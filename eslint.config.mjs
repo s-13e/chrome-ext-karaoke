@@ -1,0 +1,106 @@
+import { FlatCompat } from '@eslint/eslintrc';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import js from '@eslint/js';
+import prettierConfig from 'eslint-config-prettier';
+import prettierPlugin from 'eslint-plugin-prettier';
+import tseslint from '@typescript-eslint/eslint-plugin';
+import tsParser from '@typescript-eslint/parser';
+import pluginReact from 'eslint-plugin-react'; // 이름 변경
+import reactHooks from 'eslint-plugin-react-hooks';
+import { defineConfig } from 'eslint/config';
+import globals from 'globals';
+import importPlugin from 'eslint-plugin-import';
+
+// CommonJS 변수 모방 (필수)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const compat = new FlatCompat({
+  baseDirectory: __dirname,
+  recommendedConfig: js.configs.recommended, // 기본 추천 설정
+});
+
+export default [
+  js.configs.recommended,
+  ...compat.extends('plugin:import/recommended'),
+  ...compat.extends('plugin:react/recommended'),
+
+  // 전역 변수 & 공통 규칙
+  {
+    name: 'chrome-extension/base',
+    files: ['**/*.{js,ts,jsx,tsx}'],
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
+    },
+    plugins: {
+      import: importPlugin,
+      prettier: prettierPlugin, // ✅ 추가
+    },
+    rules: {
+      'no-console': 'warn',
+      'prefer-const': 'error',
+      'import/no-default-export': 'error',
+      'prettier/prettier': 'error',
+    },
+  },
+  // TypeScript 규칙
+  {
+    name: 'chrome-extension/typescript',
+    files: ['**/*.ts', '**/*.tsx'],
+    plugins: { '@typescript-eslint': tseslint },
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        project: './tsconfig.json',
+      },
+    },
+    rules: {
+      ...tseslint.configs.recommended.rules,
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-unused-vars': ['error', { vars: 'all', args: 'after-used', ignoreRestSiblings: true }],
+      '@typescript-eslint/naming-convention': 'error',
+    },
+  },
+
+  // React 규칙
+  {
+    name: 'chrome-extension/React',
+    files: ['**/*.tsx', '**/*.jsx'],
+    plugins: {
+      react: pluginReact,
+    },
+    settings: {
+      react: {
+        version: 'detect',
+      },
+    },
+    rules: {
+      ...pluginReact.configs.recommended.rules,
+      'react/jsx-key': 'error',
+      'react/jsx-no-useless-fragment': 'error',
+    },
+  },
+  // React-hooks 규칙칙
+  {
+    name: 'chrome-extension/react-hooks',
+    files: ['**/*.tsx', '**/*.jsx'],
+    plugins: {
+      'react-hooks': reactHooks,
+    },
+    rules: {
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
+    },
+  },
+
+  // jest 규칙
+  {
+    name: 'chrome-extension/jest',
+    files: ['**/*.test.ts', '**/*.test.tsx'],
+    rules: {
+      '@typescript-eslint/no-unused-expressions': 'off',
+    },
+  },
+  prettierConfig,
+];

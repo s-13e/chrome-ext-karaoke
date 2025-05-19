@@ -1,0 +1,41 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    // 1. Webpack 번들링
+    {
+      "label": "Build (Webpack)",
+      "type": "npm",
+      "script": "build",
+      "group": "build"
+    },
+    // 2. ESLint 코드 검사
+    {
+      "label": "Lint (ESLint 코드 검사)",
+      "type": "npm",
+      "script": "lint"
+    },
+    // 3. Prettier 코드 포맷
+    {
+      "label": "Format (Prettier 코드 포맷)",
+      "type": "npm",
+      "script": "format"
+    },
+    // 4. Jest 테스트 실행
+    {
+      "label": "Test (Jest 테스트)",
+      "type": "npm",
+      "script": "test"
+    },
+    // 5. 전체 자동화 (Build → Lint → Format → Test)
+    {
+      "label": "All (Build → Lint → Format → Test)",
+      "dependsOn": [
+        "Build (Webpack 번들링)",
+        "Lint (ESLint 코드 검사)",
+        "Format (Prettier 코드 포맷)",
+        "Test (Jest 테스트)"
+      ],
+      "group": "build"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+    // 저장할 때 자동으로 코드 포매팅
+    "editor.formatOnPaste": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true,
+
+    // 후행 공백 자동 제거
+    "files.trimTrailingWhitespace": true,
+
+    // 코드에서 공백(스페이스, 탭) 표시
+    "editor.renderWhitespace": "all",
+
+    // 마크다운 파일은 후행 공백 제거하지 않음
+    "[markdown]": {
+      "files.trimTrailingWhitespace": false
+    },
+
+    // ESLint, Prettier 확장 설정 (있으면)
+    "eslint.enable": true,
+    "prettier.singleQuote": true,
+    "prettier.semi": true
+  }
