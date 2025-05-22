@@ -9,6 +9,7 @@ const entryPoints = {
   content: './src/content/index.tsx',
   background: './src/background/background.ts',
   popup: './src/popup/index.tsx',
+  options: './src/options/index.tsx',
 };
 
 module.exports = {
@@ -46,8 +47,15 @@ module.exports = {
   },
   plugins: [
     new HtmlWebpackPlugin({
-      template: './src/popup/popup.html',
+      filename: 'options/options.html',
+      template: './src/options/options.html',
+      chunks: ['options'],
+      inject: 'body',
+      scriptLoading: 'module',
+    }),
+    new HtmlWebpackPlugin({
       filename: 'popup/popup.html',
+      template: './src/popup/popup.html',
       chunks: ['popup'],
       publicPath: '../',
       scriptLoading: 'module',
@@ -65,6 +73,7 @@ module.exports = {
         { from: 'manifest.json', to: 'manifest.json' },
         { from: '_locales', to: '_locales' },
         { from: 'public/assets/images', to: 'assets/images' },
+        { from: 'src/content/content.css', to: 'content/content.css' },
       ],
     }),
     new CleanWebpackPlugin(),

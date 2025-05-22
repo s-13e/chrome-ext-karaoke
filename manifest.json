@@ -5,27 +5,27 @@
   "description": "__MSG_extDescription__",
   "default_locale": "en",
   "options_ui": {
-    "page": "options.html"
+    "page": "options/options.html"
   },
   "background": {
-    "service_worker": "dist/background/background.js"
+    "service_worker": "background/background.js"
   },
   "permissions": ["storage", "activeTab", "webNavigation", "scripting", "tabs"],
   "host_permissions": ["*://*.youtube.com/*"],
   "action": {
-    "default_popup": "popup.html",
+    "default_popup": "popup/popup.html",
     "default_title": "Popup name",
     "default_icon": {
-      "16": "public/assets/images/icon-16.png",
-      "48": "public/assets/images/icon-48.png",
-      "128": "public/assets/images/icon-128.png"
+      "16": "assets/images/icon-16.png",
+      "48": "assets/images/icon-48.png",
+      "128": "assets/images/icon-128.png"
     }
   },
   "content_scripts": [
     {
       "matches": ["*://*.youtube.com/*"],
-      "js": ["content.js"],
-      "css": ["dist/content/content.css"],
+      "js": ["content/content.js"],
+      "css": ["content/content.css"],
       "run_at": "document_idle"
     }
   ],
@@ -35,10 +35,9 @@
       "matches": ["*://*.youtube.com/*"]
     }
   ],
-
   "icons": {
-    "16": "public/assets/images/icon-16.png",
-    "48": "public/assets/images/icon-48.png",
-    "128": "public/assets/images/icon-128.png"
+    "16": "assets/images/icon-16.png",
+    "48": "assets/images/icon-48.png",
+    "128": "assets/images/icon-128.png"
   }
 }

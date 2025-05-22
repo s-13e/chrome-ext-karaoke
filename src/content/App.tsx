@@ -3,7 +3,7 @@
 export function App() {
   return (
     <div>
-      <h1>Hello, Chrome Extension!</h1>
+      <h1>Hello, content</h1>
     </div>
   );
 }

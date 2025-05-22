@@ -1,7 +1,7 @@
 export function App() {
   return (
     <div>
-      <h1>Hello, Chrome Extension!</h1>
+      <h1>Hello, options page!</h1>
     </div>
   );
 }
