@@ -6,16 +6,16 @@ const CopyPlugin = require('copy-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
 const entryPoints = {
-  content: './src/content/index.ts',
-  background: './src/background/index.ts',
-  popup: './src/popup/index.ts',
+  content: './src/content/index.tsx',
+  background: './src/background/background.ts',
+  popup: './src/popup/index.tsx',
 };
 
 module.exports = {
   entry: entryPoints,
   output: {
     filename: `[name]/[name].js`,
-    path: path.resolve(__dirname, 'dist'),
+    path: path.resolve(__dirname, '../dist'),
     clean: true,
     publicPath: '',
   },
@@ -42,7 +42,7 @@ module.exports = {
     ],
   },
   resolve: {
-    extensions: ['.ts', 'tsx', '.js'],
+    extensions: ['.ts', '.tsx', '.js'],
   },
   plugins: [
     new HtmlWebpackPlugin({
@@ -55,7 +55,6 @@ module.exports = {
     }),
     new MiniCssExtractPlugin({
       filename: (pathData) => {
-        // 각 청크별로 고유한 CSS 파일명 생성
         return pathData.chunk.name === 'popup'
           ? 'popup/style.css' // popup 폴더 내에 생성
           : `${pathData.chunk.name}/style.css`;
@@ -64,11 +63,8 @@ module.exports = {
     new CopyPlugin({
       patterns: [
         { from: 'manifest.json', to: 'manifest.json' },
-        { from: 'src/assets/icons', to: 'assets/icons' },
-        { from: 'src/assets/images', to: 'assets/images' },
-        { from: 'src/popup/pages', to: 'popup/pages' },
-        { from: 'src/popup/js', to: 'popup/js', noErrorOnMissing: true },
-        { from: 'src/types', to: 'types' },
+        { from: '_locales', to: '_locales' },
+        { from: 'public/assets/images', to: 'assets/images' },
       ],
     }),
     new CleanWebpackPlugin(),

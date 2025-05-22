@@ -30,18 +30,28 @@ export default [
   {
     name: 'chrome-extension/base',
     files: ['**/*.{js,ts,jsx,tsx}'],
-    languageOptions: {
-      globals: { ...globals.browser, ...globals.node },
-    },
     plugins: {
       import: importPlugin,
       prettier: prettierPlugin, // ✅ 추가
     },
     rules: {
-      'no-console': 'warn',
       'prefer-const': 'error',
       'import/no-default-export': 'error',
       'prettier/prettier': 'error',
+    },
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+        chrome: 'readonly', // 크롬 확장용
+      },
+    },
+    settings: {
+      'import/resolver': {
+        typescript: { alwaysTryTypes: true },
+      },
     },
   },
   // TypeScript 규칙
@@ -59,7 +69,20 @@ export default [
       ...tseslint.configs.recommended.rules,
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': ['error', { vars: 'all', args: 'after-used', ignoreRestSiblings: true }],
-      '@typescript-eslint/naming-convention': 'error',
+      '@typescript-eslint/naming-convention': [
+        'error',
+        // 기본 변수/함수: camelCase
+        {
+          selector: ['variable', 'function'],
+          format: ['camelCase'],
+        },
+        // React 컴포넌트(exported 함수/클래스): PascalCase
+        {
+          selector: ['function', 'class'], // ★ selector 필수
+          modifiers: ['exported'], // export된 것만 대상
+          format: ['PascalCase'], // ★ format 필수
+        },
+      ],
     },
   },
 
@@ -79,6 +102,7 @@ export default [
       ...pluginReact.configs.recommended.rules,
       'react/jsx-key': 'error',
       'react/jsx-no-useless-fragment': 'error',
+      'react/react-in-jsx-scope': 'off',
     },
   },
   // React-hooks 규칙칙

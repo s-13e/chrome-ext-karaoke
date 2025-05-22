@@ -1,60 +1,44 @@
 {
-    "manifest_version": 3,
-    "name": "확장 이름",
-    "version": "1.0.0",
-    "description": "설명",
-    "default_locale": "en",
-    "options_ui": {
-        "page": "options.html"
-    },
-    "background": {
-        "service_worker": "dist/background/background.js"
-    },
-    "permissions": [
-        "storage",
-        "activeTab",
-        "webNavigation",
-        "scripting",
-        "tabs"
-    ],
-    "host_permissions": [
-        "*://*.youtube.com/*"
-    ],
-    "action": {
-        "default_popup": "popup.html",
-        "default_title": "Popup name",
-        "default_icon": {
-            "16": "images/icon-16.png",
-            "48": "images/icon-48.png",
-            "128": "image/icon-128.png"
-        }
-    },
-    "content_scripts": [
-        {
-            "matches": [
-                "*://*.youtube.com/*"
-            ],
-            "js": [
-                "content.js"
-            ],
-            "css": [
-                "dist/content/content.css"
-            ],
-            "run_at": "document_idle"
-        }
-    ],
-    "web_accessible_resources": [
-        {
-            "resources": [],
-            "matches": [
-                "*://*.youtube.com/*"
-            ]
-        }
-    ],
-
-    "icons": {
-        "16": "images/icon-16.png",
-        "48": "images/icon-48.png",
-        "128": "images/icon-128.png"
+  "manifest_version": 3,
+  "name": "__MSG_extName__",
+  "version": "1.0.0",
+  "description": "__MSG_extDescription__",
+  "default_locale": "en",
+  "options_ui": {
+    "page": "options.html"
+  },
+  "background": {
+    "service_worker": "dist/background/background.js"
+  },
+  "permissions": ["storage", "activeTab", "webNavigation", "scripting", "tabs"],
+  "host_permissions": ["*://*.youtube.com/*"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Popup name",
+    "default_icon": {
+      "16": "public/assets/images/icon-16.png",
+      "48": "public/assets/images/icon-48.png",
+      "128": "public/assets/images/icon-128.png"
     }
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.youtube.com/*"],
+      "js": ["content.js"],
+      "css": ["dist/content/content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [],
+      "matches": ["*://*.youtube.com/*"]
+    }
+  ],
+
+  "icons": {
+    "16": "public/assets/images/icon-16.png",
+    "48": "public/assets/images/icon-48.png",
+    "128": "public/assets/images/icon-128.png"
+  }
 }
