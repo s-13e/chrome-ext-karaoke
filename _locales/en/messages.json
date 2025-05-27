@@ -1,8 +1,11 @@
 {
   "extName": {
-    "message": "Karaoke Extension"
+    "message": "Chrome Extension Templet"
   },
   "extDescription": {
-    "message": "Sing along with YouTube videos in karaoke mode!"
+    "message": "jot that down description"
+  },
+  "language":{
+    "message": "Language"
   }
 }

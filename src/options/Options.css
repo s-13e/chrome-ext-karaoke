@@ -1,0 +1,8 @@
+.custom-select {
+  border: none;
+  background: transparent;
+  font-size: 1rem;
+  padding: 4px 8px;
+  outline: none;
+  /* 필요하다면 width, color 등도 추가 */
+}

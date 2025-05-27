@@ -51,6 +51,7 @@ module.exports = {
       template: './src/options/options.html',
       chunks: ['options'],
       inject: 'body',
+      publicPath: '../',
       scriptLoading: 'module',
     }),
     new HtmlWebpackPlugin({
@@ -62,17 +63,14 @@ module.exports = {
       inject: true, // CSS와 JS 자동 주입
     }),
     new MiniCssExtractPlugin({
-      filename: (pathData) => {
-        return pathData.chunk.name === 'popup'
-          ? 'popup/style.css' // popup 폴더 내에 생성
-          : `${pathData.chunk.name}/style.css`;
-      },
+      filename: ({ chunk }) => `${chunk.name}/style.css`,
     }),
     new CopyPlugin({
       patterns: [
         { from: 'manifest.json', to: 'manifest.json' },
         { from: '_locales', to: '_locales' },
         { from: 'public/assets/images', to: 'assets/images' },
+        { from: 'src/assets/icons', to: 'assets/icons' },
         { from: 'src/content/content.css', to: 'content/content.css' },
       ],
     }),

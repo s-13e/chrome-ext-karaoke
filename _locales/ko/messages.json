@@ -4,5 +4,8 @@
   },
   "extDescription": {
     "message": "여기에 설명 적으셈"
+  },
+  "language": {
+    "message": "언어"
   }
 }
