@@ -10,6 +10,7 @@ const entryPoints = {
   background: './src/background/background.ts',
   popup: './src/popup/index.tsx',
   options: './src/options/index.tsx',
+  main: './src/index.tsx',
 };
 
 module.exports = {

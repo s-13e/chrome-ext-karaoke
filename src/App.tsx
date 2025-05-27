@@ -1,20 +1,16 @@
-import React, { useEffect } from 'react';
+// src/App.tsx
 import { useTranslation } from 'react-i18next';
+import { useLangLoader } from './i18n/useLangLoader';
 
 export function App() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
+  const isLangLoaded = useLangLoader();
 
-  // 컴포넌트 마운트 시 저장된 언어 불러오기
-  useEffect(() => {
-    chrome.storage.sync.get('language', (result) => {
-      const savedLang = result.language || 'en';
-      i18n.changeLanguage(savedLang);
-    });
-  }, [i18n]);
+  if (!isLangLoaded) return null; // 로딩 중에는 아무것도 렌더링하지 않음
 
   return (
     <div>
-      <h1>{t('language')}</h1>
+      <h2>{t('language')}</h2>
     </div>
   );
 }

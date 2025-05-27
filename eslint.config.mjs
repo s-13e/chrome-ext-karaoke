@@ -76,11 +76,23 @@ export default [
           selector: ['variable', 'function'],
           format: ['camelCase'],
         },
-        // React 컴포넌트(exported 함수/클래스): PascalCase
         {
-          selector: ['function', 'class'], // ★ selector 필수
-          modifiers: ['exported'], // export된 것만 대상
-          format: ['PascalCase'], // ★ format 필수
+          selector: ['function', 'method'],
+          modifiers: ['exported'],
+          format: ['camelCase'],
+          filter: {
+            regex: '^use[A-Z]',
+            match: true,
+          },
+        },
+        {
+          selector: ['function', 'class'],
+          modifiers: ['exported'],
+          format: ['PascalCase'],
+          filter: {
+            regex: '^use[A-Z]',
+            match: false,
+          },
         },
       ],
     },

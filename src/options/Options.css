@@ -6,3 +6,13 @@
   outline: none;
   /* 필요하다면 width, color 등도 추가 */
 }
+css
+/* 팝업, 옵션 공통 CSS */
+body:not([data-lang-loaded]) {
+  opacity: 0;
+}
+
+body[data-lang-loaded] {
+  opacity: 1;
+  transition: opacity 0.3s;
+}
