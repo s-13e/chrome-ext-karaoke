@@ -18,7 +18,6 @@ const resources = {
   ko: { translation: convertMessages(koRaw) },
 };
 
-// 저장된 언어 동기적으로 가져오기 (주의: chrome.storage는 비동기이므로 완벽하지 않음)
 let savedLang = 'en';
 chrome.storage.sync.get('language', (result) => {
   savedLang = result.language || 'en';
