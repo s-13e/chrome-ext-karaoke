@@ -18,17 +18,22 @@ const resources = {
   ko: { translation: convertMessages(koRaw) },
 };
 
-let savedLang = 'en';
-chrome.storage.sync.get('language', (result) => {
-  savedLang = result.language || 'en';
-});
-
-i18n.use(initReactI18next).init({
-  resources,
-  lng: savedLang, // 초기 언어를 저장된 값으로 설정
-  fallbackLng: 'en',
-  interpolation: { escapeValue: false },
-  react: { useSuspense: false }, // 크롬 확장에서 중요!
-});
-
+// ✅ 저장된 언어를 먼저 읽고 초기화
+export const initializeI18n = async () => {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get('language', (result) => {
+      const savedLang = result.language || 'en';
+      i18n
+        .use(initReactI18next)
+        .init({
+          resources,
+          lng: savedLang, // 저장된 언어로 초기화
+          fallbackLng: 'en',
+          interpolation: { escapeValue: false },
+          react: { useSuspense: false },
+        })
+        .then(resolve);
+    });
+  });
+};
 export const i18nInstance = i18n;

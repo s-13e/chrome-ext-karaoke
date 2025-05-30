@@ -1,9 +1,15 @@
 // src/content/index.tsx
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
-import '../i18n/i18n';
+import { initializeI18n } from '../i18n/i18n';
+import React from 'react';
 
-const root = document.getElementById('root');
-if (root) {
-  createRoot(root).render(<App />);
-}
+// ✅ i18n 초기화 후에만 앱 렌더링
+initializeI18n().then(() => {
+  const root = createRoot(document.getElementById('root')!);
+  root.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>,
+  );
+});
