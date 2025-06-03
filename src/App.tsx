@@ -1,6 +1,6 @@
 // src/App.tsx
 //import { useTranslation } from 'react-i18next';
-import { useLangLoader } from './i18n/useLangLoader';
+import { useLangLoader } from './hooks/useLangLoader';
 
 export function App() {
   const isLangLoaded = useLangLoader();
