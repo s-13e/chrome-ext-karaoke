@@ -14,7 +14,8 @@
     "open_in_tab": true
   },
   "background": {
-    "service_worker": "background/background.js"
+    "service_worker": "background/background.js",
+    "type": "module"
   },
   "permissions": ["storage", "activeTab", "webNavigation", "scripting", "tabs"],
   "host_permissions": ["*://*.youtube.com/*"],

@@ -44,6 +44,15 @@ module.exports = {
     ],
   },
   resolve: {
+    alias: {
+      '@_locales': path.resolve(__dirname, '../_locales'),
+      '@assets': path.resolve(__dirname, '../public/assets'),
+      '@components': path.resolve(__dirname, '../src/components'),
+      '@hooks': path.resolve(__dirname, '../src/hooks'),
+      '@services': path.resolve(__dirname, '../src/services'),
+      '@my_types': path.resolve(__dirname, '../src/types'),
+      '@utils': path.resolve(__dirname, '../src/utils'),
+    },
     extensions: ['.ts', '.tsx', '.js'],
   },
   plugins: [

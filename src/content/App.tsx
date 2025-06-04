@@ -1,6 +1,6 @@
 // src/content/App.tsx
 import { useEffect } from 'react';
-import type { ContentScriptMessage } from '../types/message';
+import type { ContentScriptMessage } from '@my_types/message';
 
 export function App() {
   useEffect(() => {

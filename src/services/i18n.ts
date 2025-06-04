@@ -1,9 +1,8 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 //import LanguageDetector from 'i18next-browser-languagedetector';
-
-import enRaw from '../../_locales/en/messages.json';
-import koRaw from '../../_locales/ko/messages.json';
+import enRaw from '@_locales/en/messages.json';
+import koRaw from '@_locales/ko/messages.json';
 
 function convertMessages(raw: Record<string, { message?: string }>) {
   const result: Record<string, string> = {};
@@ -32,7 +31,14 @@ export const initializeI18n = async () => {
           interpolation: { escapeValue: false },
           react: { useSuspense: false },
         })
-        .then(resolve);
+        .then(() => {
+          document.documentElement.lang = savedLang;
+          resolve(true);
+        })
+        .catch((err) => {
+          console.error('i18n init failed:', err);
+          resolve(false);
+        });
     });
   });
 };

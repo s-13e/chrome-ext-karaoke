@@ -1,10 +1,10 @@
 // poup/App.tsx
 import React from 'react';
 import './popup.css';
-import { useLangLoader } from '../hooks/useLangLoader';
+import { useLangLoader } from '@hooks/useLangLoader';
 // import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useChromeStorage } from '../hooks/useChromeStorage';
+import { useChromeStorage } from '@hooks/useChromeStorage';
 
 export function App() {
   const { t } = useTranslation();
@@ -28,12 +28,14 @@ export function App() {
 
     // 현재 활성 탭에 메시지 전송
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]?.id) {
-        chrome.tabs.sendMessage(tabs[0].id, {
-          type: 'TOGGLE_CONTENT',
-          enabled: newValue,
-        });
+      if (!tabs[0]?.id) {
+        console.error('No active tab found');
+        return;
       }
+      chrome.tabs.sendMessage(tabs[0].id, {
+        type: 'TOGGLE_CONTENT',
+        enabled: newValue,
+      });
     });
   };
 

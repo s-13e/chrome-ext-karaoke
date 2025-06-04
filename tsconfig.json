@@ -1,10 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2023",
-    "lib": [
-      "ES2023",
-      "DOM"
-    ],
+    "lib": ["ES2023", "DOM"],
     "module": "ESNext",
     "esModuleInterop": true,
     "strict": true,
@@ -13,29 +10,23 @@
     "moduleResolution": "bundler",
     "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "src/*"
-      ],
-      "@assets/*": [
-        "public/assets/*"
-      ]
+      "@_locales/*":["_locales/*"],
+      "@/*": ["src/*"],
+      "@assets/*": ["public/assets/*"],
+      "@components/*": ["src/components/*"],
+      "@hooks/*": ["src/hooks/*"],
+      "@services/*": ["src/services/*"],
+      "@my_types/*": ["src/types/*"],
+      "@utils/*": ["src/utils/*"]
     },
-    "types": [
-      "chrome",
-      "jest"
-    ],
+    "types": ["chrome", "jest"],
     "allowJs": true,
     "noUncheckedIndexedAccess": true, // 인덱스 접근 시 undefined 체크 강제화
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,
     "noUnusedLocals": true, // 사용하지 않은 변수 에러 처리
-    "noUnusedParameters": true, // 사용하지 않은 파라미터 에러 처리
+    "noUnusedParameters": true // 사용하지 않은 파라미터 에러 처리
   },
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist"
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
 }
