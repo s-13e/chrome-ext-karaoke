@@ -10,7 +10,6 @@ const entryPoints = {
   background: './src/background/background.ts',
   popup: './src/popup/index.tsx',
   options: './src/options/index.tsx',
-  main: './src/index.tsx',
 };
 
 module.exports = {
@@ -49,6 +48,7 @@ module.exports = {
       '@assets': path.resolve(__dirname, '../public/assets'),
       '@components': path.resolve(__dirname, '../src/components'),
       '@hooks': path.resolve(__dirname, '../src/hooks'),
+      '@styles': path.resolve(__dirname, '../src/styles'),
       '@services': path.resolve(__dirname, '../src/services'),
       '@my_types': path.resolve(__dirname, '../src/types'),
       '@utils': path.resolve(__dirname, '../src/utils'),

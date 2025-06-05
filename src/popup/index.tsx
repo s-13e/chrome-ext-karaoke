@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { initializeI18n } from '@services/i18n';
 import React from 'react';
+import 'normalize.css';
+// import { GlobalStyle } from '@styles/GlobalStyle';
 
 // ✅ i18n 초기화 후에만 앱 렌더링
 initializeI18n().then(() => {

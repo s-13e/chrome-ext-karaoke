@@ -71,19 +71,12 @@ export default [
       '@typescript-eslint/no-unused-vars': ['error', { vars: 'all', args: 'after-used', ignoreRestSiblings: true }],
       '@typescript-eslint/naming-convention': [
         'error',
-        // 기본 변수/함수: camelCase
+        // 1. React 컴포넌트 (변수에 할당된 함수 표현식 포함)
         {
-          selector: ['variable', 'function'],
-          format: ['camelCase'],
-        },
-        {
-          selector: ['function', 'method'],
+          selector: 'variable',
           modifiers: ['exported'],
-          format: ['camelCase'],
-          filter: {
-            regex: '^use[A-Z]',
-            match: true,
-          },
+          types: ['function'], // 함수 타입 변수만 대상
+          format: ['PascalCase'], // PascalCase 허용
         },
         {
           selector: ['function', 'class'],
@@ -91,8 +84,23 @@ export default [
           format: ['PascalCase'],
           filter: {
             regex: '^use[A-Z]',
-            match: false,
+            match: false, // use로 시작하지 않는 경우만 적용
           },
+        },
+        // 2. React 훅 (exported 함수) → camelCase
+        {
+          selector: 'function',
+          modifiers: ['exported'],
+          format: ['camelCase'],
+          filter: {
+            regex: '^use[A-Z]',
+            match: true, // use로 시작하는 경우만 적용
+          },
+        },
+        // 3. 일반 변수 → camelCase (함수 제외)
+        {
+          selector: 'variable',
+          format: ['camelCase'],
         },
       ],
     },
