@@ -47,6 +47,7 @@ module.exports = {
       '@_locales': path.resolve(__dirname, '../_locales'),
       '@assets': path.resolve(__dirname, '../public/assets'),
       '@components': path.resolve(__dirname, '../src/components'),
+      '@constants': path.resolve(__dirname, '../src/constants'),
       '@hooks': path.resolve(__dirname, '../src/hooks'),
       '@styles': path.resolve(__dirname, '../src/styles'),
       '@services': path.resolve(__dirname, '../src/services'),

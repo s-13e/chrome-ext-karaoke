@@ -71,12 +71,17 @@ export default [
       '@typescript-eslint/no-unused-vars': ['error', { vars: 'all', args: 'after-used', ignoreRestSiblings: true }],
       '@typescript-eslint/naming-convention': [
         'error',
-        // 1. React 컴포넌트 (변수에 할당된 함수 표현식 포함)
+        // 1. React 컴포넌트 (exported 함수 타입 변수 + JSX 사용)
         {
           selector: 'variable',
           modifiers: ['exported'],
-          types: ['function'], // 함수 타입 변수만 대상
-          format: ['PascalCase'], // PascalCase 허용
+          types: ['function'],
+          format: ['PascalCase'],
+          filter: {
+            // JSX 컴포넌트로 사용되는 변수만 대상 (예: <MyComponent />)
+            regex: '^[A-Z]',
+            match: true,
+          },
         },
         {
           selector: ['function', 'class'],
@@ -97,7 +102,7 @@ export default [
             match: true, // use로 시작하는 경우만 적용
           },
         },
-        // 3. 일반 변수 → camelCase (함수 제외)
+        // 4. 일반 변수 → camelCase (함수 제외)
         {
           selector: 'variable',
           format: ['camelCase'],
@@ -105,7 +110,28 @@ export default [
       ],
     },
   },
-
+  // constants 폴더 전용 규칙 (UPPER_CASE 강제)
+  {
+    name: 'chrome-extension/constants-upper-case',
+    files: ['src/constants/**/*.ts'],
+    plugins: { '@typescript-eslint': tseslint },
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        project: './tsconfig.json',
+      },
+    },
+    rules: {
+      '@typescript-eslint/naming-convention': [
+        'error',
+        {
+          selector: 'variable',
+          modifiers: ['const'],
+          format: ['UPPER_CASE'], // constants 폴더 내 모든 const는 UPPER_CASE
+        },
+      ],
+    },
+  },
   // React 규칙
   {
     name: 'chrome-extension/React',

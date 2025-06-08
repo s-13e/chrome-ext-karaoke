@@ -3,6 +3,7 @@ import { initReactI18next } from 'react-i18next';
 //import LanguageDetector from 'i18next-browser-languagedetector';
 import enRaw from '@_locales/en/messages.json';
 import koRaw from '@_locales/ko/messages.json';
+import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, SupportedLanguage } from '@constants/languages';
 
 function convertMessages(raw: Record<string, { message?: string }>) {
   const result: Record<string, string> = {};
@@ -21,13 +22,15 @@ const resources = {
 export const initializeI18n = async () => {
   return new Promise((resolve) => {
     chrome.storage.sync.get('language', (result) => {
-      const savedLang = result.language || 'en';
+      const savedLang = (SUPPORTED_LANGUAGES as readonly string[]).includes(result.language)
+        ? (result.language as SupportedLanguage)
+        : DEFAULT_LANGUAGE;
       i18n
         .use(initReactI18next)
         .init({
           resources,
-          lng: savedLang, // 저장된 언어로 초기화
-          fallbackLng: 'en',
+          lng: savedLang,
+          fallbackLng: DEFAULT_LANGUAGE,
           interpolation: { escapeValue: false },
           react: { useSuspense: false },
         })

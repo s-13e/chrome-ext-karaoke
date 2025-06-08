@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { SUPPORTED_LANGUAGES, DEFAULT_LANGUAGE, SupportedLanguage } from '@constants/languages';
 
 export function useLangLoader() {
   const { i18n } = useTranslation();
@@ -9,7 +10,9 @@ export function useLangLoader() {
 
   useEffect(() => {
     chrome.storage.sync.get('language', (result) => {
-      const savedLang = result.language || 'en';
+      const savedLang = (SUPPORTED_LANGUAGES as readonly string[]).includes(result.language)
+        ? (result.language as SupportedLanguage)
+        : DEFAULT_LANGUAGE;
       i18n
         .changeLanguage(savedLang)
         .then(() => {

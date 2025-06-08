@@ -5,6 +5,7 @@ import { useLangLoader } from '@hooks/useLangLoader';
 // import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useChromeStorage } from '@hooks/useChromeStorage';
+import { MESSAGE_TYPES } from '@constants/messageTypes';
 
 export function App() {
   const { t } = useTranslation();
@@ -33,7 +34,7 @@ export function App() {
         return;
       }
       chrome.tabs.sendMessage(tabs[0].id, {
-        type: 'TOGGLE_CONTENT',
+        type: MESSAGE_TYPES.TOGGLE_CONTENT,
         enabled: newValue,
       });
     });

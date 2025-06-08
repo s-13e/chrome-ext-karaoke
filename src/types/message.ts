@@ -1,6 +1,8 @@
 // types/message.ts
+import { MESSAGE_TYPES } from '@constants/messageTypes';
+
 export interface ToggleContentMessage {
-  type: 'TOGGLE_CONTENT';
+  type: typeof MESSAGE_TYPES.TOGGLE_CONTENT;
   enabled: boolean;
 }
 

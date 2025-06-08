@@ -3,25 +3,21 @@ This file is a merged representation of the entire codebase, combined into a sin
 # File Summary
 
 ## Purpose
-
 This file contains a packed representation of the entire repository's contents.
 It is designed to be easily consumable by AI systems for analysis, code review,
 or other automated processes.
 
 ## File Format
-
 The content is organized as follows:
-
 1. This summary section
 2. Repository information
 3. Directory structure
 4. Repository files (if enabled)
 5. Multiple file entries, each consisting of:
-   a. A header with the file path (## File: path/to/file)
-   b. The full contents of the file in a code block
+  a. A header with the file path (## File: path/to/file)
+  b. The full contents of the file in a code block
 
 ## Usage Guidelines
-
 - This file should be treated as read-only. Any changes should be made to the
   original repository files, not this packed version.
 - When processing this file, use the file path to distinguish
@@ -30,7 +26,6 @@ The content is organized as follows:
   the same level of security as you would the original repository.
 
 ## Notes
-
 - Some files may have been excluded based on .gitignore rules and Repomix's configuration
 - Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
 - Files matching patterns in .gitignore are excluded
@@ -38,15 +33,16 @@ The content is organized as follows:
 - Files are sorted by Git change count (files with more changes are at the bottom)
 
 # Directory Structure
-
 ```
-App.tsx
 background/background.ts
+components/common/ErrorFallback.tsx
+constants/languages.ts
+constants/messageTypes.ts
+constants/paths.ts
 content/App.tsx
 content/index.tsx
 hooks/useChromeStorage.ts
 hooks/useLangLoader.ts
-index.tsx
 options/App.tsx
 options/index.tsx
 options/Options.css
@@ -57,38 +53,23 @@ popup/index.tsx
 popup/popup.css
 popup/popup.html
 services/i18n.ts
+styles/GlobalStyle.ts
 types/message.ts
 ```
 
 # Files
 
-## File: App.tsx
-
-```typescript
-// src/App.tsx
-//import { useTranslation } from 'react-i18next';
-import { useLangLoader } from './hooks/useLangLoader';
-
-export function App() {
-  const isLangLoaded = useLangLoader();
-
-  if (!isLangLoaded) return null;
-
-  return null;
-}
-```
-
 ## File: background/background.ts
-
 ```typescript
-// 예시: 백그라운드 스크립트
+import { MESSAGE_TYPES } from '@constants/messageTypes';
+
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Extension installed!');
 });
 
 // background.js
 chrome.runtime.onMessage.addListener((message) => {
-  if (message.type === 'TOGGLE_CONTENT') {
+  if (message.type === MESSAGE_TYPES.TOGGLE_CONTENT) {
     console.log('Toggle received:', message.enabled);
     return true; // 비동기 처리 활성화
   }
@@ -97,12 +78,55 @@ chrome.runtime.onMessage.addListener((message) => {
 // 특정 페이지에서만 툴바의 아이콘(버튼)이 보이도록 하려함
 ```
 
-## File: content/App.tsx
+## File: components/common/ErrorFallback.tsx
+```typescript
+// src/components/common/ErrorFallback.tsx
+// import React from 'react';
 
+type Props = {
+  error: Error;
+  resetErrorBoundary: () => void;
+};
+
+export function ErrorFallback({ error, resetErrorBoundary }: Props) {
+  return (
+    <div>
+      <p>에러: {error.message}</p>
+      <button onClick={resetErrorBoundary}>다시 시도</button>
+    </div>
+  );
+}
+```
+
+## File: constants/languages.ts
+```typescript
+export const SUPPORTED_LANGUAGES = ['en', 'ko'] as const;
+export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
+export const DEFAULT_LANGUAGE: SupportedLanguage = 'en';
+```
+
+## File: constants/messageTypes.ts
+```typescript
+export const MESSAGE_TYPES = {
+  TOGGLE_CONTENT: 'TOGGLE_CONTENT',
+  // 향후 메시지 타입 추가
+} as const;
+```
+
+## File: constants/paths.ts
+```typescript
+export const PATHS = {
+  OPTIONS_HTML: 'options.html',
+  ICON_SETTING: '@assets/icons/setting.png',
+};
+```
+
+## File: content/App.tsx
 ```typescript
 // src/content/App.tsx
 import { useEffect } from 'react';
-import type { ContentScriptMessage } from '../types/message';
+import type { ContentScriptMessage } from '@my_types/message';
+import { MESSAGE_TYPES } from '@constants/messageTypes';
 
 export function App() {
   useEffect(() => {
@@ -125,7 +149,7 @@ export function App() {
 
     // 2. 메시지 리스너 등록
     const messageListener = (request: ContentScriptMessage) => {
-      if (request.type === 'TOGGLE_CONTENT') {
+      if (request.type === MESSAGE_TYPES.TOGGLE_CONTENT) {
         updateContent(request.enabled);
       }
     };
@@ -141,22 +165,29 @@ export function App() {
 ```
 
 ## File: content/index.tsx
-
 ```typescript
 // src/content/index.tsx
 // import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import 'normalize.css';
+import { GlobalStyle } from '@styles/GlobalStyle';
 
-const root = document.createElement('div');
-root.id = 'chrome-extension-root';
-document.body.appendChild(root);
-
-createRoot(root).render(<App />);
+let root = document.getElementById('chrome-extension-root');
+if (!root) {
+  root = document.createElement('div');
+  root.id = 'chrome-extension-root';
+  document.body.appendChild(root);
+}
+createRoot(root).render(
+  <>
+    <GlobalStyle />
+    <App />
+  </>,
+);
 ```
 
 ## File: hooks/useChromeStorage.ts
-
 ```typescript
 // src/hooks/useChromeStorage.ts
 import { useState, useEffect } from 'react';
@@ -185,10 +216,10 @@ export function useChromeStorage<T>(key: string, defaultValue: T) {
 ```
 
 ## File: hooks/useLangLoader.ts
-
 ```typescript
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { SUPPORTED_LANGUAGES, DEFAULT_LANGUAGE, SupportedLanguage } from '@constants/languages';
 
 export function useLangLoader() {
   const { i18n } = useTranslation();
@@ -198,7 +229,9 @@ export function useLangLoader() {
 
   useEffect(() => {
     chrome.storage.sync.get('language', (result) => {
-      const savedLang = result.language || 'en';
+      const savedLang = (SUPPORTED_LANGUAGES as readonly string[]).includes(result.language)
+        ? (result.language as SupportedLanguage)
+        : DEFAULT_LANGUAGE;
       i18n
         .changeLanguage(savedLang)
         .then(() => {
@@ -218,20 +251,7 @@ export function useLangLoader() {
 }
 ```
 
-## File: index.tsx
-
-```typescript
-//import React from 'react';
-import { createRoot } from 'react-dom/client';
-import { App } from './App';
-import './services/i18n';
-
-const root = createRoot(document.getElementById('root')!);
-root.render(<App />);
-```
-
 ## File: options/App.tsx
-
 ```typescript
 // options/App.tsx
 import React from 'react';
@@ -239,11 +259,15 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import './Options.css';
 
+console.log('App 함수 실행전');
+
 export function App() {
+  console.log('App 실행');
   const { t, i18n } = useTranslation();
   const [currentLang, setCurrentLang] = useState('en');
   const [isLangLoaded, setIsLangLoaded] = useState(false);
 
+  console.log('이거 왜 안뜸? 2t');
   // 초기 언어 로드 (useLangLoader 대신 직접 구현)
   useEffect(() => {
     try {
@@ -253,6 +277,7 @@ export function App() {
           .changeLanguage(savedLang)
           .then(() => {
             setCurrentLang(savedLang);
+            console.log('App.tsx의 then 실행?');
             setIsLangLoaded(true);
           })
           .catch((err) => {
@@ -263,6 +288,9 @@ export function App() {
     } catch (e) {
       console.error('chrome.storage error:', e);
       setIsLangLoaded(true);
+    } finally {
+      console.warn('chrome.storage finally');
+      setIsLangLoaded(true); // 무조건 실행
     }
   }, [i18n]);
 
@@ -274,7 +302,11 @@ export function App() {
     chrome.storage.sync.set({ language: newLang });
   };
 
-  if (!isLangLoaded) return null;
+  if (!isLangLoaded) {
+    console.log('isLangLoaded is not exist');
+    return null;
+  }
+  console.log('App.tsx return 직전');
 
   return (
     <div>
@@ -290,25 +322,33 @@ export function App() {
 ```
 
 ## File: options/index.tsx
-
 ```typescript
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { I18nextProvider } from 'react-i18next';
-import { i18nInstance } from '../services/i18n';
+import { initializeI18n, i18nInstance } from '@services/i18n';
+import { ErrorBoundary } from 'react-error-boundary';
+import { ErrorFallback } from '@components/common/ErrorFallback';
+import 'normalize.css';
+// import { GlobalStyle } from '@styles/GlobalStyle';
 
 const root = document.getElementById('root');
 if (root) {
-  createRoot(root).render(
-    <I18nextProvider i18n={i18nInstance}>
-      <App />
-    </I18nextProvider>,
-  );
+  initializeI18n().then(() => {
+    createRoot(root).render(
+      <ErrorBoundary FallbackComponent={ErrorFallback}>
+        <I18nextProvider i18n={i18nInstance}>
+          <App />
+        </I18nextProvider>
+      </ErrorBoundary>,
+    );
+  });
+} else {
+  console.error('Root element not found');
 }
 ```
 
 ## File: options/Options.css
-
 ```css
 .custom-select {
   border: none;
@@ -331,7 +371,6 @@ body[data-lang-loaded] {
 ```
 
 ## File: options/options.html
-
 ```html
 <!-- options.html -->
 <!doctype html>
@@ -347,7 +386,6 @@ body[data-lang-loaded] {
 ```
 
 ## File: payment/pay.txt
-
 ```
 나중에 하셈.
 ExtensionPay 로 구현할 예정
@@ -355,15 +393,15 @@ ExtensionPay 로 구현할 예정
 ```
 
 ## File: popup/App.tsx
-
 ```typescript
 // poup/App.tsx
 import React from 'react';
 import './popup.css';
-import { useLangLoader } from '../hooks/useLangLoader';
+import { useLangLoader } from '@hooks/useLangLoader';
 // import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useChromeStorage } from '../hooks/useChromeStorage';
+import { useChromeStorage } from '@hooks/useChromeStorage';
+import { MESSAGE_TYPES } from '@constants/messageTypes';
 
 export function App() {
   const { t } = useTranslation();
@@ -392,7 +430,7 @@ export function App() {
         return;
       }
       chrome.tabs.sendMessage(tabs[0].id, {
-        type: 'TOGGLE_CONTENT',
+        type: MESSAGE_TYPES.TOGGLE_CONTENT,
         enabled: newValue,
       });
     });
@@ -422,13 +460,14 @@ export function App() {
 ```
 
 ## File: popup/index.tsx
-
 ```typescript
 // src/content/index.tsx
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
-import { initializeI18n } from '../services/i18n';
+import { initializeI18n } from '@services/i18n';
 import React from 'react';
+import 'normalize.css';
+// import { GlobalStyle } from '@styles/GlobalStyle';
 
 // ✅ i18n 초기화 후에만 앱 렌더링
 initializeI18n().then(() => {
@@ -442,12 +481,10 @@ initializeI18n().then(() => {
 ```
 
 ## File: popup/popup.css
-
 ```css
 body {
   width: 300px;
   height: 500px;
-  margin: 0;
   padding: 10px;
 }
 .popup-header {
@@ -458,10 +495,9 @@ body {
 .icon-button {
   background: transparent;
   border: none;
-  padding: 0;
-  cursor: pointer; /* 마우스 오버 시 포인터 */
-  outline: none; /* 포커스 테두리 제거 (접근성 필요시 조정) */
-  display: inline-flex; /* 아이콘 정렬에 유리 */
+  cursor: pointer;           /* 마우스 오버 시 포인터 */
+  outline: none;             /* 포커스 테두리 제거 (접근성 필요시 조정) */
+  display: inline-flex;      /* 아이콘 정렬에 유리 */
   align-items: center;
   justify-content: center;
 }
@@ -472,33 +508,26 @@ body {
   width: 40px;
   height: 22px;
 }
-.switch input {
-  display: none;
-}
+.switch input { display: none; }
 .slider {
   position: absolute;
   cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  top: 0; left: 0; right: 0; bottom: 0;
   background-color: #ccc;
   border-radius: 22px;
-  transition: 0.4s;
+  transition: .4s;
 }
 .slider:before {
   position: absolute;
-  content: '';
-  height: 18px;
-  width: 18px;
-  left: 2px;
-  bottom: 2px;
+  content: "";
+  height: 18px; width: 18px;
+  left: 2px; bottom: 2px;
   background-color: white;
   border-radius: 50%;
-  transition: 0.4s;
+  transition: .4s;
 }
 input:checked + .slider {
-  background-color: #2196f3;
+  background-color: #2196F3;
 }
 input:checked + .slider:before {
   transform: translateX(18px);
@@ -506,28 +535,26 @@ input:checked + .slider:before {
 ```
 
 ## File: popup/popup.html
-
 ```html
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="UTF-8" />
-  </head>
-  <body>
+<head>
+    <meta charset="UTF-8">
+</head>
+<body>
     <div id="root"></div>
-  </body>
+</body>
 </html>
 ```
 
 ## File: services/i18n.ts
-
 ```typescript
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 //import LanguageDetector from 'i18next-browser-languagedetector';
-
-import enRaw from '../../_locales/en/messages.json';
-import koRaw from '../../_locales/ko/messages.json';
+import enRaw from '@_locales/en/messages.json';
+import koRaw from '@_locales/ko/messages.json';
+import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, SupportedLanguage } from '@constants/languages';
 
 function convertMessages(raw: Record<string, { message?: string }>) {
   const result: Record<string, string> = {};
@@ -546,13 +573,15 @@ const resources = {
 export const initializeI18n = async () => {
   return new Promise((resolve) => {
     chrome.storage.sync.get('language', (result) => {
-      const savedLang = result.language || 'en';
+      const savedLang = (SUPPORTED_LANGUAGES as readonly string[]).includes(result.language)
+        ? (result.language as SupportedLanguage)
+        : DEFAULT_LANGUAGE;
       i18n
         .use(initReactI18next)
         .init({
           resources,
-          lng: savedLang, // 저장된 언어로 초기화
-          fallbackLng: 'en',
+          lng: savedLang,
+          fallbackLng: DEFAULT_LANGUAGE,
           interpolation: { escapeValue: false },
           react: { useSuspense: false },
         })
@@ -570,12 +599,31 @@ export const initializeI18n = async () => {
 export const i18nInstance = i18n;
 ```
 
-## File: types/message.ts
+## File: styles/GlobalStyle.ts
+```typescript
+// src/styles/GlobalStyle.ts
+import { createGlobalStyle } from 'styled-components';
+import { normalize } from 'styled-normalize';
 
+export const GlobalStyle = createGlobalStyle`
+  ${normalize}
+
+  html, body {
+    font-family: 'Pretendard', sans-serif;
+    background: #fff;
+    color: #222;
+  }
+  /* 추가 전역 스타일 */
+`;
+```
+
+## File: types/message.ts
 ```typescript
 // types/message.ts
+import { MESSAGE_TYPES } from '@constants/messageTypes';
+
 export interface ToggleContentMessage {
-  type: 'TOGGLE_CONTENT';
+  type: typeof MESSAGE_TYPES.TOGGLE_CONTENT;
   enabled: boolean;
 }
 

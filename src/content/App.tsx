@@ -1,6 +1,7 @@
 // src/content/App.tsx
 import { useEffect } from 'react';
 import type { ContentScriptMessage } from '@my_types/message';
+import { MESSAGE_TYPES } from '@constants/messageTypes';
 
 export function App() {
   useEffect(() => {
@@ -23,7 +24,7 @@ export function App() {
 
     // 2. 메시지 리스너 등록
     const messageListener = (request: ContentScriptMessage) => {
-      if (request.type === 'TOGGLE_CONTENT') {
+      if (request.type === MESSAGE_TYPES.TOGGLE_CONTENT) {
         updateContent(request.enabled);
       }
     };

@@ -1,17 +1,16 @@
 // options/App.tsx
-import React from 'react';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import './Options.css';
 
 console.log('App 함수 실행전');
 
 export function App() {
+  console.log('App 실행');
   const { t, i18n } = useTranslation();
   const [currentLang, setCurrentLang] = useState('en');
   const [isLangLoaded, setIsLangLoaded] = useState(false);
 
-  console.log('이거 왜 안뜸? 2t');
   // 초기 언어 로드 (useLangLoader 대신 직접 구현)
   useEffect(() => {
     try {
