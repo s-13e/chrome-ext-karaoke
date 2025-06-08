@@ -39,6 +39,7 @@ components/common/ErrorFallback.tsx
 constants/languages.ts
 constants/messageTypes.ts
 constants/paths.ts
+constants/storageKeys.ts
 content/App.tsx
 content/index.tsx
 hooks/useChromeStorage.ts
@@ -119,6 +120,15 @@ export const PATHS = {
   OPTIONS_HTML: 'options.html',
   ICON_SETTING: '@assets/icons/setting.png',
 };
+```
+
+## File: constants/storageKeys.ts
+```typescript
+export const STORAGE_KEYS = {
+  CONTENT_ENABLED: 'contentEnabled',
+  LANGUAGE: 'language',
+  // 필요시 추가
+} as const;
 ```
 
 ## File: content/App.tsx
@@ -254,8 +264,7 @@ export function useLangLoader() {
 ## File: options/App.tsx
 ```typescript
 // options/App.tsx
-import React from 'react';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import './Options.css';
 
@@ -267,7 +276,6 @@ export function App() {
   const [currentLang, setCurrentLang] = useState('en');
   const [isLangLoaded, setIsLangLoaded] = useState(false);
 
-  console.log('이거 왜 안뜸? 2t');
   // 초기 언어 로드 (useLangLoader 대신 직접 구현)
   useEffect(() => {
     try {
@@ -555,6 +563,7 @@ import { initReactI18next } from 'react-i18next';
 import enRaw from '@_locales/en/messages.json';
 import koRaw from '@_locales/ko/messages.json';
 import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, SupportedLanguage } from '@constants/languages';
+import { STORAGE_KEYS } from '@/constants/storageKeys';
 
 function convertMessages(raw: Record<string, { message?: string }>) {
   const result: Record<string, string> = {};
@@ -572,7 +581,7 @@ const resources = {
 // ✅ 저장된 언어를 먼저 읽고 초기화
 export const initializeI18n = async () => {
   return new Promise((resolve) => {
-    chrome.storage.sync.get('language', (result) => {
+    chrome.storage.sync.get(STORAGE_KEYS.LANGUAGE, (result) => {
       const savedLang = (SUPPORTED_LANGUAGES as readonly string[]).includes(result.language)
         ? (result.language as SupportedLanguage)
         : DEFAULT_LANGUAGE;
