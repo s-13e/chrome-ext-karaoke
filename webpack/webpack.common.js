@@ -1,7 +1,6 @@
 const path = require('path');
 
 const HtmlWebpackPlugin = require('html-webpack-plugin');
-const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 const CopyPlugin = require('copy-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
@@ -17,7 +16,7 @@ module.exports = {
   output: {
     filename: `[name]/[name].js`,
     path: path.resolve(__dirname, '../dist'),
-    clean: true,
+    clean: false,
     publicPath: '',
   },
   module: {
@@ -40,11 +39,16 @@ module.exports = {
           },
         ],
       },
+      {
+        test: /\.json$/,
+        type: 'javascript/auto', // JSON을 모듈로 처리
+        use: ['json-loader'], // ✅ 로더 명시
+      },
     ],
   },
   resolve: {
     alias: {
-      '@_locales': path.resolve(__dirname, '../_locales'),
+      '@locales': path.resolve(__dirname, '../src/locales'),
       '@assets': path.resolve(__dirname, '../public/assets'),
       '@components': path.resolve(__dirname, '../src/components'),
       '@constants': path.resolve(__dirname, '../src/constants'),
@@ -79,12 +83,22 @@ module.exports = {
     new CopyPlugin({
       patterns: [
         { from: 'manifest.json', to: 'manifest.json' },
-        { from: '_locales', to: '_locales' },
         { from: 'public/assets/images', to: 'assets/images' },
         { from: 'src/assets/icons', to: 'assets/icons' },
         { from: 'src/content/content.css', to: 'content/content.css' },
+        {
+          from: 'src/locales/*.json',
+          to: '_locales/[name]/messages.json',
+          transform(content) {
+            const translations = JSON.parse(content);
+            const chromeFormat = {};
+            Object.keys(translations).forEach((key) => {
+              chromeFormat[key] = { message: translations[key] };
+            });
+            return JSON.stringify(chromeFormat, null, 2);
+          },
+        },
       ],
     }),
-    new CleanWebpackPlugin(),
   ],
 };

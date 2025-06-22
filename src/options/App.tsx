@@ -1,64 +1,69 @@
-// options/App.tsx
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
-import './Options.css';
-
-console.log('App 함수 실행전');
+import { useLangLoader } from '@hooks/useLangLoader';
+import { ErrorFallback } from '@components/common/ErrorFallback';
+import { LoadingOverlay } from '@components/common/LoadingOverlay';
+import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, SupportedLanguage, NATIVE_LANGUAGE_NAMES } from '@constants/languages';
+import { syncLanguage } from '@services/i18n';
+import { MESSAGE_TYPES } from '@constants/messageTypes';
+import { STORAGE_KEYS } from '@constants/storageKeys';
 
 export function App() {
-  console.log('App 실행');
   const { t, i18n } = useTranslation();
-  const [currentLang, setCurrentLang] = useState('en');
-  const [isLangLoaded, setIsLangLoaded] = useState(false);
+  const { phase, error } = useLangLoader();
+  const [isChanging, setIsChanging] = React.useState(false);
+  const [currentLang, setCurrentLang] = React.useState<SupportedLanguage>(DEFAULT_LANGUAGE);
 
-  // 초기 언어 로드 (useLangLoader 대신 직접 구현)
-  useEffect(() => {
-    try {
-      chrome.storage.sync.get('language', (result) => {
-        const savedLang = result.language || 'en';
-        i18n
-          .changeLanguage(savedLang)
-          .then(() => {
-            setCurrentLang(savedLang);
-            console.log('App.tsx의 then 실행?');
-            setIsLangLoaded(true);
-          })
-          .catch((err) => {
-            console.error('i18n error:', err);
-            setIsLangLoaded(true); // 에러여도 화면은 띄움
-          });
-      });
-    } catch (e) {
-      console.error('chrome.storage error:', e);
-      setIsLangLoaded(true);
-    } finally {
-      console.warn('chrome.storage finally');
-      setIsLangLoaded(true); // 무조건 실행
+  // ✅ i18n이 준비된 후 현재 언어 상태 동기화
+  React.useEffect(() => {
+    console.log(`[Options] i18n phase: ${phase}, current language: ${i18n.language}`);
+    if (phase === 'ready' && i18n.language) {
+      console.log(`[Options] Setting currentLang to: ${i18n.language}`);
+      setCurrentLang(i18n.language as SupportedLanguage);
     }
-  }, [i18n]);
+  }, [phase, i18n.language]);
 
-  // 언어 변경 핸들러
+  // 상태별 UI 처리
+  if (phase === 'error') return <ErrorFallback error={error!} resetErrorBoundary={() => window.location.reload()} />;
+  if (phase !== 'ready') return null;
+
+  // 언어 변경 핸들러 (실시간 반영 강화)
   const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newLang = e.target.value;
-    await i18n.changeLanguage(newLang);
-    setCurrentLang(newLang);
-    chrome.storage.sync.set({ language: newLang });
+    const newLang = e.target.value as SupportedLanguage;
+    console.log(`[Options] Language change requested: ${newLang}`);
+
+    try {
+      console.log('handleChange 핸들러 실행');
+      setIsChanging(true);
+      setCurrentLang(newLang); // 즉시 UI 업데이트
+
+      await chrome.storage.sync.set({ [STORAGE_KEYS.LANGUAGE]: newLang });
+      await syncLanguage(newLang);
+
+      // 3. 다른 컨텍스트에 메시지 전송
+      chrome.runtime.sendMessage({
+        type: MESSAGE_TYPES.LANGUAGE_CHANGED,
+        language: newLang,
+      });
+    } catch (error) {
+      console.error('Language change failed:', error);
+      setCurrentLang(i18n.language as SupportedLanguage); // 롤백
+    } finally {
+      setIsChanging(false);
+    }
   };
 
-  if (!isLangLoaded) {
-    console.log('isLangLoaded is not exist');
-    return null;
-  }
-  console.log('App.tsx return 직전');
-
   return (
-    <div>
-      <h1>{t('language')}</h1>
-      <select onChange={handleChange} value={currentLang} className="custom-select">
-        <option value="ko">한국어</option>
-        <option value="en">English</option>
+    <div className="language-selector">
+      <h2>{t('extLanguage')}</h2>
+      <select value={currentLang} onChange={handleChange} disabled={isChanging} aria-busy={isChanging}>
+        {SUPPORTED_LANGUAGES.map((lang) => (
+          <option key={lang} value={lang}>
+            {NATIVE_LANGUAGE_NAMES[lang]}
+          </option>
+        ))}
       </select>
-      <div></div>
+      {isChanging && <LoadingOverlay />}
     </div>
   );
 }

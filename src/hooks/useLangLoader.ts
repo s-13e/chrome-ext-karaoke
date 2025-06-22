@@ -1,32 +1,38 @@
+// src/hooks/useLangLoader.ts
 import { useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { SUPPORTED_LANGUAGES, DEFAULT_LANGUAGE, SupportedLanguage } from '@constants/languages';
+import { i18nInstance } from '@services/i18n';
+import { I18nError } from '@my_types/errors';
 
-export function useLangLoader() {
-  const { i18n } = useTranslation();
-  const [isLangLoaded, setIsLangLoaded] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+type I18nStatus = {
+  phase: 'idle' | 'initializing' | 'ready' | 'error';
+  error?: I18nError;
+  retryCount: number;
+};
+export const useLangLoader = (): I18nStatus => {
+  const [status, setStatus] = useState<I18nStatus>({
+    phase: i18nInstance.isInitialized ? 'ready' : 'idle',
+    retryCount: 0,
+  });
 
   useEffect(() => {
-    chrome.storage.sync.get('language', (result) => {
-      const savedLang = (SUPPORTED_LANGUAGES as readonly string[]).includes(result.language)
-        ? (result.language as SupportedLanguage)
-        : DEFAULT_LANGUAGE;
-      i18n
-        .changeLanguage(savedLang)
-        .then(() => {
-          setIsLangLoaded(true);
-          document.body.setAttribute('data-lang-loaded', 'true');
-        })
-        .catch((err) => {
-          setError(err); // 에러 발생 시 상태 업데이트
-        })
-        .finally(() => {
-          setLoading(false); // 로딩 완료 (성공/실패 무관)
-        });
-    });
-  }, [i18n]);
+    const handlers = {
+      initialized: () => setStatus({ phase: 'ready', retryCount: 0 }),
+      failed: (error: I18nError) =>
+        setStatus((prev) => ({
+          phase: 'error',
+          error,
+          retryCount: prev.retryCount + 1,
+        })),
+    };
 
-  return { isLangLoaded, loading, error }; // 객체로 상태 반환
-}
+    i18nInstance.on('initialized', handlers.initialized);
+    i18nInstance.on('failed', handlers.failed);
+
+    return () => {
+      i18nInstance.off('initialized', handlers.initialized);
+      i18nInstance.off('failed', handlers.failed);
+    };
+  }, []);
+
+  return status;
+};

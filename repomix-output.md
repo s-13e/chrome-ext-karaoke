@@ -36,6 +36,7 @@ The content is organized as follows:
 ```
 background/background.ts
 components/common/ErrorFallback.tsx
+components/common/LoadingOverlay.tsx
 constants/languages.ts
 constants/messageTypes.ts
 constants/paths.ts
@@ -44,6 +45,8 @@ content/App.tsx
 content/index.tsx
 hooks/useChromeStorage.ts
 hooks/useLangLoader.ts
+locales/en.json
+locales/ko.json
 options/App.tsx
 options/index.tsx
 options/Options.css
@@ -55,7 +58,11 @@ popup/popup.css
 popup/popup.html
 services/i18n.ts
 styles/GlobalStyle.ts
+types/errors.ts
+types/i18next.d.ts
 types/message.ts
+types/translationKeys.ts
+utils/typeGuards.ts
 ```
 
 # Files
@@ -81,37 +88,90 @@ chrome.runtime.onMessage.addListener((message) => {
 
 ## File: components/common/ErrorFallback.tsx
 ```typescript
-// src/components/common/ErrorFallback.tsx
-// import React from 'react';
+import { FallbackProps } from 'react-error-boundary';
 
-type Props = {
-  error: Error;
-  resetErrorBoundary: () => void;
-};
-
-export function ErrorFallback({ error, resetErrorBoundary }: Props) {
+export function ErrorFallback({
+  error,
+  resetErrorBoundary, // 필수 프로퍼티 추가
+}: FallbackProps) {
   return (
     <div>
-      <p>에러: {error.message}</p>
-      <button onClick={resetErrorBoundary}>다시 시도</button>
+      <p>{error.message}</p>
+      <button onClick={resetErrorBoundary}>재시도</button>
     </div>
   );
 }
 ```
 
+## File: components/common/LoadingOverlay.tsx
+```typescript
+// src/components/common/LoadingOverlay.tsx
+import styled from '@emotion/styled';
+import React from 'react';
+
+const Container = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.9);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+`;
+
+const Spinner = styled.div`
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+`;
+
+export const LoadingOverlay = React.memo(() => (
+  <Container role="alert" aria-live="polite">
+    <Spinner />
+    <span className="visually-hidden">로딩 중입니다</span>
+  </Container>
+));
+```
+
 ## File: constants/languages.ts
 ```typescript
+// 언어 관련 상수
+export const DEFAULT_LANGUAGE: SupportedLanguage = 'en';
 export const SUPPORTED_LANGUAGES = ['en', 'ko'] as const;
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
-export const DEFAULT_LANGUAGE: SupportedLanguage = 'en';
+
+export const NATIVE_LANGUAGE_NAMES = {
+  en: 'English',
+  ko: '한국어',
+} as const;
+
+// i18next 네임스페이스
+export const I18N_NAMESPACE = 'translation' as const;
 ```
 
 ## File: constants/messageTypes.ts
 ```typescript
 export const MESSAGE_TYPES = {
   TOGGLE_CONTENT: 'TOGGLE_CONTENT',
-  // 향후 메시지 타입 추가
+  LANGUAGE_CHANGED: 'LANGUAGE_CHANGED',
 } as const;
+
+export type MessageType = (typeof MESSAGE_TYPES)[keyof typeof MESSAGE_TYPES];
 ```
 
 ## File: constants/paths.ts
@@ -135,10 +195,41 @@ export const STORAGE_KEYS = {
 ```typescript
 // src/content/App.tsx
 import { useEffect } from 'react';
-import type { ContentScriptMessage } from '@my_types/message';
-import { MESSAGE_TYPES } from '@constants/messageTypes';
+// import { MESSAGE_TYPES } from '@constants/messageTypes';
+import { i18nInstance } from '@services/i18n';
+import { isToggleContentMessage } from '@utils/typeGuards';
+import { ContentScriptMessage } from '@my_types/message';
+import { STORAGE_KEYS } from '@constants/storageKeys';
 
 export function App() {
+  // 메시지 타입별로 구체적 타입 정의
+  // type ToggleMessage = {
+  //   type: typeof MESSAGE_TYPES.TOGGLE_CONTENT;
+  //   enabled: boolean;
+  // };
+
+  // type MessageRequest = ToggleMessage | { type: string }; // 확장 가능
+
+  useEffect(() => {
+    console.log('[Content] Setting up storage listener');
+
+    const handleStorageChange = (changes: Record<string, any>) => {
+      if (changes[STORAGE_KEYS.LANGUAGE]?.newValue) {
+        const newLang = changes[STORAGE_KEYS.LANGUAGE].newValue;
+        console.log(`[Content] Storage change detected: ${newLang}`);
+
+        // ✅ 실제 언어 변경 적용
+        if (i18nInstance.language !== newLang) {
+          console.log(`[Content] Changing language: ${i18nInstance.language} -> ${newLang}`);
+          i18nInstance.changeLanguage(newLang);
+        }
+      }
+    };
+
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    return () => chrome.storage.onChanged.removeListener(handleStorageChange);
+  }, []);
+
   useEffect(() => {
     // 콘텐츠 제어 함수
     const updateContent = (enabled: boolean) => {
@@ -150,22 +241,28 @@ export function App() {
         console.log('콘텐츠 비활성화');
       }
     };
+    // 언어 변경 감지 리스너
+    const handleLanguageChange = () => {
+      console.log('Language changed to:', i18nInstance.language);
+    };
 
     // 1. 초기 상태 불러오기
     chrome.storage.sync.get('contentEnabled', (result) => {
-      const enabled = result.contentEnabled ?? false;
-      updateContent(enabled);
+      updateContent(result.contentEnabled ?? false);
     });
 
     // 2. 메시지 리스너 등록
     const messageListener = (request: ContentScriptMessage) => {
-      if (request.type === MESSAGE_TYPES.TOGGLE_CONTENT) {
-        updateContent(request.enabled);
+      if (isToggleContentMessage(request)) {
+        updateContent(request.enabled); // ✅ 정확한 타입 추론
       }
     };
+
+    i18nInstance.on('languageChanged', handleLanguageChange);
     chrome.runtime.onMessage.addListener(messageListener);
 
     return () => {
+      i18nInstance.off('languageChanged', handleLanguageChange);
       chrome.runtime.onMessage.removeListener(messageListener);
     };
   }, []);
@@ -177,11 +274,13 @@ export function App() {
 ## File: content/index.tsx
 ```typescript
 // src/content/index.tsx
-// import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import 'normalize.css';
-import { GlobalStyle } from '@styles/GlobalStyle';
+import { i18nInstance, initializeI18n } from '@services/i18n';
+import { ErrorFallback } from '@components/common/ErrorFallback';
+import { I18nextProvider } from 'react-i18next';
+import { ErrorBoundary } from 'react-error-boundary';
 
 let root = document.getElementById('chrome-extension-root');
 if (!root) {
@@ -189,12 +288,27 @@ if (!root) {
   root.id = 'chrome-extension-root';
   document.body.appendChild(root);
 }
-createRoot(root).render(
-  <>
-    <GlobalStyle />
-    <App />
-  </>,
-);
+const handleReset = () => {
+  window.location.reload(); // 페이지 새로고침으로 초기화
+};
+initializeI18n()
+  .then(() => {
+    createRoot(root).render(
+      <ErrorBoundary FallbackComponent={ErrorFallback} onReset={handleReset}>
+        <I18nextProvider i18n={i18nInstance}>
+          <App />
+        </I18nextProvider>
+      </ErrorBoundary>,
+    );
+  })
+  .catch((error) => {
+    createRoot(root).render(
+      <ErrorFallback
+        error={error}
+        resetErrorBoundary={handleReset} // 리셋 함수 전달
+      />,
+    );
+  });
 ```
 
 ## File: hooks/useChromeStorage.ts
@@ -227,103 +341,138 @@ export function useChromeStorage<T>(key: string, defaultValue: T) {
 
 ## File: hooks/useLangLoader.ts
 ```typescript
+// src/hooks/useLangLoader.ts
 import { useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { SUPPORTED_LANGUAGES, DEFAULT_LANGUAGE, SupportedLanguage } from '@constants/languages';
+import { i18nInstance } from '@services/i18n';
+import { I18nError } from '@my_types/errors';
 
-export function useLangLoader() {
-  const { i18n } = useTranslation();
-  const [isLangLoaded, setIsLangLoaded] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+type I18nStatus = {
+  phase: 'idle' | 'initializing' | 'ready' | 'error';
+  error?: I18nError;
+  retryCount: number;
+};
+export const useLangLoader = (): I18nStatus => {
+  const [status, setStatus] = useState<I18nStatus>({
+    phase: i18nInstance.isInitialized ? 'ready' : 'idle',
+    retryCount: 0,
+  });
 
   useEffect(() => {
-    chrome.storage.sync.get('language', (result) => {
-      const savedLang = (SUPPORTED_LANGUAGES as readonly string[]).includes(result.language)
-        ? (result.language as SupportedLanguage)
-        : DEFAULT_LANGUAGE;
-      i18n
-        .changeLanguage(savedLang)
-        .then(() => {
-          setIsLangLoaded(true);
-          document.body.setAttribute('data-lang-loaded', 'true');
-        })
-        .catch((err) => {
-          setError(err); // 에러 발생 시 상태 업데이트
-        })
-        .finally(() => {
-          setLoading(false); // 로딩 완료 (성공/실패 무관)
-        });
-    });
-  }, [i18n]);
+    const handlers = {
+      initialized: () => setStatus({ phase: 'ready', retryCount: 0 }),
+      failed: (error: I18nError) =>
+        setStatus((prev) => ({
+          phase: 'error',
+          error,
+          retryCount: prev.retryCount + 1,
+        })),
+    };
 
-  return { isLangLoaded, loading, error }; // 객체로 상태 반환
+    i18nInstance.on('initialized', handlers.initialized);
+    i18nInstance.on('failed', handlers.failed);
+
+    return () => {
+      i18nInstance.off('initialized', handlers.initialized);
+      i18nInstance.off('failed', handlers.failed);
+    };
+  }, []);
+
+  return status;
+};
+```
+
+## File: locales/en.json
+```json
+{
+  "extName": "Chrome Extension Templet",
+  "extDescription": "jot that down description",
+  "extLanguage": "Language"
+}
+```
+
+## File: locales/ko.json
+```json
+{
+  "extName": "마켓 플레이스에 뜨는 제목",
+  "extDescription": "앱 설명",
+  "extLanguage": "언어"
 }
 ```
 
 ## File: options/App.tsx
 ```typescript
-// options/App.tsx
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
-import './Options.css';
-
-console.log('App 함수 실행전');
+import { useLangLoader } from '@hooks/useLangLoader';
+import { ErrorFallback } from '@components/common/ErrorFallback';
+import { LoadingOverlay } from '@components/common/LoadingOverlay';
+import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, SupportedLanguage } from '@constants/languages';
+import { NATIVE_LANGUAGE_NAMES } from '@constants/languages';
+import { syncLanguage } from '@services/i18n';
+import { MESSAGE_TYPES } from '@constants/messageTypes';
+import { STORAGE_KEYS } from '@constants/storageKeys';
 
 export function App() {
-  console.log('App 실행');
   const { t, i18n } = useTranslation();
-  const [currentLang, setCurrentLang] = useState('en');
-  const [isLangLoaded, setIsLangLoaded] = useState(false);
+  const { phase, error } = useLangLoader();
+  const [isChanging, setIsChanging] = React.useState(false);
+  const [currentLang, setCurrentLang] = React.useState<SupportedLanguage>(DEFAULT_LANGUAGE);
 
-  // 초기 언어 로드 (useLangLoader 대신 직접 구현)
-  useEffect(() => {
-    try {
-      chrome.storage.sync.get('language', (result) => {
-        const savedLang = result.language || 'en';
-        i18n
-          .changeLanguage(savedLang)
-          .then(() => {
-            setCurrentLang(savedLang);
-            console.log('App.tsx의 then 실행?');
-            setIsLangLoaded(true);
-          })
-          .catch((err) => {
-            console.error('i18n error:', err);
-            setIsLangLoaded(true); // 에러여도 화면은 띄움
-          });
-      });
-    } catch (e) {
-      console.error('chrome.storage error:', e);
-      setIsLangLoaded(true);
-    } finally {
-      console.warn('chrome.storage finally');
-      setIsLangLoaded(true); // 무조건 실행
+  // 상태별 UI 처리
+  if (phase === 'error') return <ErrorFallback error={error!} resetErrorBoundary={() => window.location.reload()} />;
+  if (phase !== 'ready') return null;
+
+  // ✅ i18n이 준비된 후 현재 언어 상태 동기화
+  React.useEffect(() => {
+    console.log(`[Options] i18n phase: ${phase}, current language: ${i18n.language}`);
+    if (phase === 'ready' && i18n.language) {
+      console.log(`[Options] Setting currentLang to: ${i18n.language}`);
+      setCurrentLang(i18n.language as SupportedLanguage);
     }
-  }, [i18n]);
+  }, [phase, i18n.language]);
 
-  // 언어 변경 핸들러
+  // 언어 변경 핸들러 (실시간 반영 강화)
   const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newLang = e.target.value;
-    await i18n.changeLanguage(newLang);
-    setCurrentLang(newLang);
-    chrome.storage.sync.set({ language: newLang });
+    const newLang = e.target.value as SupportedLanguage;
+    console.log(`[Options] Language change requested: ${newLang}`);
+
+    try {
+      console.log('handleChange 핸들러 실행');
+      setIsChanging(true);
+      setCurrentLang(newLang); // 즉시 UI 업데이트
+
+      await chrome.storage.sync.set({ [STORAGE_KEYS.LANGUAGE]: newLang });
+      await syncLanguage(newLang);
+
+      // 3. 다른 컨텍스트에 메시지 전송
+      chrome.runtime.sendMessage({
+        type: MESSAGE_TYPES.LANGUAGE_CHANGED,
+        language: newLang,
+      });
+    } catch (error) {
+      console.error('Language change failed:', error);
+      setCurrentLang(i18n.language as SupportedLanguage); // 롤백
+    } finally {
+      setIsChanging(false);
+    }
   };
 
-  if (!isLangLoaded) {
-    console.log('isLangLoaded is not exist');
-    return null;
-  }
-  console.log('App.tsx return 직전');
-
   return (
-    <div>
-      <h1>{t('language')}</h1>
-      <select onChange={handleChange} value={currentLang} className="custom-select">
-        <option value="ko">한국어</option>
-        <option value="en">English</option>
+    <div className="language-selector">
+      <h2>{t('extLanguage')}</h2>
+      <select
+        value={currentLang}
+        onChange={handleChange}
+        disabled={isChanging}
+        aria-busy={isChanging}
+      >
+        {SUPPORTED_LANGUAGES.map((lang) => (
+          <option key={lang} value={lang}>
+            {NATIVE_LANGUAGE_NAMES[lang]}
+          </option>
+        ))}
       </select>
-      <div></div>
+      {isChanging && <LoadingOverlay />}
     </div>
   );
 }
@@ -337,22 +486,31 @@ import { I18nextProvider } from 'react-i18next';
 import { initializeI18n, i18nInstance } from '@services/i18n';
 import { ErrorBoundary } from 'react-error-boundary';
 import { ErrorFallback } from '@components/common/ErrorFallback';
+import { LoadingOverlay } from '@components/common/LoadingOverlay';
 import 'normalize.css';
-// import { GlobalStyle } from '@styles/GlobalStyle';
+
 
 const root = document.getElementById('root');
 if (root) {
-  initializeI18n().then(() => {
-    createRoot(root).render(
-      <ErrorBoundary FallbackComponent={ErrorFallback}>
-        <I18nextProvider i18n={i18nInstance}>
-          <App />
-        </I18nextProvider>
-      </ErrorBoundary>,
-    );
-  });
-} else {
-  console.error('Root element not found');
+  initializeI18n()
+    .then((initSuccess) => {
+      createRoot(root).render(
+        <ErrorBoundary FallbackComponent={ErrorFallback}>
+          <I18nextProvider i18n={i18nInstance}>{initSuccess ? <App /> : <LoadingOverlay />}</I18nextProvider>
+        </ErrorBoundary>,
+      );
+    })
+    .catch((error) => {
+      // ✅ error 객체 받기
+      createRoot(root).render(
+        <ErrorBoundary FallbackComponent={ErrorFallback}>
+          <I18nextProvider i18n={i18nInstance}>
+            <App /> {/* ✅ 의도적으로 에러 발생 */}
+          </I18nextProvider>
+        </ErrorBoundary>,
+      );
+      throw error; // ✅ 에러 바운더리가 포착하도록 throw
+    });
 }
 ```
 
@@ -403,19 +561,66 @@ ExtensionPay 로 구현할 예정
 ## File: popup/App.tsx
 ```typescript
 // poup/App.tsx
-import React from 'react';
-import './popup.css';
+import React, { useEffect } from 'react';
 import { useLangLoader } from '@hooks/useLangLoader';
-// import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useChromeStorage } from '@hooks/useChromeStorage';
 import { MESSAGE_TYPES } from '@constants/messageTypes';
+import { ErrorFallback } from '@components/common/ErrorFallback';
+import { LoadingOverlay } from '@components/common/LoadingOverlay';
+import './popup.css';
+import { STORAGE_KEYS } from '@constants/storageKeys';
 
 export function App() {
-  const { t } = useTranslation();
-  const { isLangLoaded, loading, error } = useLangLoader(); // 구조 분해 할당
-  //const [enabled, setEnabled, isEnabledLoading] = useChromeStorage<boolean>('switchState', false);
-  const [enabled, setEnabled, isEnabledLoading] = useChromeStorage('contentEnabled', false);
+  const { t, i18n } = useTranslation();
+  const { phase } = useLangLoader();
+  const [enabled, setEnabled] = useChromeStorage('contentEnabled', false);
+
+  useEffect(() => {
+    console.log('[Popup] Setting up language listeners');
+
+    // ✅ 스토리지 변경과 메시지 둘 다 처리
+    const handleStorageChange = (changes: Record<string, any>) => {
+      if (changes[STORAGE_KEYS.LANGUAGE]?.newValue) {
+        const newLang = changes[STORAGE_KEYS.LANGUAGE].newValue;
+        console.log(`[Popup] Storage change detected: ${newLang}`);
+
+        if (i18n.language !== newLang) {
+          console.log(`[Popup] Changing language: ${i18n.language} -> ${newLang}`);
+          i18n.changeLanguage(newLang);
+        }
+      }
+    };
+
+    const handleMessage = (message: any) => {
+      console.log('[Popup] Received message:', message);
+      if (message.type === MESSAGE_TYPES.LANGUAGE_CHANGED && message.language) {
+        console.log(`[Popup] Language change message: ${message.language}`);
+        if (i18n.language !== message.language) {
+          i18n.changeLanguage(message.language);
+        }
+      }
+    };
+
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    chrome.runtime.onMessage.addListener(handleMessage);
+
+    return () => {
+      chrome.storage.onChanged.removeListener(handleStorageChange);
+      chrome.runtime.onMessage.removeListener(handleMessage);
+    };
+  }, [i18n]);
+
+  if (phase === 'error')
+    return (
+      <ErrorFallback
+        error={undefined}
+        resetErrorBoundary={function (): void {
+          throw new Error('Function not implemented.');
+        }}
+      />
+    );
+  if (phase !== 'ready') return <LoadingOverlay />;
 
   // 설정 버튼 클릭 시 옵션 페이지 열기
   const handleOpenOptions = () => {
@@ -433,20 +638,13 @@ export function App() {
 
     // 현재 활성 탭에 메시지 전송
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (!tabs[0]?.id) {
-        console.error('No active tab found');
-        return;
-      }
-      chrome.tabs.sendMessage(tabs[0].id, {
-        type: MESSAGE_TYPES.TOGGLE_CONTENT,
-        enabled: newValue,
-      });
+      if (tabs[0]?.id)
+        chrome.tabs.sendMessage(tabs[0].id, {
+          type: MESSAGE_TYPES.TOGGLE_CONTENT,
+          enabled: newValue,
+        });
     });
   };
-
-  if (loading || isEnabledLoading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error.message}</div>;
-  if (!isLangLoaded) return <div>Language not loaded</div>;
 
   return (
     <div>
@@ -472,20 +670,36 @@ export function App() {
 // src/content/index.tsx
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
-import { initializeI18n } from '@services/i18n';
-import React from 'react';
+import { i18nInstance, initializeI18n } from '@services/i18n';
 import 'normalize.css';
-// import { GlobalStyle } from '@styles/GlobalStyle';
+import { ErrorBoundary } from 'react-error-boundary';
+import { I18nextProvider } from 'react-i18next';
+import { ErrorFallback } from '@components/common/ErrorFallback';
 
-// ✅ i18n 초기화 후에만 앱 렌더링
-initializeI18n().then(() => {
-  const root = createRoot(document.getElementById('root')!);
-  root.render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>,
-  );
-});
+const root = document.getElementById('root');
+if (root) {
+  const handleReset = () => {
+    window.location.reload(); // 페이지 새로고침으로 초기화
+  };
+  initializeI18n()
+    .then(() => {
+      createRoot(root).render(
+        <ErrorBoundary FallbackComponent={ErrorFallback} onReset={handleReset}>
+          <I18nextProvider i18n={i18nInstance}>
+            <App />
+          </I18nextProvider>
+        </ErrorBoundary>,
+      );
+    })
+    .catch((error) => {
+      createRoot(root).render(
+        <ErrorFallback
+          error={error}
+          resetErrorBoundary={handleReset} // 리셋 함수 전달
+        />,
+      );
+    });
+}
 ```
 
 ## File: popup/popup.css
@@ -557,55 +771,179 @@ input:checked + .slider:before {
 
 ## File: services/i18n.ts
 ```typescript
-import i18n from 'i18next';
+// src/services/i18n.ts
+import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
-//import LanguageDetector from 'i18next-browser-languagedetector';
-import enRaw from '@_locales/en/messages.json';
-import koRaw from '@_locales/ko/messages.json';
-import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, SupportedLanguage } from '@constants/languages';
-import { STORAGE_KEYS } from '@/constants/storageKeys';
+import LanguageDetector from 'i18next-browser-languagedetector';
+import { I18nError, ResourceLoadError } from '@my_types/errors';
+import { DEFAULT_LANGUAGE, I18N_NAMESPACE, SUPPORTED_LANGUAGES, SupportedLanguage } from '@constants/languages';
+import { STORAGE_KEYS } from '@constants/storageKeys';
+import { MESSAGE_TYPES } from '@constants/messageTypes';
+import enTranslations from '../locales/en.json';
+import koTranslations from '../locales/ko.json';
 
-function convertMessages(raw: Record<string, { message?: string }>) {
-  const result: Record<string, string> = {};
-  Object.keys(raw).forEach((key) => {
-    result[key] = raw[key]?.message || '';
-  });
-  return result;
-}
+const MAX_RETRIES = 3;
+const INITIAL_DELAY = 1000; // 1초
 
 const resources = {
-  en: { translation: convertMessages(enRaw) },
-  ko: { translation: convertMessages(koRaw) },
+  en: { [I18N_NAMESPACE]: enTranslations },
+  ko: { [I18N_NAMESPACE]: koTranslations },
 };
 
-// ✅ 저장된 언어를 먼저 읽고 초기화
-export const initializeI18n = async () => {
+// 1. 싱글톤 인스턴스 생성
+export const i18nInstance = i18next.createInstance();
+
+// 1. 플러그인 설정 전용 함수
+const setupPlugins = () => {
+  i18nInstance.use(LanguageDetector).use(initReactI18next);
+};
+
+// 2. 인스턴스 구성 함수
+const configureInstance = async (lang: SupportedLanguage | null) => {
+  const config: any = {
+    resources, // ✅ 정적 리소스 한 번에 로딩
+    detection: {
+      order: ['navigator', 'htmlTag'],
+      caches: [],
+    },
+    fallbackLng: DEFAULT_LANGUAGE,
+    interpolation: { escapeValue: false },
+    supportedLngs: SUPPORTED_LANGUAGES,
+    react: {
+      bindI18n: 'languageChanged', // 언어 변경 시 리렌더링 트리거
+      bindI18nStore: '', // 스토어 바인딩 비활성화
+      useSuspense: false, // Suspense 미사용
+      transSupportBasicHtmlNodes: true, // 기본 HTML 노드 지원
+    },
+  };
+  // ✅ null이 아닐 때만 lng 설정
+  if (lang) {
+    config.lng = lang;
+  }
+  // initialLang이 null이면 LanguageDetector가 자동으로 언어 감지
+
+  await i18nInstance.init(config);
+};
+
+// 3. 스토리지 리스너 분리
+const setupStorageListeners = () => {
+  chrome.storage.onChanged.addListener((changes) => {
+    const newLang = changes?.[STORAGE_KEYS.LANGUAGE]?.newValue;
+    if (newLang && SUPPORTED_LANGUAGES.includes(newLang)) {
+      i18nInstance.changeLanguage(newLang);
+    }
+  });
+};
+
+// 4. 초기 리소스 로드
+
+const detectBrowserLanguage = (): Promise<SupportedLanguage> => {
   return new Promise((resolve) => {
-    chrome.storage.sync.get(STORAGE_KEYS.LANGUAGE, (result) => {
-      const savedLang = (SUPPORTED_LANGUAGES as readonly string[]).includes(result.language)
-        ? (result.language as SupportedLanguage)
-        : DEFAULT_LANGUAGE;
-      i18n
-        .use(initReactI18next)
-        .init({
-          resources,
-          lng: savedLang,
-          fallbackLng: DEFAULT_LANGUAGE,
-          interpolation: { escapeValue: false },
-          react: { useSuspense: false },
-        })
-        .then(() => {
-          document.documentElement.lang = savedLang;
-          resolve(true);
-        })
-        .catch((err) => {
-          console.error('i18n init failed:', err);
-          resolve(false);
-        });
+    chrome.i18n.getAcceptLanguages((languages) => {
+      console.log('[i18n] Browser languages:', languages);
+
+      // 지원 언어 중 첫 번째 일치 항목 찾기
+      for (const lang of languages) {
+        const langCode = lang.split('-')[0] as SupportedLanguage;
+        if (SUPPORTED_LANGUAGES.includes(langCode)) {
+          console.log(`[i18n] Detected valid language: ${langCode}`);
+          resolve(langCode);
+          return;
+        }
+      }
+
+      // 일치 없을 시 기본값 반환
+      console.log('[i18n] No valid browser language, using default');
+      resolve(DEFAULT_LANGUAGE);
     });
   });
 };
-export const i18nInstance = i18n;
+// services/i18n.ts
+const getSavedLanguage = async (): Promise<SupportedLanguage | null> => {
+  return new Promise<SupportedLanguage | null>((resolve) => {
+    chrome.storage.sync.get(STORAGE_KEYS.LANGUAGE, (result) => {
+      const lang = result[STORAGE_KEYS.LANGUAGE];
+      const isValid = lang && SUPPORTED_LANGUAGES.includes(lang);
+      resolve(isValid ? lang : null);
+    });
+  });
+};
+
+// 2. 초기화 함수
+let initializationPromise: Promise<boolean> | null = null;
+
+export const initializeI18n = (): Promise<boolean> => {
+  if (!initializationPromise) {
+    initializationPromise = retryWithBackoff(async () => {
+      try {
+        console.log('[i18n] Initialization started');
+        setupPlugins();
+
+        // ✅ 스토리지 언어 확인 (null 허용)
+        const savedLang = await getSavedLanguage();
+
+
+        // ✅ 브라우저 언어 감지 (스토리지 없을 때만)
+        const browserLang = savedLang ? null : await detectBrowserLanguage();
+        const finalLang = savedLang || browserLang || DEFAULT_LANGUAGE;
+        console.log(`[i18n] Using language: ${finalLang}`);
+
+        // ✅ null 처리된 configureInstance 호출
+        await configureInstance(finalLang);
+
+        // ✅ 스토리지 업데이트 (신규 감지 시)
+        if (!savedLang && browserLang) {
+          console.log(`[i18n] Saving detected language to storage: ${browserLang}`);
+          await chrome.storage.sync.set({ [STORAGE_KEYS.LANGUAGE]: browserLang });
+        }
+
+        setupStorageListeners();
+        console.log('[i18n] Initialization completed successfully');
+        return true;
+      } catch (error) {
+        if (error instanceof ResourceLoadError) {
+          throw new I18nError('PERMANENT', `리소스 누락: ${error.language}`); // ✅
+        }
+        throw new I18nError('TRANSIENT', `초기화 실패: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }, isTransientError);
+  }
+  return initializationPromise;
+};
+// 1. 지수 백오프 재시도 함수 구현
+const retryWithBackoff = async <T>(fn: () => Promise<T>, isRetriableError: (error: unknown) => boolean): Promise<T> => {
+  let attempt = 0;
+
+  while (true) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (!isRetriableError(error) || attempt >= MAX_RETRIES) throw error;
+      const delay = INITIAL_DELAY * Math.pow(2, attempt);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      attempt++;
+    }
+  }
+};
+// 2. 재시도 가능 에러 판별 함수
+const isTransientError = (error: unknown): boolean => {
+  return error instanceof I18nError && error.code === 'TRANSIENT';
+};
+
+// 7. 언어 변경 핸들러 (기존과 동일)
+export const syncLanguage = async (newLang: SupportedLanguage) => {
+  try {
+    // Chrome API로 언어 변경 처리
+    await chrome.storage.sync.set({ [STORAGE_KEYS.LANGUAGE]: newLang });
+    document.documentElement.lang = newLang;
+    chrome.runtime.sendMessage({
+      type: MESSAGE_TYPES.LANGUAGE_CHANGED,
+      payload: newLang,
+    });
+  } catch (error) {
+    console.error('Language sync failed:', error);
+  }
+};
 ```
 
 ## File: styles/GlobalStyle.ts
@@ -626,16 +964,82 @@ export const GlobalStyle = createGlobalStyle`
 `;
 ```
 
+## File: types/errors.ts
+```typescript
+// src/types/errors.ts
+export class ResourceLoadError extends Error {
+  constructor(public readonly language: string) {
+    super(`리소스 로드 실패: ${language}`);
+    this.name = 'ResourceLoadError';
+  }
+}
+
+export class I18nError extends Error {
+  constructor(
+    public readonly code: 'TRANSIENT' | 'PERMANENT',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'I18nError';
+    Object.setPrototypeOf(this, I18nError.prototype);
+  }
+}
+
+// 타입 가드 함수 추가
+export function isI18nError(error: unknown): error is I18nError {
+  return error instanceof I18nError;
+}
+```
+
+## File: types/i18next.d.ts
+```typescript
+// src/types/i18next.d.ts
+import 'i18next';
+
+declare module 'i18next' {
+  interface CustomTypeOptions {
+    returnNull: false;
+    resources: typeof import('@locales/en.json');
+  }
+
+  interface i18n {
+    initializePromise?: Promise<boolean>;
+  }
+}
+```
+
 ## File: types/message.ts
 ```typescript
 // types/message.ts
 import { MESSAGE_TYPES } from '@constants/messageTypes';
 
-export interface ToggleContentMessage {
+export type ToggleContentMessage = {
   type: typeof MESSAGE_TYPES.TOGGLE_CONTENT;
   enabled: boolean;
-}
+};
 
-// 향후 메시지가 늘어날 경우 유니온 타입으로 관리 가능
-export type ContentScriptMessage = ToggleContentMessage; // | OtherMessageType ...
+// 2. 확장 가능한 유니온 타입
+export type ContentScriptMessage = ToggleContentMessage;
+// | AnotherMessageType
+```
+
+## File: types/translationKeys.ts
+```typescript
+// types/translationKeys.ts
+export const TRANSLATION_KEYS = ['extName', 'extDescription', 'extLanguage', ] as const;
+
+export type TranslationKey = (typeof TRANSLATION_KEYS)[number];
+```
+
+## File: utils/typeGuards.ts
+```typescript
+// src/utils/typeGuards.ts
+import { ToggleContentMessage } from '@my_types/message';
+import { MESSAGE_TYPES } from '@constants/messageTypes';
+
+export const isToggleContentMessage = (
+  request: { type: string }
+): request is ToggleContentMessage => {
+  return request.type === MESSAGE_TYPES.TOGGLE_CONTENT;
+};
 ```

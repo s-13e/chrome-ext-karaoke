@@ -1,16 +1,13 @@
-// src/components/common/ErrorFallback.tsx
-// import React from 'react';
+import { FallbackProps } from 'react-error-boundary';
 
-type Props = {
-  error: Error;
-  resetErrorBoundary: () => void;
-};
-
-export function ErrorFallback({ error, resetErrorBoundary }: Props) {
+export function ErrorFallback({
+  error,
+  resetErrorBoundary, // 필수 프로퍼티 추가
+}: FallbackProps) {
   return (
     <div>
-      <p>에러: {error.message}</p>
-      <button onClick={resetErrorBoundary}>다시 시도</button>
+      <p>{error.message}</p>
+      <button onClick={resetErrorBoundary}>재시도</button>
     </div>
   );
 }

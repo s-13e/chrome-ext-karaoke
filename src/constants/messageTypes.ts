@@ -1,4 +1,6 @@
 export const MESSAGE_TYPES = {
   TOGGLE_CONTENT: 'TOGGLE_CONTENT',
-  // 향후 메시지 타입 추가
+  LANGUAGE_CHANGED: 'LANGUAGE_CHANGED',
 } as const;
+
+export type MessageType = (typeof MESSAGE_TYPES)[keyof typeof MESSAGE_TYPES];

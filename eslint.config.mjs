@@ -73,7 +73,7 @@ export default [
         'error',
         // 1. React 컴포넌트 (exported 함수 타입 변수 + JSX 사용)
         {
-          selector: 'variable',
+          selector: ['variable', 'function'],
           modifiers: ['exported'],
           types: ['function'],
           format: ['PascalCase'],
@@ -83,29 +83,33 @@ export default [
             match: true,
           },
         },
-        {
-          selector: ['function', 'class'],
-          modifiers: ['exported'],
-          format: ['PascalCase'],
-          filter: {
-            regex: '^use[A-Z]',
-            match: false, // use로 시작하지 않는 경우만 적용
-          },
-        },
-        // 2. React 훅 (exported 함수) → camelCase
+        // 2. 일반 함수 (camelCase)
         {
           selector: 'function',
           modifiers: ['exported'],
           format: ['camelCase'],
           filter: {
-            regex: '^use[A-Z]',
-            match: true, // use로 시작하는 경우만 적용
+            regex: '^[A-Z]',
+            match: false,
           },
         },
-        // 4. 일반 변수 → camelCase (함수 제외)
+        // 3. 변수 (camelCase)
         {
           selector: 'variable',
           format: ['camelCase'],
+          filter: {
+            regex: '^[A-Z]',
+            match: false,
+          },
+        },
+        // 4. 대문자 시작 변수 (PascalCase 허용)
+        {
+          selector: 'variable',
+          format: ['PascalCase'],
+          filter: {
+            regex: '^[A-Z]',
+            match: true,
+          },
         },
       ],
     },
@@ -113,7 +117,10 @@ export default [
   // constants 폴더 전용 규칙 (UPPER_CASE 강제)
   {
     name: 'chrome-extension/constants-upper-case',
-    files: ['src/constants/**/*.ts'],
+    files: [
+      'src/constants/**/*.ts',
+      'src/types/**/*.ts',
+    ],
     plugins: { '@typescript-eslint': tseslint },
     languageOptions: {
       parser: tsParser,
