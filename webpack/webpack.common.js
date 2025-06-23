@@ -1,7 +1,6 @@
 const path = require('path');
 
 const HtmlWebpackPlugin = require('html-webpack-plugin');
-const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 const CopyPlugin = require('copy-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
@@ -17,7 +16,7 @@ module.exports = {
   output: {
     filename: `[name]/[name].js`,
     path: path.resolve(__dirname, '../dist'),
-    clean: true,
+    clean: false,
     publicPath: '',
   },
   module: {
@@ -40,9 +39,25 @@ module.exports = {
           },
         ],
       },
+      {
+        test: /\.json$/,
+        type: 'javascript/auto', // JSON을 모듈로 처리
+        use: ['json-loader'], // ✅ 로더 명시
+      },
     ],
   },
   resolve: {
+    alias: {
+      '@locales': path.resolve(__dirname, '../src/locales'),
+      '@assets': path.resolve(__dirname, '../public/assets'),
+      '@components': path.resolve(__dirname, '../src/components'),
+      '@constants': path.resolve(__dirname, '../src/constants'),
+      '@hooks': path.resolve(__dirname, '../src/hooks'),
+      '@styles': path.resolve(__dirname, '../src/styles'),
+      '@services': path.resolve(__dirname, '../src/services'),
+      '@my_types': path.resolve(__dirname, '../src/types'),
+      '@utils': path.resolve(__dirname, '../src/utils'),
+    },
     extensions: ['.ts', '.tsx', '.js'],
   },
   plugins: [
@@ -51,6 +66,7 @@ module.exports = {
       template: './src/options/options.html',
       chunks: ['options'],
       inject: 'body',
+      publicPath: '../',
       scriptLoading: 'module',
     }),
     new HtmlWebpackPlugin({
@@ -62,20 +78,27 @@ module.exports = {
       inject: true, // CSS와 JS 자동 주입
     }),
     new MiniCssExtractPlugin({
-      filename: (pathData) => {
-        return pathData.chunk.name === 'popup'
-          ? 'popup/style.css' // popup 폴더 내에 생성
-          : `${pathData.chunk.name}/style.css`;
-      },
+      filename: ({ chunk }) => `${chunk.name}/style.css`,
     }),
     new CopyPlugin({
       patterns: [
         { from: 'manifest.json', to: 'manifest.json' },
-        { from: '_locales', to: '_locales' },
         { from: 'public/assets/images', to: 'assets/images' },
+        { from: 'src/assets/icons', to: 'assets/icons' },
         { from: 'src/content/content.css', to: 'content/content.css' },
+        {
+          from: 'src/locales/*.json',
+          to: '_locales/[name]/messages.json',
+          transform(content) {
+            const translations = JSON.parse(content);
+            const chromeFormat = {};
+            Object.keys(translations).forEach((key) => {
+              chromeFormat[key] = { message: translations[key] };
+            });
+            return JSON.stringify(chromeFormat, null, 2);
+          },
+        },
       ],
     }),
-    new CleanWebpackPlugin(),
   ],
 };
