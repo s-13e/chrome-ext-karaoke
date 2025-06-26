@@ -1,6 +1,7 @@
 import { MESSAGE_TYPES } from '@constants/messageTypes';
 import { fetchGeniusLyrics } from './api/genius';
 import { YOUTUBE_HOST, YOUTUBE_REGEX } from '@constants/youtubeSelectors';
+import { PATHS } from '@constants/paths';
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Extension installed!');
@@ -23,7 +24,7 @@ const injectContentScript = (tabId: number, url: string) => {
   chrome.scripting
     .executeScript({
       target: { tabId },
-      files: ['content/content.js'],
+      files: [PATHS.CONTENT_SCRIPT],
     })
     .catch((err) => console.error(`Content script injection failed for tab ${tabId}:`, err));
 };
@@ -35,7 +36,7 @@ chrome.runtime.onMessage.addListener((request, sender) => {
     return true; // 비동기 처리 활성화
   }
 
-  if (request.type === 'VIDEO_DETECTED') {
+  if (request.type === MESSAGE_TYPES.VIDEO_DETECTED) {
     const { videoId, title } = request.payload;
 
     fetchGeniusLyrics(title)

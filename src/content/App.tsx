@@ -30,13 +30,7 @@ export function App() {
   useEffect(() => {
     // 콘텐츠 제어 함수
     const updateContent = (enabled: boolean) => {
-      if (enabled) {
-        document.body.style.border = '5px solid red';
-        console.log('콘텐츠 활성화');
-      } else {
-        document.body.style.border = '';
-        console.log('콘텐츠 비활성화');
-      }
+      console.log(enabled ? '콘텐츠 활성화' : '콘텐츠 비활성화');
     };
     // 언어 변경 감지 리스너
     const handleLanguageChange = () => {
@@ -44,7 +38,7 @@ export function App() {
     };
 
     // 1. 초기 상태 불러오기
-    chrome.storage.sync.get('contentEnabled', (result) => {
+    chrome.storage.sync.get(STORAGE_KEYS.CONTENT_ENABLED, (result) => {
       updateContent(result.contentEnabled ?? false);
     });
 

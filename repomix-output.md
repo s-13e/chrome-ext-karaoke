@@ -38,10 +38,15 @@ background/api/genius.ts
 background/background.ts
 components/common/ErrorFallback.tsx
 components/common/LoadingOverlay.tsx
+constants/api.ts
+constants/doomIds.ts
+constants/errorCodes.ts
+constants/errorMessages.ts
 constants/languages.ts
 constants/messageTypes.ts
 constants/paths.ts
 constants/storageKeys.ts
+constants/time.ts
 constants/youtubeSelectors.ts
 content/App.tsx
 content/components/LyricsContainer.tsx
@@ -76,11 +81,11 @@ styles/GlobalStyle.ts
 
 ## File: background/api/genius.ts
 ```typescript
-const API_URL = 'https://api.genius.com';
+import { GENIUS_API_URL } from '@constants/api';
 
 export const fetchGeniusLyrics = async (title: string): Promise<string> => {
   console.log('[GENIUS] 가사 요청 시작', { title });
-  const searchUrl = `${API_URL}/search?q=${encodeURIComponent(title)}`;
+  const searchUrl = `${GENIUS_API_URL}/search?q=${encodeURIComponent(title)}`;
   const headers = {
     Authorization: `Bearer ${process.env.GENIUS_ACCESS_TOKEN}`,
   };
@@ -93,7 +98,7 @@ export const fetchGeniusLyrics = async (title: string): Promise<string> => {
   if (!trackId) throw new Error('No lyrics found');
 
   // 2. 트랙 ID로 가사 조회
-  const lyricsUrl = `${API_URL}/songs/${trackId}`;
+  const lyricsUrl = `${GENIUS_API_URL}/songs/${trackId}`;
   const lyricsRes = await fetch(lyricsUrl, { headers });
   const lyricsData = await lyricsRes.json();
 
@@ -105,10 +110,34 @@ export const fetchGeniusLyrics = async (title: string): Promise<string> => {
 ```typescript
 import { MESSAGE_TYPES } from '@constants/messageTypes';
 import { fetchGeniusLyrics } from './api/genius';
+import { YOUTUBE_HOST, YOUTUBE_REGEX } from '@constants/youtubeSelectors';
+import { PATHS } from '@constants/paths';
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Extension installed!');
 });
+
+// 초기 로드 감지
+chrome.webNavigation.onCompleted.addListener((details) => injectContentScript(details.tabId, details.url), {
+  url: [{ hostSuffix: YOUTUBE_HOST }],
+});
+
+// SPA 네비게이션 감지
+chrome.webNavigation.onHistoryStateUpdated.addListener((details) => injectContentScript(details.tabId, details.url), {
+  url: [{ hostSuffix: YOUTUBE_HOST }],
+});
+
+// 스크립트 주입 함수
+const injectContentScript = (tabId: number, url: string) => {
+  if (!YOUTUBE_REGEX.test(url)) return;
+
+  chrome.scripting
+    .executeScript({
+      target: { tabId },
+      files: [PATHS.CONTENT_SCRIPT],
+    })
+    .catch((err) => console.error(`Content script injection failed for tab ${tabId}:`, err));
+};
 
 // 영상 감지 시 가사 요청
 chrome.runtime.onMessage.addListener((request, sender) => {
@@ -117,7 +146,7 @@ chrome.runtime.onMessage.addListener((request, sender) => {
     return true; // 비동기 처리 활성화
   }
 
-  if (request.type === 'VIDEO_DETECTED') {
+  if (request.type === MESSAGE_TYPES.VIDEO_DETECTED) {
     const { videoId, title } = request.payload;
 
     fetchGeniusLyrics(title)
@@ -203,6 +232,39 @@ export const LoadingOverlay = React.memo(() => (
 LoadingOverlay.displayName = 'LoadingOverlay';
 ```
 
+## File: constants/api.ts
+```typescript
+// src/constants/api.ts
+export const GENIUS_API_URL = 'https://api.genius.com';
+```
+
+## File: constants/doomIds.ts
+```typescript
+export const DOM_IDS = {
+  ROOT_CONTAINER: 'chrome-extension-root',
+  LYRICS_CONTAINER: 'lyrics-root',
+} as const;
+```
+
+## File: constants/errorCodes.ts
+```typescript
+// src/constants/errorCodes.ts
+export const ERROR_CODES = {
+  NETWORK_FAILURE: 1001,
+  AUTH_EXPIRED: 2001,
+  RATE_LIMIT: 3001,
+} as const;
+```
+
+## File: constants/errorMessages.ts
+```typescript
+export const ERROR_MESSAGES = {
+  LYRIC_FETCH_FAILED: '가사 조회 실패',
+  VIDEO_DETECTION_FAILED: '영상 감지 실패',
+  INJECTION_FAILED: '스크립트 주입 실패',
+} as const;
+```
+
 ## File: constants/languages.ts
 ```typescript
 // 언어 관련 상수
@@ -227,6 +289,10 @@ export const I18N_NAMESPACE = 'translation' as const;
 export const MESSAGE_TYPES = {
   TOGGLE_CONTENT: 'TOGGLE_CONTENT',
   LANGUAGE_CHANGED: 'LANGUAGE_CHANGED',
+  VIDEO_DETECTED: 'VIDEO_DETECTED',
+  LYRICS_DATA: 'LYRICS_DATA',
+  NO_LYRICS_FOUND: 'NO_LYRICS_FOUND',
+  SPA_NAVIGATION_DETECTED: 'SPA_NAVIGATION_DETECTED',
 } as const;
 
 export type MessageType = (typeof MESSAGE_TYPES)[keyof typeof MESSAGE_TYPES];
@@ -235,6 +301,7 @@ export type MessageType = (typeof MESSAGE_TYPES)[keyof typeof MESSAGE_TYPES];
 ## File: constants/paths.ts
 ```typescript
 export const PATHS = {
+  CONTENT_SCRIPT: 'content/content.js',
   OPTIONS_HTML: 'options.html',
   ICON_SETTING: '@assets/icons/setting.png',
 };
@@ -245,16 +312,26 @@ export const PATHS = {
 export const STORAGE_KEYS = {
   CONTENT_ENABLED: 'contentEnabled',
   LANGUAGE: 'language',
-  // 필요시 추가
+  LAST_VIDEO_ID: 'lastVideoId',
 } as const;
+```
+
+## File: constants/time.ts
+```typescript
+export const DEBOUNCE_DELAY = 1000; // ms
+export const SYNC_OFFSET_THRESHOLD = 0.5; // seconds
+export const EXECUTION_COOLDOWN = 10000; // 10초
 ```
 
 ## File: constants/youtubeSelectors.ts
 ```typescript
 // constants/youtubeSelectors.ts
+export const YOUTUBE_HOST = 'youtube.com';
+
 export const YOUTUBE_PLAYER_SELECTOR = '#movie_player';
 export const YOUTUBE_PLAYER_CONTAINER = 'ytd-player';
 export const YOUTUBE_VIDEO_SELECTOR = 'video.html5-main-video';
+export const YOUTUBE_AD_SELECTOR = '.ad-showing, .ad-interrupting';
 
 // 유튜브 URL 관련 상수
 export const YOUTUBE_WATCH_PATH = '/watch';
@@ -262,6 +339,8 @@ export const YOUTUBE_VIDEO_ID_PARAM = 'v';
 
 // DOM 선택자 관련 상수
 export const YOUTUBE_TITLE_SELECTOR = 'h1.ytd-watch-metadata > yt-formatted-string';
+
+export const YOUTUBE_REGEX = /youtube\.com\/watch\?v=[\w-]{11}/;
 ```
 
 ## File: content/App.tsx
@@ -298,13 +377,7 @@ export function App() {
   useEffect(() => {
     // 콘텐츠 제어 함수
     const updateContent = (enabled: boolean) => {
-      if (enabled) {
-        document.body.style.border = '5px solid red';
-        console.log('콘텐츠 활성화');
-      } else {
-        document.body.style.border = '';
-        console.log('콘텐츠 비활성화');
-      }
+      console.log(enabled ? '콘텐츠 활성화' : '콘텐츠 비활성화');
     };
     // 언어 변경 감지 리스너
     const handleLanguageChange = () => {
@@ -312,7 +385,7 @@ export function App() {
     };
 
     // 1. 초기 상태 불러오기
-    chrome.storage.sync.get('contentEnabled', (result) => {
+    chrome.storage.sync.get(STORAGE_KEYS.CONTENT_ENABLED, (result) => {
       updateContent(result.contentEnabled ?? false);
     });
 
@@ -435,10 +508,36 @@ import { detectYouTubeVideo, setupSPAObserver } from '@lib/youtube';
 import { initLyricsContainer } from './components/LyricsContainer';
 import { debounce } from '@lib/utils/common';
 import 'normalize.css';
+import { STORAGE_KEYS } from '@constants/storageKeys';
+import { MESSAGE_TYPES } from '@constants/messageTypes';
+import { DOM_IDS } from '@constants/doomIds';
+
+
+let contentEnabled = true;
+
+// 저장소 상태 초기화 및 감지
+chrome.storage.sync.get(STORAGE_KEYS.CONTENT_ENABLED, (result) => {
+  contentEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? true;
+});
+
+chrome.storage.onChanged.addListener((changes) => {
+  // 안전한 접근 방식
+  const contentEnabledChange = changes[STORAGE_KEYS.CONTENT_ENABLED];
+
+  if (contentEnabledChange && typeof contentEnabledChange.newValue === 'boolean') {
+    contentEnabled = contentEnabledChange.newValue;
+    console.log(`[STATUS] 콘텐츠 상태 변경: ${contentEnabled ? '활성화' : '비활성화'}`);
+  }
+});
+
 
 // 영상 감지 핸들러
 const handleVideoDetection = () => {
   console.log('[DEBUG] handleVideoDetection 호출');
+  if (!contentEnabled) {
+    console.log('[DEBUG] 콘텐츠 비활성화 상태 - 영상 감지 건너뜀');
+    return;
+  }
 
   const videoData = detectYouTubeVideo();
   if (!videoData) {
@@ -449,7 +548,7 @@ const handleVideoDetection = () => {
     videoId: videoData.videoId,
     title: videoData.title,
   });
-  chrome.runtime.sendMessage({ type: 'VIDEO_DETECTED', payload: videoData });
+  chrome.runtime.sendMessage({ type: MESSAGE_TYPES.VIDEO_DETECTED, payload: videoData });
 };
 
 // 가사 수신 처리
@@ -460,17 +559,31 @@ const setupLyricsListener = () => {
     }
   });
 };
-const debouncedHandleVideoDetection = debounce(handleVideoDetection, 500);
+const debouncedHandleVideoDetection = debounce(handleVideoDetection, 1000);
 
 // SPA 감지 설정
 const setupSPADetection = () => {
   setupSPAObserver(debouncedHandleVideoDetection);
 };
 
+// ✅ SPA 네비게이션 메시지 핸들러 통합
+chrome.runtime.onMessage.addListener((message) => {
+  // 백그라운드에서 전송한 SPA 감지 메시지 처리
+  if (message.type === MESSAGE_TYPES.SPA_NAVIGATION_DETECTED) {
+    console.log('SPA navigation detected');
+    debouncedHandleVideoDetection(); // 디바운싱 적용된 영상 감지
+  }
+
+  // 가사 데이터 수신 처리 (기존 유지)
+  if (message.type === MESSAGE_TYPES.LYRICS_DATA) {
+    initLyricsContainer(message.payload);
+  }
+});
+
 // 루트 엘리먼트 생성
 const createRootElement = () => {
   const root = document.createElement('div');
-  root.id = 'chrome-extension-root';
+  root.id = DOM_IDS.ROOT_CONTAINER;
   document.body.appendChild(root);
   return root;
 };
@@ -484,7 +597,7 @@ const handleReset = () => {
 const initializeApp = async () => {
   try {
     await initializeI18n();
-    const rootElement = document.getElementById('chrome-extension-root') || createRootElement();
+    const rootElement = document.getElementById(DOM_IDS.ROOT_CONTAINER) || createRootElement();
     const root = createRoot(rootElement);
     root.render(
       <ErrorBoundary FallbackComponent={ErrorFallback} onReset={handleReset}>
@@ -501,7 +614,7 @@ const initializeApp = async () => {
     console.log('[DEBUG] SPA 감지 설정 시작');
     setupSPADetection();
   } catch (error) {
-    const rootElement = document.getElementById('chrome-extension-root') || createRootElement();
+    const rootElement = document.getElementById(DOM_IDS.ROOT_CONTAINER) || createRootElement();
     const root = createRoot(rootElement);
     root.render(<ErrorFallback error={error} resetErrorBoundary={handleReset} />);
   }
@@ -650,7 +763,7 @@ export type TranslationKey = (typeof TRANSLATION_KEYS)[number];
 ## File: lib/utils/common.ts
 ```typescript
 // 디바운싱
-export const debounce = <T extends (...args: any[]) => any>(
+export const debounce = <T extends (...args: unknown[]) => unknown>(
   func: T,
   delay: number,
 ): ((...args: Parameters<T>) => void) => {
@@ -662,7 +775,7 @@ export const debounce = <T extends (...args: any[]) => any>(
 };
 
 // 스로틀링
-export const throttle = <T extends (...args: any[]) => any>(
+export const throttle = <T extends (...args: unknown[]) => unknown>(
   func: T,
   limit: number,
 ): ((...args: Parameters<T>) => void) => {
@@ -732,17 +845,21 @@ export const isToggleContentMessage = (request: { type: string }): request is To
   return request.type === MESSAGE_TYPES.TOGGLE_CONTENT;
 };
 // 배열 타입 검사
-export const isArrayOfType = <T>(
-  arr: any,
-  guard: (item: any) => item is T
-): arr is T[] => {
-  return Array.isArray(arr) && arr.every(guard);
+// 고급 버전 (타입 안전성 극대화)
+export const isArrayOfType = <T>(arr: unknown, guard: (item: unknown) => item is T): arr is T[] => {
+  if (!Array.isArray(arr)) return false;
+
+  // 타입 가드가 모든 요소를 검사하도록 강제
+  for (const item of arr) {
+    if (!guard(item)) return false;
+  }
+  return true;
 };
 ```
 
 ## File: lib/youtube.ts
 ```typescript
-import { YOUTUBE_TITLE_SELECTOR, YOUTUBE_VIDEO_ID_PARAM, YOUTUBE_WATCH_PATH } from "@constants/youtubeSelectors";
+import { YOUTUBE_TITLE_SELECTOR, YOUTUBE_VIDEO_ID_PARAM, YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
 
 // 유튜브 영상 감지 및 메타데이터 추출
 export const detectYouTubeVideo = (): { videoId: string; title: string } | null => {
@@ -964,7 +1081,7 @@ interface LanguageChangeMessage {
 export function App() {
   const { t, i18n } = useTranslation();
   const { phase } = useLangLoader();
-  const [enabled, setEnabled] = useChromeStorage('contentEnabled', false);
+  const [enabled, setEnabled] = useChromeStorage(STORAGE_KEYS.CONTENT_ENABLED, false);
 
   useEffect(() => {
     console.log('[Popup] Setting up language listeners');

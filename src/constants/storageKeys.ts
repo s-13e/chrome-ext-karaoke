@@ -1,5 +1,5 @@
 export const STORAGE_KEYS = {
   CONTENT_ENABLED: 'contentEnabled',
   LANGUAGE: 'language',
-  // 필요시 추가
+  LAST_VIDEO_ID: 'lastVideoId',
 } as const;

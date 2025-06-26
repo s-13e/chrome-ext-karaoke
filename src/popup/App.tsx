@@ -16,7 +16,7 @@ interface LanguageChangeMessage {
 export function App() {
   const { t, i18n } = useTranslation();
   const { phase } = useLangLoader();
-  const [enabled, setEnabled] = useChromeStorage('contentEnabled', false);
+  const [enabled, setEnabled] = useChromeStorage(STORAGE_KEYS.CONTENT_ENABLED, false);
 
   useEffect(() => {
     console.log('[Popup] Setting up language listeners');
