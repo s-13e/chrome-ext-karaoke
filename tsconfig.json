@@ -12,15 +12,13 @@
     "baseUrl": ".",
     "paths": {
       "@locales/*": ["src/locales/*"],
-      "@/*": ["src/*"],
       "@assets/*": ["public/assets/*"],
       "@components/*": ["src/components/*"],
       "@constants/*": ["src/constants/*"],
       "@hooks/*": ["src/hooks/*"],
       "@styles/*": ["src/styles/*"],
       "@services/*": ["src/services/*"],
-      "@my_types/*": ["src/types/*"],
-      "@utils/*": ["src/utils/*"]
+      "@lib/*": ["src/lib/*"],
     },
     "types": ["chrome", "jest"],
     "allowJs": true,

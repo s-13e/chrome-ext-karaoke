@@ -2,7 +2,7 @@
 import i18next, { InitOptions } from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
-import { I18nError, ResourceLoadError } from '@my_types/errors';
+import { I18nError, ResourceLoadError } from '@lib/types/errors';
 import {
   DEFAULT_LANGUAGE,
   I18N_NAMESPACE,

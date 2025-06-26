@@ -34,6 +34,7 @@ The content is organized as follows:
 
 # Directory Structure
 ```
+background/api/genius.ts
 background/background.ts
 components/common/ErrorFallback.tsx
 components/common/LoadingOverlay.tsx
@@ -41,10 +42,21 @@ constants/languages.ts
 constants/messageTypes.ts
 constants/paths.ts
 constants/storageKeys.ts
+constants/youtubeSelectors.ts
 content/App.tsx
+content/components/LyricsContainer.tsx
+content/components/SyncSubtitle.tsx
 content/index.tsx
 hooks/useChromeStorage.ts
 hooks/useLangLoader.ts
+lib/types/errors.ts
+lib/types/i18next.d.ts
+lib/types/message.ts
+lib/types/translationKeys.ts
+lib/utils/common.ts
+lib/utils/time.ts
+lib/utils/typeGuards.ts
+lib/youtube.ts
 locales/en.json
 locales/ko.json
 options/App.tsx
@@ -58,32 +70,74 @@ popup/popup.css
 popup/popup.html
 services/i18n.ts
 styles/GlobalStyle.ts
-types/errors.ts
-types/i18next.d.ts
-types/message.ts
-types/translationKeys.ts
-utils/typeGuards.ts
 ```
 
 # Files
 
+## File: background/api/genius.ts
+```typescript
+const API_URL = 'https://api.genius.com';
+
+export const fetchGeniusLyrics = async (title: string): Promise<string> => {
+  console.log('[GENIUS] 가사 요청 시작', { title });
+  const searchUrl = `${API_URL}/search?q=${encodeURIComponent(title)}`;
+  const headers = {
+    Authorization: `Bearer ${process.env.GENIUS_ACCESS_TOKEN}`,
+  };
+
+  // 1. 검색을 통해 트랙 ID 획득
+  const searchRes = await fetch(searchUrl, { headers });
+  const searchData = await searchRes.json();
+  const trackId = searchData.response.hits[0]?.result.id;
+
+  if (!trackId) throw new Error('No lyrics found');
+
+  // 2. 트랙 ID로 가사 조회
+  const lyricsUrl = `${API_URL}/songs/${trackId}`;
+  const lyricsRes = await fetch(lyricsUrl, { headers });
+  const lyricsData = await lyricsRes.json();
+
+  return lyricsData.response.song.lyrics;
+};
+```
+
 ## File: background/background.ts
 ```typescript
 import { MESSAGE_TYPES } from '@constants/messageTypes';
+import { fetchGeniusLyrics } from './api/genius';
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Extension installed!');
 });
 
-// background.js
-chrome.runtime.onMessage.addListener((message) => {
-  if (message.type === MESSAGE_TYPES.TOGGLE_CONTENT) {
-    console.log('Toggle received:', message.enabled);
+// 영상 감지 시 가사 요청
+chrome.runtime.onMessage.addListener((request, sender) => {
+  if (request.type === MESSAGE_TYPES.TOGGLE_CONTENT) {
+    console.log('Toggle received:', request.enabled);
     return true; // 비동기 처리 활성화
   }
-});
 
-// 특정 페이지에서만 툴바의 아이콘(버튼)이 보이도록 하려함
+  if (request.type === 'VIDEO_DETECTED') {
+    const { videoId, title } = request.payload;
+
+    fetchGeniusLyrics(title)
+      .then((lyrics) => {
+        chrome.tabs.sendMessage(sender.tab!.id!, {
+          type: 'LYRICS_DATA',
+          payload: { videoId, lyrics },
+        });
+      })
+      .catch((error) => {
+        // 가사 없음 안내 메시지 전송
+        chrome.tabs.sendMessage(sender.tab!.id!, {
+          type: 'NO_LYRICS_FOUND',
+          payload: { videoId, title },
+        });
+        console.error('Lyrics fetch error:', error);
+      });
+    return true;
+  }
+});
 ```
 
 ## File: components/common/ErrorFallback.tsx
@@ -146,6 +200,7 @@ export const LoadingOverlay = React.memo(() => (
     <span className="visually-hidden">로딩 중입니다</span>
   </Container>
 ));
+LoadingOverlay.displayName = 'LoadingOverlay';
 ```
 
 ## File: constants/languages.ts
@@ -154,6 +209,9 @@ export const LoadingOverlay = React.memo(() => (
 export const DEFAULT_LANGUAGE: SupportedLanguage = 'en';
 export const SUPPORTED_LANGUAGES = ['en', 'ko'] as const;
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
+
+export const MAX_RETRIES = 3;
+export const INITIAL_DELAY = 1000; // 1초
 
 export const NATIVE_LANGUAGE_NAMES = {
   en: 'English',
@@ -191,31 +249,38 @@ export const STORAGE_KEYS = {
 } as const;
 ```
 
+## File: constants/youtubeSelectors.ts
+```typescript
+// constants/youtubeSelectors.ts
+export const YOUTUBE_PLAYER_SELECTOR = '#movie_player';
+export const YOUTUBE_PLAYER_CONTAINER = 'ytd-player';
+export const YOUTUBE_VIDEO_SELECTOR = 'video.html5-main-video';
+
+// 유튜브 URL 관련 상수
+export const YOUTUBE_WATCH_PATH = '/watch';
+export const YOUTUBE_VIDEO_ID_PARAM = 'v';
+
+// DOM 선택자 관련 상수
+export const YOUTUBE_TITLE_SELECTOR = 'h1.ytd-watch-metadata > yt-formatted-string';
+```
+
 ## File: content/App.tsx
 ```typescript
 // src/content/App.tsx
 import { useEffect } from 'react';
-// import { MESSAGE_TYPES } from '@constants/messageTypes';
 import { i18nInstance } from '@services/i18n';
-import { isToggleContentMessage } from '@utils/typeGuards';
-import { ContentScriptMessage } from '@my_types/message';
+import { isToggleContentMessage } from '@lib/utils/typeGuards';
+import { ContentScriptMessage } from '@lib/types/message';
 import { STORAGE_KEYS } from '@constants/storageKeys';
+// import { LyricsContainer } from './components/LyricsContainer';
 
 export function App() {
-  // 메시지 타입별로 구체적 타입 정의
-  // type ToggleMessage = {
-  //   type: typeof MESSAGE_TYPES.TOGGLE_CONTENT;
-  //   enabled: boolean;
-  // };
-
-  // type MessageRequest = ToggleMessage | { type: string }; // 확장 가능
-
   useEffect(() => {
     console.log('[Content] Setting up storage listener');
 
-    const handleStorageChange = (changes: Record<string, any>) => {
+    const handleStorageChange = (changes: Record<string, chrome.storage.StorageChange>) => {
       if (changes[STORAGE_KEYS.LANGUAGE]?.newValue) {
-        const newLang = changes[STORAGE_KEYS.LANGUAGE].newValue;
+        const newLang = changes[STORAGE_KEYS.LANGUAGE]?.newValue;
         console.log(`[Content] Storage change detected: ${newLang}`);
 
         // ✅ 실제 언어 변경 적용
@@ -271,44 +336,178 @@ export function App() {
 }
 ```
 
+## File: content/components/LyricsContainer.tsx
+```typescript
+import React, { useEffect, useState } from 'react';
+import { SyncSubtitle } from './SyncSubtitle';
+import { createRoot } from 'react-dom/client';
+
+export const LyricsContainer: React.FC<{ lyrics: string }> = ({ lyrics }) => {
+  const [currentTime, setCurrentTime] = useState(0);
+
+  useEffect(() => {
+    const video = document.querySelector('video');
+    if (!video) return;
+
+    const updateTime = () => setCurrentTime(video.currentTime);
+    video.addEventListener('timeupdate', updateTime);
+
+    return () => video.removeEventListener('timeupdate', updateTime);
+  }, []);
+
+  return (
+    <div className="lyrics-container">
+      <SyncSubtitle lyrics={lyrics} currentTime={currentTime} />
+    </div>
+  );
+};
+
+// DOM에 컨테이너 초기화
+export const initLyricsContainer = (data: { lyrics: string }) => {
+  let container = document.getElementById('lyrics-root');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'lyrics-root';
+    document.body.appendChild(container);
+  }
+
+  const root = createRoot(container);
+  root.render(<LyricsContainer lyrics={data.lyrics} />);
+};
+```
+
+## File: content/components/SyncSubtitle.tsx
+```typescript
+import React from 'react';
+import { parseTimeToSeconds } from '@lib/utils/time';
+
+// 가사 파싱 인터페이스
+interface LyricLine {
+  time: number;
+  text: string;
+}
+
+export const SyncSubtitle: React.FC<{
+  lyrics: string;
+  currentTime: number;
+}> = ({ lyrics, currentTime }) => {
+  // 가사 파싱
+  const parsedLyrics: LyricLine[] = lyrics.split('\n').reduce<LyricLine[]>((acc, line) => {
+    const match = line.match(/\[(\d+):(\d+\.\d+)\](.*)/);
+    if (!match) return acc;
+
+    const [, min, sec, text] = match;
+    // text가 undefined일 경우 빈 문자열로 대체
+    const safeText = (text ?? '').trim();
+    if (safeText === '') return acc; // 빈 줄은 제외
+
+    const time = parseTimeToSeconds(`${min}:${sec}`);
+    acc.push({ time, text: safeText });
+    return acc;
+  }, []);
+
+  // 현재 시간에 해당하는 가사 찾기
+  const currentLineIndex = parsedLyrics.findIndex((line, index) => {
+    const nextLine = parsedLyrics[index + 1];
+    return currentTime >= line.time && (!nextLine || currentTime < nextLine.time);
+  });
+
+  return (
+    <div className="subtitle-display">
+      {currentLineIndex >= 0 && parsedLyrics[currentLineIndex] && (
+        <div className="current-line">{parsedLyrics[currentLineIndex].text}</div>
+      )}
+    </div>
+  );
+};
+```
+
 ## File: content/index.tsx
 ```typescript
 // src/content/index.tsx
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
-import 'normalize.css';
 import { i18nInstance, initializeI18n } from '@services/i18n';
 import { ErrorFallback } from '@components/common/ErrorFallback';
 import { I18nextProvider } from 'react-i18next';
 import { ErrorBoundary } from 'react-error-boundary';
+import { detectYouTubeVideo, setupSPAObserver } from '@lib/youtube';
+import { initLyricsContainer } from './components/LyricsContainer';
+import { debounce } from '@lib/utils/common';
+import 'normalize.css';
 
-let root = document.getElementById('chrome-extension-root');
-if (!root) {
-  root = document.createElement('div');
+// 영상 감지 핸들러
+const handleVideoDetection = () => {
+  console.log('[DEBUG] handleVideoDetection 호출');
+
+  const videoData = detectYouTubeVideo();
+  if (!videoData) {
+    console.log('[DEBUG] 영상 데이터 없음: YouTube 영상 페이지가 아님');
+    return;
+  }
+  console.log('[DEBUG] 영상 감지 성공', {
+    videoId: videoData.videoId,
+    title: videoData.title,
+  });
+  chrome.runtime.sendMessage({ type: 'VIDEO_DETECTED', payload: videoData });
+};
+
+// 가사 수신 처리
+const setupLyricsListener = () => {
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.type === 'LYRICS_DATA') {
+      initLyricsContainer(message.payload);
+    }
+  });
+};
+const debouncedHandleVideoDetection = debounce(handleVideoDetection, 500);
+
+// SPA 감지 설정
+const setupSPADetection = () => {
+  setupSPAObserver(debouncedHandleVideoDetection);
+};
+
+// 루트 엘리먼트 생성
+const createRootElement = () => {
+  const root = document.createElement('div');
   root.id = 'chrome-extension-root';
   document.body.appendChild(root);
-}
-const handleReset = () => {
-  window.location.reload(); // 페이지 새로고침으로 초기화
+  return root;
 };
-initializeI18n()
-  .then(() => {
-    createRoot(root).render(
+
+// 에러 바운더리 리셋 핸들러
+const handleReset = () => {
+  window.location.reload();
+};
+
+// 앱 초기화
+const initializeApp = async () => {
+  try {
+    await initializeI18n();
+    const rootElement = document.getElementById('chrome-extension-root') || createRootElement();
+    const root = createRoot(rootElement);
+    root.render(
       <ErrorBoundary FallbackComponent={ErrorFallback} onReset={handleReset}>
         <I18nextProvider i18n={i18nInstance}>
           <App />
         </I18nextProvider>
       </ErrorBoundary>,
     );
-  })
-  .catch((error) => {
-    createRoot(root).render(
-      <ErrorFallback
-        error={error}
-        resetErrorBoundary={handleReset} // 리셋 함수 전달
-      />,
-    );
-  });
+    setupLyricsListener();
+
+    console.log('[DEBUG] 초기 영상 감지 시도');
+    debouncedHandleVideoDetection(); // 디바운싱 버전 사용
+
+    console.log('[DEBUG] SPA 감지 설정 시작');
+    setupSPADetection();
+  } catch (error) {
+    const rootElement = document.getElementById('chrome-extension-root') || createRootElement();
+    const root = createRoot(rootElement);
+    root.render(<ErrorFallback error={error} resetErrorBoundary={handleReset} />);
+  }
+};
+
+initializeApp();
 ```
 
 ## File: hooks/useChromeStorage.ts
@@ -344,7 +543,7 @@ export function useChromeStorage<T>(key: string, defaultValue: T) {
 // src/hooks/useLangLoader.ts
 import { useEffect, useState } from 'react';
 import { i18nInstance } from '@services/i18n';
-import { I18nError } from '@my_types/errors';
+import { I18nError } from '@lib/types/errors';
 
 type I18nStatus = {
   phase: 'idle' | 'initializing' | 'ready' | 'error';
@@ -381,10 +580,204 @@ export const useLangLoader = (): I18nStatus => {
 };
 ```
 
+## File: lib/types/errors.ts
+```typescript
+// src/types/errors.ts
+export class ResourceLoadError extends Error {
+  constructor(public readonly language: string) {
+    super(`리소스 로드 실패: ${language}`);
+    this.name = 'ResourceLoadError';
+  }
+}
+
+export class I18nError extends Error {
+  constructor(
+    public readonly code: 'TRANSIENT' | 'PERMANENT',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'I18nError';
+    Object.setPrototypeOf(this, I18nError.prototype);
+  }
+}
+
+// 타입 가드 함수 추가
+export function isI18nError(error: unknown): error is I18nError {
+  return error instanceof I18nError;
+}
+```
+
+## File: lib/types/i18next.d.ts
+```typescript
+// src/types/i18next.d.ts
+import 'i18next';
+
+declare module 'i18next' {
+  interface CustomTypeOptions {
+    returnNull: false;
+    resources: typeof import('@locales/en.json');
+  }
+
+  interface i18n {
+    initializePromise?: Promise<boolean>;
+  }
+}
+```
+
+## File: lib/types/message.ts
+```typescript
+// types/message.ts
+import { MESSAGE_TYPES } from '@constants/messageTypes';
+
+export type ToggleContentMessage = {
+  type: typeof MESSAGE_TYPES.TOGGLE_CONTENT;
+  enabled: boolean;
+};
+
+// 2. 확장 가능한 유니온 타입
+export type ContentScriptMessage = ToggleContentMessage;
+// | AnotherMessageType
+```
+
+## File: lib/types/translationKeys.ts
+```typescript
+// types/translationKeys.ts
+export const TRANSLATION_KEYS = ['extName', 'extDescription', 'extLanguage'] as const;
+
+export type TranslationKey = (typeof TRANSLATION_KEYS)[number];
+```
+
+## File: lib/utils/common.ts
+```typescript
+// 디바운싱
+export const debounce = <T extends (...args: any[]) => any>(
+  func: T,
+  delay: number,
+): ((...args: Parameters<T>) => void) => {
+  let timeoutId: ReturnType<typeof setTimeout>;
+  return (...args: Parameters<T>) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => func(...args), delay);
+  };
+};
+
+// 스로틀링
+export const throttle = <T extends (...args: any[]) => any>(
+  func: T,
+  limit: number,
+): ((...args: Parameters<T>) => void) => {
+  let lastCall = 0;
+  return (...args: Parameters<T>) => {
+    const now = Date.now();
+    if (now - lastCall >= limit) {
+      func(...args);
+      lastCall = now;
+    }
+  };
+};
+```
+
+## File: lib/utils/time.ts
+```typescript
+/**
+ * 시간 문자열 파싱 (MM:SS.ms → 초 단위)
+ * @param timeStr - [분:초.밀리초] 형식 문자열
+ * @returns 초 단위 시간 (파싱 실패 시 0 반환)
+ */
+export const parseTimeToSeconds = (timeStr: string): number => {
+  const parts = timeStr.split(':');
+
+  // 파트 검증 및 기본값 설정
+  const minutesStr = parts[0] || '0';
+  const secondsStr = parts[1]?.split('.')[0] || '0'; // 밀리초 제거
+
+  const minutes = parseFloat(minutesStr);
+  const seconds = parseFloat(secondsStr);
+
+  // 유효성 검사
+  if (isNaN(minutes) || isNaN(seconds)) return 0;
+
+  return minutes * 60 + seconds;
+};
+
+/**
+ * 초 단위 시간을 [MM:SS] 형식으로 변환
+ * @param seconds - 초 단위 시간
+ * @returns 포맷된 문자열 (예: "03:45")
+ */
+export const formatSecondsToTime = (seconds: number): string => {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+};
+
+/**
+ * 싱크 오차 보정 (±500ms 이내 조정)
+ * @param currentTime - 현재 시간
+ * @param targetTime - 목표 시간
+ * @returns 보정된 시간
+ */
+export const adjustSyncOffset = (currentTime: number, targetTime: number): number => {
+  return Math.abs(targetTime - currentTime) <= 0.5 ? targetTime : currentTime;
+};
+```
+
+## File: lib/utils/typeGuards.ts
+```typescript
+// src/utils/typeGuards.ts
+import { ToggleContentMessage } from '@lib/types/message';
+import { MESSAGE_TYPES } from '@constants/messageTypes';
+
+export const isToggleContentMessage = (request: { type: string }): request is ToggleContentMessage => {
+  return request.type === MESSAGE_TYPES.TOGGLE_CONTENT;
+};
+// 배열 타입 검사
+export const isArrayOfType = <T>(
+  arr: any,
+  guard: (item: any) => item is T
+): arr is T[] => {
+  return Array.isArray(arr) && arr.every(guard);
+};
+```
+
+## File: lib/youtube.ts
+```typescript
+import { YOUTUBE_TITLE_SELECTOR, YOUTUBE_VIDEO_ID_PARAM, YOUTUBE_WATCH_PATH } from "@constants/youtubeSelectors";
+
+// 유튜브 영상 감지 및 메타데이터 추출
+export const detectYouTubeVideo = (): { videoId: string; title: string } | null => {
+  if (!location.pathname.includes(YOUTUBE_WATCH_PATH)) return null;
+
+  const urlParams = new URLSearchParams(location.search);
+  const videoId = urlParams.get(YOUTUBE_VIDEO_ID_PARAM);
+  const titleElement = document.querySelector(YOUTUBE_TITLE_SELECTOR) as HTMLHeadingElement;
+
+  return videoId && titleElement
+    ? {
+        videoId,
+        title: titleElement.innerText.trim(),
+      }
+    : null;
+};
+
+// SPA 네비게이션 대응
+export const setupSPAObserver = (callback: () => void): void => {
+  const observer = new MutationObserver(() => {
+    if (detectYouTubeVideo()) callback();
+  });
+
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+  });
+};
+```
+
 ## File: locales/en.json
 ```json
 {
-  "extName": "Chrome Extension Templet",
+  "extName": "Youtube Karaoke",
   "extDescription": "jot that down description",
   "extLanguage": "Language"
 }
@@ -393,7 +786,7 @@ export const useLangLoader = (): I18nStatus => {
 ## File: locales/ko.json
 ```json
 {
-  "extName": "마켓 플레이스에 뜨는 제목",
+  "extName": "유튜브 노래방",
   "extDescription": "앱 설명",
   "extLanguage": "언어"
 }
@@ -406,8 +799,7 @@ import { useTranslation } from 'react-i18next';
 import { useLangLoader } from '@hooks/useLangLoader';
 import { ErrorFallback } from '@components/common/ErrorFallback';
 import { LoadingOverlay } from '@components/common/LoadingOverlay';
-import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, SupportedLanguage } from '@constants/languages';
-import { NATIVE_LANGUAGE_NAMES } from '@constants/languages';
+import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, SupportedLanguage, NATIVE_LANGUAGE_NAMES } from '@constants/languages';
 import { syncLanguage } from '@services/i18n';
 import { MESSAGE_TYPES } from '@constants/messageTypes';
 import { STORAGE_KEYS } from '@constants/storageKeys';
@@ -418,10 +810,6 @@ export function App() {
   const [isChanging, setIsChanging] = React.useState(false);
   const [currentLang, setCurrentLang] = React.useState<SupportedLanguage>(DEFAULT_LANGUAGE);
 
-  // 상태별 UI 처리
-  if (phase === 'error') return <ErrorFallback error={error!} resetErrorBoundary={() => window.location.reload()} />;
-  if (phase !== 'ready') return null;
-
   // ✅ i18n이 준비된 후 현재 언어 상태 동기화
   React.useEffect(() => {
     console.log(`[Options] i18n phase: ${phase}, current language: ${i18n.language}`);
@@ -430,6 +818,10 @@ export function App() {
       setCurrentLang(i18n.language as SupportedLanguage);
     }
   }, [phase, i18n.language]);
+
+  // 상태별 UI 처리
+  if (phase === 'error') return <ErrorFallback error={error!} resetErrorBoundary={() => window.location.reload()} />;
+  if (phase !== 'ready') return null;
 
   // 언어 변경 핸들러 (실시간 반영 강화)
   const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -460,12 +852,7 @@ export function App() {
   return (
     <div className="language-selector">
       <h2>{t('extLanguage')}</h2>
-      <select
-        value={currentLang}
-        onChange={handleChange}
-        disabled={isChanging}
-        aria-busy={isChanging}
-      >
+      <select value={currentLang} onChange={handleChange} disabled={isChanging} aria-busy={isChanging}>
         {SUPPORTED_LANGUAGES.map((lang) => (
           <option key={lang} value={lang}>
             {NATIVE_LANGUAGE_NAMES[lang]}
@@ -488,7 +875,6 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { ErrorFallback } from '@components/common/ErrorFallback';
 import { LoadingOverlay } from '@components/common/LoadingOverlay';
 import 'normalize.css';
-
 
 const root = document.getElementById('root');
 if (root) {
@@ -571,6 +957,10 @@ import { LoadingOverlay } from '@components/common/LoadingOverlay';
 import './popup.css';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 
+interface LanguageChangeMessage {
+  type: typeof MESSAGE_TYPES.LANGUAGE_CHANGED;
+  language: string;
+}
 export function App() {
   const { t, i18n } = useTranslation();
   const { phase } = useLangLoader();
@@ -580,9 +970,9 @@ export function App() {
     console.log('[Popup] Setting up language listeners');
 
     // ✅ 스토리지 변경과 메시지 둘 다 처리
-    const handleStorageChange = (changes: Record<string, any>) => {
+    const handleStorageChange = (changes: Record<string, chrome.storage.StorageChange>) => {
       if (changes[STORAGE_KEYS.LANGUAGE]?.newValue) {
-        const newLang = changes[STORAGE_KEYS.LANGUAGE].newValue;
+        const newLang = changes[STORAGE_KEYS.LANGUAGE]?.newValue;
         console.log(`[Popup] Storage change detected: ${newLang}`);
 
         if (i18n.language !== newLang) {
@@ -592,7 +982,7 @@ export function App() {
       }
     };
 
-    const handleMessage = (message: any) => {
+    const handleMessage = (message: LanguageChangeMessage) => {
       console.log('[Popup] Received message:', message);
       if (message.type === MESSAGE_TYPES.LANGUAGE_CHANGED && message.language) {
         console.log(`[Popup] Language change message: ${message.language}`);
@@ -772,18 +1162,22 @@ input:checked + .slider:before {
 ## File: services/i18n.ts
 ```typescript
 // src/services/i18n.ts
-import i18next from 'i18next';
+import i18next, { InitOptions } from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
-import { I18nError, ResourceLoadError } from '@my_types/errors';
-import { DEFAULT_LANGUAGE, I18N_NAMESPACE, SUPPORTED_LANGUAGES, SupportedLanguage } from '@constants/languages';
+import { I18nError, ResourceLoadError } from '@lib/types/errors';
+import {
+  DEFAULT_LANGUAGE,
+  I18N_NAMESPACE,
+  INITIAL_DELAY,
+  MAX_RETRIES,
+  SUPPORTED_LANGUAGES,
+  SupportedLanguage,
+} from '@constants/languages';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 import { MESSAGE_TYPES } from '@constants/messageTypes';
-import enTranslations from '../locales/en.json';
-import koTranslations from '../locales/ko.json';
-
-const MAX_RETRIES = 3;
-const INITIAL_DELAY = 1000; // 1초
+import enTranslations from '@locales/en.json';
+import koTranslations from '@locales/ko.json';
 
 const resources = {
   en: { [I18N_NAMESPACE]: enTranslations },
@@ -800,7 +1194,7 @@ const setupPlugins = () => {
 
 // 2. 인스턴스 구성 함수
 const configureInstance = async (lang: SupportedLanguage | null) => {
-  const config: any = {
+  const config: InitOptions = {
     resources, // ✅ 정적 리소스 한 번에 로딩
     detection: {
       order: ['navigator', 'htmlTag'],
@@ -882,7 +1276,6 @@ export const initializeI18n = (): Promise<boolean> => {
         // ✅ 스토리지 언어 확인 (null 허용)
         const savedLang = await getSavedLanguage();
 
-
         // ✅ 브라우저 언어 감지 (스토리지 없을 때만)
         const browserLang = savedLang ? null : await detectBrowserLanguage();
         const finalLang = savedLang || browserLang || DEFAULT_LANGUAGE;
@@ -962,84 +1355,4 @@ export const GlobalStyle = createGlobalStyle`
   }
   /* 추가 전역 스타일 */
 `;
-```
-
-## File: types/errors.ts
-```typescript
-// src/types/errors.ts
-export class ResourceLoadError extends Error {
-  constructor(public readonly language: string) {
-    super(`리소스 로드 실패: ${language}`);
-    this.name = 'ResourceLoadError';
-  }
-}
-
-export class I18nError extends Error {
-  constructor(
-    public readonly code: 'TRANSIENT' | 'PERMANENT',
-    message: string,
-  ) {
-    super(message);
-    this.name = 'I18nError';
-    Object.setPrototypeOf(this, I18nError.prototype);
-  }
-}
-
-// 타입 가드 함수 추가
-export function isI18nError(error: unknown): error is I18nError {
-  return error instanceof I18nError;
-}
-```
-
-## File: types/i18next.d.ts
-```typescript
-// src/types/i18next.d.ts
-import 'i18next';
-
-declare module 'i18next' {
-  interface CustomTypeOptions {
-    returnNull: false;
-    resources: typeof import('@locales/en.json');
-  }
-
-  interface i18n {
-    initializePromise?: Promise<boolean>;
-  }
-}
-```
-
-## File: types/message.ts
-```typescript
-// types/message.ts
-import { MESSAGE_TYPES } from '@constants/messageTypes';
-
-export type ToggleContentMessage = {
-  type: typeof MESSAGE_TYPES.TOGGLE_CONTENT;
-  enabled: boolean;
-};
-
-// 2. 확장 가능한 유니온 타입
-export type ContentScriptMessage = ToggleContentMessage;
-// | AnotherMessageType
-```
-
-## File: types/translationKeys.ts
-```typescript
-// types/translationKeys.ts
-export const TRANSLATION_KEYS = ['extName', 'extDescription', 'extLanguage', ] as const;
-
-export type TranslationKey = (typeof TRANSLATION_KEYS)[number];
-```
-
-## File: utils/typeGuards.ts
-```typescript
-// src/utils/typeGuards.ts
-import { ToggleContentMessage } from '@my_types/message';
-import { MESSAGE_TYPES } from '@constants/messageTypes';
-
-export const isToggleContentMessage = (
-  request: { type: string }
-): request is ToggleContentMessage => {
-  return request.type === MESSAGE_TYPES.TOGGLE_CONTENT;
-};
 ```

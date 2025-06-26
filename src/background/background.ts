@@ -1,15 +1,58 @@
 import { MESSAGE_TYPES } from '@constants/messageTypes';
+import { fetchGeniusLyrics } from './api/genius';
+import { YOUTUBE_HOST, YOUTUBE_REGEX } from '@constants/youtubeSelectors';
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Extension installed!');
 });
 
-// background.js
-chrome.runtime.onMessage.addListener((message) => {
-  if (message.type === MESSAGE_TYPES.TOGGLE_CONTENT) {
-    console.log('Toggle received:', message.enabled);
-    return true; // 비동기 처리 활성화
-  }
+// 초기 로드 감지
+chrome.webNavigation.onCompleted.addListener((details) => injectContentScript(details.tabId, details.url), {
+  url: [{ hostSuffix: YOUTUBE_HOST }],
 });
 
-// 특정 페이지에서만 툴바의 아이콘(버튼)이 보이도록 하려함
+// SPA 네비게이션 감지
+chrome.webNavigation.onHistoryStateUpdated.addListener((details) => injectContentScript(details.tabId, details.url), {
+  url: [{ hostSuffix: YOUTUBE_HOST }],
+});
+
+// 스크립트 주입 함수
+const injectContentScript = (tabId: number, url: string) => {
+  if (!YOUTUBE_REGEX.test(url)) return;
+
+  chrome.scripting
+    .executeScript({
+      target: { tabId },
+      files: ['content/content.js'],
+    })
+    .catch((err) => console.error(`Content script injection failed for tab ${tabId}:`, err));
+};
+
+// 영상 감지 시 가사 요청
+chrome.runtime.onMessage.addListener((request, sender) => {
+  if (request.type === MESSAGE_TYPES.TOGGLE_CONTENT) {
+    console.log('Toggle received:', request.enabled);
+    return true; // 비동기 처리 활성화
+  }
+
+  if (request.type === 'VIDEO_DETECTED') {
+    const { videoId, title } = request.payload;
+
+    fetchGeniusLyrics(title)
+      .then((lyrics) => {
+        chrome.tabs.sendMessage(sender.tab!.id!, {
+          type: 'LYRICS_DATA',
+          payload: { videoId, lyrics },
+        });
+      })
+      .catch((error) => {
+        // 가사 없음 안내 메시지 전송
+        chrome.tabs.sendMessage(sender.tab!.id!, {
+          type: 'NO_LYRICS_FOUND',
+          payload: { videoId, title },
+        });
+        console.error('Lyrics fetch error:', error);
+      });
+    return true;
+  }
+});

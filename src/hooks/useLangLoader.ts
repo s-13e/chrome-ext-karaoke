@@ -1,7 +1,7 @@
 // src/hooks/useLangLoader.ts
 import { useEffect, useState } from 'react';
 import { i18nInstance } from '@services/i18n';
-import { I18nError } from '@my_types/errors';
+import { I18nError } from '@lib/types/errors';
 
 type I18nStatus = {
   phase: 'idle' | 'initializing' | 'ready' | 'error';

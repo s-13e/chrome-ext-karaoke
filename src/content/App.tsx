@@ -1,10 +1,10 @@
 // src/content/App.tsx
 import { useEffect } from 'react';
-// import { MESSAGE_TYPES } from '@constants/messageTypes';
 import { i18nInstance } from '@services/i18n';
-import { isToggleContentMessage } from '@utils/typeGuards';
-import { ContentScriptMessage } from '@my_types/message';
+import { isToggleContentMessage } from '@lib/utils/typeGuards';
+import { ContentScriptMessage } from '@lib/types/message';
 import { STORAGE_KEYS } from '@constants/storageKeys';
+// import { LyricsContainer } from './components/LyricsContainer';
 
 export function App() {
   useEffect(() => {

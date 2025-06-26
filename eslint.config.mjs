@@ -119,7 +119,7 @@ export default [
     name: 'chrome-extension/constants-upper-case',
     files: [
       'src/constants/**/*.ts',
-      'src/types/**/*.ts',
+      'src/lib/types/**/*.ts',
     ],
     plugins: { '@typescript-eslint': tseslint },
     languageOptions: {
