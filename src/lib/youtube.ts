@@ -17,7 +17,7 @@ export const detectYouTubeVideo = (): { videoId: string; title: string } | null 
 };
 
 // SPA 네비게이션 대응
-export const setupSPAObserver = (callback: () => void): void => {
+export const setupSPAObserver = (callback: () => void): MutationObserver => {
   const observer = new MutationObserver(() => {
     if (detectYouTubeVideo()) callback();
   });
@@ -27,4 +27,6 @@ export const setupSPAObserver = (callback: () => void): void => {
     subtree: true,
     attributes: true,
   });
+
+  return observer; // MutationObserver 반환
 };

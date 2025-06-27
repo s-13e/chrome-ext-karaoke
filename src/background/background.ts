@@ -1,32 +1,43 @@
 import { MESSAGE_TYPES } from '@constants/messageTypes';
 import { fetchGeniusLyrics } from './api/genius';
-import { YOUTUBE_HOST, YOUTUBE_REGEX } from '@constants/youtubeSelectors';
+import { YOUTUBE_HOST } from '@constants/youtubeSelectors';
 import { PATHS } from '@constants/paths';
+import { YOUTUBE_CONFIG } from '@constants/platforms';
+import { DetectionConfig } from '@lib/types/config';
+
+const activeTabs = new Set<number>();
+let lastInjectedUrl = '';
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Extension installed!');
 });
 
 // 초기 로드 감지
-chrome.webNavigation.onCompleted.addListener((details) => injectContentScript(details.tabId, details.url), {
-  url: [{ hostSuffix: YOUTUBE_HOST }],
-});
+chrome.webNavigation.onCompleted.addListener(
+  (details) => injectContentScript(details.tabId, details.url, YOUTUBE_CONFIG),
+  { url: [{ hostSuffix: YOUTUBE_HOST }] },
+);
 
 // SPA 네비게이션 감지
-chrome.webNavigation.onHistoryStateUpdated.addListener((details) => injectContentScript(details.tabId, details.url), {
-  url: [{ hostSuffix: YOUTUBE_HOST }],
-});
+chrome.webNavigation.onHistoryStateUpdated.addListener(
+  (details) => injectContentScript(details.tabId, details.url, YOUTUBE_CONFIG),
+  { url: [{ hostSuffix: YOUTUBE_HOST }] },
+);
 
 // 스크립트 주입 함수
-const injectContentScript = (tabId: number, url: string) => {
-  if (!YOUTUBE_REGEX.test(url)) return;
+const injectContentScript = (tabId: number, url: string, config: DetectionConfig) => {
+  // ✅ 이미 주입된 탭 체크
+  if (activeTabs.has(tabId) || !config.urlRegex.test(url) || url === lastInjectedUrl) return;
+
+  activeTabs.add(tabId);
+  lastInjectedUrl = url;
 
   chrome.scripting
     .executeScript({
       target: { tabId },
       files: [PATHS.CONTENT_SCRIPT],
     })
-    .catch((err) => console.error(`Content script injection failed for tab ${tabId}:`, err));
+    .catch(console.error);
 };
 
 // 영상 감지 시 가사 요청
@@ -56,4 +67,9 @@ chrome.runtime.onMessage.addListener((request, sender) => {
       });
     return true;
   }
+});
+
+// 탭 닫힘 시 상태 제거
+chrome.tabs.onRemoved.addListener((tabId) => {
+  activeTabs.delete(tabId);
 });

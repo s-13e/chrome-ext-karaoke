@@ -89,7 +89,6 @@ const detectBrowserLanguage = (): Promise<SupportedLanguage> => {
     });
   });
 };
-// services/i18n.ts
 const getSavedLanguage = async (): Promise<SupportedLanguage | null> => {
   return new Promise<SupportedLanguage | null>((resolve) => {
     chrome.storage.sync.get(STORAGE_KEYS.LANGUAGE, (result) => {
@@ -100,10 +99,22 @@ const getSavedLanguage = async (): Promise<SupportedLanguage | null> => {
   });
 };
 
+// 전역 상태 관리 (SPA 재주입 시 유지)
+declare global {
+  interface Window {
+    __i18n_initialized?: boolean;
+  }
+}
+
 // 2. 초기화 함수
 let initializationPromise: Promise<boolean> | null = null;
 
 export const initializeI18n = (): Promise<boolean> => {
+  // ✅ 윈도우 상태 체크 (SPA 재주입 방어)
+  if (typeof window !== 'undefined' && window.__i18n_initialized) {
+    return Promise.resolve(true);
+  }
+
   if (!initializationPromise) {
     initializationPromise = retryWithBackoff(async () => {
       try {
@@ -128,11 +139,16 @@ export const initializeI18n = (): Promise<boolean> => {
         }
 
         setupStorageListeners();
+        // ✅ 윈도우 상태 업데이트
+        if (typeof window !== 'undefined') {
+          window.__i18n_initialized = true;
+        }
+
         console.log('[i18n] Initialization completed successfully');
         return true;
       } catch (error) {
         if (error instanceof ResourceLoadError) {
-          throw new I18nError('PERMANENT', `리소스 누락: ${error.language}`); // ✅
+          throw new I18nError('PERMANENT', `리소스 누락: ${error.language}`);
         }
         throw new I18nError('TRANSIENT', `초기화 실패: ${error instanceof Error ? error.message : String(error)}`);
       }

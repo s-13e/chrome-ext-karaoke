@@ -113,30 +113,51 @@ import { fetchGeniusLyrics } from './api/genius';
 import { YOUTUBE_HOST, YOUTUBE_REGEX } from '@constants/youtubeSelectors';
 import { PATHS } from '@constants/paths';
 
+
+interface DetectionConfig {
+  hostSuffix: string;
+  urlRegex: RegExp;
+}
+
+const YOUTUBE_CONFIG: DetectionConfig = {
+  hostSuffix: YOUTUBE_HOST,
+  urlRegex: YOUTUBE_REGEX,
+};
+
+const activeTabs = new Set<number>();
+let lastInjectedUrl = '';
+
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Extension installed!');
 });
 
 // 초기 로드 감지
-chrome.webNavigation.onCompleted.addListener((details) => injectContentScript(details.tabId, details.url), {
-  url: [{ hostSuffix: YOUTUBE_HOST }],
-});
+chrome.webNavigation.onCompleted.addListener(
+  (details) => injectContentScript(details.tabId, details.url, YOUTUBE_CONFIG),
+  { url: [{ hostSuffix: YOUTUBE_HOST }] }
+);
 
 // SPA 네비게이션 감지
-chrome.webNavigation.onHistoryStateUpdated.addListener((details) => injectContentScript(details.tabId, details.url), {
-  url: [{ hostSuffix: YOUTUBE_HOST }],
-});
+chrome.webNavigation.onHistoryStateUpdated.addListener(
+  (details) => injectContentScript(details.tabId, details.url, YOUTUBE_CONFIG),
+  { url: [{ hostSuffix: YOUTUBE_HOST }] }
+);
+
 
 // 스크립트 주입 함수
-const injectContentScript = (tabId: number, url: string) => {
-  if (!YOUTUBE_REGEX.test(url)) return;
+const injectContentScript = (tabId: number, url: string, config: DetectionConfig) => {
+  // ✅ 이미 주입된 탭 체크
+  if (activeTabs.has(tabId) || !config.urlRegex.test(url) || url === lastInjectedUrl) return;
+
+  activeTabs.add(tabId);
+  lastInjectedUrl = url;
 
   chrome.scripting
     .executeScript({
       target: { tabId },
       files: [PATHS.CONTENT_SCRIPT],
     })
-    .catch((err) => console.error(`Content script injection failed for tab ${tabId}:`, err));
+    .catch(console.error);
 };
 
 // 영상 감지 시 가사 요청
@@ -166,6 +187,12 @@ chrome.runtime.onMessage.addListener((request, sender) => {
       });
     return true;
   }
+});
+
+
+// 탭 닫힘 시 상태 제거
+chrome.tabs.onRemoved.addListener((tabId) => {
+  activeTabs.delete(tabId);
 });
 ```
 
@@ -512,44 +539,77 @@ import { STORAGE_KEYS } from '@constants/storageKeys';
 import { MESSAGE_TYPES } from '@constants/messageTypes';
 import { DOM_IDS } from '@constants/doomIds';
 
+// 타입 명시적 정의
+interface DetectionController {
+  spaObserver: MutationObserver | null;
+  videoDetection: (() => void) | null;
+}
 
-let contentEnabled = true;
+let detectionController: DetectionController = {
+  spaObserver: null,
+  videoDetection: null,
+};
 
-// 저장소 상태 초기화 및 감지
-chrome.storage.sync.get(STORAGE_KEYS.CONTENT_ENABLED, (result) => {
-  contentEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? true;
-});
+// 영상 감지 핸들러 (순수 로직)
+const handleVideoDetection = () => {
+  const videoData = detectYouTubeVideo();
+  if (!videoData) return;
+
+  chrome.runtime.sendMessage({
+    type: MESSAGE_TYPES.VIDEO_DETECTED,
+    payload: videoData,
+  });
+};
+
+// 감지 시스템 활성화
+const enableDetection = () => {
+  // 기존 리소스 정리
+  if (detectionController.spaObserver) {
+    detectionController.spaObserver.disconnect();
+  }
+
+  // 새로운 감지 시스템 설정
+  const debouncedDetection = debounce(handleVideoDetection, 1000);
+  const newObserver = setupSPAObserver(debouncedDetection);
+
+  detectionController = {
+    spaObserver: newObserver,
+    videoDetection: debouncedDetection,
+  };
+
+  // 초기 감지 실행
+  debouncedDetection();
+};
+// 감지 시스템 완전 비활성화
+const disableDetection = () => {
+  if (detectionController.spaObserver) {
+    detectionController.spaObserver.disconnect();
+  }
+  detectionController = {
+    spaObserver: null,
+    videoDetection: null,
+  };
+};
+
+// 저장소 상태에 따른 감지 시스템 제어
+const setDetectionState = (enabled: boolean) => {
+  if (enabled) {
+    enableDetection();
+    console.log('[STATUS] 감지 시스템 활성화');
+  } else {
+    disableDetection();
+    console.log('[STATUS] 감지 시스템 비활성화');
+  }
+};
 
 chrome.storage.onChanged.addListener((changes) => {
-  // 안전한 접근 방식
+  // 변경사항이 존재하고, 값이 boolean 타입인지 확인
   const contentEnabledChange = changes[STORAGE_KEYS.CONTENT_ENABLED];
 
   if (contentEnabledChange && typeof contentEnabledChange.newValue === 'boolean') {
-    contentEnabled = contentEnabledChange.newValue;
-    console.log(`[STATUS] 콘텐츠 상태 변경: ${contentEnabled ? '활성화' : '비활성화'}`);
+    setDetectionState(contentEnabledChange.newValue);
   }
 });
-
-
-// 영상 감지 핸들러
-const handleVideoDetection = () => {
-  console.log('[DEBUG] handleVideoDetection 호출');
-  if (!contentEnabled) {
-    console.log('[DEBUG] 콘텐츠 비활성화 상태 - 영상 감지 건너뜀');
-    return;
-  }
-
-  const videoData = detectYouTubeVideo();
-  if (!videoData) {
-    console.log('[DEBUG] 영상 데이터 없음: YouTube 영상 페이지가 아님');
-    return;
-  }
-  console.log('[DEBUG] 영상 감지 성공', {
-    videoId: videoData.videoId,
-    title: videoData.title,
-  });
-  chrome.runtime.sendMessage({ type: MESSAGE_TYPES.VIDEO_DETECTED, payload: videoData });
-};
 
 // 가사 수신 처리
 const setupLyricsListener = () => {
@@ -559,26 +619,6 @@ const setupLyricsListener = () => {
     }
   });
 };
-const debouncedHandleVideoDetection = debounce(handleVideoDetection, 1000);
-
-// SPA 감지 설정
-const setupSPADetection = () => {
-  setupSPAObserver(debouncedHandleVideoDetection);
-};
-
-// ✅ SPA 네비게이션 메시지 핸들러 통합
-chrome.runtime.onMessage.addListener((message) => {
-  // 백그라운드에서 전송한 SPA 감지 메시지 처리
-  if (message.type === MESSAGE_TYPES.SPA_NAVIGATION_DETECTED) {
-    console.log('SPA navigation detected');
-    debouncedHandleVideoDetection(); // 디바운싱 적용된 영상 감지
-  }
-
-  // 가사 데이터 수신 처리 (기존 유지)
-  if (message.type === MESSAGE_TYPES.LYRICS_DATA) {
-    initLyricsContainer(message.payload);
-  }
-});
 
 // 루트 엘리먼트 생성
 const createRootElement = () => {
@@ -609,10 +649,11 @@ const initializeApp = async () => {
     setupLyricsListener();
 
     console.log('[DEBUG] 초기 영상 감지 시도');
-    debouncedHandleVideoDetection(); // 디바운싱 버전 사용
-
-    console.log('[DEBUG] SPA 감지 설정 시작');
-    setupSPADetection();
+    // 초기 감지 상태 설정
+    chrome.storage.sync.get(STORAGE_KEYS.CONTENT_ENABLED, (result) => {
+      const enabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? true;
+      setDetectionState(enabled);
+    });
   } catch (error) {
     const rootElement = document.getElementById(DOM_IDS.ROOT_CONTAINER) || createRootElement();
     const root = createRoot(rootElement);
@@ -621,6 +662,13 @@ const initializeApp = async () => {
 };
 
 initializeApp();
+
+// SPA 네비게이션 메시지 핸들러
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.type === MESSAGE_TYPES.SPA_NAVIGATION_DETECTED && detectionController.videoDetection) {
+    detectionController.videoDetection();
+  }
+});
 ```
 
 ## File: hooks/useChromeStorage.ts
@@ -878,7 +926,7 @@ export const detectYouTubeVideo = (): { videoId: string; title: string } | null 
 };
 
 // SPA 네비게이션 대응
-export const setupSPAObserver = (callback: () => void): void => {
+export const setupSPAObserver = (callback: () => void): MutationObserver => {
   const observer = new MutationObserver(() => {
     if (detectYouTubeVideo()) callback();
   });
@@ -886,8 +934,10 @@ export const setupSPAObserver = (callback: () => void): void => {
   observer.observe(document.body, {
     childList: true,
     subtree: true,
-    attributes: true,
+    attributes: true
   });
+
+  return observer; // MutationObserver 반환
 };
 ```
 
@@ -1369,7 +1419,6 @@ const detectBrowserLanguage = (): Promise<SupportedLanguage> => {
     });
   });
 };
-// services/i18n.ts
 const getSavedLanguage = async (): Promise<SupportedLanguage | null> => {
   return new Promise<SupportedLanguage | null>((resolve) => {
     chrome.storage.sync.get(STORAGE_KEYS.LANGUAGE, (result) => {
@@ -1380,10 +1429,22 @@ const getSavedLanguage = async (): Promise<SupportedLanguage | null> => {
   });
 };
 
+// 전역 상태 관리 (SPA 재주입 시 유지)
+declare global {
+  interface Window {
+    __i18n_initialized?: boolean;
+  }
+}
+
 // 2. 초기화 함수
 let initializationPromise: Promise<boolean> | null = null;
 
 export const initializeI18n = (): Promise<boolean> => {
+  // ✅ 윈도우 상태 체크 (SPA 재주입 방어)
+  if (typeof window !== 'undefined' && window.__i18n_initialized) {
+    return Promise.resolve(true);
+  }
+
   if (!initializationPromise) {
     initializationPromise = retryWithBackoff(async () => {
       try {
@@ -1408,11 +1469,16 @@ export const initializeI18n = (): Promise<boolean> => {
         }
 
         setupStorageListeners();
+        // ✅ 윈도우 상태 업데이트
+        if (typeof window !== 'undefined') {
+          window.__i18n_initialized = true;
+        }
+
         console.log('[i18n] Initialization completed successfully');
         return true;
       } catch (error) {
         if (error instanceof ResourceLoadError) {
-          throw new I18nError('PERMANENT', `리소스 누락: ${error.language}`); // ✅
+          throw new I18nError('PERMANENT', `리소스 누락: ${error.language}`);
         }
         throw new I18nError('TRANSIENT', `초기화 실패: ${error instanceof Error ? error.message : String(error)}`);
       }
