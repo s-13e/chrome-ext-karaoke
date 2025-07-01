@@ -71,6 +71,26 @@ export default [
       '@typescript-eslint/no-unused-vars': ['error', { vars: 'all', args: 'after-used', ignoreRestSiblings: true }],
       '@typescript-eslint/naming-convention': [
         'error',
+        // 1. UPPER_CASE const 상수 (최우선 적용)
+        {
+          selector: 'variable',
+          modifiers: ['const'],
+          format: ['UPPER_CASE'],
+          filter: {
+            regex: '^[A-Z_]+$', // 대문자+언더스코어만 허용
+            match: true,
+          },
+        },
+        // 2. camelCase const 변수
+        {
+          selector: 'variable',
+          modifiers: ['const'],
+          format: ['camelCase'],
+          filter: {
+            regex: '^[a-z]', // 소문자 시작만 허용
+            match: true,
+          },
+        },
         // 1. React 컴포넌트 (exported 함수 타입 변수 + JSX 사용)
         {
           selector: ['variable', 'function'],
@@ -99,17 +119,13 @@ export default [
           format: ['camelCase'],
           filter: {
             regex: '^[A-Z]',
-            match: false,
-          },
-        },
-        // 4. 대문자 시작 변수 (PascalCase 허용)
-        {
-          selector: 'variable',
-          format: ['PascalCase'],
-          filter: {
-            regex: '^[A-Z]',
             match: true,
           },
+        },
+        // 5. 타입 정의 규칙
+        {
+          selector: 'typeLike',
+          format: ['PascalCase'],
         },
       ],
     },
@@ -117,10 +133,7 @@ export default [
   // constants 폴더 전용 규칙 (UPPER_CASE 강제)
   {
     name: 'chrome-extension/constants-upper-case',
-    files: [
-      'src/constants/**/*.ts',
-      'src/lib/types/**/*.ts',
-    ],
+    files: ['src/constants/**/*.ts', 'src/lib/types/**/*.ts'],
     plugins: { '@typescript-eslint': tseslint },
     languageOptions: {
       parser: tsParser,
@@ -137,6 +150,14 @@ export default [
           format: ['UPPER_CASE'], // constants 폴더 내 모든 const는 UPPER_CASE
         },
       ],
+    },
+  },
+  {
+    name: 'chrome-extension/type-declarations',
+    files: ['**/*.d.ts'],
+    rules: {
+      '@typescript-eslint/naming-convention': 'off',
+      'import/no-default-export': 'off',
     },
   },
   // React 규칙

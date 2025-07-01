@@ -38,6 +38,10 @@ background/api/genius.ts
 background/background.ts
 components/common/ErrorFallback.tsx
 components/common/LoadingOverlay.tsx
+components/lyrics/KaraokePlayerContainer/index.tsx
+components/lyrics/KaraokePlayerContainer/styles.module.css
+components/lyrics/LyricsSidebar/index.tsx
+components/lyrics/LyricsSidebar/LyricsPanel.tsx
 constants/api.ts
 constants/doomIds.ts
 constants/errorCodes.ts
@@ -45,6 +49,7 @@ constants/errorMessages.ts
 constants/languages.ts
 constants/messageTypes.ts
 constants/paths.ts
+constants/platforms.ts
 constants/storageKeys.ts
 constants/time.ts
 constants/youtubeSelectors.ts
@@ -54,11 +59,16 @@ content/components/SyncSubtitle.tsx
 content/index.tsx
 hooks/useChromeStorage.ts
 hooks/useLangLoader.ts
+lib/types/config.ts
 lib/types/errors.ts
+lib/types/global.d.ts
 lib/types/i18next.d.ts
 lib/types/message.ts
 lib/types/translationKeys.ts
 lib/utils/common.ts
+lib/utils/domUtils.ts
+lib/utils/playerUtils.ts
+lib/utils/styleInjection.ts
 lib/utils/time.ts
 lib/utils/typeGuards.ts
 lib/youtube.ts
@@ -110,19 +120,10 @@ export const fetchGeniusLyrics = async (title: string): Promise<string> => {
 ```typescript
 import { MESSAGE_TYPES } from '@constants/messageTypes';
 import { fetchGeniusLyrics } from './api/genius';
-import { YOUTUBE_HOST, YOUTUBE_REGEX } from '@constants/youtubeSelectors';
+import { YOUTUBE_HOST } from '@constants/youtubeSelectors';
 import { PATHS } from '@constants/paths';
-
-
-interface DetectionConfig {
-  hostSuffix: string;
-  urlRegex: RegExp;
-}
-
-const YOUTUBE_CONFIG: DetectionConfig = {
-  hostSuffix: YOUTUBE_HOST,
-  urlRegex: YOUTUBE_REGEX,
-};
+import { YOUTUBE_CONFIG } from '@constants/platforms';
+import { DetectionConfig } from '@lib/types/config';
 
 const activeTabs = new Set<number>();
 let lastInjectedUrl = '';
@@ -134,15 +135,14 @@ chrome.runtime.onInstalled.addListener(() => {
 // 초기 로드 감지
 chrome.webNavigation.onCompleted.addListener(
   (details) => injectContentScript(details.tabId, details.url, YOUTUBE_CONFIG),
-  { url: [{ hostSuffix: YOUTUBE_HOST }] }
+  { url: [{ hostSuffix: YOUTUBE_HOST }] },
 );
 
 // SPA 네비게이션 감지
 chrome.webNavigation.onHistoryStateUpdated.addListener(
   (details) => injectContentScript(details.tabId, details.url, YOUTUBE_CONFIG),
-  { url: [{ hostSuffix: YOUTUBE_HOST }] }
+  { url: [{ hostSuffix: YOUTUBE_HOST }] },
 );
-
 
 // 스크립트 주입 함수
 const injectContentScript = (tabId: number, url: string, config: DetectionConfig) => {
@@ -188,7 +188,6 @@ chrome.runtime.onMessage.addListener((request, sender) => {
     return true;
   }
 });
-
 
 // 탭 닫힘 시 상태 제거
 chrome.tabs.onRemoved.addListener((tabId) => {
@@ -257,6 +256,151 @@ export const LoadingOverlay = React.memo(() => (
   </Container>
 ));
 LoadingOverlay.displayName = 'LoadingOverlay';
+```
+
+## File: components/lyrics/KaraokePlayerContainer/index.tsx
+```typescript
+// components/lyrics/KaraokePlayerContainer/index.tsx
+import { useEffect, useRef } from 'react';
+import styles from './styles.module.css';
+
+// 스타일 내용을 상수로 분리 (성능 최적화)
+const KARAOKE_STYLES = `
+  ytd-app { padding-top: 0 !important; }
+  ytd-watch-flexy {
+    width: 75% !important;
+    height: calc(100vh - var(--header-height, 56px)) !important; /* 헤더 높이 고려 */
+    position: fixed !important;
+    top: var(--header-height, 56px) !important; /* 헤더 아래 시작 */
+    left: 0 !important;
+    z-index: 1000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+      /* 헤더 스타일 커스텀 (색상 조정) */
+  #masthead-container {
+    background-color: #1a1a1a !important; /* 어두운 색상 예시 */
+    border-bottom: 1px solid #333 !important;
+  }
+  #movie_player {
+    width: 100% !important;
+    height: 100% !important;
+    position: relative !important;
+  }
+  #secondary { display: none !important; }
+  body { overflow: hidden !important; }
+`;
+
+const KaraokePlayerContainer = () => {
+  const styleRef = useRef<HTMLStyleElement | null>(null);
+
+  useEffect(() => {
+    // 1. 기존 스타일 제거 (중복 주입 방지)
+    if (styleRef.current) {
+      document.head.removeChild(styleRef.current);
+    }
+
+    // 2. 새 스타일 요소 생성
+    const style = document.createElement('style');
+    style.id = 'karaoke-player-styles';
+    style.textContent = KARAOKE_STYLES;
+    document.head.appendChild(style);
+    styleRef.current = style;
+
+    // 3. YouTube DOM 변경 감지 (SPA 대응)
+    const observer = new MutationObserver(() => {
+      if (!document.querySelector('ytd-watch-flexy')) return;
+
+      // 스타일 재주입
+      if (style.parentNode !== document.head) {
+        document.head.appendChild(style);
+      }
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+
+    return () => {
+      // 4. 정리 함수에서 스타일 제거 및 관찰 중지
+      if (styleRef.current) {
+        document.head.removeChild(styleRef.current);
+      }
+      observer.disconnect();
+    };
+  }, []);
+
+  return <div className={styles.lyricsContainer}>가사 컨테이너</div>;
+};
+
+export default KaraokePlayerContainer;
+```
+
+## File: components/lyrics/KaraokePlayerContainer/styles.module.css
+```css
+/* styles.module.css */
+.karaokePlayerContainer {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 1500 !important; /* YouTube보다 낮게 */
+  background: transparent !important; /* ✅ 투명 배경 */
+  pointer-events: none !important; /* ✅ 기본적으로 클릭 차단 해제 */
+}
+
+.lyricsContainer {
+  position: fixed !important;
+  top: 0 !important;
+  right: 0 !important; /* ✅ 오른쪽 고정 */
+  width: 25% !important;
+  height: 100vh !important;
+  background: #1a1a1a !important;
+  pointer-events: auto !important; /* ✅ 가사 영역만 클릭 가능 */
+  z-index: 2000 !important;
+}
+```
+
+## File: components/lyrics/LyricsSidebar/index.tsx
+```typescript
+// components/lyrics/LyricsSidebar/index.tsx
+import React from 'react';
+// import MenuTabs from './MenuTabs';
+// import LyricsPanel from './LyricsPanel';
+
+const LyricsSidebar: React.FC = () => {
+  return (
+    <div className="lyrics-sidebar">
+      {/* <MenuTabs />
+      <LyricsPanel /> */}
+    </div>
+  );
+};
+
+export default LyricsSidebar;
+```
+
+## File: components/lyrics/LyricsSidebar/LyricsPanel.tsx
+```typescript
+// // components/lyrics/LyricsSidebar/LyricsPanel.tsx
+// import React from 'react';
+// import LyricsItem from '../../LyricsItem';
+
+// type LyricsType = { text: string; id: string };
+
+// const LyricsPanel: React.FC<{ lyrics?: LyricsType[] }> = ({ lyrics = [] }) => {
+//   return (
+//     <div className="lyrics-panel">
+//       {lyrics.map((line) => (
+//         <LyricsItem key={line.id} text={line.text} />
+//       ))}
+//     </div>
+//   );
+// };
+
+// export default LyricsPanel;
 ```
 
 ## File: constants/api.ts
@@ -332,6 +476,21 @@ export const PATHS = {
   OPTIONS_HTML: 'options.html',
   ICON_SETTING: '@assets/icons/setting.png',
 };
+```
+
+## File: constants/platforms.ts
+```typescript
+// src/constants/platforms.ts
+import { DetectionConfig } from '@lib/types/config';
+import { YOUTUBE_HOST, YOUTUBE_REGEX } from './youtubeSelectors';
+
+export const YOUTUBE_CONFIG: DetectionConfig = {
+  hostSuffix: YOUTUBE_HOST,
+  urlRegex: YOUTUBE_REGEX,
+};
+
+// 추후 다른 플랫폼 설정 추가 가능
+// export const NETFLIX_CONFIG: DetectionConfig = { ... };
 ```
 
 ## File: constants/storageKeys.ts
@@ -538,6 +697,7 @@ import 'normalize.css';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 import { MESSAGE_TYPES } from '@constants/messageTypes';
 import { DOM_IDS } from '@constants/doomIds';
+import KaraokePlayerContainer from '@components/lyrics/KaraokePlayerContainer';
 
 // 타입 명시적 정의
 interface DetectionController {
@@ -550,10 +710,30 @@ let detectionController: DetectionController = {
   videoDetection: null,
 };
 
+// ✅ 추가할 함수: URL 변경 핸들러
+const handleUrlChange = () => {
+  const isWatchPage = window.location.pathname.startsWith('/watch');
+  const karaokeRoot = document.getElementById('karaoke-root');
+
+  if (isWatchPage && !karaokeRoot) {
+    // watch 페이지이고 컨테이너가 없으면 생성
+    const karaokeRootElement = document.createElement('div');
+    karaokeRootElement.id = 'karaoke-root';
+    document.body.appendChild(karaokeRootElement);
+    const karaokeRootInstance = createRoot(karaokeRootElement);
+    karaokeRootInstance.render(<KaraokePlayerContainer />);
+  } else if (!isWatchPage && karaokeRoot) {
+    // watch 페이지가 아니고 컨테이너가 있으면 제거
+    karaokeRoot.remove();
+  }
+};
+
 // 영상 감지 핸들러 (순수 로직)
 const handleVideoDetection = () => {
   const videoData = detectYouTubeVideo();
   if (!videoData) return;
+
+  console.log('[VIDEO DETECTED]', videoData.videoId, videoData.title);
 
   chrome.runtime.sendMessage({
     type: MESSAGE_TYPES.VIDEO_DETECTED,
@@ -632,10 +812,20 @@ const createRootElement = () => {
 const handleReset = () => {
   window.location.reload();
 };
+const injectCSS = () => {
+  const cssId = 'karaoke-styles';
+  if (document.getElementById(cssId)) return;
 
+  const link = document.createElement('link');
+  link.id = cssId;
+  link.rel = 'stylesheet';
+  link.href = chrome.runtime.getURL('content/style.css'); // 확장자원 URL
+  document.head.appendChild(link);
+};
 // 앱 초기화
 const initializeApp = async () => {
   try {
+    injectCSS();
     await initializeI18n();
     const rootElement = document.getElementById(DOM_IDS.ROOT_CONTAINER) || createRootElement();
     const root = createRoot(rootElement);
@@ -646,9 +836,20 @@ const initializeApp = async () => {
         </I18nextProvider>
       </ErrorBoundary>,
     );
-    setupLyricsListener();
 
+    // ✅ 가사/플레이어 컨테이너를 별도로 렌더링
+    let karaokeRoot = document.getElementById('karaoke-root');
+    if (!karaokeRoot) {
+      karaokeRoot = document.createElement('div');
+      karaokeRoot.id = 'karaoke-root';
+      document.body.appendChild(karaokeRoot);
+    }
+    const karaokeRootInstance = createRoot(karaokeRoot);
+    karaokeRootInstance.render(<KaraokePlayerContainer />);
+
+    setupLyricsListener();
     console.log('[DEBUG] 초기 영상 감지 시도');
+
     // 초기 감지 상태 설정
     chrome.storage.sync.get(STORAGE_KEYS.CONTENT_ENABLED, (result) => {
       const enabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? true;
@@ -665,8 +866,14 @@ initializeApp();
 
 // SPA 네비게이션 메시지 핸들러
 chrome.runtime.onMessage.addListener((message) => {
-  if (message.type === MESSAGE_TYPES.SPA_NAVIGATION_DETECTED && detectionController.videoDetection) {
-    detectionController.videoDetection();
+ if (message.type === MESSAGE_TYPES.SPA_NAVIGATION_DETECTED) {
+    // ✅ SPA 네비게이션 감지 시 URL 체크
+    handleUrlChange();
+
+    // 기존 비디오 감지 로직 유지
+    if (detectionController.videoDetection) {
+      detectionController.videoDetection();
+    }
   }
 });
 ```
@@ -741,6 +948,21 @@ export const useLangLoader = (): I18nStatus => {
 };
 ```
 
+## File: lib/types/config.ts
+```typescript
+// lib/types/config.ts
+export interface DetectionConfig {
+  hostSuffix: string;
+  urlRegex: RegExp;
+}
+
+export interface PlatformConfig extends DetectionConfig {
+  name: string;
+  contentSelector: string;
+  // 추후 확장 가능한 설정들
+}
+```
+
 ## File: lib/types/errors.ts
 ```typescript
 // src/types/errors.ts
@@ -765,6 +987,25 @@ export class I18nError extends Error {
 // 타입 가드 함수 추가
 export function isI18nError(error: unknown): error is I18nError {
   return error instanceof I18nError;
+}
+```
+
+## File: lib/types/global.d.ts
+```typescript
+// src/types/global.d.ts
+declare module '*.module.css' {
+  const classes: { [key: string]: string };
+  export default classes;
+}
+
+declare module '*.module.scss' {
+  const classes: { [key: string]: string };
+  export default classes;
+}
+
+declare module '*.css' {
+  const content: { [className: string]: string };
+  export default content;
 }
 ```
 
@@ -836,6 +1077,159 @@ export const throttle = <T extends (...args: unknown[]) => unknown>(
     }
   };
 };
+```
+
+## File: lib/utils/domUtils.ts
+```typescript
+// src/lib/utils/domUtils.ts
+
+// 요소 대기 함수
+export const waitForElement = <T extends Element>(selector: string, timeout = 5000): Promise<T> => {
+  return new Promise((resolve, reject) => {
+    const element = document.querySelector<T>(selector);
+    if (element) return resolve(element);
+
+    const observer = new MutationObserver(() => {
+      const found = document.querySelector<T>(selector);
+      if (found) {
+        cleanup();
+        resolve(found);
+      }
+    });
+
+    const timeoutId = setTimeout(() => {
+      cleanup();
+      reject(new Error(`Element ${selector} not found in ${timeout}ms`));
+    }, timeout);
+
+    const cleanup = () => {
+      observer.disconnect();
+      clearTimeout(timeoutId);
+    };
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+  });
+};
+
+// 요소 생성 함수
+export const createElement = <K extends keyof HTMLElementTagNameMap>(
+  tagName: K,
+  options?: ElementCreationOptions,
+): HTMLElementTagNameMap[K] => {
+  return document.createElement(tagName, options);
+};
+
+// 안전한 요소 삽입
+export const safeAppendChild = (parent: Node, child: Node): boolean => {
+  try {
+    parent.appendChild(child);
+    return true;
+  } catch (error) {
+    console.error('DOM append failed:', error);
+    return false;
+  }
+};
+// 요소 제거 유틸리티
+export const removeElement = (selector: string): boolean => {
+  const element = document.querySelector(selector);
+  if (!element) return false;
+  element.remove();
+  return true;
+};
+
+// CSS 클래스 토글
+export const toggleClass = (
+  element: Element,
+  className: string,
+  force?: boolean
+): boolean => {
+  if (!element) return false;
+  element.classList.toggle(className, force);
+  return true;
+};
+```
+
+## File: lib/utils/playerUtils.ts
+```typescript
+// src/utils/playerUtils.ts
+
+// YouTube 플레이어 이동 유틸리티
+export const moveYouTubePlayer = (targetContainer: HTMLElement, playerSelector = '#movie_player'): boolean => {
+  const player = document.querySelector(playerSelector) as HTMLElement;
+  if (!player || !targetContainer) {
+    console.error('[moveYouTubePlayer] 플레이어 또는 컨테이너를 찾을 수 없음');
+    return false;
+  }
+
+  try {
+    console.log('[moveYouTubePlayer] 플레이어 이동 시작');
+
+    // // 플레이어 스타일 백업
+    // const originalStyles = {
+    //   position: player.style.position,
+    //   zIndex: player.style.zIndex,
+    //   opacity: player.style.opacity,
+    //   visibility: player.style.visibility
+    // };
+
+    // 플레이어 강제 표시
+    player.style.opacity = '1';
+    player.style.visibility = 'visible';
+    player.style.display = 'block';
+    player.style.position = 'relative';
+    player.style.zIndex = '1000';
+
+    // 플레이어 이동
+    targetContainer.appendChild(player);
+
+    console.log('[moveYouTubePlayer] 플레이어 이동 완료');
+
+    // 리사이즈 트리거
+    setTimeout(() => {
+      window.dispatchEvent(new Event('resize'));
+    }, 100);
+
+    return true;
+  } catch (error) {
+    console.error('[moveYouTubePlayer] 플레이어 이동 실패:', error);
+    return false;
+  }
+};
+
+// 플레이어 상태 체크
+export const isPlayerReady = (): boolean => {
+  return !!document.querySelector('video');
+};
+```
+
+## File: lib/utils/styleInjection.ts
+```typescript
+// utils/styleInjection.ts
+export const injectGlobalStyles = () => {
+  const styleId = 'karaoke-global-styles';
+  if (document.getElementById(styleId)) return;
+
+  const style = document.createElement('style');
+  style.id = styleId;
+  style.textContent = `
+    /* YouTube 기본 요소 숨기기 */
+    ytd-watch-flexy[theater] #player-wide-container,
+    ytd-watch-flexy #player-wide-container {
+      display: none !important;
+    }
+
+    /* 스크롤 방지 */
+    body.karaoke-mode {
+      overflow: hidden !important;
+    }
+  `;
+  document.head.appendChild(style);
+};
+
+injectGlobalStyles();
 ```
 
 ## File: lib/utils/time.ts
@@ -934,7 +1328,7 @@ export const setupSPAObserver = (callback: () => void): MutationObserver => {
   observer.observe(document.body, {
     childList: true,
     subtree: true,
-    attributes: true
+    attributes: true,
   });
 
   return observer; // MutationObserver 반환

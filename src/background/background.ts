@@ -8,19 +8,35 @@ import { DetectionConfig } from '@lib/types/config';
 const activeTabs = new Set<number>();
 let lastInjectedUrl = '';
 
-chrome.runtime.onInstalled.addListener(() => {
-  console.log('Extension installed!');
-});
-
 // 초기 로드 감지
 chrome.webNavigation.onCompleted.addListener(
   (details) => injectContentScript(details.tabId, details.url, YOUTUBE_CONFIG),
   { url: [{ hostSuffix: YOUTUBE_HOST }] },
 );
 
-// SPA 네비게이션 감지
+// ✅ SPA 네비게이션 감지 추가
 chrome.webNavigation.onHistoryStateUpdated.addListener(
-  (details) => injectContentScript(details.tabId, details.url, YOUTUBE_CONFIG),
+  (details) => {
+    console.log('[SPA Navigation]', details.url);
+
+    // Content script에 URL 변경 알림
+    chrome.tabs
+      .sendMessage(details.tabId, {
+        type: MESSAGE_TYPES.SPA_NAVIGATION_DETECTED,
+        payload: {
+          url: details.url,
+          isWatchPage: details.url.includes('/watch'),
+        },
+      })
+      .catch(() => {
+        // Content script가 아직 주입되지 않은 경우 무시
+      });
+
+    // Watch 페이지로 이동한 경우에만 스크립트 주입
+    if (details.url.includes('/watch')) {
+      injectContentScript(details.tabId, details.url, YOUTUBE_CONFIG);
+    }
+  },
   { url: [{ hostSuffix: YOUTUBE_HOST }] },
 );
 

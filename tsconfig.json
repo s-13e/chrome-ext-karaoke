@@ -28,6 +28,9 @@
     "noUnusedLocals": true, // 사용하지 않은 변수 에러 처리
     "noUnusedParameters": true // 사용하지 않은 파라미터 에러 처리
   },
-  "include": ["src/**/*"],
+  "include": [
+    "src/**/*",
+    "src/lib/types/global.d.ts"
+  ],
   "exclude": ["node_modules", "dist"]
 }

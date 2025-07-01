@@ -29,12 +29,21 @@ module.exports = {
       {
         test: /\.css$/,
         use: [
-          MiniCssExtractPlugin.loader,
+          {
+            loader: MiniCssExtractPlugin.loader,
+            options: {
+              esModule: false, // ✅ CommonJS 방식 사용
+            },
+          },
           {
             loader: 'css-loader',
             options: {
-              modules: false,
+              modules: {
+                auto: true,
+                localIdentName: '[name]__[local]--[hash:base64:5]',
+              },
               importLoaders: 1,
+              esModule: false, // ✅ CommonJS 방식 사용
             },
           },
         ],
