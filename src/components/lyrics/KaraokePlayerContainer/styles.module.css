@@ -16,7 +16,7 @@
   right: 0 !important; /* ✅ 오른쪽 고정 */
   width: 25% !important;
   height: 100vh !important;
-  background: #1a1a1a !important;
+  background: RED !important;
   pointer-events: auto !important; /* ✅ 가사 영역만 클릭 가능 */
   z-index: 2000 !important;
 }
