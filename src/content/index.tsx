@@ -13,6 +13,9 @@ import { STORAGE_KEYS } from '@constants/storageKeys';
 import { MESSAGE_TYPES } from '@constants/messageTypes';
 import { DOM_IDS } from '@constants/doomIds';
 import { KaraokePlayerContainer } from '@components/lyrics/KaraokePlayerContainer';
+import { fetchYouTubeVideoMeta } from '@background/api/youtube';
+import { isMusicVideo } from '@lib/utils/musicDetection';
+import { YOUTUBE_API_KEY } from '@constants/apiKey';
 
 // 타입 명시적 정의
 interface DetectionController {
@@ -89,11 +92,24 @@ const handleUrlChange = (url: string) => {
 };
 
 // 영상 감지 핸들러 (순수 로직)
-const handleVideoDetection = () => {
+const handleVideoDetection = async () => {
   const videoData = detectYouTubeVideo();
   if (!videoData) return;
 
-  console.log('[VIDEO DETECTED]', videoData.videoId, videoData.title);
+  // 1. YouTube Data API로 메타데이터 요청
+  const meta = await fetchYouTubeVideoMeta(videoData.videoId, YOUTUBE_API_KEY);
+
+  // 2. 음악 여부 판별
+  if (meta && isMusicVideo(meta)) {
+    console.log('음악 영상입니다!');
+    chrome.runtime.sendMessage({
+      type: MESSAGE_TYPES.VIDEO_DETECTED,
+      payload: videoData,
+    });
+  } else {
+    console.log('음악 영상이 아닙니다.');
+    // 음악이 아닐 때의 처리
+  }
 
   chrome.runtime.sendMessage({
     type: MESSAGE_TYPES.VIDEO_DETECTED,
@@ -156,7 +172,14 @@ chrome.storage.onChanged.addListener((changes) => {
 const setupLyricsListener = () => {
   chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'LYRICS_DATA') {
+      // 가사 로그 출력
+      console.log('[Genius 가사]', message.payload.lyrics);
+      // 기존 가사 UI 표시 로직
       initLyricsContainer(message.payload);
+    }
+    // 필요하다면 NO_LYRICS_FOUND 처리도 추가
+    if (message.type === 'NO_LYRICS_FOUND') {
+      console.log('[Genius 가사 없음]', message.payload.title);
     }
   });
 };
