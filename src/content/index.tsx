@@ -8,7 +8,6 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { detectYouTubeVideo, setupSPAObserver } from '@lib/youtube';
 import { initLyricsContainer } from './components/LyricsContainer';
 import { debounce } from '@lib/utils/common';
-import 'normalize.css';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 import { MESSAGE_TYPES } from '@constants/messageTypes';
 import { DOM_IDS } from '@constants/doomIds';
@@ -16,33 +15,45 @@ import { KaraokePlayerContainer } from '@components/lyrics/KaraokePlayerContaine
 import { fetchYouTubeVideoMeta } from '@background/api/youtube';
 import { isMusicVideo } from '@lib/utils/musicDetection';
 import { YOUTUBE_API_KEY } from '@constants/apiKey';
+import { UIResourceManager } from '@lib/utils/uiResourceManager';
+import 'normalize.css';
+import { YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
 
 // 타입 명시적 정의
 interface DetectionController {
   spaObserver: MutationObserver | null;
   videoDetection: (() => void) | null;
 }
+type LyricsDataPayload = { videoId: string; lyrics: string };
+type NoLyricsFoundPayload = { videoId: string; title: string };
+type LyricsMessage =
+  | { type: 'LYRICS_DATA'; payload: LyricsDataPayload }
+  | { type: 'NO_LYRICS_FOUND'; payload: NoLyricsFoundPayload };
 
 let detectionController: DetectionController = {
   spaObserver: null,
   videoDetection: null,
 };
+let contentEnabled = false;
+
+const uiManager = new UIResourceManager();
+
+// 2. 초기값을 chrome.storage에서 읽어옴
+chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED], (result) => {
+  contentEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
+});
+// 3. 스토리지 값이 바뀌면 항상 동기화
+chrome.storage.onChanged.addListener((changes) => {
+  const change = changes[STORAGE_KEYS.CONTENT_ENABLED];
+  if (change && typeof change.newValue === 'boolean') {
+    contentEnabled = change.newValue;
+    // 필요하다면 여기서 setDetectionState(change.newValue) 등 호출
+  }
+});
 
 // ✅ UI 요소들을 완전히 정리하는 함수
 const cleanupAllUIElements = () => {
-  // 1. 카라오케 컨테이너 제거
-  const karaokeRoot = document.getElementById('karaoke-root');
-  if (karaokeRoot) {
-    karaokeRoot.remove();
-    console.log('[Cleanup] Karaoke container removed');
-  }
-
-  // 2. 가사 컨테이너 제거
-  const lyricsRoot = document.getElementById('lyrics-root');
-  if (lyricsRoot) {
-    lyricsRoot.remove();
-    console.log('[Cleanup] Lyrics container removed');
-  }
+  uiManager.cleanup();
 
   // 3. 주입된 스타일 제거
   const injectedStyles = document.querySelectorAll('#karaoke-player-styles, #karaoke-styles');
@@ -54,40 +65,38 @@ const cleanupAllUIElements = () => {
   console.log('[Cleanup] UI cleanup completed');
 };
 
-// ✅ UI 요소들을 생성하는 함수
-const createUIElements = () => {
-  console.log('[UI] Creating UI elements for watch page');
+// 루트 엘리먼트 생성
+const createRootElement = () => {
+  const root = document.createElement('div');
+  root.id = DOM_IDS.ROOT_CONTAINER;
+  document.body.appendChild(root);
+  return root;
+};
 
-  // 카라오케 컨테이너 생성
-  let karaokeRoot = document.getElementById('karaoke-root');
-  if (!karaokeRoot) {
-    karaokeRoot = document.createElement('div');
-    karaokeRoot.id = 'karaoke-root';
-    document.body.appendChild(karaokeRoot);
+const injectCSS = () => {
+  const cssId = 'karaoke-styles';
+  if (document.getElementById(cssId)) return;
 
-    const karaokeRootInstance = createRoot(karaokeRoot);
-    karaokeRootInstance.render(<KaraokePlayerContainer />);
-    console.log('[UI] Karaoke container created');
-  }
+  const link = document.createElement('link');
+  link.id = cssId;
+  link.rel = 'stylesheet';
+  link.href = chrome.runtime.getURL('content/style.css');
+  document.head.appendChild(link);
 };
 
 // ✅ URL 변경 핸들러 개선
 const handleUrlChange = (url: string) => {
-  const isWatchPage = url.includes('/watch');
+  if (!contentEnabled) return;
+
+  const isWatchPage = url.includes(YOUTUBE_WATCH_PATH);
 
   console.log(`[URL Change] ${url}, isWatchPage: ${isWatchPage}`);
 
   if (isWatchPage) {
-    // Watch 페이지 - UI 요소 생성
-    createUIElements();
-
     // 비디오 감지 실행
     if (detectionController.videoDetection) {
       detectionController.videoDetection();
     }
-  } else {
-    // Watch 페이지가 아님 - 모든 UI 요소 제거
-    cleanupAllUIElements();
   }
 };
 
@@ -159,6 +168,36 @@ const setDetectionState = (enabled: boolean) => {
   }
 };
 
+function setupKaraokeContainer() {
+  let karaokeRoot = document.getElementById('karaoke-root');
+  if (!karaokeRoot) {
+    karaokeRoot = document.createElement('div');
+    karaokeRoot.id = 'karaoke-root';
+    document.body.appendChild(karaokeRoot);
+    uiManager.register(karaokeRoot);
+  }
+  const karaokeRootInstance = createRoot(karaokeRoot);
+  karaokeRootInstance.render(<KaraokePlayerContainer />);
+}
+
+function handleLyricsMessage(message: LyricsMessage) {
+  if (message.type === 'LYRICS_DATA') {
+    console.log('[Genius 가사]', message.payload.lyrics);
+    initLyricsContainer(message.payload);
+  }
+  if (message.type === 'NO_LYRICS_FOUND') {
+    console.log('[Genius 가사 없음]', message.payload.title);
+  }
+}
+
+// 2. 기존 리스너 해제 후 등록 (전역 스코프)
+try {
+  chrome.runtime.onMessage.removeListener(handleLyricsMessage);
+} catch {
+  console.log('리스너 문제!');
+}
+chrome.runtime.onMessage.addListener(handleLyricsMessage);
+
 chrome.storage.onChanged.addListener((changes) => {
   // 변경사항이 존재하고, 값이 boolean 타입인지 확인
   const contentEnabledChange = changes[STORAGE_KEYS.CONTENT_ENABLED];
@@ -167,88 +206,6 @@ chrome.storage.onChanged.addListener((changes) => {
     setDetectionState(contentEnabledChange.newValue);
   }
 });
-
-// 가사 수신 처리
-const setupLyricsListener = () => {
-  chrome.runtime.onMessage.addListener((message) => {
-    if (message.type === 'LYRICS_DATA') {
-      // 가사 로그 출력
-      console.log('[Genius 가사]', message.payload.lyrics);
-      // 기존 가사 UI 표시 로직
-      initLyricsContainer(message.payload);
-    }
-    // 필요하다면 NO_LYRICS_FOUND 처리도 추가
-    if (message.type === 'NO_LYRICS_FOUND') {
-      console.log('[Genius 가사 없음]', message.payload.title);
-    }
-  });
-};
-
-// 루트 엘리먼트 생성
-const createRootElement = () => {
-  const root = document.createElement('div');
-  root.id = DOM_IDS.ROOT_CONTAINER;
-  document.body.appendChild(root);
-  return root;
-};
-
-// 에러 바운더리 리셋 핸들러
-const handleReset = () => {
-  window.location.reload();
-};
-const injectCSS = () => {
-  const cssId = 'karaoke-styles';
-  if (document.getElementById(cssId)) return;
-
-  const link = document.createElement('link');
-  link.id = cssId;
-  link.rel = 'stylesheet';
-  link.href = chrome.runtime.getURL('content/style.css'); // 확장자원 URL
-  document.head.appendChild(link);
-};
-// 앱 초기화
-const initializeApp = async () => {
-  try {
-    injectCSS();
-    await initializeI18n();
-    const rootElement = document.getElementById(DOM_IDS.ROOT_CONTAINER) || createRootElement();
-    const root = createRoot(rootElement);
-    root.render(
-      <ErrorBoundary FallbackComponent={ErrorFallback} onReset={handleReset}>
-        <I18nextProvider i18n={i18nInstance}>
-          <App />
-        </I18nextProvider>
-      </ErrorBoundary>,
-    );
-
-    // ✅ 가사/플레이어 컨테이너를 별도로 렌더링
-    let karaokeRoot = document.getElementById('karaoke-root');
-    if (!karaokeRoot) {
-      karaokeRoot = document.createElement('div');
-      karaokeRoot.id = 'karaoke-root';
-      document.body.appendChild(karaokeRoot);
-    }
-    const karaokeRootInstance = createRoot(karaokeRoot);
-    karaokeRootInstance.render(<KaraokePlayerContainer />);
-
-    setupLyricsListener();
-    console.log('[DEBUG] 초기 영상 감지 시도');
-
-    handleUrlChange(window.location.href);
-
-    // 초기 감지 상태 설정
-    chrome.storage.sync.get(STORAGE_KEYS.CONTENT_ENABLED, (result) => {
-      const enabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? true;
-      setDetectionState(enabled);
-    });
-  } catch (error) {
-    const rootElement = document.getElementById(DOM_IDS.ROOT_CONTAINER) || createRootElement();
-    const root = createRoot(rootElement);
-    root.render(<ErrorFallback error={error} resetErrorBoundary={handleReset} />);
-  }
-};
-
-initializeApp();
 
 // SPA 네비게이션 메시지 핸들러
 chrome.runtime.onMessage.addListener((message) => {
@@ -273,3 +230,46 @@ document.addEventListener('visibilitychange', () => {
     handleUrlChange(window.location.href);
   }
 });
+
+// 에러 바운더리 리셋 핸들러
+const handleReset = () => {
+  window.location.reload();
+};
+
+// 앱 초기화
+const initializeApp = async () => {
+  try {
+    injectCSS();
+    await initializeI18n();
+
+    // 루트 컨테이너 준비 및 렌더링
+    const rootElement = document.getElementById(DOM_IDS.ROOT_CONTAINER) || createRootElement();
+    const root = createRoot(rootElement);
+    root.render(
+      <ErrorBoundary FallbackComponent={ErrorFallback} onReset={handleReset}>
+        <I18nextProvider i18n={i18nInstance}>
+          <App />
+        </I18nextProvider>
+      </ErrorBoundary>,
+    );
+
+    // 가라오케/가사 컨테이너 준비 및 렌더링
+    setupKaraokeContainer();
+
+    // 초기 URL 감지 및 UI/감지 시스템 활성화
+    handleUrlChange(window.location.href);
+
+    // 감지 시스템 활성/비활성 상태 동기화
+    chrome.storage.sync.get(STORAGE_KEYS.CONTENT_ENABLED, (result) => {
+      const enabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? true;
+      setDetectionState(enabled);
+    });
+  } catch (error) {
+    // fallback UI 렌더링
+    const rootElement = document.getElementById(DOM_IDS.ROOT_CONTAINER) || createRootElement();
+    const root = createRoot(rootElement);
+    root.render(<ErrorFallback error={error} resetErrorBoundary={handleReset} />);
+  }
+};
+
+initializeApp();
