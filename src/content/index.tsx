@@ -210,6 +210,8 @@ chrome.storage.onChanged.addListener((changes) => {
 // SPA 네비게이션 메시지 핸들러
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === MESSAGE_TYPES.SPA_NAVIGATION_DETECTED) {
+    if (!contentEnabled) return; // 비활성화 시 아무 동작도 하지 않음
+
     const { url, isWatchPage } = message.payload;
     console.log(`[SPA Navigation] ${url}, isWatchPage: ${isWatchPage}`);
 
