@@ -750,6 +750,11 @@ interface DetectionController {
   spaObserver: MutationObserver | null;
   videoDetection: (() => void) | null;
 }
+type LyricsDataPayload = { videoId: string; lyrics: string };
+type NoLyricsFoundPayload = { videoId: string; title: string };
+type LyricsMessage =
+  | { type: 'LYRICS_DATA'; payload: LyricsDataPayload }
+  | { type: 'NO_LYRICS_FOUND'; payload: NoLyricsFoundPayload };
 
 let detectionController: DetectionController = {
   spaObserver: null,
@@ -901,7 +906,7 @@ function setupKaraokeContainer() {
   karaokeRootInstance.render(<KaraokePlayerContainer />);
 }
 
-function handleLyricsMessage(message: any) {
+function handleLyricsMessage(message: LyricsMessage) {
   if (message.type === 'LYRICS_DATA') {
     console.log('[Genius 가사]', message.payload.lyrics);
     initLyricsContainer(message.payload);
@@ -914,9 +919,10 @@ function handleLyricsMessage(message: any) {
 // 2. 기존 리스너 해제 후 등록 (전역 스코프)
 try {
   chrome.runtime.onMessage.removeListener(handleLyricsMessage);
-} catch (e) {}
+} catch {
+  console.log('리스너 문제!');
+}
 chrome.runtime.onMessage.addListener(handleLyricsMessage);
-
 
 chrome.storage.onChanged.addListener((changes) => {
   // 변경사항이 존재하고, 값이 boolean 타입인지 확인
@@ -1123,6 +1129,9 @@ declare module '*.module.scss' {
 declare module '*.css' {
   const content: { [className: string]: string };
   export default content;
+}
+interface Window {
+  [key: string]: unknown;
 }
 ```
 
@@ -1373,9 +1382,11 @@ export const isPlayerReady = (): boolean => {
 ```typescript
 // src/lib/utils/singletonListener.ts
 export function registerSingletonListener(flagName: string, registerFn: () => void) {
-  if (!(window as any)[flagName]) {
+  // 타입 안전하게 window에 동적 속성 부여
+  const win = window as Record<string, unknown>;
+  if (!win[flagName]) {
     registerFn();
-    (window as any)[flagName] = true;
+    win[flagName] = true;
   }
 }
 ```
