@@ -48,6 +48,7 @@ constants/apiKey.ts
 constants/doomIds.ts
 constants/errorCodes.ts
 constants/errorMessages.ts
+constants/keywords.ts
 constants/languages.ts
 constants/messageTypes.ts
 constants/paths.ts
@@ -67,11 +68,15 @@ lib/types/global.d.ts
 lib/types/i18next.d.ts
 lib/types/message.ts
 lib/types/translationKeys.ts
+lib/utils/artistTitle.ts
 lib/utils/common.ts
 lib/utils/domUtils.ts
+lib/utils/listenerManager.ts
 lib/utils/musicDetection.ts
 lib/utils/playerUtils.ts
+lib/utils/registerAllListeners.ts
 lib/utils/singletonListener.ts
+lib/utils/stringUtils.ts
 lib/utils/styleInjection.ts
 lib/utils/time.ts
 lib/utils/typeGuards.ts
@@ -148,7 +153,6 @@ export async function fetchYouTubeVideoMeta(videoId: string, apiKey: string) {
 ## File: background/background.ts
 ```typescript
 import { MESSAGE_TYPES } from '@constants/messageTypes';
-import { fetchGeniusLyrics } from './api/genius';
 import { YOUTUBE_HOST } from '@constants/youtubeSelectors';
 import { PATHS } from '@constants/paths';
 import { YOUTUBE_CONFIG } from '@constants/platforms';
@@ -204,35 +208,6 @@ const injectContentScript = (tabId: number, url: string, config: DetectionConfig
     })
     .catch(console.error);
 };
-
-// 영상 감지 시 가사 요청
-chrome.runtime.onMessage.addListener((request, sender) => {
-  if (request.type === MESSAGE_TYPES.TOGGLE_CONTENT) {
-    console.log('Toggle received:', request.enabled);
-    return true; // 비동기 처리 활성화
-  }
-
-  if (request.type === MESSAGE_TYPES.VIDEO_DETECTED) {
-    const { videoId, title } = request.payload;
-
-    fetchGeniusLyrics(title)
-      .then((lyrics) => {
-        chrome.tabs.sendMessage(sender.tab!.id!, {
-          type: 'LYRICS_DATA',
-          payload: { videoId, lyrics },
-        });
-      })
-      .catch((error) => {
-        // 가사 없음 안내 메시지 전송
-        chrome.tabs.sendMessage(sender.tab!.id!, {
-          type: 'NO_LYRICS_FOUND',
-          payload: { videoId, title },
-        });
-        console.error('Lyrics fetch error:', error);
-      });
-    return true;
-  }
-});
 
 // 탭 닫힘 시 상태 제거
 chrome.tabs.onRemoved.addListener((tabId) => {
@@ -475,6 +450,37 @@ export const ERROR_MESSAGES = {
   VIDEO_DETECTION_FAILED: '영상 감지 실패',
   INJECTION_FAILED: '스크립트 주입 실패',
 } as const;
+```
+
+## File: constants/keywords.ts
+```typescript
+export const MUSIC_KEYWORDS = [
+  // 영어
+  'official',
+  'mv',
+  'm/v',
+  'music video',
+  'lyric',
+  'lyrics',
+  'cover',
+  'remix',
+  'ost',
+  'op',
+  'ed',
+  'instrumental',
+  'karaoke',
+  'tj karaoke',
+  // 한국어
+  '노래방',
+  '가사',
+  '커버',
+  '노래',
+  '뮤직비디오',
+  '뮤비',
+  // 일본어
+  '歌ってみた',
+];
+export const EXTRA_KEYWORDS = [ ...MUSIC_KEYWORDS, 'animation', ];
 ```
 
 ## File: constants/languages.ts
@@ -732,7 +738,6 @@ import { ErrorFallback } from '@components/common/ErrorFallback';
 import { I18nextProvider } from 'react-i18next';
 import { ErrorBoundary } from 'react-error-boundary';
 import { detectYouTubeVideo, setupSPAObserver } from '@lib/youtube';
-import { initLyricsContainer } from './components/LyricsContainer';
 import { debounce } from '@lib/utils/common';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 import { MESSAGE_TYPES } from '@constants/messageTypes';
@@ -742,8 +747,12 @@ import { fetchYouTubeVideoMeta } from '@background/api/youtube';
 import { isMusicVideo } from '@lib/utils/musicDetection';
 import { YOUTUBE_API_KEY } from '@constants/apiKey';
 import { UIResourceManager } from '@lib/utils/uiResourceManager';
-import 'normalize.css';
 import { YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
+import { extractArtistAndTitle } from '@lib/utils/artistTitle';
+import { cleanUp, extractArtistAndTitleCustom } from '@lib/utils/stringUtils';
+import { listenerManager } from '@lib/utils/listenerManager';
+import 'normalize.css';
+import { registerAllListeners } from '@lib/utils/registerAllListeners';
 
 // 타입 명시적 정의
 interface DetectionController {
@@ -761,20 +770,13 @@ let detectionController: DetectionController = {
   videoDetection: null,
 };
 let contentEnabled = false;
+let isObserverActive = false;
 
 const uiManager = new UIResourceManager();
 
 // 2. 초기값을 chrome.storage에서 읽어옴
 chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED], (result) => {
   contentEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
-});
-// 3. 스토리지 값이 바뀌면 항상 동기화
-chrome.storage.onChanged.addListener((changes) => {
-  const change = changes[STORAGE_KEYS.CONTENT_ENABLED];
-  if (change && typeof change.newValue === 'boolean') {
-    contentEnabled = change.newValue;
-    // 필요하다면 여기서 setDetectionState(change.newValue) 등 호출
-  }
 });
 
 // ✅ UI 요소들을 완전히 정리하는 함수
@@ -810,9 +812,13 @@ const injectCSS = () => {
   document.head.appendChild(link);
 };
 
+let lastUrl = window.location.href;
+
 // ✅ URL 변경 핸들러 개선
 const handleUrlChange = (url: string) => {
   if (!contentEnabled) return;
+  if (url === lastUrl) return; // URL이 실제로 바뀌었을 때만 실행
+  lastUrl = url;
 
   const isWatchPage = url.includes(YOUTUBE_WATCH_PATH);
 
@@ -825,25 +831,55 @@ const handleUrlChange = (url: string) => {
     }
   }
 };
+let lastVideoId: string | null = null;
 
 // 영상 감지 핸들러 (순수 로직)
 const handleVideoDetection = async () => {
+  console.log('handleVideoDetection 실행');
+  if (!contentEnabled) {
+    console.log('비활성화 상태입니다.');
+    return;
+  }
+
   const videoData = detectYouTubeVideo();
-  if (!videoData) return;
+  if (!videoData) {
+    console.log('detectYouTubeVideo 실패');
+    return;
+  }
+  if (videoData.videoId === lastVideoId) return; // 같은 영상이면 실행하지 않음
+  lastVideoId = videoData.videoId;
 
   // 1. YouTube Data API로 메타데이터 요청
   const meta = await fetchYouTubeVideoMeta(videoData.videoId, YOUTUBE_API_KEY);
-
+  if (!meta) {
+    console.log('fetchYouTubeVideoMeta 실패');
+    return;
+  }
+  if (!isMusicVideo(meta)) {
+    console.log('isMusicVideo 판별 실패');
+    return;
+  }
   // 2. 음악 여부 판별
   if (meta && isMusicVideo(meta)) {
-    console.log('음악 영상입니다!');
-    chrome.runtime.sendMessage({
-      type: MESSAGE_TYPES.VIDEO_DETECTED,
-      payload: videoData,
-    });
+    const result = extractArtistAndTitle(meta.title);
+    if (!result) {
+      console.log('extractArtistAndTitle 실패', meta.title);
+      return;
+    }
+
+    // 2차 커스텀 로직 적용
+    const customResult = extractArtistAndTitleCustom(meta.title);
+    if (!customResult) {
+      console.log('extractArtistAndTitleCustom 실패', meta.title);
+      return;
+    }
+    const cleanedArtist = cleanUp(customResult.artist);
+    const cleanedTitle = cleanUp(customResult.title);
+
+    console.log('아티스트:', cleanedArtist, '곡명:', cleanedTitle);
+
   } else {
     console.log('음악 영상이 아닙니다.');
-    // 음악이 아닐 때의 처리
   }
 
   chrome.runtime.sendMessage({
@@ -854,13 +890,17 @@ const handleVideoDetection = async () => {
 
 // 감지 시스템 활성화
 const enableDetection = () => {
+  if (isObserverActive) return; // 이미 활성화된 경우 중복 방지
+
   // 기존 리소스 정리
   if (detectionController.spaObserver) {
     detectionController.spaObserver.disconnect();
   }
+  // 리스너 재등록
+  registerAllListeners(setDetectionState);
 
   // 새로운 감지 시스템 설정
-  const debouncedDetection = debounce(handleVideoDetection, 1000);
+  const debouncedDetection = debounce(handleVideoDetection, 300);
   const newObserver = setupSPAObserver(debouncedDetection);
 
   detectionController = {
@@ -876,6 +916,8 @@ const disableDetection = () => {
   if (detectionController.spaObserver) {
     detectionController.spaObserver.disconnect();
   }
+  listenerManager.removeAll(); // 등록된 모든 리스너 해제
+
   detectionController = {
     spaObserver: null,
     videoDetection: null,
@@ -906,36 +948,11 @@ function setupKaraokeContainer() {
   karaokeRootInstance.render(<KaraokePlayerContainer />);
 }
 
-function handleLyricsMessage(message: LyricsMessage) {
-  if (message.type === 'LYRICS_DATA') {
-    console.log('[Genius 가사]', message.payload.lyrics);
-    initLyricsContainer(message.payload);
-  }
-  if (message.type === 'NO_LYRICS_FOUND') {
-    console.log('[Genius 가사 없음]', message.payload.title);
-  }
-}
-
-// 2. 기존 리스너 해제 후 등록 (전역 스코프)
-try {
-  chrome.runtime.onMessage.removeListener(handleLyricsMessage);
-} catch {
-  console.log('리스너 문제!');
-}
-chrome.runtime.onMessage.addListener(handleLyricsMessage);
-
-chrome.storage.onChanged.addListener((changes) => {
-  // 변경사항이 존재하고, 값이 boolean 타입인지 확인
-  const contentEnabledChange = changes[STORAGE_KEYS.CONTENT_ENABLED];
-
-  if (contentEnabledChange && typeof contentEnabledChange.newValue === 'boolean') {
-    setDetectionState(contentEnabledChange.newValue);
-  }
-});
-
 // SPA 네비게이션 메시지 핸들러
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === MESSAGE_TYPES.SPA_NAVIGATION_DETECTED) {
+    if (!contentEnabled) return; // 비활성화 시 아무 동작도 하지 않음
+
     const { url, isWatchPage } = message.payload;
     console.log(`[SPA Navigation] ${url}, isWatchPage: ${isWatchPage}`);
 
@@ -943,6 +960,7 @@ chrome.runtime.onMessage.addListener((message) => {
     handleUrlChange(url);
   }
 });
+
 // ✅ 페이지 언로드 시 정리
 window.addEventListener('beforeunload', () => {
   cleanupAllUIElements();
@@ -1175,6 +1193,22 @@ export const TRANSLATION_KEYS = ['extName', 'extDescription', 'extLanguage'] as 
 export type TranslationKey = (typeof TRANSLATION_KEYS)[number];
 ```
 
+## File: lib/utils/artistTitle.ts
+```typescript
+import getArtistTitle from 'get-artist-title';
+
+/**
+ * 유튜브 영상 제목에서 [아티스트, 타이틀] 추출
+ */
+export function extractArtistAndTitle(title: string): { artist: string; title: string } | null {
+  const [artist, songTitle] = getArtistTitle(title) || [];
+  if (artist && songTitle) {
+    return { artist, title: songTitle };
+  }
+  return null;
+}
+```
+
 ## File: lib/utils/common.ts
 ```typescript
 // 디바운싱
@@ -1274,6 +1308,43 @@ export const toggleClass = (element: Element, className: string, force?: boolean
 };
 ```
 
+## File: lib/utils/listenerManager.ts
+```typescript
+// src/lib/utils/listenerManager.ts
+
+type UnregisterFn = () => void;
+
+class ListenerManager {
+  private unregisterFns: UnregisterFn[] = [];
+
+  /**
+   * 리스너 등록 함수
+   * @param register 등록 함수 (리스너 등록 시 호출, 해제 함수 반환)
+   */
+  public add(register: () => UnregisterFn): void {
+    const unregister = register();
+    this.unregisterFns.push(unregister);
+  }
+
+  /**
+   * 모든 리스너 해제 (cleanup)
+   */
+  public removeAll(): void {
+    this.unregisterFns.forEach((unregister) => {
+      try {
+        unregister();
+      } catch (e) {
+        // 해제 중 에러 무시
+      }
+    });
+    this.unregisterFns = [];
+  }
+}
+
+// 싱글 인스턴스 export (프로젝트 전체에서 공유)
+export const listenerManager = new ListenerManager();
+```
+
 ## File: lib/utils/musicDetection.ts
 ```typescript
 // lib/utils/musicDetection.ts
@@ -1286,7 +1357,7 @@ export interface MusicDetectionInput {
   durationSec?: number;
 }
 
-const MUSIC_KEYWORDS = [
+export const MUSIC_KEYWORDS = [
   // 영어
   'official',
   'mv',
@@ -1378,9 +1449,46 @@ export const isPlayerReady = (): boolean => {
 };
 ```
 
+## File: lib/utils/registerAllListeners.ts
+```typescript
+import { listenerManager } from './listenerManager';
+import { STORAGE_KEYS } from '@constants/storageKeys';
+
+// 필요한 핸들러 함수도 이 파일에서 선언하거나 import
+export function registerAllListeners(setDetectionState: (enabled: boolean) => void) {
+  // 1. chrome.storage.onChanged 리스너
+  listenerManager.add(() => {
+    const handler = (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      // areaName?: 'sync' | 'local' | 'managed' | 'session'
+    ) => {
+      const contentEnabledChange = changes[STORAGE_KEYS.CONTENT_ENABLED];
+      if (contentEnabledChange && typeof contentEnabledChange.newValue === 'boolean') {
+        setDetectionState(contentEnabledChange.newValue);
+      }
+    };
+    chrome.storage.onChanged.addListener(handler);
+    return () => chrome.storage.onChanged.removeListener(handler);
+  });
+
+  // 2. window resize 리스너
+  listenerManager.add(() => {
+    const onResize = (event: UIEvent) => {
+      // 예: 가사 UI 레이아웃 동기화 등
+      // updateLyricsContainerLayout();
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  });
+
+  // 3. 필요한 다른 리스너도 이곳에 추가
+}
+```
+
 ## File: lib/utils/singletonListener.ts
 ```typescript
 // src/lib/utils/singletonListener.ts
+// 공통 리스너 관리 모듈
 export function registerSingletonListener(flagName: string, registerFn: () => void) {
   // 타입 안전하게 window에 동적 속성 부여
   const win = window as Record<string, unknown>;
@@ -1388,6 +1496,119 @@ export function registerSingletonListener(flagName: string, registerFn: () => vo
     registerFn();
     win[flagName] = true;
   }
+}
+```
+
+## File: lib/utils/stringUtils.ts
+```typescript
+// src/lib/utils/stringUtils.ts
+import { EXTRA_KEYWORDS } from '@constants/keywords';
+
+/**
+ * 문자열에서 부가정보(괄호, 대괄호, 파이프 등)를 제거합니다.
+ */
+export function cleanUp(str: string): string {
+  return (
+    str
+      .replace(/\[.*?\]/g, '') // 대괄호 제거
+      //.replace(/\((?!\s*(feat\.|Feat\.|featuring|with)\b)[^)]*\)/gi, '') // feat. 제외 괄호 제거
+      .replace(/\\s{2,}/g, ' ') // 이중 공백 정리
+      .trim()
+  );
+}
+
+export function removeExtraInfo(title: string): string {
+  const extraKeywords = EXTRA_KEYWORDS.slice().sort((a, b) => b.length - a.length); // 긴 키워드 우선
+  let result = title;
+
+  // 1. 복합 키워드(공백/특수문자 포함) 전체 제거
+  for (const kw of extraKeywords) {
+    // 키워드가 특수문자 포함 가능하므로 escape 처리
+    const regex = new RegExp(`(\\s*${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    result = result.replace(regex, '').trim();
+  }
+
+  // 2. 기존 구분자 분할(남아있는 경우만)
+  let parts = result.split(/\s*[-/|]\s*/);
+  while (parts.length > 1 && extraKeywords.some((kw) => parts[parts.length - 1]?.toLowerCase().includes(kw))) {
+    parts.pop();
+  }
+  result = parts.join(' - ');
+
+  // 3. 끝에 남아있는 부가정보 반복 제거
+  let found = true;
+  while (found) {
+    found = false;
+    for (const kw of extraKeywords) {
+      const regex = new RegExp(`(\\s*${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})$`, 'i');
+      if (regex.test(result)) {
+        result = result.replace(regex, '').trim();
+        found = true;
+      }
+    }
+  }
+  result = parts.filter(Boolean).join(' - '); // 빈 값 제거 후 합치기
+  result = result.replace(/[-/|]+$/, '').trim();  // 끝에 남은 구분자 제거
+
+  return result;
+}
+
+export function extractArtistAndTitleCustom(rawTitle: string): { artist: string; title: string } | null {
+  const cleaned = cleanUp(rawTitle);
+
+  // 우선순위: ' - ' > ' / ' > ' | '
+  const delimiters = [' - ', ' / ', ' | '];
+  let artist = '',
+    title = '';
+  // 1. 구분자(split) 기반 추출
+  for (const delim of delimiters) {
+    if (cleaned.includes(delim)) {
+      const parts = cleaned.split(delim);
+      if (parts.length >= 2) {
+        artist = parts[0]?.trim() ?? '';
+        title = parts.slice(1).join(delim).trim();
+        break;
+      }
+    }
+  }
+
+  // 2. remove extra info
+  title = removeExtraInfo(title);
+
+  // 3. 추가 패턴: "아티스트 '곡명'" 또는 "아티스트 \"곡명\""
+  if (!artist || !title) {
+    // 따옴표
+    let match = cleaned.match(/^(.+?)\s*['"](.+?)['"]/);
+    if (match) {
+      artist = match[1]?.trim() ?? '';
+      title = match[2]?.trim() ?? '';
+    }
+  }
+
+  // 4. 추가 패턴: 괄호
+  if (!artist || !title) {
+    let match = cleaned.match(/^(.+?)\s*\((.+?)\)/);
+    if (match) {
+      artist = match[1]?.trim() ?? '';
+      title = match[2]?.trim() ?? '';
+    }
+  }
+
+  // 5. 추가 패턴: 아티스트와 곡명이 모두 영문/숫자/공백으로만 구성된 경우
+  if (!artist || !title) {
+    // 대문자로 시작하는 두 단어 이상이면 첫 단어를 아티스트, 나머지를 곡명으로 추정
+    let match = cleaned.match(/^([A-Za-z가-힣0-9]+)\s+(.+)$/);
+    if (match) {
+      artist = match[1]?.trim() ?? '';
+      title = match[2]?.trim() ?? '';
+    }
+  }
+
+  // 6. 곡명에서 부가정보 추가 제거
+  title = removeExtraInfo(title);
+
+  if (!artist || !title) return null;
+  return { artist, title };
 }
 ```
 

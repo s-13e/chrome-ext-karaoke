@@ -6,7 +6,6 @@ import { ErrorFallback } from '@components/common/ErrorFallback';
 import { I18nextProvider } from 'react-i18next';
 import { ErrorBoundary } from 'react-error-boundary';
 import { detectYouTubeVideo, setupSPAObserver } from '@lib/youtube';
-import { initLyricsContainer } from './components/LyricsContainer';
 import { debounce } from '@lib/utils/common';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 import { MESSAGE_TYPES } from '@constants/messageTypes';
@@ -16,39 +15,36 @@ import { fetchYouTubeVideoMeta } from '@background/api/youtube';
 import { isMusicVideo } from '@lib/utils/musicDetection';
 import { YOUTUBE_API_KEY } from '@constants/apiKey';
 import { UIResourceManager } from '@lib/utils/uiResourceManager';
-import 'normalize.css';
 import { YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
+import { extractArtistAndTitle } from '@lib/utils/artistTitle';
+import { cleanUp, extractArtistAndTitleCustom } from '@lib/utils/stringUtils';
+import { listenerManager } from '@lib/utils/listenerManager';
+import 'normalize.css';
+import { registerAllListeners } from '@lib/utils/registerAllListeners';
 
 // 타입 명시적 정의
 interface DetectionController {
   spaObserver: MutationObserver | null;
   videoDetection: (() => void) | null;
 }
-type LyricsDataPayload = { videoId: string; lyrics: string };
-type NoLyricsFoundPayload = { videoId: string; title: string };
-type LyricsMessage =
-  | { type: 'LYRICS_DATA'; payload: LyricsDataPayload }
-  | { type: 'NO_LYRICS_FOUND'; payload: NoLyricsFoundPayload };
+// type LyricsDataPayload = { videoId: string; lyrics: string };
+//type NoLyricsFoundPayload = { videoId: string; title: string };
+//type LyricsMessage =
+//  | { type: 'LYRICS_DATA'; payload: LyricsDataPayload }
+//  | { type: 'NO_LYRICS_FOUND'; payload: NoLyricsFoundPayload };
 
 let detectionController: DetectionController = {
   spaObserver: null,
   videoDetection: null,
 };
 let contentEnabled = false;
+const isObserverActive = false;
 
 const uiManager = new UIResourceManager();
 
 // 2. 초기값을 chrome.storage에서 읽어옴
 chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED], (result) => {
   contentEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
-});
-// 3. 스토리지 값이 바뀌면 항상 동기화
-chrome.storage.onChanged.addListener((changes) => {
-  const change = changes[STORAGE_KEYS.CONTENT_ENABLED];
-  if (change && typeof change.newValue === 'boolean') {
-    contentEnabled = change.newValue;
-    // 필요하다면 여기서 setDetectionState(change.newValue) 등 호출
-  }
 });
 
 // ✅ UI 요소들을 완전히 정리하는 함수
@@ -84,9 +80,13 @@ const injectCSS = () => {
   document.head.appendChild(link);
 };
 
+let lastUrl = window.location.href;
+
 // ✅ URL 변경 핸들러 개선
 const handleUrlChange = (url: string) => {
   if (!contentEnabled) return;
+  if (url === lastUrl) return; // URL이 실제로 바뀌었을 때만 실행
+  lastUrl = url;
 
   const isWatchPage = url.includes(YOUTUBE_WATCH_PATH);
 
@@ -99,25 +99,54 @@ const handleUrlChange = (url: string) => {
     }
   }
 };
+let lastVideoId: string | null = null;
 
 // 영상 감지 핸들러 (순수 로직)
 const handleVideoDetection = async () => {
+  console.log('handleVideoDetection 실행');
+  if (!contentEnabled) {
+    console.log('비활성화 상태입니다.');
+    return;
+  }
+
   const videoData = detectYouTubeVideo();
-  if (!videoData) return;
+  if (!videoData) {
+    console.log('detectYouTubeVideo 실패');
+    return;
+  }
+  if (videoData.videoId === lastVideoId) return; // 같은 영상이면 실행하지 않음
+  lastVideoId = videoData.videoId;
 
   // 1. YouTube Data API로 메타데이터 요청
   const meta = await fetchYouTubeVideoMeta(videoData.videoId, YOUTUBE_API_KEY);
-
+  if (!meta) {
+    console.log('fetchYouTubeVideoMeta 실패');
+    return;
+  }
+  if (!isMusicVideo(meta)) {
+    console.log('isMusicVideo 판별 실패');
+    return;
+  }
   // 2. 음악 여부 판별
   if (meta && isMusicVideo(meta)) {
-    console.log('음악 영상입니다!');
-    chrome.runtime.sendMessage({
-      type: MESSAGE_TYPES.VIDEO_DETECTED,
-      payload: videoData,
-    });
+    const result = extractArtistAndTitle(meta.title);
+    if (!result) {
+      console.log('extractArtistAndTitle 실패', meta.title);
+      return;
+    }
+
+    // 2차 커스텀 로직 적용
+    const customResult = extractArtistAndTitleCustom(meta.title);
+    if (!customResult) {
+      console.log('extractArtistAndTitleCustom 실패', meta.title);
+      return;
+    }
+    const cleanedArtist = cleanUp(customResult.artist);
+    const cleanedTitle = cleanUp(customResult.title);
+
+    console.log('아티스트:', cleanedArtist, '곡명:', cleanedTitle);
   } else {
     console.log('음악 영상이 아닙니다.');
-    // 음악이 아닐 때의 처리
   }
 
   chrome.runtime.sendMessage({
@@ -128,13 +157,17 @@ const handleVideoDetection = async () => {
 
 // 감지 시스템 활성화
 const enableDetection = () => {
+  if (isObserverActive) return; // 이미 활성화된 경우 중복 방지
+
   // 기존 리소스 정리
   if (detectionController.spaObserver) {
     detectionController.spaObserver.disconnect();
   }
+  // 리스너 재등록
+  registerAllListeners(setDetectionState);
 
   // 새로운 감지 시스템 설정
-  const debouncedDetection = debounce(handleVideoDetection, 1000);
+  const debouncedDetection = debounce(handleVideoDetection, 300);
   const newObserver = setupSPAObserver(debouncedDetection);
 
   detectionController = {
@@ -150,6 +183,8 @@ const disableDetection = () => {
   if (detectionController.spaObserver) {
     detectionController.spaObserver.disconnect();
   }
+  listenerManager.removeAll(); // 등록된 모든 리스너 해제
+
   detectionController = {
     spaObserver: null,
     videoDetection: null,
@@ -180,33 +215,6 @@ function setupKaraokeContainer() {
   karaokeRootInstance.render(<KaraokePlayerContainer />);
 }
 
-function handleLyricsMessage(message: LyricsMessage) {
-  if (message.type === 'LYRICS_DATA') {
-    console.log('[Genius 가사]', message.payload.lyrics);
-    initLyricsContainer(message.payload);
-  }
-  if (message.type === 'NO_LYRICS_FOUND') {
-    console.log('[Genius 가사 없음]', message.payload.title);
-  }
-}
-
-// 2. 기존 리스너 해제 후 등록 (전역 스코프)
-try {
-  chrome.runtime.onMessage.removeListener(handleLyricsMessage);
-} catch {
-  console.log('리스너 문제!');
-}
-chrome.runtime.onMessage.addListener(handleLyricsMessage);
-
-chrome.storage.onChanged.addListener((changes) => {
-  // 변경사항이 존재하고, 값이 boolean 타입인지 확인
-  const contentEnabledChange = changes[STORAGE_KEYS.CONTENT_ENABLED];
-
-  if (contentEnabledChange && typeof contentEnabledChange.newValue === 'boolean') {
-    setDetectionState(contentEnabledChange.newValue);
-  }
-});
-
 // SPA 네비게이션 메시지 핸들러
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === MESSAGE_TYPES.SPA_NAVIGATION_DETECTED) {
@@ -219,6 +227,7 @@ chrome.runtime.onMessage.addListener((message) => {
     handleUrlChange(url);
   }
 });
+
 // ✅ 페이지 언로드 시 정리
 window.addEventListener('beforeunload', () => {
   cleanupAllUIElements();
