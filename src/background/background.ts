@@ -1,5 +1,4 @@
 import { MESSAGE_TYPES } from '@constants/messageTypes';
-import { fetchGeniusLyrics } from './api/genius';
 import { YOUTUBE_HOST } from '@constants/youtubeSelectors';
 import { PATHS } from '@constants/paths';
 import { YOUTUBE_CONFIG } from '@constants/platforms';
@@ -55,35 +54,6 @@ const injectContentScript = (tabId: number, url: string, config: DetectionConfig
     })
     .catch(console.error);
 };
-
-// 영상 감지 시 가사 요청
-chrome.runtime.onMessage.addListener((request, sender) => {
-  if (request.type === MESSAGE_TYPES.TOGGLE_CONTENT) {
-    console.log('Toggle received:', request.enabled);
-    return true; // 비동기 처리 활성화
-  }
-
-  if (request.type === MESSAGE_TYPES.VIDEO_DETECTED) {
-    const { videoId, title } = request.payload;
-
-    fetchGeniusLyrics(title)
-      .then((lyrics) => {
-        chrome.tabs.sendMessage(sender.tab!.id!, {
-          type: 'LYRICS_DATA',
-          payload: { videoId, lyrics },
-        });
-      })
-      .catch((error) => {
-        // 가사 없음 안내 메시지 전송
-        chrome.tabs.sendMessage(sender.tab!.id!, {
-          type: 'NO_LYRICS_FOUND',
-          payload: { videoId, title },
-        });
-        console.error('Lyrics fetch error:', error);
-      });
-    return true;
-  }
-});
 
 // 탭 닫힘 시 상태 제거
 chrome.tabs.onRemoved.addListener((tabId) => {

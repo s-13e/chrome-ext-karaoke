@@ -8,7 +8,7 @@ export interface MusicDetectionInput {
   durationSec?: number;
 }
 
-const MUSIC_KEYWORDS = [
+export const MUSIC_KEYWORDS = [
   // 영어
   'official',
   'mv',
