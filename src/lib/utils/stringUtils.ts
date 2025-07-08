@@ -5,15 +5,19 @@ import { EXTRA_KEYWORDS } from '@constants/keywords';
  * 문자열에서 부가정보(괄호, 대괄호, 파이프 등)를 제거합니다.
  */
 export function cleanUp(str: string): string {
-  return (
-    str
-      .replace(/\[.*?\]/g, '') // 대괄호 제거
-      //.replace(/\((?!\s*(feat\.|Feat\.|featuring|with)\b)[^)]*\)/gi, '') // feat. 제외 괄호 제거
-      .replace(/\\s{2,}/g, ' ') // 이중 공백 정리
-      .trim()
-  );
+  return str
+    .replace(/\[.*?\]/g, '') // 대괄호 제거
+    .replace(/\\s{2,}/g, ' ') // 이중 공백 정리
+    .trim();
 }
 
+function cleanMusicKeyword(str: string): string {
+  return str
+    .replace(/([^A-Za-z]|^)(OP|ED|OST|MV)([^A-Za-z]|$)/gi, (_match, p1, _p2, p3) => {
+      return `${p1}${p3}`.replace(/\s{2,}/g, ' ');
+    })
+    .trim();
+}
 export function removeExtraInfo(title: string): string {
   const extraKeywords = EXTRA_KEYWORDS.slice().sort((a, b) => b.length - a.length); // 긴 키워드 우선
   let result = title;
@@ -44,37 +48,51 @@ export function removeExtraInfo(title: string): string {
       }
     }
   }
+
   result = parts.filter(Boolean).join(' - '); // 빈 값 제거 후 합치기
   result = result.replace(/[-/|]+$/, '').trim(); // 끝에 남은 구분자 제거
 
   return result;
 }
+
 export function removeTrailingHashtags(title: string): string {
   // 곡명 끝에 연속된 해시태그만 제거
   return title.replace(/(\s*#[\p{L}\p{N}._-]+)+\s*$/gu, '').trim();
 }
 
+export function removeDatePattern(str: string): string {
+  return str.replace(/\b\d{2}[01]\d(?:3[0-2]|[0-2][0-9])\b/g, '').trim();
+}
+
 export function extractArtistAndTitleCustom(rawTitle: string): { artist: string; title: string } | null {
   const cleaned = cleanUp(rawTitle);
 
-  // 우선순위: ' - ' > ' / ' > ' | '
-  const delimiters = [' - ', ' / ', ' | '];
+  // 1. 쌍따옴표(“ ” 또는 " ") 패턴 우선 적용
+  const match = cleaned.match(/^(.+?)\s*[“"](.+?)[”"]/);
   let artist = '',
     title = '';
-  // 1. 구분자(split) 기반 추출
-  for (const delim of delimiters) {
-    if (cleaned.includes(delim)) {
-      const parts = cleaned.split(delim);
-      if (parts.length >= 2) {
-        artist = parts[0]?.trim() ?? '';
-        title = parts.slice(1).join(delim).trim();
-        break;
+  if (match) {
+    artist = match[1]?.trim() ?? '';
+    title = match[2]?.trim() ?? '';
+  } else {
+    // 2. 구분자(split) 기반 추출
+    const delimiters = [' - ', ' / ', ' | '];
+    for (const delim of delimiters) {
+      if (cleaned.includes(delim)) {
+        const parts = cleaned.split(delim);
+        if (parts.length >= 2) {
+          artist = parts[0]?.trim() ?? '';
+          title = parts.slice(1).join(delim).trim();
+          break;
+        }
       }
     }
   }
 
   // 2. remove extra info
   title = removeExtraInfo(title);
+  artist = cleanMusicKeyword(artist);
+  title = cleanMusicKeyword(title);
 
   // 3. 추가 패턴: "아티스트 '곡명'" 또는 "아티스트 \"곡명\""
   if (!artist || !title) {
@@ -108,7 +126,28 @@ export function extractArtistAndTitleCustom(rawTitle: string): { artist: string;
   // 6. 곡명에서 부가정보 추가 제거
   title = removeExtraInfo(title);
   title = removeTrailingHashtags(title);
+  title = removeDatePattern(title);
+  title = title.replace(/[-/|]+$/, '').trim(); // 끝에 남은 구분자도 제거
 
   if (!artist || !title) return null;
+  artist = removeEmptyBrackets(removeExtraInfo(artist));
+
   return { artist, title };
+}
+export function extractEnglishName(name: string): string {
+  // 연속된 영어 단어(공백 포함)만 추출
+  const match = name.match(/([A-Za-z][A-Za-z\s'&.-]*)/g);
+  return match ? match.join(' ').trim() : name;
+}
+export function extractEnglishTitle(title: string): string {
+  // 영어 단어가 2개 이상 연속된 부분만 추출 (예시)
+  const match = title.match(/([A-Za-z][A-Za-z\s']{2,})/g);
+  return match ? match.join(' ').trim() : title;
+}
+export function removeEmptyBrackets(title: string): string {
+  return title
+    .replace(/\(\s*\)/g, '')
+    .replace(/\[\s*\]/g, '')
+    .replace(/\{\s*\}/g, '')
+    .trim();
 }
