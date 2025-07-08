@@ -35,6 +35,7 @@ The content is organized as follows:
 # Directory Structure
 ```
 background/api/genius.ts
+background/api/lrclib.ts
 background/api/youtube.ts
 background/background.ts
 components/common/ErrorFallback.tsx
@@ -125,6 +126,18 @@ export const fetchGeniusLyrics = async (title: string): Promise<string> => {
 
   return lyricsData.response.song.lyrics;
 };
+```
+
+## File: background/api/lrclib.ts
+```typescript
+// background/api/lrclib.ts
+export async function fetchLrclibLyrics(artist: string, title: string): Promise<string | null> {
+  const endpoint = `https://lrclib.net/api/get?artist=${encodeURIComponent(artist)}&track=${encodeURIComponent(title)}`;
+  const res = await fetch(endpoint);
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data?.syncedLyrics || data?.plainLyrics || null;
+}
 ```
 
 ## File: background/api/youtube.ts
@@ -480,7 +493,7 @@ export const MUSIC_KEYWORDS = [
   // 일본어
   '歌ってみた',
 ];
-export const EXTRA_KEYWORDS = [ ...MUSIC_KEYWORDS, 'animation', ];
+export const EXTRA_KEYWORDS = [...MUSIC_KEYWORDS, 'animation'];
 ```
 
 ## File: constants/languages.ts
@@ -749,28 +762,29 @@ import { YOUTUBE_API_KEY } from '@constants/apiKey';
 import { UIResourceManager } from '@lib/utils/uiResourceManager';
 import { YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
 import { extractArtistAndTitle } from '@lib/utils/artistTitle';
-import { cleanUp, extractArtistAndTitleCustom } from '@lib/utils/stringUtils';
+import { cleanUp, extractArtistAndTitleCustom, extractEnglishName, extractEnglishTitle } from '@lib/utils/stringUtils';
 import { listenerManager } from '@lib/utils/listenerManager';
-import 'normalize.css';
 import { registerAllListeners } from '@lib/utils/registerAllListeners';
+import { fetchLrclibLyrics } from '@background/api/lrclib';
+import 'normalize.css';
 
 // 타입 명시적 정의
 interface DetectionController {
   spaObserver: MutationObserver | null;
   videoDetection: (() => void) | null;
 }
-type LyricsDataPayload = { videoId: string; lyrics: string };
-type NoLyricsFoundPayload = { videoId: string; title: string };
-type LyricsMessage =
-  | { type: 'LYRICS_DATA'; payload: LyricsDataPayload }
-  | { type: 'NO_LYRICS_FOUND'; payload: NoLyricsFoundPayload };
+// type LyricsDataPayload = { videoId: string; lyrics: string };
+//type NoLyricsFoundPayload = { videoId: string; title: string };
+//type LyricsMessage =
+//  | { type: 'LYRICS_DATA'; payload: LyricsDataPayload }
+//  | { type: 'NO_LYRICS_FOUND'; payload: NoLyricsFoundPayload };
 
 let detectionController: DetectionController = {
   spaObserver: null,
   videoDetection: null,
 };
 let contentEnabled = false;
-let isObserverActive = false;
+const isObserverActive = false;
 
 const uiManager = new UIResourceManager();
 
@@ -876,7 +890,13 @@ const handleVideoDetection = async () => {
     const cleanedArtist = cleanUp(customResult.artist);
     const cleanedTitle = cleanUp(customResult.title);
 
-    console.log('아티스트:', cleanedArtist, '곡명:', cleanedTitle);
+    const englishArtist = extractEnglishName(cleanedArtist);
+    const englishTitle = extractEnglishTitle(cleanedTitle);
+
+    console.log('아티스트:', englishArtist, '곡명:', englishTitle);
+
+    const lyrics = await fetchLrclibLyrics(englishArtist, englishTitle);
+    console.log('가사: ', lyrics);
 
   } else {
     console.log('음악 영상이 아닙니다.');
@@ -1333,7 +1353,7 @@ class ListenerManager {
     this.unregisterFns.forEach((unregister) => {
       try {
         unregister();
-      } catch (e) {
+      } catch {
         // 해제 중 에러 무시
       }
     });
@@ -1473,7 +1493,7 @@ export function registerAllListeners(setDetectionState: (enabled: boolean) => vo
 
   // 2. window resize 리스너
   listenerManager.add(() => {
-    const onResize = (event: UIEvent) => {
+    const onResize = (/*event: UIEvent*/) => {
       // 예: 가사 UI 레이아웃 동기화 등
       // updateLyricsContainerLayout();
     };
@@ -1529,7 +1549,7 @@ export function removeExtraInfo(title: string): string {
   }
 
   // 2. 기존 구분자 분할(남아있는 경우만)
-  let parts = result.split(/\s*[-/|]\s*/);
+  const parts = result.split(/\s*[-/|]\s*/);
   while (parts.length > 1 && extraKeywords.some((kw) => parts[parts.length - 1]?.toLowerCase().includes(kw))) {
     parts.pop();
   }
@@ -1548,9 +1568,13 @@ export function removeExtraInfo(title: string): string {
     }
   }
   result = parts.filter(Boolean).join(' - '); // 빈 값 제거 후 합치기
-  result = result.replace(/[-/|]+$/, '').trim();  // 끝에 남은 구분자 제거
+  result = result.replace(/[-/|]+$/, '').trim(); // 끝에 남은 구분자 제거
 
   return result;
+}
+export function removeTrailingHashtags(title: string): string {
+  // 곡명 끝에 연속된 해시태그만 제거
+  return title.replace(/(\s*#[\p{L}\p{N}._-]+)+\s*$/gu, '').trim();
 }
 
 export function extractArtistAndTitleCustom(rawTitle: string): { artist: string; title: string } | null {
@@ -1578,7 +1602,7 @@ export function extractArtistAndTitleCustom(rawTitle: string): { artist: string;
   // 3. 추가 패턴: "아티스트 '곡명'" 또는 "아티스트 \"곡명\""
   if (!artist || !title) {
     // 따옴표
-    let match = cleaned.match(/^(.+?)\s*['"](.+?)['"]/);
+    const match = cleaned.match(/^(.+?)\s*['"](.+?)['"]/);
     if (match) {
       artist = match[1]?.trim() ?? '';
       title = match[2]?.trim() ?? '';
@@ -1587,7 +1611,7 @@ export function extractArtistAndTitleCustom(rawTitle: string): { artist: string;
 
   // 4. 추가 패턴: 괄호
   if (!artist || !title) {
-    let match = cleaned.match(/^(.+?)\s*\((.+?)\)/);
+    const match = cleaned.match(/^(.+?)\s*\((.+?)\)/);
     if (match) {
       artist = match[1]?.trim() ?? '';
       title = match[2]?.trim() ?? '';
@@ -1597,7 +1621,7 @@ export function extractArtistAndTitleCustom(rawTitle: string): { artist: string;
   // 5. 추가 패턴: 아티스트와 곡명이 모두 영문/숫자/공백으로만 구성된 경우
   if (!artist || !title) {
     // 대문자로 시작하는 두 단어 이상이면 첫 단어를 아티스트, 나머지를 곡명으로 추정
-    let match = cleaned.match(/^([A-Za-z가-힣0-9]+)\s+(.+)$/);
+    const match = cleaned.match(/^([A-Za-z가-힣0-9]+)\s+(.+)$/);
     if (match) {
       artist = match[1]?.trim() ?? '';
       title = match[2]?.trim() ?? '';
@@ -1606,9 +1630,20 @@ export function extractArtistAndTitleCustom(rawTitle: string): { artist: string;
 
   // 6. 곡명에서 부가정보 추가 제거
   title = removeExtraInfo(title);
+  title = removeTrailingHashtags(title);
 
   if (!artist || !title) return null;
   return { artist, title };
+}
+export function extractEnglishName(name: string): string {
+  // 연속된 영어 단어(공백 포함)만 추출
+  const match = name.match(/([A-Za-z][A-Za-z\s'&.-]*)/g);
+  return match ? match.join(' ').trim() : name;
+}
+export function extractEnglishTitle(title: string): string {
+  // 영어 단어가 2개 이상 연속된 부분만 추출 (예시)
+  const match = title.match(/([A-Za-z][A-Za-z\s']{2,})/g);
+  return match ? match.join(' ').trim() : title;
 }
 ```
 

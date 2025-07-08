@@ -1,3 +1,5 @@
+import { MUSIC_KEYWORDS } from '@constants/keywords';
+
 // lib/utils/musicDetection.ts
 export interface MusicDetectionInput {
   categoryId?: string;
@@ -7,27 +9,7 @@ export interface MusicDetectionInput {
   channelTitle?: string;
   durationSec?: number;
 }
-
-export const MUSIC_KEYWORDS = [
-  // 영어
-  'official',
-  'mv',
-  'm/v',
-  'lyric',
-  'cover',
-  'remix',
-  'ost',
-  'op',
-  'ed',
-  'instrumental',
-  'karaoke',
-  // 한국어
-  '가사',
-  '커버',
-  '노래',
-  // 일본어
-  '歌ってみた',
-];
+const specialMusicPattern = /([^A-Za-z]|^)(OP|ED|OST|MV)([^A-Za-z]|$)/i;
 
 export function scoreMusicVideo(meta: MusicDetectionInput): number {
   let score = 0;
@@ -38,6 +20,11 @@ export function scoreMusicVideo(meta: MusicDetectionInput): number {
   if (meta.tags && meta.tags.some((tag) => MUSIC_KEYWORDS.some((k) => tag.toLowerCase().includes(k)))) score += 1;
   if (meta.durationSec && meta.durationSec >= 60 && meta.durationSec <= 600) score += 1;
   // 채널명 등 추가 휴리스틱 가능
+
+  // OP/ED/OST/MV가 앞뒤 영어 없이 등장할 때 추가 가산점
+  if (meta.title && specialMusicPattern.test(meta.title)) score += 1;
+  if (meta.description && specialMusicPattern.test(meta.description)) score += 1;
+  if (meta.tags && meta.tags.some((tag) => specialMusicPattern.test(tag))) score += 1;
 
   return score;
 }

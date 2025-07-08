@@ -17,10 +17,11 @@ import { YOUTUBE_API_KEY } from '@constants/apiKey';
 import { UIResourceManager } from '@lib/utils/uiResourceManager';
 import { YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
 import { extractArtistAndTitle } from '@lib/utils/artistTitle';
-import { cleanUp, extractArtistAndTitleCustom } from '@lib/utils/stringUtils';
+import { cleanUp, extractArtistAndTitleCustom, removeEmptyBrackets } from '@lib/utils/stringUtils';
 import { listenerManager } from '@lib/utils/listenerManager';
-import 'normalize.css';
 import { registerAllListeners } from '@lib/utils/registerAllListeners';
+import { fetchLrclibLyrics } from '@background/api/lrclib';
+import 'normalize.css';
 
 // 타입 명시적 정의
 interface DetectionController {
@@ -142,9 +143,49 @@ const handleVideoDetection = async () => {
       return;
     }
     const cleanedArtist = cleanUp(customResult.artist);
-    const cleanedTitle = cleanUp(customResult.title);
+    let cleanedTitle = cleanUp(customResult.title);
 
-    console.log('아티스트:', cleanedArtist, '곡명:', cleanedTitle);
+    cleanedTitle = removeEmptyBrackets(cleanedTitle); // ★ 여기서 호출
+
+    const englishArtist = cleanedArtist;
+    const englishTitle = cleanedTitle;
+
+    console.log('아티스트:', englishArtist, '곡명:', englishTitle);
+
+    let lyrics = await fetchLrclibLyrics(englishArtist, englishTitle);
+    if (lyrics) {
+      console.log('[lrclib] 1차(기본) 가사 조회 성공:', { englishArtist, englishTitle });
+    } else {
+      // swap 검색
+      lyrics = await fetchLrclibLyrics(englishTitle, englishArtist);
+      if (lyrics) {
+        console.log('[lrclib] 2차(swap) 가사 조회 성공:', { artist: englishTitle, title: englishArtist });
+      } else {
+        // search API 후보군 반복 조회
+        const searchRes = await fetch(
+          `https://lrclib.net/api/search?q=${encodeURIComponent(englishArtist + ' ' + englishTitle)}`,
+        );
+        const searchData = await searchRes.json();
+        let found = false;
+        for (const candidate of searchData) {
+          const detailRes = await fetch(`https://lrclib.net/api/get/${candidate.id}`);
+          const detail = await detailRes.json();
+          lyrics = detail.syncedLyrics || detail.plainLyrics;
+          if (lyrics) {
+            console.log('[lrclib] 3차(search) 후보군 id로 가사 조회 성공:', {
+              id: candidate.id,
+              artist: candidate.artistName,
+              title: candidate.trackName,
+            });
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          console.log('[lrclib] 가사 검색 실패:', { englishArtist, englishTitle });
+        }
+      }
+    }
   } else {
     console.log('음악 영상이 아닙니다.');
   }
