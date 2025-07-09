@@ -13,7 +13,6 @@ import { DOM_IDS } from '@constants/doomIds';
 import { KaraokePlayerContainer } from '@components/lyrics/KaraokePlayerContainer';
 import { fetchYouTubeVideoMeta } from '@background/api/youtube';
 import { isMusicVideo } from '@lib/utils/musicDetection';
-import { YOUTUBE_API_KEY } from '@constants/apiKey';
 import { UIResourceManager } from '@lib/utils/uiResourceManager';
 import { YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
 import { extractArtistAndTitle } from '@lib/utils/artistTitle';
@@ -22,6 +21,7 @@ import { listenerManager } from '@lib/utils/listenerManager';
 import { registerAllListeners } from '@lib/utils/registerAllListeners';
 import { fetchLrclibLyrics } from '@background/api/lrclib';
 import 'normalize.css';
+import 'dotenv/config';
 
 // 타입 명시적 정의
 interface DetectionController {
@@ -119,7 +119,7 @@ const handleVideoDetection = async () => {
   lastVideoId = videoData.videoId;
 
   // 1. YouTube Data API로 메타데이터 요청
-  const meta = await fetchYouTubeVideoMeta(videoData.videoId, YOUTUBE_API_KEY);
+  const meta = await fetchYouTubeVideoMeta(videoData.videoId, process.env.YOUTUBE_API_KEY!);
   if (!meta) {
     console.log('fetchYouTubeVideoMeta 실패');
     return;
