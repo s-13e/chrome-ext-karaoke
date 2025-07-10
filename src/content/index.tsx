@@ -20,25 +20,23 @@ import { cleanUp, extractArtistAndTitleCustom, removeEmptyBrackets } from '@lib/
 import { listenerManager } from '@lib/utils/listenerManager';
 import { registerAllListeners } from '@lib/utils/registerAllListeners';
 import { fetchLrclibLyrics } from '@background/api/lrclib';
+import { withContentEnabled } from '@lib/utils/contentGuard';
 import 'normalize.css';
-import 'dotenv/config';
 
 // 타입 명시적 정의
 interface DetectionController {
   spaObserver: MutationObserver | null;
   videoDetection: (() => void) | null;
 }
-// type LyricsDataPayload = { videoId: string; lyrics: string };
-//type NoLyricsFoundPayload = { videoId: string; title: string };
-//type LyricsMessage =
-//  | { type: 'LYRICS_DATA'; payload: LyricsDataPayload }
-//  | { type: 'NO_LYRICS_FOUND'; payload: NoLyricsFoundPayload };
 
 let detectionController: DetectionController = {
   spaObserver: null,
   videoDetection: null,
 };
+
 let contentEnabled = false;
+const getContentEnabled = () => contentEnabled; // 전역 변수 접근
+
 const isObserverActive = false;
 
 const uiManager = new UIResourceManager();
@@ -85,7 +83,6 @@ let lastUrl = window.location.href;
 
 // ✅ URL 변경 핸들러 개선
 const handleUrlChange = (url: string) => {
-  if (!contentEnabled) return;
   if (url === lastUrl) return; // URL이 실제로 바뀌었을 때만 실행
   lastUrl = url;
 
@@ -100,15 +97,13 @@ const handleUrlChange = (url: string) => {
     }
   }
 };
+const handleUrlChangeGuarded = withContentEnabled(getContentEnabled, handleUrlChange);
+
 let lastVideoId: string | null = null;
 
 // 영상 감지 핸들러 (순수 로직)
 const handleVideoDetection = async () => {
   console.log('handleVideoDetection 실행');
-  if (!contentEnabled) {
-    console.log('비활성화 상태입니다.');
-    return;
-  }
 
   const videoData = detectYouTubeVideo();
   if (!videoData) {
@@ -195,6 +190,7 @@ const handleVideoDetection = async () => {
     payload: videoData,
   });
 };
+const handleVideoDetectionGuarded = withContentEnabled(getContentEnabled, handleVideoDetection);
 
 // 감지 시스템 활성화
 const enableDetection = () => {
@@ -208,7 +204,7 @@ const enableDetection = () => {
   registerAllListeners(setDetectionState);
 
   // 새로운 감지 시스템 설정
-  const debouncedDetection = debounce(handleVideoDetection, 300);
+  const debouncedDetection = debounce(handleVideoDetectionGuarded, 300);
   const newObserver = setupSPAObserver(debouncedDetection);
 
   detectionController = {
@@ -259,13 +255,11 @@ function setupKaraokeContainer() {
 // SPA 네비게이션 메시지 핸들러
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === MESSAGE_TYPES.SPA_NAVIGATION_DETECTED) {
-    if (!contentEnabled) return; // 비활성화 시 아무 동작도 하지 않음
-
     const { url, isWatchPage } = message.payload;
     console.log(`[SPA Navigation] ${url}, isWatchPage: ${isWatchPage}`);
 
     // URL 변경 처리
-    handleUrlChange(url);
+    handleUrlChangeGuarded(url);
   }
 });
 
@@ -279,7 +273,7 @@ window.addEventListener('beforeunload', () => {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     // 페이지가 다시 보이면 현재 URL 확인
-    handleUrlChange(window.location.href);
+    handleUrlChangeGuarded(window.location.href);
   }
 });
 
@@ -309,7 +303,7 @@ const initializeApp = async () => {
     setupKaraokeContainer();
 
     // 초기 URL 감지 및 UI/감지 시스템 활성화
-    handleUrlChange(window.location.href);
+    handleUrlChangeGuarded(window.location.href);
 
     // 감지 시스템 활성/비활성 상태 동기화
     chrome.storage.sync.get(STORAGE_KEYS.CONTENT_ENABLED, (result) => {

@@ -1,6 +1,5 @@
 // src/lib/api/ksoftsi.ts
 import axios from 'axios';
-import 'dotenv/config';
 
 const KSOFT_API_KEY = process.env.KSOFT_API_KEY; // 환경변수로 관리 권장
 

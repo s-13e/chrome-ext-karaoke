@@ -4,6 +4,10 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyPlugin = require('copy-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
+const webpack = require('webpack');
+const dotenv = require('dotenv');
+dotenv.config(); // .env 파일에서 환경변수 로드
+
 const entryPoints = {
   content: './src/content/index.tsx',
   background: './src/background/background.ts',
@@ -108,6 +112,9 @@ module.exports = {
           },
         },
       ],
+    }),
+    new webpack.DefinePlugin({
+      'process.env.YOUTUBE_API_KEY': JSON.stringify(process.env.YOUTUBE_API_KEY),
     }),
   ],
 };
