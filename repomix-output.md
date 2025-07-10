@@ -35,7 +35,10 @@ The content is organized as follows:
 # Directory Structure
 ```
 background/api/genius.ts
+<<<<<<< HEAD
 background/api/ksoftsi.ts
+=======
+>>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
 background/api/lrclib.ts
 background/api/youtube.ts
 background/background.ts
@@ -46,6 +49,7 @@ components/lyrics/KaraokePlayerContainer/styles.module.css
 components/lyrics/LyricsSidebar/index.tsx
 components/lyrics/LyricsSidebar/LyricsPanel.tsx
 constants/api.ts
+constants/apiKey.ts
 constants/doomIds.ts
 constants/errorCodes.ts
 constants/errorMessages.ts
@@ -128,6 +132,7 @@ export const fetchGeniusLyrics = async (title: string): Promise<string> => {
 };
 ```
 
+<<<<<<< HEAD
 ## File: background/api/ksoftsi.ts
 ```typescript
 // src/lib/api/ksoftsi.ts
@@ -170,6 +175,8 @@ export async function fetchKSoftLyrics(artist: string, title: string): Promise<K
 }
 ```
 
+=======
+>>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
 ## File: background/api/lrclib.ts
 ```typescript
 // background/api/lrclib.ts
@@ -475,6 +482,11 @@ export const LyricsSidebar: React.FC = () => {
 export const GENIUS_API_URL = 'https://api.genius.com';
 ```
 
+## File: constants/apiKey.ts
+```typescript
+export const YOUTUBE_API_KEY = 'AIzaSyAmnaI5MB0QWgJzsSr6IE_nAk7RbGcHyRs';
+```
+
 ## File: constants/doomIds.ts
 ```typescript
 export const DOM_IDS = {
@@ -504,6 +516,7 @@ export const ERROR_MESSAGES = {
 
 ## File: constants/keywords.ts
 ```typescript
+<<<<<<< HEAD
 export const SPECIAL_MUSIC_KEYWORDS = ['ed', 'op', 'mv', 'ost'];
 export const MUSIC_KEYWORDS = [
   // 영어
@@ -511,6 +524,11 @@ export const MUSIC_KEYWORDS = [
   'official video',
   'performance video',
   'Official Lyric Video',
+=======
+export const MUSIC_KEYWORDS = [
+  // 영어
+  'official',
+>>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
   'mv',
   'm/v',
   'music video',
@@ -518,10 +536,19 @@ export const MUSIC_KEYWORDS = [
   'lyrics',
   'cover',
   'remix',
+<<<<<<< HEAD
   'instrumental',
   'karaoke',
   'tj karaoke',
   'ky karaoke',
+=======
+  'ost',
+  'op',
+  'ed',
+  'instrumental',
+  'karaoke',
+  'tj karaoke',
+>>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
   // 한국어
   '노래방',
   '가사',
@@ -532,6 +559,7 @@ export const MUSIC_KEYWORDS = [
   // 일본어
   '歌ってみた',
 ];
+<<<<<<< HEAD
 export const EXTRA_KEYWORDS = [
   ...MUSIC_KEYWORDS,
   // 영어
@@ -553,6 +581,9 @@ export const EXTRA_KEYWORDS = [
   '직캠',
   '원테이크',
 ];
+=======
+export const EXTRA_KEYWORDS = [...MUSIC_KEYWORDS, 'animation'];
+>>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
 ```
 
 ## File: constants/languages.ts
@@ -817,15 +848,26 @@ import { DOM_IDS } from '@constants/doomIds';
 import { KaraokePlayerContainer } from '@components/lyrics/KaraokePlayerContainer';
 import { fetchYouTubeVideoMeta } from '@background/api/youtube';
 import { isMusicVideo } from '@lib/utils/musicDetection';
+<<<<<<< HEAD
 import { UIResourceManager } from '@lib/utils/uiResourceManager';
 import { YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
 import { extractArtistAndTitle } from '@lib/utils/artistTitle';
 import { cleanUp, extractArtistAndTitleCustom, removeEmptyBrackets } from '@lib/utils/stringUtils';
+=======
+import { YOUTUBE_API_KEY } from '@constants/apiKey';
+import { UIResourceManager } from '@lib/utils/uiResourceManager';
+import { YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
+import { extractArtistAndTitle } from '@lib/utils/artistTitle';
+import { cleanUp, extractArtistAndTitleCustom, extractEnglishName, extractEnglishTitle } from '@lib/utils/stringUtils';
+>>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
 import { listenerManager } from '@lib/utils/listenerManager';
 import { registerAllListeners } from '@lib/utils/registerAllListeners';
 import { fetchLrclibLyrics } from '@background/api/lrclib';
 import 'normalize.css';
+<<<<<<< HEAD
 import 'dotenv/config';
+=======
+>>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
 
 // 타입 명시적 정의
 interface DetectionController {
@@ -923,7 +965,11 @@ const handleVideoDetection = async () => {
   lastVideoId = videoData.videoId;
 
   // 1. YouTube Data API로 메타데이터 요청
+<<<<<<< HEAD
   const meta = await fetchYouTubeVideoMeta(videoData.videoId, process.env.YOUTUBE_API_KEY!);
+=======
+  const meta = await fetchYouTubeVideoMeta(videoData.videoId, YOUTUBE_API_KEY);
+>>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
   if (!meta) {
     console.log('fetchYouTubeVideoMeta 실패');
     return;
@@ -947,6 +993,7 @@ const handleVideoDetection = async () => {
       return;
     }
     const cleanedArtist = cleanUp(customResult.artist);
+<<<<<<< HEAD
     let cleanedTitle = cleanUp(customResult.title);
 
     cleanedTitle = removeEmptyBrackets(cleanedTitle); // ★ 여기서 호출
@@ -990,6 +1037,18 @@ const handleVideoDetection = async () => {
         }
       }
     }
+=======
+    const cleanedTitle = cleanUp(customResult.title);
+
+    const englishArtist = extractEnglishName(cleanedArtist);
+    const englishTitle = extractEnglishTitle(cleanedTitle);
+
+    console.log('아티스트:', englishArtist, '곡명:', englishTitle);
+
+    const lyrics = await fetchLrclibLyrics(englishArtist, englishTitle);
+    console.log('가사: ', lyrics);
+
+>>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
   } else {
     console.log('음악 영상이 아닙니다.');
   }
@@ -1459,8 +1518,11 @@ export const listenerManager = new ListenerManager();
 
 ## File: lib/utils/musicDetection.ts
 ```typescript
+<<<<<<< HEAD
 import { MUSIC_KEYWORDS } from '@constants/keywords';
 
+=======
+>>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
 // lib/utils/musicDetection.ts
 export interface MusicDetectionInput {
   categoryId?: string;
@@ -1470,7 +1532,31 @@ export interface MusicDetectionInput {
   channelTitle?: string;
   durationSec?: number;
 }
+<<<<<<< HEAD
 const specialMusicPattern = /([^A-Za-z]|^)(OP|ED|OST|MV)([^A-Za-z]|$)/i;
+=======
+
+export const MUSIC_KEYWORDS = [
+  // 영어
+  'official',
+  'mv',
+  'm/v',
+  'lyric',
+  'cover',
+  'remix',
+  'ost',
+  'op',
+  'ed',
+  'instrumental',
+  'karaoke',
+  // 한국어
+  '가사',
+  '커버',
+  '노래',
+  // 일본어
+  '歌ってみた',
+];
+>>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
 
 export function scoreMusicVideo(meta: MusicDetectionInput): number {
   let score = 0;
@@ -1482,11 +1568,14 @@ export function scoreMusicVideo(meta: MusicDetectionInput): number {
   if (meta.durationSec && meta.durationSec >= 60 && meta.durationSec <= 600) score += 1;
   // 채널명 등 추가 휴리스틱 가능
 
+<<<<<<< HEAD
   // OP/ED/OST/MV가 앞뒤 영어 없이 등장할 때 추가 가산점
   if (meta.title && specialMusicPattern.test(meta.title)) score += 1;
   if (meta.description && specialMusicPattern.test(meta.description)) score += 1;
   if (meta.tags && meta.tags.some((tag) => specialMusicPattern.test(tag))) score += 1;
 
+=======
+>>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
   return score;
 }
 
@@ -1607,6 +1696,7 @@ import { EXTRA_KEYWORDS } from '@constants/keywords';
  * 문자열에서 부가정보(괄호, 대괄호, 파이프 등)를 제거합니다.
  */
 export function cleanUp(str: string): string {
+<<<<<<< HEAD
   return str
     .replace(/\[.*?\]/g, '') // 대괄호 제거
     .replace(/\\s{2,}/g, ' ') // 이중 공백 정리
@@ -1620,6 +1710,17 @@ function cleanMusicKeyword(str: string): string {
     })
     .trim();
 }
+=======
+  return (
+    str
+      .replace(/\[.*?\]/g, '') // 대괄호 제거
+      //.replace(/\((?!\s*(feat\.|Feat\.|featuring|with)\b)[^)]*\)/gi, '') // feat. 제외 괄호 제거
+      .replace(/\\s{2,}/g, ' ') // 이중 공백 정리
+      .trim()
+  );
+}
+
+>>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
 export function removeExtraInfo(title: string): string {
   const extraKeywords = EXTRA_KEYWORDS.slice().sort((a, b) => b.length - a.length); // 긴 키워드 우선
   let result = title;
@@ -1650,18 +1751,25 @@ export function removeExtraInfo(title: string): string {
       }
     }
   }
+<<<<<<< HEAD
 
+=======
+>>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
   result = parts.filter(Boolean).join(' - '); // 빈 값 제거 후 합치기
   result = result.replace(/[-/|]+$/, '').trim(); // 끝에 남은 구분자 제거
 
   return result;
 }
+<<<<<<< HEAD
 
+=======
+>>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
 export function removeTrailingHashtags(title: string): string {
   // 곡명 끝에 연속된 해시태그만 제거
   return title.replace(/(\s*#[\p{L}\p{N}._-]+)+\s*$/gu, '').trim();
 }
 
+<<<<<<< HEAD
 export function removeDatePattern(str: string): string {
   return str.replace(/\b\d{2}[01]\d(?:3[0-2]|[0-2][0-9])\b/g, '').trim();
 }
@@ -1687,14 +1795,34 @@ export function extractArtistAndTitleCustom(rawTitle: string): { artist: string;
           title = parts.slice(1).join(delim).trim();
           break;
         }
+=======
+export function extractArtistAndTitleCustom(rawTitle: string): { artist: string; title: string } | null {
+  const cleaned = cleanUp(rawTitle);
+
+  // 우선순위: ' - ' > ' / ' > ' | '
+  const delimiters = [' - ', ' / ', ' | '];
+  let artist = '',
+    title = '';
+  // 1. 구분자(split) 기반 추출
+  for (const delim of delimiters) {
+    if (cleaned.includes(delim)) {
+      const parts = cleaned.split(delim);
+      if (parts.length >= 2) {
+        artist = parts[0]?.trim() ?? '';
+        title = parts.slice(1).join(delim).trim();
+        break;
+>>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
       }
     }
   }
 
   // 2. remove extra info
   title = removeExtraInfo(title);
+<<<<<<< HEAD
   artist = cleanMusicKeyword(artist);
   title = cleanMusicKeyword(title);
+=======
+>>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
 
   // 3. 추가 패턴: "아티스트 '곡명'" 또는 "아티스트 \"곡명\""
   if (!artist || !title) {
@@ -1728,12 +1856,17 @@ export function extractArtistAndTitleCustom(rawTitle: string): { artist: string;
   // 6. 곡명에서 부가정보 추가 제거
   title = removeExtraInfo(title);
   title = removeTrailingHashtags(title);
+<<<<<<< HEAD
   title = removeDatePattern(title);
   title = title.replace(/[-/|]+$/, '').trim(); // 끝에 남은 구분자도 제거
 
   if (!artist || !title) return null;
   artist = removeEmptyBrackets(removeExtraInfo(artist));
 
+=======
+
+  if (!artist || !title) return null;
+>>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
   return { artist, title };
 }
 export function extractEnglishName(name: string): string {
@@ -1746,6 +1879,7 @@ export function extractEnglishTitle(title: string): string {
   const match = title.match(/([A-Za-z][A-Za-z\s']{2,})/g);
   return match ? match.join(' ').trim() : title;
 }
+<<<<<<< HEAD
 export function removeEmptyBrackets(title: string): string {
   return title
     .replace(/\(\s*\)/g, '')
@@ -1753,6 +1887,8 @@ export function removeEmptyBrackets(title: string): string {
     .replace(/\{\s*\}/g, '')
     .trim();
 }
+=======
+>>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
 ```
 
 ## File: lib/utils/styleInjection.ts

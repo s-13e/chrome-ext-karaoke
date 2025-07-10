@@ -34,6 +34,11 @@ let detectionController: DetectionController = {
   videoDetection: null,
 };
 
+// 2. 초기값을 chrome.storage에서 읽어옴
+chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED], (result) => {
+  contentEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
+});
+
 let contentEnabled = false;
 const getContentEnabled = () => contentEnabled; // 전역 변수 접근
 
@@ -255,6 +260,8 @@ function setupKaraokeContainer() {
 // SPA 네비게이션 메시지 핸들러
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === MESSAGE_TYPES.SPA_NAVIGATION_DETECTED) {
+    if (!contentEnabled) return; // 비활성화 시 아무 동작도 하지 않음
+
     const { url, isWatchPage } = message.payload;
     console.log(`[SPA Navigation] ${url}, isWatchPage: ${isWatchPage}`);
 
