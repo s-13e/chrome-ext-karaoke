@@ -112,80 +112,89 @@ const handleUrlChange = (url: string) => {
 };
 const handleUrlChangeGuarded = withContentEnabled(getContentEnabled, handleUrlChange);
 
+let isDetecting = false;
 let lastVideoId: string | null = null;
+const RETRY_DELAY = 300;
 
 // 영상 감지 핸들러 (순수 로직)
 const handleVideoDetection = async () => {
   console.log('handleVideoDetection 실행');
+  if (isDetecting) return;
+  isDetecting = true;
+  try {
+    const videoData = detectYouTubeVideo();
+    if (!videoData) {
+      setTimeout(handleVideoDetectionGuarded, RETRY_DELAY);
+      return;
+    }
+    if (videoData.videoId === lastVideoId) return; // 같은 영상이면 실행하지 않음
+    lastVideoId = videoData.videoId;
 
-  const videoData = detectYouTubeVideo();
-  if (!videoData) {
-    console.log('detectYouTubeVideo 실패');
-    return;
-  }
-  if (videoData.videoId === lastVideoId) return; // 같은 영상이면 실행하지 않음
-  lastVideoId = videoData.videoId;
+    // 1. YouTube Data API로 메타데이터 요청
+    const meta = await fetchYouTubeVideoMeta(videoData.videoId, process.env.YOUTUBE_API_KEY!);
+    if (!meta) {
+      console.log('fetchYouTubeVideoMeta 실패');
+      return;
+    }
+    if (!isMusicVideo(meta)) {
+      console.log('isMusicVideo 판별 실패');
+      return;
+    }
 
-  // 1. YouTube Data API로 메타데이터 요청
-  const meta = await fetchYouTubeVideoMeta(videoData.videoId, process.env.YOUTUBE_API_KEY!);
-  if (!meta) {
-    console.log('fetchYouTubeVideoMeta 실패');
-    return;
-  }
-  if (!isMusicVideo(meta)) {
-    console.log('isMusicVideo 판별 실패');
-    return;
-  }
+    const parsed = extractArtistAndTitle(meta.title);
+    if (!parsed) {
+      console.log('extractArtistAndTitle 실패', meta.title);
+      return;
+    }
 
-  const parsed = extractArtistAndTitle(meta.title);
-  if (!parsed) {
-    console.log('extractArtistAndTitle 실패', meta.title);
-    return;
-  }
+    const refined = extractArtistAndTitleCustom(`${parsed.artist} - ${parsed.title}`);
+    if (!refined) {
+      console.log('extractArtistAndTitleCustom 실패', meta.title);
+      return;
+    }
 
-  const refined = extractArtistAndTitleCustom(`${parsed.artist} - ${parsed.title}`);
-  if (!refined) {
-    console.log('extractArtistAndTitleCustom 실패', meta.title);
-    return;
-  }
+    const artist = cleanUp(refined.artist);
+    let title = cleanUp(refined.title);
+    title = removeEmptyBrackets(title);
 
-  const artist = cleanUp(refined.artist);
-  let title = cleanUp(refined.title);
-  title = removeEmptyBrackets(title);
+    console.log('아티스트:', artist, '곡명:', title);
 
-  console.log('아티스트:', artist, '곡명:', title);
+    let lyrics = await fetchLrclibLyrics(artist, title);
 
-  let lyrics = await fetchLrclibLyrics(artist, title);
-
-  if (!lyrics) {
-    lyrics = await fetchLrclibLyrics(title, artist);
     if (!lyrics) {
-      const searchRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(artist + ' ' + title)}`);
-      const searchData = await searchRes.json();
-      for (const candidate of searchData) {
-        const detailRes = await fetch(`https://lrclib.net/api/get/${candidate.id}`);
-        const detail = await detailRes.json();
-        lyrics = detail.syncedLyrics || detail.plainLyrics;
-        if (lyrics) break;
+      lyrics = await fetchLrclibLyrics(title, artist);
+      if (!lyrics) {
+        const searchRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(artist + ' ' + title)}`);
+        const searchData = await searchRes.json();
+        for (const candidate of searchData) {
+          const detailRes = await fetch(`https://lrclib.net/api/get/${candidate.id}`);
+          const detail = await detailRes.json();
+          lyrics = detail.syncedLyrics || detail.plainLyrics;
+          if (lyrics) break;
+        }
       }
     }
-  }
-  console.log('가사:', lyrics);
+    console.log('가사:', lyrics);
 
-  // 가사 획득 성공 시 오버레이 렌더링 호출
-  if (lyrics) {
-    renderLyricsOverlay(lyrics);
-  }
+    // 가사 획득 성공 시 오버레이 렌더링 호출
+    if (lyrics) {
+      renderLyricsOverlay(lyrics);
+    }
 
-  chrome.runtime.sendMessage({
-    type: MESSAGE_TYPES.VIDEO_DETECTED,
-    payload: videoData,
-  });
+    chrome.runtime.sendMessage({
+      type: MESSAGE_TYPES.VIDEO_DETECTED,
+      payload: videoData,
+    });
+  } finally {
+    isDetecting = false;
+  }
 };
 const handleVideoDetectionGuarded = withContentEnabled(getContentEnabled, handleVideoDetection);
 
 const debouncedDetection = debounce(handleVideoDetectionGuarded, 300);
-
+setupPlayerReadyObserver(() => {
+  debouncedDetection();
+});
 // 감지 시스템 활성화
 const enableDetection = () => {
   if (isObserverActive) return; // 이미 활성화된 경우 중복 방지

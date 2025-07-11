@@ -887,7 +887,7 @@ import { i18nInstance, initializeI18n } from '@services/i18n';
 import { ErrorFallback } from '@components/common/ErrorFallback';
 import { I18nextProvider } from 'react-i18next';
 import { ErrorBoundary } from 'react-error-boundary';
-import { detectYouTubeVideo, setupSPAObserver } from '@lib/youtube';
+import { detectYouTubeVideo, setupSPAObserver, setupPlayerReadyObserver } from '@lib/youtube';
 import { debounce } from '@lib/utils/common';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 import { MESSAGE_TYPES } from '@constants/messageTypes';
@@ -994,80 +994,89 @@ const handleUrlChange = (url: string) => {
 };
 const handleUrlChangeGuarded = withContentEnabled(getContentEnabled, handleUrlChange);
 
+let isDetecting = false;
 let lastVideoId: string | null = null;
+const RETRY_DELAY = 300;
 
 // 영상 감지 핸들러 (순수 로직)
 const handleVideoDetection = async () => {
   console.log('handleVideoDetection 실행');
+  if (isDetecting) return;
+  isDetecting = true;
+  try {
+    const videoData = detectYouTubeVideo();
+    if (!videoData) {
+      setTimeout(handleVideoDetectionGuarded, RETRY_DELAY);
+      return;
+    }
+    if (videoData.videoId === lastVideoId) return; // 같은 영상이면 실행하지 않음
+    lastVideoId = videoData.videoId;
 
-  const videoData = detectYouTubeVideo();
-  if (!videoData) {
-    console.log('detectYouTubeVideo 실패');
-    return;
-  }
-  if (videoData.videoId === lastVideoId) return; // 같은 영상이면 실행하지 않음
-  lastVideoId = videoData.videoId;
+    // 1. YouTube Data API로 메타데이터 요청
+    const meta = await fetchYouTubeVideoMeta(videoData.videoId, process.env.YOUTUBE_API_KEY!);
+    if (!meta) {
+      console.log('fetchYouTubeVideoMeta 실패');
+      return;
+    }
+    if (!isMusicVideo(meta)) {
+      console.log('isMusicVideo 판별 실패');
+      return;
+    }
 
-  // 1. YouTube Data API로 메타데이터 요청
-  const meta = await fetchYouTubeVideoMeta(videoData.videoId, process.env.YOUTUBE_API_KEY!);
-  if (!meta) {
-    console.log('fetchYouTubeVideoMeta 실패');
-    return;
-  }
-  if (!isMusicVideo(meta)) {
-    console.log('isMusicVideo 판별 실패');
-    return;
-  }
+    const parsed = extractArtistAndTitle(meta.title);
+    if (!parsed) {
+      console.log('extractArtistAndTitle 실패', meta.title);
+      return;
+    }
 
-  const parsed = extractArtistAndTitle(meta.title);
-  if (!parsed) {
-    console.log('extractArtistAndTitle 실패', meta.title);
-    return;
-  }
+    const refined = extractArtistAndTitleCustom(`${parsed.artist} - ${parsed.title}`);
+    if (!refined) {
+      console.log('extractArtistAndTitleCustom 실패', meta.title);
+      return;
+    }
 
-  const refined = extractArtistAndTitleCustom(`${parsed.artist} - ${parsed.title}`);
-  if (!refined) {
-    console.log('extractArtistAndTitleCustom 실패', meta.title);
-    return;
-  }
+    const artist = cleanUp(refined.artist);
+    let title = cleanUp(refined.title);
+    title = removeEmptyBrackets(title);
 
-  const artist = cleanUp(refined.artist);
-  let title = cleanUp(refined.title);
-  title = removeEmptyBrackets(title);
+    console.log('아티스트:', artist, '곡명:', title);
 
-  console.log('아티스트:', artist, '곡명:', title);
+    let lyrics = await fetchLrclibLyrics(artist, title);
 
-  let lyrics = await fetchLrclibLyrics(artist, title);
-
-  if (!lyrics) {
-    lyrics = await fetchLrclibLyrics(title, artist);
     if (!lyrics) {
-      const searchRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(artist + ' ' + title)}`);
-      const searchData = await searchRes.json();
-      for (const candidate of searchData) {
-        const detailRes = await fetch(`https://lrclib.net/api/get/${candidate.id}`);
-        const detail = await detailRes.json();
-        lyrics = detail.syncedLyrics || detail.plainLyrics;
-        if (lyrics) break;
+      lyrics = await fetchLrclibLyrics(title, artist);
+      if (!lyrics) {
+        const searchRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(artist + ' ' + title)}`);
+        const searchData = await searchRes.json();
+        for (const candidate of searchData) {
+          const detailRes = await fetch(`https://lrclib.net/api/get/${candidate.id}`);
+          const detail = await detailRes.json();
+          lyrics = detail.syncedLyrics || detail.plainLyrics;
+          if (lyrics) break;
+        }
       }
     }
-  }
-  console.log('가사:', lyrics);
+    console.log('가사:', lyrics);
 
-  // 가사 획득 성공 시 오버레이 렌더링 호출
-  if (lyrics) {
-    renderLyricsOverlay(lyrics);
-  }
+    // 가사 획득 성공 시 오버레이 렌더링 호출
+    if (lyrics) {
+      renderLyricsOverlay(lyrics);
+    }
 
-  chrome.runtime.sendMessage({
-    type: MESSAGE_TYPES.VIDEO_DETECTED,
-    payload: videoData,
-  });
+    chrome.runtime.sendMessage({
+      type: MESSAGE_TYPES.VIDEO_DETECTED,
+      payload: videoData,
+    });
+  } finally {
+    isDetecting = false;
+  }
 };
 const handleVideoDetectionGuarded = withContentEnabled(getContentEnabled, handleVideoDetection);
 
 const debouncedDetection = debounce(handleVideoDetectionGuarded, 300);
-
+setupPlayerReadyObserver(() => {
+  debouncedDetection();
+});
 // 감지 시스템 활성화
 const enableDetection = () => {
   if (isObserverActive) return; // 이미 활성화된 경우 중복 방지
@@ -1164,6 +1173,11 @@ const initializeApp = async () => {
   try {
     injectCSS();
     await initializeI18n();
+    // 플레이어 등장 즉시 가사 감지 트리거
+    setupPlayerReadyObserver(() => {
+      console.log('[Observer] 유튜브 플레이어 등장 감지, 가사 감지 실행');
+      handleVideoDetectionGuarded();
+    });
 
     // 루트 컨테이너 준비 및 렌더링
     const rootElement = document.getElementById(DOM_IDS.ROOT_CONTAINER) || createRootElement();
@@ -1414,18 +1428,18 @@ export type TranslationKey = (typeof TRANSLATION_KEYS)[number];
 
 ## File: lib/types/video.ts
 ```typescript
-interface VideoData {
-  videoId: string;
-  title: string;
-}
-interface VideoMeta {
-  categoryId?: string;
-  title?: string;
-  description?: string;
-  tags?: string[];
-  channelTitle?: string;
-  durationSec?: number;
-}
+// interface VideoData {
+//   videoId: string;
+//   title: string;
+// }
+// interface VideoMeta {
+//   categoryId?: string;
+//   title?: string;
+//   description?: string;
+//   tags?: string[];
+//   channelTitle?: string;
+//   durationSec?: number;
+// }
 ```
 
 ## File: lib/utils/artistTitle.ts
@@ -2086,6 +2100,35 @@ export const setupSPAObserver = (callback: () => void): MutationObserver => {
   });
 
   return observer; // MutationObserver 반환
+};
+
+/**
+ * YouTube 플레이어(#movie_player) DOM이 문서에 추가되는 즉시 콜백을 실행하는 MutationObserver를 생성합니다.
+ *
+ * @param callback - 플레이어가 감지되었을 때 실행할 함수
+ * @returns MutationObserver 인스턴스
+ */
+export const setupPlayerReadyObserver = (callback: () => void): MutationObserver => {
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        if (node instanceof HTMLElement) {
+          if (node.id === 'movie_player' || node.querySelector('#movie_player')) {
+            callback();
+            observer.disconnect(); // 한 번 감지 후 관찰 중지
+            return;
+          }
+        }
+      }
+    }
+  });
+
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+
+  return observer;
 };
 ```
 
