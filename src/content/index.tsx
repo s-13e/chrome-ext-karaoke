@@ -5,7 +5,7 @@ import { i18nInstance, initializeI18n } from '@services/i18n';
 import { ErrorFallback } from '@components/common/ErrorFallback';
 import { I18nextProvider } from 'react-i18next';
 import { ErrorBoundary } from 'react-error-boundary';
-import { detectYouTubeVideo, setupSPAObserver } from '@lib/youtube';
+import { detectYouTubeVideo, setupSPAObserver, setupPlayerReadyObserver } from '@lib/youtube';
 import { debounce } from '@lib/utils/common';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 import { MESSAGE_TYPES } from '@constants/messageTypes';
@@ -22,6 +22,8 @@ import { registerAllListeners } from '@lib/utils/registerAllListeners';
 import { fetchLrclibLyrics } from '@background/api/lrclib';
 import { withContentEnabled } from '@lib/utils/contentGuard';
 import 'normalize.css';
+import { injectLyricsOverlayRoot } from '@components/lyrics/LyricsOverlayRoot';
+import { SyncSubtitle } from '@components/lyrics/SyncSubtitle';
 
 // 타입 명시적 정의
 interface DetectionController {
@@ -84,6 +86,12 @@ const injectCSS = () => {
   document.head.appendChild(link);
 };
 
+function renderLyricsOverlay(lyrics: string) {
+  const overlay = injectLyricsOverlayRoot();
+  const root = createRoot(overlay);
+  root.render(<SyncSubtitle lyrics={lyrics} />);
+}
+
 let lastUrl = window.location.href;
 
 // ✅ URL 변경 핸들러 개선
@@ -128,66 +136,45 @@ const handleVideoDetection = async () => {
     console.log('isMusicVideo 판별 실패');
     return;
   }
-  // 2. 음악 여부 판별
-  if (meta && isMusicVideo(meta)) {
-    const result = extractArtistAndTitle(meta.title);
-    if (!result) {
-      console.log('extractArtistAndTitle 실패', meta.title);
-      return;
-    }
 
-    // 2차 커스텀 로직 적용
-    const customResult = extractArtistAndTitleCustom(meta.title);
-    if (!customResult) {
-      console.log('extractArtistAndTitleCustom 실패', meta.title);
-      return;
-    }
-    const cleanedArtist = cleanUp(customResult.artist);
-    let cleanedTitle = cleanUp(customResult.title);
+  const parsed = extractArtistAndTitle(meta.title);
+  if (!parsed) {
+    console.log('extractArtistAndTitle 실패', meta.title);
+    return;
+  }
 
-    cleanedTitle = removeEmptyBrackets(cleanedTitle); // ★ 여기서 호출
+  const refined = extractArtistAndTitleCustom(`${parsed.artist} - ${parsed.title}`);
+  if (!refined) {
+    console.log('extractArtistAndTitleCustom 실패', meta.title);
+    return;
+  }
 
-    const englishArtist = cleanedArtist;
-    const englishTitle = cleanedTitle;
+  const artist = cleanUp(refined.artist);
+  let title = cleanUp(refined.title);
+  title = removeEmptyBrackets(title);
 
-    console.log('아티스트:', englishArtist, '곡명:', englishTitle);
+  console.log('아티스트:', artist, '곡명:', title);
 
-    let lyrics = await fetchLrclibLyrics(englishArtist, englishTitle);
-    if (lyrics) {
-      console.log('[lrclib] 1차(기본) 가사 조회 성공:', { englishArtist, englishTitle });
-    } else {
-      // swap 검색
-      lyrics = await fetchLrclibLyrics(englishTitle, englishArtist);
-      if (lyrics) {
-        console.log('[lrclib] 2차(swap) 가사 조회 성공:', { artist: englishTitle, title: englishArtist });
-      } else {
-        // search API 후보군 반복 조회
-        const searchRes = await fetch(
-          `https://lrclib.net/api/search?q=${encodeURIComponent(englishArtist + ' ' + englishTitle)}`,
-        );
-        const searchData = await searchRes.json();
-        let found = false;
-        for (const candidate of searchData) {
-          const detailRes = await fetch(`https://lrclib.net/api/get/${candidate.id}`);
-          const detail = await detailRes.json();
-          lyrics = detail.syncedLyrics || detail.plainLyrics;
-          if (lyrics) {
-            console.log('[lrclib] 3차(search) 후보군 id로 가사 조회 성공:', {
-              id: candidate.id,
-              artist: candidate.artistName,
-              title: candidate.trackName,
-            });
-            found = true;
-            break;
-          }
-        }
-        if (!found) {
-          console.log('[lrclib] 가사 검색 실패:', { englishArtist, englishTitle });
-        }
+  let lyrics = await fetchLrclibLyrics(artist, title);
+
+  if (!lyrics) {
+    lyrics = await fetchLrclibLyrics(title, artist);
+    if (!lyrics) {
+      const searchRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(artist + ' ' + title)}`);
+      const searchData = await searchRes.json();
+      for (const candidate of searchData) {
+        const detailRes = await fetch(`https://lrclib.net/api/get/${candidate.id}`);
+        const detail = await detailRes.json();
+        lyrics = detail.syncedLyrics || detail.plainLyrics;
+        if (lyrics) break;
       }
     }
-  } else {
-    console.log('음악 영상이 아닙니다.');
+  }
+  console.log('가사:', lyrics);
+
+  // 가사 획득 성공 시 오버레이 렌더링 호출
+  if (lyrics) {
+    renderLyricsOverlay(lyrics);
   }
 
   chrome.runtime.sendMessage({
@@ -196,6 +183,8 @@ const handleVideoDetection = async () => {
   });
 };
 const handleVideoDetectionGuarded = withContentEnabled(getContentEnabled, handleVideoDetection);
+
+const debouncedDetection = debounce(handleVideoDetectionGuarded, 300);
 
 // 감지 시스템 활성화
 const enableDetection = () => {
@@ -209,7 +198,6 @@ const enableDetection = () => {
   registerAllListeners(setDetectionState);
 
   // 새로운 감지 시스템 설정
-  const debouncedDetection = debounce(handleVideoDetectionGuarded, 300);
   const newObserver = setupSPAObserver(debouncedDetection);
 
   detectionController = {
@@ -240,7 +228,7 @@ const setDetectionState = (enabled: boolean) => {
     console.log('[STATUS] 감지 시스템 활성화');
   } else {
     disableDetection();
-    cleanupAllUIElements(); // ✅ 비활성화 시 UI도 정리
+    cleanupAllUIElements();
     console.log('[STATUS] 감지 시스템 비활성화');
   }
 };
@@ -294,6 +282,11 @@ const initializeApp = async () => {
   try {
     injectCSS();
     await initializeI18n();
+    // 플레이어 등장 즉시 가사 감지 트리거
+    setupPlayerReadyObserver(() => {
+      console.log('[Observer] 유튜브 플레이어 등장 감지, 가사 감지 실행');
+      handleVideoDetectionGuarded();
+    });
 
     // 루트 컨테이너 준비 및 렌더링
     const rootElement = document.getElementById(DOM_IDS.ROOT_CONTAINER) || createRootElement();

@@ -1,11 +1,6 @@
 import React from 'react';
 import { parseTimeToSeconds } from '@lib/utils/time';
-
-// 가사 파싱 인터페이스
-interface LyricLine {
-  time: number;
-  text: string;
-}
+import { LyricLine } from '@lib/types/lyrics';
 
 export const SyncSubtitle: React.FC<{
   lyrics: string;

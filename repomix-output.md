@@ -35,10 +35,7 @@ The content is organized as follows:
 # Directory Structure
 ```
 background/api/genius.ts
-<<<<<<< HEAD
 background/api/ksoftsi.ts
-=======
->>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
 background/api/lrclib.ts
 background/api/youtube.ts
 background/background.ts
@@ -46,10 +43,12 @@ components/common/ErrorFallback.tsx
 components/common/LoadingOverlay.tsx
 components/lyrics/KaraokePlayerContainer/index.tsx
 components/lyrics/KaraokePlayerContainer/styles.module.css
+components/lyrics/lyricsOverlay.module.css
+components/lyrics/LyricsOverlayRoot.tsx
 components/lyrics/LyricsSidebar/index.tsx
 components/lyrics/LyricsSidebar/LyricsPanel.tsx
+components/lyrics/SyncSubtitle.tsx
 constants/api.ts
-constants/apiKey.ts
 constants/doomIds.ts
 constants/errorCodes.ts
 constants/errorMessages.ts
@@ -66,17 +65,22 @@ content/components/LyricsContainer.tsx
 content/components/SyncSubtitle.tsx
 content/index.tsx
 hooks/useChromeStorage.ts
+hooks/useCurrentTime.ts
 hooks/useLangLoader.ts
 lib/types/config.ts
 lib/types/errors.ts
 lib/types/global.d.ts
 lib/types/i18next.d.ts
+lib/types/lyrics.ts
 lib/types/message.ts
 lib/types/translationKeys.ts
+lib/types/video.ts
 lib/utils/artistTitle.ts
 lib/utils/common.ts
+lib/utils/contentGuard.ts
 lib/utils/domUtils.ts
 lib/utils/listenerManager.ts
+lib/utils/lyricsParser.ts
 lib/utils/musicDetection.ts
 lib/utils/playerUtils.ts
 lib/utils/registerAllListeners.ts
@@ -132,12 +136,10 @@ export const fetchGeniusLyrics = async (title: string): Promise<string> => {
 };
 ```
 
-<<<<<<< HEAD
 ## File: background/api/ksoftsi.ts
 ```typescript
 // src/lib/api/ksoftsi.ts
 import axios from 'axios';
-import 'dotenv/config';
 
 const KSOFT_API_KEY = process.env.KSOFT_API_KEY; // 환경변수로 관리 권장
 
@@ -175,8 +177,6 @@ export async function fetchKSoftLyrics(artist: string, title: string): Promise<K
 }
 ```
 
-=======
->>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
 ## File: background/api/lrclib.ts
 ```typescript
 // background/api/lrclib.ts
@@ -438,6 +438,52 @@ export const KaraokePlayerContainer = () => {
 }
 ```
 
+## File: components/lyrics/lyricsOverlay.module.css
+```css
+#lyrics-cc-overlay {
+  position: absolute;
+  left: 0; right: 0; bottom: 10%;
+  width: 100%;
+  pointer-events: none;
+  z-index: 3000;
+  display: flex;
+  justify-content: center;
+}
+.lyrics-cc-subtitle {
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  font-size: 2.2vw;
+  padding: 0.3em 1.2em;
+  border-radius: 0.5em;
+  text-align: center;
+  max-width: 80vw;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+```
+
+## File: components/lyrics/LyricsOverlayRoot.tsx
+```typescript
+import { YOUTUBE_PLAYER_SELECTOR } from '@constants/youtubeSelectors';
+
+export function injectLyricsOverlayRoot() {
+  let overlay = document.getElementById('lyrics-cc-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'lyrics-cc-overlay';
+    const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR);
+    if (player) {
+      player.appendChild(overlay);
+      console.log('[LyricsOverlayRoot] 오버레이 루트 DOM 삽입 성공');
+    } else {
+      console.warn('[LyricsOverlayRoot] 유튜브 플레이어 컨테이너를 찾지 못함');
+    }
+  } else {
+    console.log('[LyricsOverlayRoot] 기존 오버레이 루트 DOM 재사용');
+  }
+  return overlay;
+}
+```
+
 ## File: components/lyrics/LyricsSidebar/index.tsx
 ```typescript
 // components/lyrics/LyricsSidebar/index.tsx
@@ -476,15 +522,40 @@ export const LyricsSidebar: React.FC = () => {
 // export default LyricsPanel;
 ```
 
+## File: components/lyrics/SyncSubtitle.tsx
+```typescript
+import React from 'react';
+import { parseLyrics } from '@lib/utils/lyricsParser';
+import { useCurrentTime } from '@hooks/useCurrentTime';
+
+export const SyncSubtitle: React.FC<{ lyrics: string }> = ({ lyrics }) => {
+  const currentTime = useCurrentTime();
+  const lines = parseLyrics(lyrics);
+
+  if (!lyrics || lyrics.trim() === '') {
+    console.warn('[SyncSubtitle] lyrics prop이 비어 있음');
+  }
+  if (!lines.length) {
+    console.warn('[SyncSubtitle] 파싱된 가사 라인이 없음');
+  }
+
+  const idx = lines.findIndex((l, i) => {
+    const next = lines[i + 1];
+    return currentTime >= l.time && (next === undefined || currentTime < next.time);
+  });
+
+  if (idx === -1 && lines.length > 0) {
+    console.log('[SyncSubtitle] 현재 시간에 맞는 가사 라인 없음', currentTime);
+  }
+
+  return <div className="lyrics-cc-subtitle">{idx >= 0 && lines[idx] && <span>{lines[idx].text}</span>}</div>;
+};
+```
+
 ## File: constants/api.ts
 ```typescript
 // src/constants/api.ts
 export const GENIUS_API_URL = 'https://api.genius.com';
-```
-
-## File: constants/apiKey.ts
-```typescript
-export const YOUTUBE_API_KEY = 'AIzaSyAmnaI5MB0QWgJzsSr6IE_nAk7RbGcHyRs';
 ```
 
 ## File: constants/doomIds.ts
@@ -516,7 +587,6 @@ export const ERROR_MESSAGES = {
 
 ## File: constants/keywords.ts
 ```typescript
-<<<<<<< HEAD
 export const SPECIAL_MUSIC_KEYWORDS = ['ed', 'op', 'mv', 'ost'];
 export const MUSIC_KEYWORDS = [
   // 영어
@@ -524,11 +594,6 @@ export const MUSIC_KEYWORDS = [
   'official video',
   'performance video',
   'Official Lyric Video',
-=======
-export const MUSIC_KEYWORDS = [
-  // 영어
-  'official',
->>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
   'mv',
   'm/v',
   'music video',
@@ -536,19 +601,10 @@ export const MUSIC_KEYWORDS = [
   'lyrics',
   'cover',
   'remix',
-<<<<<<< HEAD
   'instrumental',
   'karaoke',
   'tj karaoke',
   'ky karaoke',
-=======
-  'ost',
-  'op',
-  'ed',
-  'instrumental',
-  'karaoke',
-  'tj karaoke',
->>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
   // 한국어
   '노래방',
   '가사',
@@ -559,7 +615,6 @@ export const MUSIC_KEYWORDS = [
   // 일본어
   '歌ってみた',
 ];
-<<<<<<< HEAD
 export const EXTRA_KEYWORDS = [
   ...MUSIC_KEYWORDS,
   // 영어
@@ -581,9 +636,6 @@ export const EXTRA_KEYWORDS = [
   '직캠',
   '원테이크',
 ];
-=======
-export const EXTRA_KEYWORDS = [...MUSIC_KEYWORDS, 'animation'];
->>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
 ```
 
 ## File: constants/languages.ts
@@ -789,12 +841,7 @@ export const initLyricsContainer = (data: { lyrics: string }) => {
 ```typescript
 import React from 'react';
 import { parseTimeToSeconds } from '@lib/utils/time';
-
-// 가사 파싱 인터페이스
-interface LyricLine {
-  time: number;
-  text: string;
-}
+import { LyricLine } from '@lib/types/lyrics';
 
 export const SyncSubtitle: React.FC<{
   lyrics: string;
@@ -848,43 +895,37 @@ import { DOM_IDS } from '@constants/doomIds';
 import { KaraokePlayerContainer } from '@components/lyrics/KaraokePlayerContainer';
 import { fetchYouTubeVideoMeta } from '@background/api/youtube';
 import { isMusicVideo } from '@lib/utils/musicDetection';
-<<<<<<< HEAD
 import { UIResourceManager } from '@lib/utils/uiResourceManager';
 import { YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
 import { extractArtistAndTitle } from '@lib/utils/artistTitle';
 import { cleanUp, extractArtistAndTitleCustom, removeEmptyBrackets } from '@lib/utils/stringUtils';
-=======
-import { YOUTUBE_API_KEY } from '@constants/apiKey';
-import { UIResourceManager } from '@lib/utils/uiResourceManager';
-import { YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
-import { extractArtistAndTitle } from '@lib/utils/artistTitle';
-import { cleanUp, extractArtistAndTitleCustom, extractEnglishName, extractEnglishTitle } from '@lib/utils/stringUtils';
->>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
 import { listenerManager } from '@lib/utils/listenerManager';
 import { registerAllListeners } from '@lib/utils/registerAllListeners';
 import { fetchLrclibLyrics } from '@background/api/lrclib';
+import { withContentEnabled } from '@lib/utils/contentGuard';
 import 'normalize.css';
-<<<<<<< HEAD
-import 'dotenv/config';
-=======
->>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
+import { injectLyricsOverlayRoot } from '@components/lyrics/LyricsOverlayRoot';
+import { SyncSubtitle } from '@components/lyrics/SyncSubtitle';
 
 // 타입 명시적 정의
 interface DetectionController {
   spaObserver: MutationObserver | null;
   videoDetection: (() => void) | null;
 }
-// type LyricsDataPayload = { videoId: string; lyrics: string };
-//type NoLyricsFoundPayload = { videoId: string; title: string };
-//type LyricsMessage =
-//  | { type: 'LYRICS_DATA'; payload: LyricsDataPayload }
-//  | { type: 'NO_LYRICS_FOUND'; payload: NoLyricsFoundPayload };
 
 let detectionController: DetectionController = {
   spaObserver: null,
   videoDetection: null,
 };
+
+// 2. 초기값을 chrome.storage에서 읽어옴
+chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED], (result) => {
+  contentEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
+});
+
 let contentEnabled = false;
+const getContentEnabled = () => contentEnabled; // 전역 변수 접근
+
 const isObserverActive = false;
 
 const uiManager = new UIResourceManager();
@@ -927,11 +968,16 @@ const injectCSS = () => {
   document.head.appendChild(link);
 };
 
+function renderLyricsOverlay(lyrics: string) {
+  const overlay = injectLyricsOverlayRoot();
+  const root = createRoot(overlay);
+  root.render(<SyncSubtitle lyrics={lyrics} />);
+}
+
 let lastUrl = window.location.href;
 
 // ✅ URL 변경 핸들러 개선
 const handleUrlChange = (url: string) => {
-  if (!contentEnabled) return;
   if (url === lastUrl) return; // URL이 실제로 바뀌었을 때만 실행
   lastUrl = url;
 
@@ -946,15 +992,13 @@ const handleUrlChange = (url: string) => {
     }
   }
 };
+const handleUrlChangeGuarded = withContentEnabled(getContentEnabled, handleUrlChange);
+
 let lastVideoId: string | null = null;
 
 // 영상 감지 핸들러 (순수 로직)
 const handleVideoDetection = async () => {
   console.log('handleVideoDetection 실행');
-  if (!contentEnabled) {
-    console.log('비활성화 상태입니다.');
-    return;
-  }
 
   const videoData = detectYouTubeVideo();
   if (!videoData) {
@@ -965,11 +1009,7 @@ const handleVideoDetection = async () => {
   lastVideoId = videoData.videoId;
 
   // 1. YouTube Data API로 메타데이터 요청
-<<<<<<< HEAD
   const meta = await fetchYouTubeVideoMeta(videoData.videoId, process.env.YOUTUBE_API_KEY!);
-=======
-  const meta = await fetchYouTubeVideoMeta(videoData.videoId, YOUTUBE_API_KEY);
->>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
   if (!meta) {
     console.log('fetchYouTubeVideoMeta 실패');
     return;
@@ -978,79 +1018,45 @@ const handleVideoDetection = async () => {
     console.log('isMusicVideo 판별 실패');
     return;
   }
-  // 2. 음악 여부 판별
-  if (meta && isMusicVideo(meta)) {
-    const result = extractArtistAndTitle(meta.title);
-    if (!result) {
-      console.log('extractArtistAndTitle 실패', meta.title);
-      return;
-    }
 
-    // 2차 커스텀 로직 적용
-    const customResult = extractArtistAndTitleCustom(meta.title);
-    if (!customResult) {
-      console.log('extractArtistAndTitleCustom 실패', meta.title);
-      return;
-    }
-    const cleanedArtist = cleanUp(customResult.artist);
-<<<<<<< HEAD
-    let cleanedTitle = cleanUp(customResult.title);
+  const parsed = extractArtistAndTitle(meta.title);
+  if (!parsed) {
+    console.log('extractArtistAndTitle 실패', meta.title);
+    return;
+  }
 
-    cleanedTitle = removeEmptyBrackets(cleanedTitle); // ★ 여기서 호출
+  const refined = extractArtistAndTitleCustom(`${parsed.artist} - ${parsed.title}`);
+  if (!refined) {
+    console.log('extractArtistAndTitleCustom 실패', meta.title);
+    return;
+  }
 
-    const englishArtist = cleanedArtist;
-    const englishTitle = cleanedTitle;
+  const artist = cleanUp(refined.artist);
+  let title = cleanUp(refined.title);
+  title = removeEmptyBrackets(title);
 
-    console.log('아티스트:', englishArtist, '곡명:', englishTitle);
+  console.log('아티스트:', artist, '곡명:', title);
 
-    let lyrics = await fetchLrclibLyrics(englishArtist, englishTitle);
-    if (lyrics) {
-      console.log('[lrclib] 1차(기본) 가사 조회 성공:', { englishArtist, englishTitle });
-    } else {
-      // swap 검색
-      lyrics = await fetchLrclibLyrics(englishTitle, englishArtist);
-      if (lyrics) {
-        console.log('[lrclib] 2차(swap) 가사 조회 성공:', { artist: englishTitle, title: englishArtist });
-      } else {
-        // search API 후보군 반복 조회
-        const searchRes = await fetch(
-          `https://lrclib.net/api/search?q=${encodeURIComponent(englishArtist + ' ' + englishTitle)}`,
-        );
-        const searchData = await searchRes.json();
-        let found = false;
-        for (const candidate of searchData) {
-          const detailRes = await fetch(`https://lrclib.net/api/get/${candidate.id}`);
-          const detail = await detailRes.json();
-          lyrics = detail.syncedLyrics || detail.plainLyrics;
-          if (lyrics) {
-            console.log('[lrclib] 3차(search) 후보군 id로 가사 조회 성공:', {
-              id: candidate.id,
-              artist: candidate.artistName,
-              title: candidate.trackName,
-            });
-            found = true;
-            break;
-          }
-        }
-        if (!found) {
-          console.log('[lrclib] 가사 검색 실패:', { englishArtist, englishTitle });
-        }
+  let lyrics = await fetchLrclibLyrics(artist, title);
+
+  if (!lyrics) {
+    lyrics = await fetchLrclibLyrics(title, artist);
+    if (!lyrics) {
+      const searchRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(artist + ' ' + title)}`);
+      const searchData = await searchRes.json();
+      for (const candidate of searchData) {
+        const detailRes = await fetch(`https://lrclib.net/api/get/${candidate.id}`);
+        const detail = await detailRes.json();
+        lyrics = detail.syncedLyrics || detail.plainLyrics;
+        if (lyrics) break;
       }
     }
-=======
-    const cleanedTitle = cleanUp(customResult.title);
+  }
+  console.log('가사:', lyrics);
 
-    const englishArtist = extractEnglishName(cleanedArtist);
-    const englishTitle = extractEnglishTitle(cleanedTitle);
-
-    console.log('아티스트:', englishArtist, '곡명:', englishTitle);
-
-    const lyrics = await fetchLrclibLyrics(englishArtist, englishTitle);
-    console.log('가사: ', lyrics);
-
->>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
-  } else {
-    console.log('음악 영상이 아닙니다.');
+  // 가사 획득 성공 시 오버레이 렌더링 호출
+  if (lyrics) {
+    renderLyricsOverlay(lyrics);
   }
 
   chrome.runtime.sendMessage({
@@ -1058,6 +1064,9 @@ const handleVideoDetection = async () => {
     payload: videoData,
   });
 };
+const handleVideoDetectionGuarded = withContentEnabled(getContentEnabled, handleVideoDetection);
+
+const debouncedDetection = debounce(handleVideoDetectionGuarded, 300);
 
 // 감지 시스템 활성화
 const enableDetection = () => {
@@ -1071,7 +1080,6 @@ const enableDetection = () => {
   registerAllListeners(setDetectionState);
 
   // 새로운 감지 시스템 설정
-  const debouncedDetection = debounce(handleVideoDetection, 300);
   const newObserver = setupSPAObserver(debouncedDetection);
 
   detectionController = {
@@ -1102,7 +1110,7 @@ const setDetectionState = (enabled: boolean) => {
     console.log('[STATUS] 감지 시스템 활성화');
   } else {
     disableDetection();
-    cleanupAllUIElements(); // ✅ 비활성화 시 UI도 정리
+    cleanupAllUIElements();
     console.log('[STATUS] 감지 시스템 비활성화');
   }
 };
@@ -1128,7 +1136,7 @@ chrome.runtime.onMessage.addListener((message) => {
     console.log(`[SPA Navigation] ${url}, isWatchPage: ${isWatchPage}`);
 
     // URL 변경 처리
-    handleUrlChange(url);
+    handleUrlChangeGuarded(url);
   }
 });
 
@@ -1142,7 +1150,7 @@ window.addEventListener('beforeunload', () => {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     // 페이지가 다시 보이면 현재 URL 확인
-    handleUrlChange(window.location.href);
+    handleUrlChangeGuarded(window.location.href);
   }
 });
 
@@ -1172,7 +1180,7 @@ const initializeApp = async () => {
     setupKaraokeContainer();
 
     // 초기 URL 감지 및 UI/감지 시스템 활성화
-    handleUrlChange(window.location.href);
+    handleUrlChangeGuarded(window.location.href);
 
     // 감지 시스템 활성/비활성 상태 동기화
     chrome.storage.sync.get(STORAGE_KEYS.CONTENT_ENABLED, (result) => {
@@ -1215,6 +1223,38 @@ export function useChromeStorage<T>(key: string, defaultValue: T) {
   };
 
   return [value, setStoredValue, isLoading] as const;
+}
+```
+
+## File: hooks/useCurrentTime.ts
+```typescript
+// YouTube 비디오의 현재 재생 시간을 React 상태로 실시간 추적하여,
+// 가사 오버레이, 전체 가사 하이라이트 등에서 재사용할 수 있도록 합니다.
+
+import { useEffect, useState } from 'react';
+
+/**
+ * 유튜브 비디오의 현재 재생 시간을 반환하는 커스텀 훅
+ */
+export function useCurrentTime(): number {
+  const [currentTime, setCurrentTime] = useState(0);
+
+  useEffect(() => {
+    const video = document.querySelector('video');
+    if (!video) {
+      console.warn('[useCurrentTime] video 엘리먼트 없음');
+      return;
+    }
+    const update = () => setCurrentTime(video.currentTime);
+    video.addEventListener('timeupdate', update);
+
+    // 초기값 동기화
+    setCurrentTime(video.currentTime);
+
+    return () => video.removeEventListener('timeupdate', update);
+  }, []);
+
+  return currentTime;
 }
 ```
 
@@ -1341,6 +1381,14 @@ declare module 'i18next' {
 }
 ```
 
+## File: lib/types/lyrics.ts
+```typescript
+export interface LyricLine {
+  time: number;
+  text: string;
+}
+```
+
 ## File: lib/types/message.ts
 ```typescript
 // types/message.ts
@@ -1362,6 +1410,22 @@ export type ContentScriptMessage = ToggleContentMessage;
 export const TRANSLATION_KEYS = ['extName', 'extDescription', 'extLanguage'] as const;
 
 export type TranslationKey = (typeof TRANSLATION_KEYS)[number];
+```
+
+## File: lib/types/video.ts
+```typescript
+interface VideoData {
+  videoId: string;
+  title: string;
+}
+interface VideoMeta {
+  categoryId?: string;
+  title?: string;
+  description?: string;
+  tags?: string[];
+  channelTitle?: string;
+  durationSec?: number;
+}
 ```
 
 ## File: lib/utils/artistTitle.ts
@@ -1408,6 +1472,21 @@ export const throttle = <T extends (...args: unknown[]) => unknown>(
     }
   };
 };
+```
+
+## File: lib/utils/contentGuard.ts
+```typescript
+// lib/utils/contentGuard.ts
+// contents 비활성화/활성화 여부에 따라 진행되는 함수의 경우 해당 함수 사용
+export function withContentEnabled<Args extends unknown[], R>(
+  getContentEnabled: () => boolean,
+  fn: (...args: Args) => R,
+): (...args: Args) => R | undefined {
+  return function (...args: Args): R | undefined {
+    if (!getContentEnabled()) return;
+    return fn(...args);
+  };
+}
 ```
 
 ## File: lib/utils/domUtils.ts
@@ -1516,13 +1595,41 @@ class ListenerManager {
 export const listenerManager = new ListenerManager();
 ```
 
+## File: lib/utils/lyricsParser.ts
+```typescript
+// LRC 등 싱크 가사 포맷을 파싱해, [time, text] 배열로 변환합니다.
+// 싱크 자막, 전체 가사, 하이라이트 등 다양한 곳에서 재사용할 수 있습니다.
+
+import { LyricLine } from '@lib/types/lyrics';
+import { parseTimeToSeconds } from '@lib/utils/time';
+
+/**
+ * LRC 형식의 가사 문자열을 파싱하여 [{ time, text }] 배열로 반환
+ */ export function parseLyrics(lyrics: string): LyricLine[] {
+  if (!lyrics || lyrics.trim() === '') {
+    console.warn('[lyricsParser] 입력된 lyrics가 비어 있음');
+    return [];
+  }
+  const result = lyrics.split('\n').reduce<LyricLine[]>((acc, line) => {
+    const match = line.match(/\[(\d+):(\d+\.\d+)\](.*)/);
+    if (!match) return acc;
+    const [, min, sec, text] = match;
+    const safeText = (text ?? '').trim();
+    if (safeText === '') return acc;
+    acc.push({ time: parseTimeToSeconds(`${min}:${sec}`), text: safeText });
+    return acc;
+  }, []);
+  if (!result.length) {
+    console.warn('[lyricsParser] LRC 파싱 결과가 없음');
+  }
+  return result;
+}
+```
+
 ## File: lib/utils/musicDetection.ts
 ```typescript
-<<<<<<< HEAD
 import { MUSIC_KEYWORDS } from '@constants/keywords';
 
-=======
->>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
 // lib/utils/musicDetection.ts
 export interface MusicDetectionInput {
   categoryId?: string;
@@ -1532,31 +1639,7 @@ export interface MusicDetectionInput {
   channelTitle?: string;
   durationSec?: number;
 }
-<<<<<<< HEAD
 const specialMusicPattern = /([^A-Za-z]|^)(OP|ED|OST|MV)([^A-Za-z]|$)/i;
-=======
-
-export const MUSIC_KEYWORDS = [
-  // 영어
-  'official',
-  'mv',
-  'm/v',
-  'lyric',
-  'cover',
-  'remix',
-  'ost',
-  'op',
-  'ed',
-  'instrumental',
-  'karaoke',
-  // 한국어
-  '가사',
-  '커버',
-  '노래',
-  // 일본어
-  '歌ってみた',
-];
->>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
 
 export function scoreMusicVideo(meta: MusicDetectionInput): number {
   let score = 0;
@@ -1568,14 +1651,11 @@ export function scoreMusicVideo(meta: MusicDetectionInput): number {
   if (meta.durationSec && meta.durationSec >= 60 && meta.durationSec <= 600) score += 1;
   // 채널명 등 추가 휴리스틱 가능
 
-<<<<<<< HEAD
   // OP/ED/OST/MV가 앞뒤 영어 없이 등장할 때 추가 가산점
   if (meta.title && specialMusicPattern.test(meta.title)) score += 1;
   if (meta.description && specialMusicPattern.test(meta.description)) score += 1;
   if (meta.tags && meta.tags.some((tag) => specialMusicPattern.test(tag))) score += 1;
 
-=======
->>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
   return score;
 }
 
@@ -1696,7 +1776,6 @@ import { EXTRA_KEYWORDS } from '@constants/keywords';
  * 문자열에서 부가정보(괄호, 대괄호, 파이프 등)를 제거합니다.
  */
 export function cleanUp(str: string): string {
-<<<<<<< HEAD
   return str
     .replace(/\[.*?\]/g, '') // 대괄호 제거
     .replace(/\\s{2,}/g, ' ') // 이중 공백 정리
@@ -1710,17 +1789,6 @@ function cleanMusicKeyword(str: string): string {
     })
     .trim();
 }
-=======
-  return (
-    str
-      .replace(/\[.*?\]/g, '') // 대괄호 제거
-      //.replace(/\((?!\s*(feat\.|Feat\.|featuring|with)\b)[^)]*\)/gi, '') // feat. 제외 괄호 제거
-      .replace(/\\s{2,}/g, ' ') // 이중 공백 정리
-      .trim()
-  );
-}
-
->>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
 export function removeExtraInfo(title: string): string {
   const extraKeywords = EXTRA_KEYWORDS.slice().sort((a, b) => b.length - a.length); // 긴 키워드 우선
   let result = title;
@@ -1751,25 +1819,18 @@ export function removeExtraInfo(title: string): string {
       }
     }
   }
-<<<<<<< HEAD
 
-=======
->>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
   result = parts.filter(Boolean).join(' - '); // 빈 값 제거 후 합치기
   result = result.replace(/[-/|]+$/, '').trim(); // 끝에 남은 구분자 제거
 
   return result;
 }
-<<<<<<< HEAD
 
-=======
->>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
 export function removeTrailingHashtags(title: string): string {
   // 곡명 끝에 연속된 해시태그만 제거
   return title.replace(/(\s*#[\p{L}\p{N}._-]+)+\s*$/gu, '').trim();
 }
 
-<<<<<<< HEAD
 export function removeDatePattern(str: string): string {
   return str.replace(/\b\d{2}[01]\d(?:3[0-2]|[0-2][0-9])\b/g, '').trim();
 }
@@ -1795,34 +1856,14 @@ export function extractArtistAndTitleCustom(rawTitle: string): { artist: string;
           title = parts.slice(1).join(delim).trim();
           break;
         }
-=======
-export function extractArtistAndTitleCustom(rawTitle: string): { artist: string; title: string } | null {
-  const cleaned = cleanUp(rawTitle);
-
-  // 우선순위: ' - ' > ' / ' > ' | '
-  const delimiters = [' - ', ' / ', ' | '];
-  let artist = '',
-    title = '';
-  // 1. 구분자(split) 기반 추출
-  for (const delim of delimiters) {
-    if (cleaned.includes(delim)) {
-      const parts = cleaned.split(delim);
-      if (parts.length >= 2) {
-        artist = parts[0]?.trim() ?? '';
-        title = parts.slice(1).join(delim).trim();
-        break;
->>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
       }
     }
   }
 
   // 2. remove extra info
   title = removeExtraInfo(title);
-<<<<<<< HEAD
   artist = cleanMusicKeyword(artist);
   title = cleanMusicKeyword(title);
-=======
->>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
 
   // 3. 추가 패턴: "아티스트 '곡명'" 또는 "아티스트 \"곡명\""
   if (!artist || !title) {
@@ -1856,17 +1897,12 @@ export function extractArtistAndTitleCustom(rawTitle: string): { artist: string;
   // 6. 곡명에서 부가정보 추가 제거
   title = removeExtraInfo(title);
   title = removeTrailingHashtags(title);
-<<<<<<< HEAD
   title = removeDatePattern(title);
   title = title.replace(/[-/|]+$/, '').trim(); // 끝에 남은 구분자도 제거
 
   if (!artist || !title) return null;
   artist = removeEmptyBrackets(removeExtraInfo(artist));
 
-=======
-
-  if (!artist || !title) return null;
->>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
   return { artist, title };
 }
 export function extractEnglishName(name: string): string {
@@ -1879,7 +1915,6 @@ export function extractEnglishTitle(title: string): string {
   const match = title.match(/([A-Za-z][A-Za-z\s']{2,})/g);
   return match ? match.join(' ').trim() : title;
 }
-<<<<<<< HEAD
 export function removeEmptyBrackets(title: string): string {
   return title
     .replace(/\(\s*\)/g, '')
@@ -1887,8 +1922,6 @@ export function removeEmptyBrackets(title: string): string {
     .replace(/\{\s*\}/g, '')
     .trim();
 }
-=======
->>>>>>> e178931d86ec8c0128a597d46e64d2a7e0cd650c
 ```
 
 ## File: lib/utils/styleInjection.ts
