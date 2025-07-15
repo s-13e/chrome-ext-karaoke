@@ -41,13 +41,13 @@ background/api/youtube.ts
 background/background.ts
 components/common/ErrorFallback.tsx
 components/common/LoadingOverlay.tsx
+components/lyrics/DualHighlightSubtitle.tsx
 components/lyrics/KaraokePlayerContainer/index.tsx
 components/lyrics/KaraokePlayerContainer/styles.module.css
-components/lyrics/lyricsOverlay.module.css
 components/lyrics/LyricsOverlayRoot.tsx
 components/lyrics/LyricsSidebar/index.tsx
 components/lyrics/LyricsSidebar/LyricsPanel.tsx
-components/lyrics/SyncSubtitle.tsx
+components/lyrics/styles.module.css
 constants/api.ts
 constants/doomIds.ts
 constants/errorCodes.ts
@@ -79,7 +79,9 @@ lib/utils/artistTitle.ts
 lib/utils/common.ts
 lib/utils/contentGuard.ts
 lib/utils/domUtils.ts
+lib/utils/languageDetector.ts
 lib/utils/listenerManager.ts
+lib/utils/lyricsDisplay.ts
 lib/utils/lyricsParser.ts
 lib/utils/musicDetection.ts
 lib/utils/playerUtils.ts
@@ -340,76 +342,98 @@ export const LoadingOverlay = React.memo(() => (
 LoadingOverlay.displayName = 'LoadingOverlay';
 ```
 
-## File: components/lyrics/KaraokePlayerContainer/index.tsx
+## File: components/lyrics/DualHighlightSubtitle.tsx
 ```typescript
-// components/lyrics/KaraokePlayerContainer/index.tsx
-import { useEffect, useRef } from 'react';
+import React, { useMemo } from 'react';
+import { parseLyrics } from '@lib/utils/lyricsParser';
+import { useCurrentTime } from '@hooks/useCurrentTime';
+import { getDisplayLines } from '@lib/utils/lyricsDisplay';
 import styles from './styles.module.css';
 
-const KARAOKE_STYLES = `
-  ytd-app { padding-top: 0 !important; }
-  ytd-watch-flexy {
-    width: 75% !important;
-    height: calc(100vh - var(--header-height, 56px)) !important; /* 헤더 높이 고려 */
-    position: fixed !important;
-    top: var(--header-height, 56px) !important; /* 헤더 아래 시작 */
-    left: 0 !important;
-    z-index: 1000 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
+export const DualHighlightSubtitle: React.FC<{ lyrics: string }> = ({ lyrics }) => {
+  const currentTime = useCurrentTime();
+  const lines = useMemo(() => parseLyrics(lyrics) ?? [], [lyrics]);
+  const { top, bottom, highlightTop, highlightBottom } = getDisplayLines(lines, currentTime);
 
-  #movie_player {
-    width: 100% !important;
-    height: 100% !important;
-    position: relative !important;
-  }
-  #secondary { display: none !important; }
-  body { overflow: hidden !important; }
-`;
-
-export const KaraokePlayerContainer = () => {
-  const styleRef = useRef<HTMLStyleElement | null>(null);
-
-  useEffect(() => {
-    // 1. 기존 스타일 제거 (중복 주입 방지)
-    if (styleRef.current) {
-      document.head.removeChild(styleRef.current);
-    }
-
-    // 2. 새 스타일 요소 생성
-    const style = document.createElement('style');
-    style.id = 'karaoke-player-styles';
-    style.textContent = KARAOKE_STYLES;
-    document.head.appendChild(style);
-    styleRef.current = style;
-
-    // 3. YouTube DOM 변경 감지 (SPA 대응)
-    const observer = new MutationObserver(() => {
-      if (!document.querySelector('ytd-watch-flexy')) return;
-
-      // 스타일 재주입
-      if (style.parentNode !== document.head) {
-        document.head.appendChild(style);
-      }
-    });
-
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-    });
-
-    return () => {
-      // 4. 정리 함수에서 스타일 제거 및 관찰 중지
-      if (styleRef.current) {
-        document.head.removeChild(styleRef.current);
-      }
-      observer.disconnect();
-    };
-  }, []);
-
-  return <div className={styles.lyricsContainer}>가사 컨테이너</div>;
+  return (
+    <div className={styles.dualHighlightSubtitle}>
+      <div className={highlightTop ? styles.highlight : ''}>{top}</div>
+      <div className={highlightBottom ? styles.highlight : ''}>{bottom}</div>
+    </div>
+  );
 };
+```
+
+## File: components/lyrics/KaraokePlayerContainer/index.tsx
+```typescript
+// // components/lyrics/KaraokePlayerContainer/index.tsx
+// import { useEffect, useRef } from 'react';
+// import styles from './styles.module.css';
+
+// const KARAOKE_STYLES = `
+//   ytd-app { padding-top: 0 !important; }
+//   ytd-watch-flexy {
+//     width: 75% !important;
+//     height: calc(100vh - var(--header-height, 56px)) !important; /* 헤더 높이 고려 */
+//     position: fixed !important;
+//     top: var(--header-height, 56px) !important; /* 헤더 아래 시작 */
+//     left: 0 !important;
+//     z-index: 1000 !important;
+//     margin: 0 !important;
+//     padding: 0 !important;
+//   }
+
+//   #movie_player {
+//     width: 100% !important;
+//     height: 100% !important;
+//     position: relative !important;
+//   }
+//   #secondary { display: none !important; }
+//   body { overflow: hidden !important; }
+// `;
+
+// export const KaraokePlayerContainer = () => {
+//   const styleRef = useRef<HTMLStyleElement | null>(null);
+
+//   useEffect(() => {
+//     // 1. 기존 스타일 제거 (중복 주입 방지)
+//     if (styleRef.current) {
+//       document.head.removeChild(styleRef.current);
+//     }
+
+//     // 2. 새 스타일 요소 생성
+//     const style = document.createElement('style');
+//     style.id = 'karaoke-player-styles';
+//     style.textContent = KARAOKE_STYLES;
+//     document.head.appendChild(style);
+//     styleRef.current = style;
+
+//     // 3. YouTube DOM 변경 감지 (SPA 대응)
+//     const observer = new MutationObserver(() => {
+//       if (!document.querySelector('ytd-watch-flexy')) return;
+
+//       // 스타일 재주입
+//       if (style.parentNode !== document.head) {
+//         document.head.appendChild(style);
+//       }
+//     });
+
+//     observer.observe(document.body, {
+//       childList: true,
+//       subtree: true,
+//     });
+
+//     return () => {
+//       // 4. 정리 함수에서 스타일 제거 및 관찰 중지
+//       if (styleRef.current) {
+//         document.head.removeChild(styleRef.current);
+//       }
+//       observer.disconnect();
+//     };
+//   }, []);
+
+//   return <div className={styles.lyricsContainer}>가사 컨테이너</div>;
+// };
 ```
 
 ## File: components/lyrics/KaraokePlayerContainer/styles.module.css
@@ -438,38 +462,19 @@ export const KaraokePlayerContainer = () => {
 }
 ```
 
-## File: components/lyrics/lyricsOverlay.module.css
-```css
-#lyrics-cc-overlay {
-  position: absolute;
-  left: 0; right: 0; bottom: 10%;
-  width: 100%;
-  pointer-events: none;
-  z-index: 3000;
-  display: flex;
-  justify-content: center;
-}
-.lyrics-cc-subtitle {
-  background: rgba(0,0,0,0.6);
-  color: #fff;
-  font-size: 2.2vw;
-  padding: 0.3em 1.2em;
-  border-radius: 0.5em;
-  text-align: center;
-  max-width: 80vw;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-}
-```
-
 ## File: components/lyrics/LyricsOverlayRoot.tsx
 ```typescript
 import { YOUTUBE_PLAYER_SELECTOR } from '@constants/youtubeSelectors';
+import styles from './styles.module.css';
 
 export function injectLyricsOverlayRoot() {
   let overlay = document.getElementById('lyrics-cc-overlay');
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = 'lyrics-cc-overlay';
+    // 여기서 CSS 모듈 클래스 적용!
+    overlay.className = styles.overlayRoot!;
+
     const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR);
     if (player) {
       player.appendChild(overlay);
@@ -487,18 +492,18 @@ export function injectLyricsOverlayRoot() {
 ## File: components/lyrics/LyricsSidebar/index.tsx
 ```typescript
 // components/lyrics/LyricsSidebar/index.tsx
-import React from 'react';
+// import React from 'react';
 // import MenuTabs from './MenuTabs';
 // import LyricsPanel from './LyricsPanel';
 
-export const LyricsSidebar: React.FC = () => {
-  return (
-    <div className="lyrics-sidebar">
-      {/* <MenuTabs />
-      <LyricsPanel /> */}
-    </div>
-  );
-};
+// export const LyricsSidebar: React.FC = () => {
+//   return (
+//     <div className="lyrics-sidebar">
+//       {/* <MenuTabs />
+//       <LyricsPanel /> */}
+//     </div>
+//   );
+// };
 ```
 
 ## File: components/lyrics/LyricsSidebar/LyricsPanel.tsx
@@ -522,34 +527,50 @@ export const LyricsSidebar: React.FC = () => {
 // export default LyricsPanel;
 ```
 
-## File: components/lyrics/SyncSubtitle.tsx
-```typescript
-import React from 'react';
-import { parseLyrics } from '@lib/utils/lyricsParser';
-import { useCurrentTime } from '@hooks/useCurrentTime';
-
-export const SyncSubtitle: React.FC<{ lyrics: string }> = ({ lyrics }) => {
-  const currentTime = useCurrentTime();
-  const lines = parseLyrics(lyrics);
-
-  if (!lyrics || lyrics.trim() === '') {
-    console.warn('[SyncSubtitle] lyrics prop이 비어 있음');
-  }
-  if (!lines.length) {
-    console.warn('[SyncSubtitle] 파싱된 가사 라인이 없음');
-  }
-
-  const idx = lines.findIndex((l, i) => {
-    const next = lines[i + 1];
-    return currentTime >= l.time && (next === undefined || currentTime < next.time);
-  });
-
-  if (idx === -1 && lines.length > 0) {
-    console.log('[SyncSubtitle] 현재 시간에 맞는 가사 라인 없음', currentTime);
-  }
-
-  return <div className="lyrics-cc-subtitle">{idx >= 0 && lines[idx] && <span>{lines[idx].text}</span>}</div>;
-};
+## File: components/lyrics/styles.module.css
+```css
+#lyrics-cc-overlay {
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 10% !important;
+  width: 100% !important;
+  pointer-events: none !important;
+  z-index: 3000 !important;
+  display: flex !important;
+  justify-content: center !important;
+}
+.dual-highlight-subtitle {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 2em;
+  font-size: 2vw;
+  line-height: 1.4;
+  color: #fff;
+  text-shadow:
+    2px 2px 8px rgba(0, 0, 0, 0.8),
+    0 0 2px #000,
+    0 0 1px #000;
+}
+.dual-highlight-subtitle > div {
+  min-height: 2em;
+  white-space: nowrap;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+.overlayRoot {
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 10% !important;
+  width: 100% !important;
+  pointer-events: none !important;
+  z-index: 3000 !important;
+  display: flex !important;
+  justify-content: center !important;
+}
 ```
 
 ## File: constants/api.ts
@@ -881,7 +902,7 @@ export const SyncSubtitle: React.FC<{
 ## File: content/index.tsx
 ```typescript
 // src/content/index.tsx
-import { createRoot } from 'react-dom/client';
+import { createRoot, Root } from 'react-dom/client';
 import { App } from './App';
 import { i18nInstance, initializeI18n } from '@services/i18n';
 import { ErrorFallback } from '@components/common/ErrorFallback';
@@ -892,11 +913,11 @@ import { debounce } from '@lib/utils/common';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 import { MESSAGE_TYPES } from '@constants/messageTypes';
 import { DOM_IDS } from '@constants/doomIds';
-import { KaraokePlayerContainer } from '@components/lyrics/KaraokePlayerContainer';
+// import { KaraokePlayerContainer } from '@components/lyrics/KaraokePlayerContainer';
 import { fetchYouTubeVideoMeta } from '@background/api/youtube';
 import { isMusicVideo } from '@lib/utils/musicDetection';
 import { UIResourceManager } from '@lib/utils/uiResourceManager';
-import { YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
+import { YOUTUBE_PLAYER_SELECTOR, YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
 import { extractArtistAndTitle } from '@lib/utils/artistTitle';
 import { cleanUp, extractArtistAndTitleCustom, removeEmptyBrackets } from '@lib/utils/stringUtils';
 import { listenerManager } from '@lib/utils/listenerManager';
@@ -905,7 +926,8 @@ import { fetchLrclibLyrics } from '@background/api/lrclib';
 import { withContentEnabled } from '@lib/utils/contentGuard';
 import 'normalize.css';
 import { injectLyricsOverlayRoot } from '@components/lyrics/LyricsOverlayRoot';
-import { SyncSubtitle } from '@components/lyrics/SyncSubtitle';
+import { DualHighlightSubtitle } from '@components/lyrics/DualHighlightSubtitle';
+import { isAdPlaying } from '@lib/utils/domUtils';
 
 // 타입 명시적 정의
 interface DetectionController {
@@ -929,11 +951,6 @@ const getContentEnabled = () => contentEnabled; // 전역 변수 접근
 const isObserverActive = false;
 
 const uiManager = new UIResourceManager();
-
-// 2. 초기값을 chrome.storage에서 읽어옴
-chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED], (result) => {
-  contentEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
-});
 
 // ✅ UI 요소들을 완전히 정리하는 함수
 const cleanupAllUIElements = () => {
@@ -968,10 +985,53 @@ const injectCSS = () => {
   document.head.appendChild(link);
 };
 
-function renderLyricsOverlay(lyrics: string) {
-  const overlay = injectLyricsOverlayRoot();
-  const root = createRoot(overlay);
-  root.render(<SyncSubtitle lyrics={lyrics} />);
+let lyricsOverlayRoot: Root | null = null; // 렌더링된 root 인스턴스 보관
+let lyricsObserver: MutationObserver | null = null; // MutationObserver 보관
+let lyricsOverlayElement: HTMLElement | null = null;
+
+function hideLyricsOverlay() {
+  const overlay = document.getElementById('lyrics-cc-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+function showLyricsOverlay(lyrics: string) {
+  if (!lyricsOverlayElement) {
+    lyricsOverlayElement = injectLyricsOverlayRoot();
+  }
+  lyricsOverlayElement.style.display = '';
+  // React Root 인스턴스도 한 번만 생성
+  if (!lyricsOverlayRoot) {
+    lyricsOverlayRoot = createRoot(lyricsOverlayElement);
+  }
+
+  lyricsOverlayRoot.render(<DualHighlightSubtitle lyrics={lyrics} />);
+}
+export function renderLyricsOverlay(lyrics: string) {
+  const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR);
+  if (!player) return;
+
+  // Observer 중복 생성 방지
+  if (lyricsObserver) {
+    lyricsObserver.disconnect();
+    lyricsObserver = null;
+  }
+
+  // 광고 상태에 맞게 초기 표시
+  if (isAdPlaying()) {
+    hideLyricsOverlay();
+  } else {
+    showLyricsOverlay(lyrics);
+  }
+
+  // 광고 감지: 클래스 속성 변경 시마다 실행
+  lyricsObserver = new MutationObserver(() => {
+    if (isAdPlaying()) {
+      hideLyricsOverlay();
+    } else {
+      showLyricsOverlay(lyrics);
+    }
+  });
+  lyricsObserver.observe(player, { attributes: true, attributeFilter: ['class'] });
 }
 
 let lastUrl = window.location.href;
@@ -1124,17 +1184,17 @@ const setDetectionState = (enabled: boolean) => {
   }
 };
 
-function setupKaraokeContainer() {
-  let karaokeRoot = document.getElementById('karaoke-root');
-  if (!karaokeRoot) {
-    karaokeRoot = document.createElement('div');
-    karaokeRoot.id = 'karaoke-root';
-    document.body.appendChild(karaokeRoot);
-    uiManager.register(karaokeRoot);
-  }
-  const karaokeRootInstance = createRoot(karaokeRoot);
-  karaokeRootInstance.render(<KaraokePlayerContainer />);
-}
+// function setupKaraokeContainer() {
+//   let karaokeRoot = document.getElementById('karaoke-root');
+//   if (!karaokeRoot) {
+//     karaokeRoot = document.createElement('div');
+//     karaokeRoot.id = 'karaoke-root';
+//     document.body.appendChild(karaokeRoot);
+//     uiManager.register(karaokeRoot);
+//   }
+//   const karaokeRootInstance = createRoot(karaokeRoot);
+//   //karaokeRootInstance.render(<KaraokePlayerContainer />);
+// }
 
 // SPA 네비게이션 메시지 핸들러
 chrome.runtime.onMessage.addListener((message) => {
@@ -1191,7 +1251,7 @@ const initializeApp = async () => {
     );
 
     // 가라오케/가사 컨테이너 준비 및 렌더링
-    setupKaraokeContainer();
+    // setupKaraokeContainer();
 
     // 초기 URL 감지 및 UI/감지 시스템 활성화
     handleUrlChangeGuarded(window.location.href);
@@ -1507,6 +1567,8 @@ export function withContentEnabled<Args extends unknown[], R>(
 ```typescript
 // src/lib/utils/domUtils.ts
 
+import { YOUTUBE_PLAYER_SELECTOR } from "@constants/youtubeSelectors";
+
 // 요소 대기 함수
 export const waitForElement = <T extends Element>(selector: string, timeout = 5000): Promise<T> => {
   return new Promise((resolve, reject) => {
@@ -1570,6 +1632,16 @@ export const toggleClass = (element: Element, className: string, force?: boolean
   element.classList.toggle(className, force);
   return true;
 };
+
+export function isAdPlaying() {
+  const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR);
+  return player && (player.classList.contains('ad-showing') || player.classList.contains('ad-interrupting'));
+}
+```
+
+## File: lib/utils/languageDetector.ts
+```typescript
+// 가사의 언어 감지
 ```
 
 ## File: lib/utils/listenerManager.ts
@@ -1607,6 +1679,65 @@ class ListenerManager {
 
 // 싱글 인스턴스 export (프로젝트 전체에서 공유)
 export const listenerManager = new ListenerManager();
+```
+
+## File: lib/utils/lyricsDisplay.ts
+```typescript
+// utils/lyricsDisplay.ts
+
+export interface Line {
+  time: number;
+  text: string;
+}
+
+export interface DisplayIndices {
+  top: string;
+  bottom: string;
+  highlightTop: boolean;
+  highlightBottom: boolean;
+}
+
+export function getDisplayLines(lines: Line[], currentTime: number): DisplayIndices {
+  if (lines.length === 0) {
+    return { top: '', bottom: '', highlightTop: false, highlightBottom: false };
+  }
+
+  let activeIndex = -1;
+
+  for (let i = 0; i < lines.length; i++) {
+    const cur = lines[i];
+    const next = lines[i + 1];
+    if (!cur) continue;
+
+    const endTime = next?.time ?? Infinity;
+    const previewTime = cur.time + (endTime - cur.time) * 0.5;
+
+    if (currentTime >= cur.time && currentTime < previewTime) {
+      activeIndex = i;
+      break;
+    } else if (currentTime >= previewTime && currentTime < endTime) {
+      activeIndex = i + 1;
+      break;
+    }
+  }
+
+  if (activeIndex === -1) {
+    activeIndex = lines.length - 1;
+  }
+
+  // 위치는 교대로: 0번째는 bottom, 1번째는 top, 2번째는 bottom, 3번째는 top ...
+  const isEven = activeIndex % 2 === 0;
+
+  const topIdx = isEven ? activeIndex - 1 : activeIndex;
+  const bottomIdx = isEven ? activeIndex : activeIndex - 1;
+
+  return {
+    top: topIdx >= 0 ? (lines[topIdx]?.text ?? '') : '',
+    bottom: bottomIdx >= 0 ? (lines[bottomIdx]?.text ?? '') : '',
+    highlightTop: !isEven, // 홀수 번째 줄이면 top 강조
+    highlightBottom: isEven, // 짝수 번째 줄이면 bottom 강조
+  };
+}
 ```
 
 ## File: lib/utils/lyricsParser.ts

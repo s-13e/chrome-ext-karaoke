@@ -14,3 +14,9 @@
 ### library
 
 - get-artist-title by James Kyburz (MIT License, https://www.npmjs.com/package/get-artist-title)
+- @daun_jung/korean-romanizer by Daun Jung (MIT License, https://www.npmjs.com/package/@daun_jung/korean-romanizer)
+- @emotion/react, @emotion/styled by Emotion Team (MIT License, https://emotion.sh/docs/introduction)
+- react, react-dom by Meta (Facebook) (MIT License, https://react.dev/)
+- styled-normalize, normalize.css by Nicolas Gallagher (MIT License, https://necolas.github.io/normalize.css/)
+- axios by Matt Zabriskie et al. (MIT License, https://github.com/axios/axios)
+- i18next, react-i18next by Jan Mühlemann et al. (MIT License, https://www.i18next.com/)

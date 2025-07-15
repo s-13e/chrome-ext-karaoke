@@ -1,5 +1,5 @@
 // src/content/index.tsx
-import { createRoot } from 'react-dom/client';
+import { createRoot, Root } from 'react-dom/client';
 import { App } from './App';
 import { i18nInstance, initializeI18n } from '@services/i18n';
 import { ErrorFallback } from '@components/common/ErrorFallback';
@@ -10,11 +10,11 @@ import { debounce } from '@lib/utils/common';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 import { MESSAGE_TYPES } from '@constants/messageTypes';
 import { DOM_IDS } from '@constants/doomIds';
-import { KaraokePlayerContainer } from '@components/lyrics/KaraokePlayerContainer';
+// import { KaraokePlayerContainer } from '@components/lyrics/KaraokePlayerContainer';
 import { fetchYouTubeVideoMeta } from '@background/api/youtube';
 import { isMusicVideo } from '@lib/utils/musicDetection';
 import { UIResourceManager } from '@lib/utils/uiResourceManager';
-import { YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
+import { YOUTUBE_PLAYER_SELECTOR, YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
 import { extractArtistAndTitle } from '@lib/utils/artistTitle';
 import { cleanUp, extractArtistAndTitleCustom, removeEmptyBrackets } from '@lib/utils/stringUtils';
 import { listenerManager } from '@lib/utils/listenerManager';
@@ -23,7 +23,8 @@ import { fetchLrclibLyrics } from '@background/api/lrclib';
 import { withContentEnabled } from '@lib/utils/contentGuard';
 import 'normalize.css';
 import { injectLyricsOverlayRoot } from '@components/lyrics/LyricsOverlayRoot';
-import { SyncSubtitle } from '@components/lyrics/SyncSubtitle';
+import { DualHighlightSubtitle } from '@components/lyrics/DualHighlightSubtitle';
+import { isAdPlaying } from '@lib/utils/domUtils';
 
 // 타입 명시적 정의
 interface DetectionController {
@@ -47,11 +48,6 @@ const getContentEnabled = () => contentEnabled; // 전역 변수 접근
 const isObserverActive = false;
 
 const uiManager = new UIResourceManager();
-
-// 2. 초기값을 chrome.storage에서 읽어옴
-chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED], (result) => {
-  contentEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
-});
 
 // ✅ UI 요소들을 완전히 정리하는 함수
 const cleanupAllUIElements = () => {
@@ -86,10 +82,57 @@ const injectCSS = () => {
   document.head.appendChild(link);
 };
 
-function renderLyricsOverlay(lyrics: string) {
-  const overlay = injectLyricsOverlayRoot();
-  const root = createRoot(overlay);
-  root.render(<SyncSubtitle lyrics={lyrics} />);
+let lyricsOverlayRoot: Root | null = null; // 렌더링된 root 인스턴스 보관
+let lyricsObserver: MutationObserver | null = null; // MutationObserver 보관
+let lyricsOverlayElement: HTMLElement | null = null;
+
+function hideLyricsOverlay() {
+  const overlay = document.getElementById('lyrics-cc-overlay');
+  if (overlay && overlay.parentNode) {
+    overlay.parentNode.removeChild(overlay); // 1. 오버레이 DOM 완전 제거
+  }
+  lyricsOverlayRoot = null; // 2. React Root 인스턴스 해제
+  lyricsOverlayElement = null; // 3. 전역 DOM 참조 변수 초기화
+}
+
+function showLyricsOverlay(lyrics: string) {
+  if (!lyricsOverlayElement) {
+    lyricsOverlayElement = injectLyricsOverlayRoot();
+  }
+  lyricsOverlayElement.style.display = '';
+  // React Root 인스턴스도 한 번만 생성
+  if (!lyricsOverlayRoot) {
+    lyricsOverlayRoot = createRoot(lyricsOverlayElement);
+  }
+
+  lyricsOverlayRoot.render(<DualHighlightSubtitle lyrics={lyrics} />);
+}
+export function renderLyricsOverlay(lyrics: string) {
+  const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR);
+  if (!player) return;
+
+  // Observer 중복 생성 방지
+  if (lyricsObserver) {
+    lyricsObserver.disconnect();
+    lyricsObserver = null;
+  }
+
+  // 광고 상태에 맞게 초기 표시
+  if (isAdPlaying()) {
+    hideLyricsOverlay();
+  } else {
+    showLyricsOverlay(lyrics);
+  }
+
+  // 광고 감지: 클래스 속성 변경 시마다 실행
+  lyricsObserver = new MutationObserver(() => {
+    if (isAdPlaying()) {
+      hideLyricsOverlay();
+    } else {
+      showLyricsOverlay(lyrics);
+    }
+  });
+  lyricsObserver.observe(player, { attributes: true, attributeFilter: ['class'] });
 }
 
 let lastUrl = window.location.href;
@@ -136,6 +179,8 @@ const handleVideoDetection = async () => {
       console.log('fetchYouTubeVideoMeta 실패');
       return;
     }
+    hideLyricsOverlay();
+
     if (!isMusicVideo(meta)) {
       console.log('isMusicVideo 판별 실패');
       return;
@@ -242,17 +287,17 @@ const setDetectionState = (enabled: boolean) => {
   }
 };
 
-function setupKaraokeContainer() {
-  let karaokeRoot = document.getElementById('karaoke-root');
-  if (!karaokeRoot) {
-    karaokeRoot = document.createElement('div');
-    karaokeRoot.id = 'karaoke-root';
-    document.body.appendChild(karaokeRoot);
-    uiManager.register(karaokeRoot);
-  }
-  const karaokeRootInstance = createRoot(karaokeRoot);
-  karaokeRootInstance.render(<KaraokePlayerContainer />);
-}
+// function setupKaraokeContainer() {
+//   let karaokeRoot = document.getElementById('karaoke-root');
+//   if (!karaokeRoot) {
+//     karaokeRoot = document.createElement('div');
+//     karaokeRoot.id = 'karaoke-root';
+//     document.body.appendChild(karaokeRoot);
+//     uiManager.register(karaokeRoot);
+//   }
+//   const karaokeRootInstance = createRoot(karaokeRoot);
+//   //karaokeRootInstance.render(<KaraokePlayerContainer />);
+// }
 
 // SPA 네비게이션 메시지 핸들러
 chrome.runtime.onMessage.addListener((message) => {
@@ -309,7 +354,7 @@ const initializeApp = async () => {
     );
 
     // 가라오케/가사 컨테이너 준비 및 렌더링
-    setupKaraokeContainer();
+    // setupKaraokeContainer();
 
     // 초기 URL 감지 및 UI/감지 시스템 활성화
     handleUrlChangeGuarded(window.location.href);

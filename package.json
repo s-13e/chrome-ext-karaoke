@@ -51,6 +51,7 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
+    "@daun_jung/korean-romanizer": "^1.0.1",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
     "axios": "^1.10.0",
