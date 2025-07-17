@@ -1,5 +1,4 @@
 // utils/lyricsDisplay.ts
-
 import { Line } from '@lib/types/lyrics';
 
 export interface DisplayIndices {

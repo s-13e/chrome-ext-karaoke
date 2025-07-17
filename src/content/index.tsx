@@ -10,7 +10,6 @@ import { debounce } from '@lib/utils/common';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 import { MESSAGE_TYPES } from '@constants/messageTypes';
 import { DOM_IDS } from '@constants/doomIds';
-// import { KaraokePlayerContainer } from '@components/lyrics/KaraokePlayerContainer';
 import { fetchYouTubeVideoMeta } from '@background/api/youtube';
 import { isMusicVideo } from '@lib/utils/musicDetection';
 import { UIResourceManager } from '@lib/utils/uiResourceManager';
@@ -18,15 +17,13 @@ import { YOUTUBE_PLAYER_SELECTOR, YOUTUBE_WATCH_PATH } from '@constants/youtubeS
 import { extractArtistAndTitle } from '@lib/utils/artistTitle';
 import { cleanUp, extractArtistAndTitleCustom, removeEmptyBrackets } from '@lib/utils/stringUtils';
 import { listenerManager } from '@lib/utils/listenerManager';
-import { registerAllListeners } from '@lib/utils/registerAllListeners';
-// import { fetchLrclibLyrics } from '@background/api/lrclib';
 import { withContentEnabled } from '@lib/utils/contentGuard';
-import 'normalize.css';
 import { injectLyricsOverlayRoot } from '@components/lyrics/LyricsOverlayRoot';
 import { DualHighlightSubtitle } from '@components/lyrics/DualHighlightSubtitle';
 import { isAdPlaying } from '@lib/utils/domUtils';
 import { parseLyrics } from '@lib/utils/lyricsParser';
 import { Line } from '@lib/types/lyrics';
+import 'normalize.css';
 
 // 타입 명시적 정의
 interface DetectionController {
@@ -46,8 +43,6 @@ chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED], (result) => {
 
 let contentEnabled = false;
 const getContentEnabled = () => contentEnabled; // 전역 변수 접근
-
-const isObserverActive = false;
 
 const uiManager = new UIResourceManager();
 
@@ -174,22 +169,31 @@ const handleUrlChange = (url: string) => {
 };
 const handleUrlChangeGuarded = withContentEnabled(getContentEnabled, handleUrlChange);
 
-let isDetecting = false;
-let lastVideoId: string | null = null;
 const RETRY_DELAY = 300;
+
+let isDetectionActive = false; // 감지 시스템 활성화 여부
+let isDetecting = false; // 영상 감지 함수 진입 여부(동시 실행 방지)
+let lastVideoId: string | null = null;
 
 // 영상 감지 핸들러 (순수 로직)
 const handleVideoDetection = async () => {
   console.log('handleVideoDetection 실행');
-  if (isDetecting) return;
-  isDetecting = true;
+  if (isDetecting) {
+    console.log('[SKIP] 감지 함수 실행 중 (동시 실행 방지)');
+    return;
+  }
   try {
     const videoData = detectYouTubeVideo();
     if (!videoData) {
-      setTimeout(handleVideoDetectionGuarded, RETRY_DELAY);
+      console.log('[SKIP] 비디오 감지 실패');
+      setTimeout(debouncedDetection, RETRY_DELAY);
       return;
     }
-    if (videoData.videoId === lastVideoId) return; // 같은 영상이면 실행하지 않음
+    if (videoData.videoId === lastVideoId) {
+      console.log('[SKIP] 같은 videoId에 대해 이미 실행됨');
+      return;
+    }
+    isDetecting = true;
     lastVideoId = videoData.videoId;
 
     // 1. YouTube Data API로 메타데이터 요청
@@ -245,6 +249,8 @@ const handleVideoDetection = async () => {
       // fallback (없으면 0)
     } catch (e) {
       console.warn('[Fallback] 첫 가사 타임스탬프 추출 실패:', e);
+    } finally {
+      isDetecting = false;
     }
 
     showLyricsOverlay(parsedLyrics, syncOffset);
@@ -258,25 +264,31 @@ const handleVideoDetection = async () => {
   }
 };
 const handleVideoDetectionGuarded = withContentEnabled(getContentEnabled, handleVideoDetection);
-
 const debouncedDetection = debounce(handleVideoDetectionGuarded, 300);
+
 setupPlayerReadyObserver(() => {
   debouncedDetection();
 });
 // 감지 시스템 활성화
 const enableDetection = () => {
-  if (isObserverActive) return; // 이미 활성화된 경우 중복 방지
+  if (isDetectionActive) {
+    console.log('[SKIP] 감지 시스템 이미 활성화됨');
+    return;
+  }
+  isDetectionActive = true;
 
-  // 기존 리소스 정리
+  // 기존 observer/리스너 있으면 무조건 해제
   if (detectionController.spaObserver) {
     detectionController.spaObserver.disconnect();
   }
+  listenerManager.removeAll(); // 리스너 해제 등
+
   // 리스너 재등록
-  registerAllListeners(setDetectionState);
+  // registerAllListeners(setDetectionState);
 
   // 새로운 감지 시스템 설정
+  // 감지 시스템 새로 등록 및 observer 세팅
   const newObserver = setupSPAObserver(debouncedDetection);
-
   detectionController = {
     spaObserver: newObserver,
     videoDetection: debouncedDetection,
@@ -284,14 +296,20 @@ const enableDetection = () => {
 
   // 초기 감지 실행
   debouncedDetection();
+  console.log('[Detection] 감지 시스템 활성화 및 observer/이벤트 등록 완료');
 };
 // 감지 시스템 완전 비활성화
 const disableDetection = () => {
+  if (!isDetectionActive) {
+    console.log('[SKIP] 감지 시스템 이미 비활성화됨');
+    return;
+  }
+  isDetectionActive = false;
+
   if (detectionController.spaObserver) {
     detectionController.spaObserver.disconnect();
   }
   listenerManager.removeAll(); // 등록된 모든 리스너 해제
-
   detectionController = {
     spaObserver: null,
     videoDetection: null,
@@ -356,9 +374,11 @@ const handleReset = () => {
 
 // 앱 초기화
 const initializeApp = async () => {
+  console.log('content app initializeApp 시작');
   try {
     injectCSS();
     await initializeI18n();
+    console.log('i18n 했음');
 
     // 플레이어 등장 즉시 가사 감지 트리거
     setupPlayerReadyObserver(() => {
