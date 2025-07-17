@@ -1,9 +1,6 @@
 // utils/lyricsDisplay.ts
 
-export interface Line {
-  time: number;
-  text: string;
-}
+import { Line } from '@lib/types/lyrics';
 
 export interface DisplayIndices {
   top: string;

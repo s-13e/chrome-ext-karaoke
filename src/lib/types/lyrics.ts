@@ -1,4 +1,4 @@
-export interface LyricLine {
+export interface Line {
   time: number;
   text: string;
 }

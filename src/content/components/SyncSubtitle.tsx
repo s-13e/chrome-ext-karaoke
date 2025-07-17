@@ -1,13 +1,13 @@
 import React from 'react';
 import { parseTimeToSeconds } from '@lib/utils/time';
-import { LyricLine } from '@lib/types/lyrics';
+import { Line } from '@lib/types/lyrics';
 
 export const SyncSubtitle: React.FC<{
   lyrics: string;
   currentTime: number;
 }> = ({ lyrics, currentTime }) => {
   // 가사 파싱
-  const parsedLyrics: LyricLine[] = lyrics.split('\n').reduce<LyricLine[]>((acc, line) => {
+  const parsedLyrics: Line[] = lyrics.split('\n').reduce<Line[]>((acc, line) => {
     const match = line.match(/\[(\d+):(\d+\.\d+)\](.*)/);
     if (!match) return acc;
 

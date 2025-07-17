@@ -31,7 +31,8 @@
   },
   "include": [
     "src/**/*",
-    "src/lib/types/global.d.ts"
+    "src/lib/types/global.d.ts",
+    "src/lib/types/lyrics.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }

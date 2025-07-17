@@ -19,12 +19,14 @@ import { extractArtistAndTitle } from '@lib/utils/artistTitle';
 import { cleanUp, extractArtistAndTitleCustom, removeEmptyBrackets } from '@lib/utils/stringUtils';
 import { listenerManager } from '@lib/utils/listenerManager';
 import { registerAllListeners } from '@lib/utils/registerAllListeners';
-import { fetchLrclibLyrics } from '@background/api/lrclib';
+// import { fetchLrclibLyrics } from '@background/api/lrclib';
 import { withContentEnabled } from '@lib/utils/contentGuard';
 import 'normalize.css';
 import { injectLyricsOverlayRoot } from '@components/lyrics/LyricsOverlayRoot';
 import { DualHighlightSubtitle } from '@components/lyrics/DualHighlightSubtitle';
 import { isAdPlaying } from '@lib/utils/domUtils';
+import { parseLyrics } from '@lib/utils/lyricsParser';
+import { Line } from '@lib/types/lyrics';
 
 // 타입 명시적 정의
 interface DetectionController {
@@ -95,19 +97,20 @@ function hideLyricsOverlay() {
   lyricsOverlayElement = null; // 3. 전역 DOM 참조 변수 초기화
 }
 
-function showLyricsOverlay(lyrics: string) {
+export function showLyricsOverlay(lyrics: Line[], offset?: number) {
   if (!lyricsOverlayElement) {
     lyricsOverlayElement = injectLyricsOverlayRoot();
+    lyricsOverlayElement.style.display = '';
   }
-  lyricsOverlayElement.style.display = '';
   // React Root 인스턴스도 한 번만 생성
   if (!lyricsOverlayRoot) {
     lyricsOverlayRoot = createRoot(lyricsOverlayElement);
   }
 
-  lyricsOverlayRoot.render(<DualHighlightSubtitle lyrics={lyrics} />);
+  // 👇 여기서 DualHighlightSubtitle에 Line[]과 offset을 실제로 넘김
+  lyricsOverlayRoot.render(<DualHighlightSubtitle lyrics={lyrics} offset={offset} />);
 }
-export function renderLyricsOverlay(lyrics: string) {
+export function renderLyricsOverlay(lyrics: Line[]) {
   const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR);
   if (!player) return;
 
@@ -133,6 +136,22 @@ export function renderLyricsOverlay(lyrics: string) {
     }
   });
   lyricsObserver.observe(player, { attributes: true, attributeFilter: ['class'] });
+}
+async function fetchLyricsBySearchFirst(artist: string, title: string): Promise<string | Line[] | undefined> {
+  const query = `${artist} ${title}`;
+  const searchRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(query)}`);
+  const searchData = await searchRes.json();
+
+  for (const candidate of searchData) {
+    const detailRes = await fetch(`https://lrclib.net/api/get/${candidate.id}`);
+    const detail = await detailRes.json();
+    const lyrics = detail.syncedLyrics || detail.plainLyrics;
+    console.log('가사:', lyrics);
+
+    if (lyrics) return lyrics;
+  }
+
+  return undefined;
 }
 
 let lastUrl = window.location.href;
@@ -204,27 +223,31 @@ const handleVideoDetection = async () => {
 
     console.log('아티스트:', artist, '곡명:', title);
 
-    let lyrics = await fetchLrclibLyrics(artist, title);
+    // 1. 비디오 엘리먼트 선택
+    const videoElem = document.querySelector('video');
+    if (!videoElem) return;
+
+    const lyrics = await fetchLyricsBySearchFirst(artist, title);
 
     if (!lyrics) {
-      lyrics = await fetchLrclibLyrics(title, artist);
-      if (!lyrics) {
-        const searchRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(artist + ' ' + title)}`);
-        const searchData = await searchRes.json();
-        for (const candidate of searchData) {
-          const detailRes = await fetch(`https://lrclib.net/api/get/${candidate.id}`);
-          const detail = await detailRes.json();
-          lyrics = detail.syncedLyrics || detail.plainLyrics;
-          if (lyrics) break;
-        }
-      }
+      console.log('가사 없음');
+      return;
     }
-    console.log('가사:', lyrics);
+    const parsedLyrics: Line[] = typeof lyrics === 'string' ? parseLyrics(lyrics) : lyrics;
 
-    // 가사 획득 성공 시 오버레이 렌더링 호출
-    if (lyrics) {
-      renderLyricsOverlay(lyrics);
+    const syncOffset = 0;
+
+    // 예시 - lyrics에 타임스탬프가 있다면 첫 줄 기준 offset 계산만 남겨도 됨
+    try {
+      // const firstLyricTime = extractFirstLrcTimestamp(lyrics);
+      // 예: 새 분석 엔진의 음악 시작시점(초)가 있다면 diff로 offset 계산 (지금은 0으로)
+      // syncOffset = detectedIntroStartSec - firstLyricTime;
+      // fallback (없으면 0)
+    } catch (e) {
+      console.warn('[Fallback] 첫 가사 타임스탬프 추출 실패:', e);
     }
+
+    showLyricsOverlay(parsedLyrics, syncOffset);
 
     chrome.runtime.sendMessage({
       type: MESSAGE_TYPES.VIDEO_DETECTED,
@@ -336,6 +359,7 @@ const initializeApp = async () => {
   try {
     injectCSS();
     await initializeI18n();
+
     // 플레이어 등장 즉시 가사 감지 트리거
     setupPlayerReadyObserver(() => {
       console.log('[Observer] 유튜브 플레이어 등장 감지, 가사 감지 실행');
