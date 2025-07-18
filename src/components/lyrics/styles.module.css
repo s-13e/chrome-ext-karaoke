@@ -28,7 +28,30 @@
   white-space: nowrap;
   text-align: center;
   transition: all 0.3s ease;
+  font-weight: bold; /* 굵게 */
 }
+
+.animated {
+  /* 왼쪽에서 오른쪽으로 빨간색이 채워지는 효과 */
+  background: linear-gradient(to right, red 50%, #fff 50%);
+  background-size: 200% 100%;
+  background-position: left bottom;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: revealText 1.5s linear forwards;
+}
+
+@keyframes revealText {
+  0% { background-position: right bottom; }
+  100% { background-position: left bottom; }
+}
+
+/* 이미 부른 줄 (전체 빨간색) */
+.past {
+  color: red;
+}
+
 .overlayRoot {
   position: absolute !important;
   left: 0 !important;

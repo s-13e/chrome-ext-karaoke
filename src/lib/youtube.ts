@@ -30,32 +30,3 @@ export const setupSPAObserver = (callback: () => void): MutationObserver => {
 
   return observer; // MutationObserver 반환
 };
-
-/**
- * YouTube 플레이어(#movie_player) DOM이 문서에 추가되는 즉시 콜백을 실행하는 MutationObserver를 생성합니다.
- *
- * @param callback - 플레이어가 감지되었을 때 실행할 함수
- * @returns MutationObserver 인스턴스
- */
-export const setupPlayerReadyObserver = (callback: () => void): MutationObserver => {
-  const observer = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-      for (const node of mutation.addedNodes) {
-        if (node instanceof HTMLElement) {
-          if (node.id === 'movie_player' || node.querySelector('#movie_player')) {
-            callback();
-            observer.disconnect(); // 한 번 감지 후 관찰 중지
-            return;
-          }
-        }
-      }
-    }
-  });
-
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-  });
-
-  return observer;
-};

@@ -38,6 +38,7 @@ export const EXTRA_KEYWORDS = [
   // 'live',
   'full cam',
   'clean ver.',
+  'Show! MusicCore',
   // 한국어
   '뮤직뱅크',
   '음악중심',
@@ -46,4 +47,9 @@ export const EXTRA_KEYWORDS = [
   '방송',
   '직캠',
   '원테이크',
+  '교차편집',
+  '풀캠',
+  '안방1열',
+  '직캠4k',
+  'stage mix',
 ];

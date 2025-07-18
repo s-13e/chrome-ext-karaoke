@@ -6,7 +6,6 @@ export function injectLyricsOverlayRoot() {
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = 'lyrics-cc-overlay';
-    // 여기서 CSS 모듈 클래스 적용!
     overlay.className = styles.overlayRoot!;
 
     const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR);

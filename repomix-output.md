@@ -668,6 +668,7 @@ export const EXTRA_KEYWORDS = [
   '방송',
   '직캠',
   '원테이크',
+  '교차편집',
 ];
 ```
 
@@ -920,7 +921,7 @@ import { i18nInstance, initializeI18n } from '@services/i18n';
 import { ErrorFallback } from '@components/common/ErrorFallback';
 import { I18nextProvider } from 'react-i18next';
 import { ErrorBoundary } from 'react-error-boundary';
-import { detectYouTubeVideo, setupSPAObserver, setupPlayerReadyObserver } from '@lib/youtube';
+import { detectYouTubeVideo, setupSPAObserver } from '@lib/youtube';
 import { debounce } from '@lib/utils/common';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 import { MESSAGE_TYPES } from '@constants/messageTypes';
@@ -933,22 +934,22 @@ import { extractArtistAndTitle } from '@lib/utils/artistTitle';
 import { cleanUp, extractArtistAndTitleCustom, removeEmptyBrackets } from '@lib/utils/stringUtils';
 import { listenerManager } from '@lib/utils/listenerManager';
 import { withContentEnabled } from '@lib/utils/contentGuard';
-import 'normalize.css';
 import { injectLyricsOverlayRoot } from '@components/lyrics/LyricsOverlayRoot';
 import { DualHighlightSubtitle } from '@components/lyrics/DualHighlightSubtitle';
 import { isAdPlaying } from '@lib/utils/domUtils';
 import { parseLyrics } from '@lib/utils/lyricsParser';
 import { Line } from '@lib/types/lyrics';
+import 'normalize.css';
+import { tryDetectVideoChange } from '@lib/utils/videoDetection';
 
-// 타입 명시적 정의
-interface DetectionController {
+interface DetectionObserverManager {
   spaObserver: MutationObserver | null;
-  videoDetection: (() => void) | null;
+  lyricsObserver: MutationObserver | null;
 }
-
-let detectionController: DetectionController = {
+let detectionObserverManager: DetectionObserverManager = {
   spaObserver: null,
-  videoDetection: null,
+  lyricsObserver: null,
+  // ...other observers
 };
 
 // 2. 초기값을 chrome.storage에서 읽어옴
@@ -995,7 +996,6 @@ const injectCSS = () => {
 };
 
 let lyricsOverlayRoot: Root | null = null; // 렌더링된 root 인스턴스 보관
-let lyricsObserver: MutationObserver | null = null; // MutationObserver 보관
 let lyricsOverlayElement: HTMLElement | null = null;
 
 function hideLyricsOverlay() {
@@ -1017,7 +1017,6 @@ export function showLyricsOverlay(lyrics: Line[], offset?: number) {
     lyricsOverlayRoot = createRoot(lyricsOverlayElement);
   }
 
-  // 👇 여기서 DualHighlightSubtitle에 Line[]과 offset을 실제로 넘김
   lyricsOverlayRoot.render(<DualHighlightSubtitle lyrics={lyrics} offset={offset} />);
 }
 export function renderLyricsOverlay(lyrics: Line[]) {
@@ -1025,9 +1024,9 @@ export function renderLyricsOverlay(lyrics: Line[]) {
   if (!player) return;
 
   // Observer 중복 생성 방지
-  if (lyricsObserver) {
-    lyricsObserver.disconnect();
-    lyricsObserver = null;
+  if (detectionObserverManager.lyricsObserver) {
+    detectionObserverManager.lyricsObserver.disconnect();
+    detectionObserverManager.lyricsObserver = null;
   }
 
   // 광고 상태에 맞게 초기 표시
@@ -1038,14 +1037,14 @@ export function renderLyricsOverlay(lyrics: Line[]) {
   }
 
   // 광고 감지: 클래스 속성 변경 시마다 실행
-  lyricsObserver = new MutationObserver(() => {
+  detectionObserverManager.lyricsObserver = new MutationObserver(() => {
     if (isAdPlaying()) {
       hideLyricsOverlay();
     } else {
       showLyricsOverlay(lyrics);
     }
   });
-  lyricsObserver.observe(player, { attributes: true, attributeFilter: ['class'] });
+  detectionObserverManager.lyricsObserver.observe(player, { attributes: true, attributeFilter: ['class'] });
 }
 async function fetchLyricsBySearchFirst(artist: string, title: string): Promise<string | Line[] | undefined> {
   const query = `${artist} ${title}`;
@@ -1074,12 +1073,10 @@ const handleUrlChange = (url: string) => {
   const isWatchPage = url.includes(YOUTUBE_WATCH_PATH);
 
   console.log(`[URL Change] ${url}, isWatchPage: ${isWatchPage}`);
-
+  console.log(`[URL Change] ${url}, isWatchPage: ${isWatchPage}`);
   if (isWatchPage) {
-    // 비디오 감지 실행
-    if (detectionController.videoDetection) {
-      detectionController.videoDetection();
-    }
+    const videoData = detectYouTubeVideo();
+    tryDetectVideoChange(videoData?.videoId || null, debouncedDetection);
   }
 };
 const handleUrlChangeGuarded = withContentEnabled(getContentEnabled, handleUrlChange);
@@ -1181,11 +1178,21 @@ const handleVideoDetection = async () => {
 const handleVideoDetectionGuarded = withContentEnabled(getContentEnabled, handleVideoDetection);
 const debouncedDetection = debounce(handleVideoDetectionGuarded, 300);
 
-setupPlayerReadyObserver(() => {
-  debouncedDetection();
+detectionObserverManager.spaObserver = setupSPAObserver(() => {
+  const videoData = detectYouTubeVideo();
+  tryDetectVideoChange(videoData?.videoId || null, debouncedDetection);
 });
 // 감지 시스템 활성화
 const enableDetection = () => {
+  if (detectionObserverManager.spaObserver) {
+    detectionObserverManager.spaObserver.disconnect();
+    detectionObserverManager.spaObserver = null;
+  }
+  detectionObserverManager.spaObserver = setupSPAObserver(() => {
+    const videoData = detectYouTubeVideo();
+    tryDetectVideoChange(videoData?.videoId || null, debouncedDetection);
+  });
+
   if (isDetectionActive) {
     console.log('[SKIP] 감지 시스템 이미 활성화됨');
     return;
@@ -1193,8 +1200,8 @@ const enableDetection = () => {
   isDetectionActive = true;
 
   // 기존 observer/리스너 있으면 무조건 해제
-  if (detectionController.spaObserver) {
-    detectionController.spaObserver.disconnect();
+  if (detectionObserverManager.spaObserver) {
+    detectionObserverManager.spaObserver.disconnect();
   }
   listenerManager.removeAll(); // 리스너 해제 등
 
@@ -1203,11 +1210,6 @@ const enableDetection = () => {
 
   // 새로운 감지 시스템 설정
   // 감지 시스템 새로 등록 및 observer 세팅
-  const newObserver = setupSPAObserver(debouncedDetection);
-  detectionController = {
-    spaObserver: newObserver,
-    videoDetection: debouncedDetection,
-  };
 
   // 초기 감지 실행
   debouncedDetection();
@@ -1215,19 +1217,20 @@ const enableDetection = () => {
 };
 // 감지 시스템 완전 비활성화
 const disableDetection = () => {
+  if (detectionObserverManager.spaObserver) {
+    detectionObserverManager.spaObserver.disconnect();
+    detectionObserverManager.spaObserver = null;
+  }
   if (!isDetectionActive) {
     console.log('[SKIP] 감지 시스템 이미 비활성화됨');
     return;
   }
   isDetectionActive = false;
 
-  if (detectionController.spaObserver) {
-    detectionController.spaObserver.disconnect();
-  }
   listenerManager.removeAll(); // 등록된 모든 리스너 해제
-  detectionController = {
+  detectionObserverManager = {
     spaObserver: null,
-    videoDetection: null,
+    lyricsObserver: null,
   };
 };
 
@@ -1259,12 +1262,14 @@ const setDetectionState = (enabled: boolean) => {
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === MESSAGE_TYPES.SPA_NAVIGATION_DETECTED) {
     if (!contentEnabled) return; // 비활성화 시 아무 동작도 하지 않음
-
     const { url, isWatchPage } = message.payload;
     console.log(`[SPA Navigation] ${url}, isWatchPage: ${isWatchPage}`);
-
-    // URL 변경 처리
-    handleUrlChangeGuarded(url);
+    if (isWatchPage) {
+      // 기존: handleUrlChangeGuarded(url);
+      // 변경: 아래처럼 직접 videoId 확인 후 감지 (혹은 handleUrlChangeGuarded 내부에서 이미 적용되어 있다면 중복 생략)
+      const videoData = detectYouTubeVideo();
+      tryDetectVideoChange(videoData?.videoId || null, debouncedDetection);
+    }
   }
 });
 
@@ -1278,7 +1283,8 @@ window.addEventListener('beforeunload', () => {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     // 페이지가 다시 보이면 현재 URL 확인
-    handleUrlChangeGuarded(window.location.href);
+    const videoData = detectYouTubeVideo();
+    tryDetectVideoChange(videoData?.videoId || null, debouncedDetection);
   }
 });
 
@@ -1294,12 +1300,6 @@ const initializeApp = async () => {
     injectCSS();
     await initializeI18n();
     console.log('i18n 했음');
-
-    // 플레이어 등장 즉시 가사 감지 트리거
-    setupPlayerReadyObserver(() => {
-      console.log('[Observer] 유튜브 플레이어 등장 감지, 가사 감지 실행');
-      handleVideoDetectionGuarded();
-    });
 
     // 루트 컨테이너 준비 및 렌더링
     const rootElement = document.getElementById(DOM_IDS.ROOT_CONTAINER) || createRootElement();
@@ -2407,6 +2407,14 @@ export function shouldDetect(videoId: string, cooldown = 10000): boolean {
   lastDetection = now;
   return true;
 }
+
+// 새로운, 더 활용도 높은 형태
+export function tryDetectVideoChange(videoId: string | null, trigger: () => void, cooldown = 10000) {
+  if (!videoId) return;
+  if (shouldDetect(videoId, cooldown)) {
+    trigger();
+  }
+}
 ```
 
 ## File: lib/youtube.ts
@@ -2442,35 +2450,6 @@ export const setupSPAObserver = (callback: () => void): MutationObserver => {
   });
 
   return observer; // MutationObserver 반환
-};
-
-/**
- * YouTube 플레이어(#movie_player) DOM이 문서에 추가되는 즉시 콜백을 실행하는 MutationObserver를 생성합니다.
- *
- * @param callback - 플레이어가 감지되었을 때 실행할 함수
- * @returns MutationObserver 인스턴스
- */
-export const setupPlayerReadyObserver = (callback: () => void): MutationObserver => {
-  const observer = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-      for (const node of mutation.addedNodes) {
-        if (node instanceof HTMLElement) {
-          if (node.id === 'movie_player' || node.querySelector('#movie_player')) {
-            callback();
-            observer.disconnect(); // 한 번 감지 후 관찰 중지
-            return;
-          }
-        }
-      }
-    }
-  });
-
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-  });
-
-  return observer;
 };
 ```
 

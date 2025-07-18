@@ -15,4 +15,5 @@ declare module '*.css' {
 }
 interface Window {
   [key: string]: unknown;
+  __LYRICS_OVERLAY_INITED?: boolean;
 }

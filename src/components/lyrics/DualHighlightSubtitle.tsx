@@ -15,9 +15,6 @@ export const DualHighlightSubtitle: React.FC<DualHighlightSubtitleProps> = ({ ly
   const adjustedTime = currentTime - (offset ?? 0); // offset 사용!
   const { top, bottom, highlightTop, highlightBottom } = getDisplayLines(lyrics, adjustedTime);
 
-  //const lines = useMemo(() => parseLyrics(lyrics) ?? [], [lyrics]);
-  //const { top, bottom, highlightTop, highlightBottom } = getDisplayLines(lines, currentTime);
-
   return (
     <div className={styles.dualHighlightSubtitle}>
       <div className={highlightTop ? styles.highlight : ''}>{top}</div>

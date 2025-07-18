@@ -8,3 +8,11 @@ export function shouldDetect(videoId: string, cooldown = 10000): boolean {
   lastDetection = now;
   return true;
 }
+
+// 새로운, 더 활용도 높은 형태
+export function tryDetectVideoChange(videoId: string | null, trigger: () => void, cooldown = 10000) {
+  if (!videoId) return;
+  if (shouldDetect(videoId, cooldown)) {
+    trigger();
+  }
+}

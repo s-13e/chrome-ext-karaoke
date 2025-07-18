@@ -33,7 +33,12 @@ export function getDisplayLines(lines: Line[], currentTime: number): DisplayIndi
   }
 
   if (activeIndex === -1) {
-    activeIndex = lines.length - 1;
+    const firstLine = lines[0];
+    if (firstLine && currentTime < firstLine.time) {
+      // 첫 타임스탬프 전: 아무 자막도 출력하지 않음
+      return { top: '', bottom: '', highlightTop: false, highlightBottom: false };
+    }
+    activeIndex = lines.length - 1; // 곡이 끝난 뒤, 마지막 가사 유지
   }
 
   // 위치는 교대로: 0번째는 bottom, 1번째는 top, 2번째는 bottom, 3번째는 top ...
