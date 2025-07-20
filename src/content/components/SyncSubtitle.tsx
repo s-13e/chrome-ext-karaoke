@@ -1,5 +1,5 @@
 import React from 'react';
-import { parseTimeToSeconds } from '@lib/utils/time';
+import { parseTimeToSeconds } from '@lib/utils/common/time';
 import { Line } from '@lib/types/lyrics';
 
 export const SyncSubtitle: React.FC<{

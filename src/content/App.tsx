@@ -1,7 +1,7 @@
 // src/content/App.tsx
 import { useEffect } from 'react';
 import { i18nInstance } from '@services/i18n';
-import { isToggleContentMessage } from '@lib/utils/typeGuards';
+import { isToggleContentMessage } from '@lib/utils/common/typeGuards';
 import { ContentScriptMessage } from '@lib/types/message';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 // import { LyricsContainer } from './components/LyricsContainer';

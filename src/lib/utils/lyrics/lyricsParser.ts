@@ -2,7 +2,7 @@
 // 싱크 자막, 전체 가사, 하이라이트 등 다양한 곳에서 재사용할 수 있습니다.
 
 import { Line } from '@lib/types/lyrics';
-import { parseTimeToSeconds } from '@lib/utils/time';
+import { parseTimeToSeconds } from '@lib/utils/common/time';
 
 /**
  * LRC 형식의 가사 문자열을 파싱하여 [{ time, text }] 배열로 반환

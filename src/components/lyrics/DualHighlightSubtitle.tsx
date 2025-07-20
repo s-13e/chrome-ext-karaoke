@@ -1,7 +1,7 @@
 import React from 'react';
 // import { parseLyrics } from '@lib/utils/lyricsParser';
 import { useCurrentTime } from '@hooks/useCurrentTime';
-import { getDisplayLines } from '@lib/utils/lyricsDisplay';
+import { getDisplayLines } from '@lib/utils/lyrics/lyricsDisplay';
 import styles from './styles.module.css';
 import { Line } from '@lib/types/lyrics';
 

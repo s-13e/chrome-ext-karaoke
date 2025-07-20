@@ -21,3 +21,4 @@
 - axios by Matt Zabriskie et al. (MIT License, https://github.com/axios/axios)
 - i18next, react-i18next by Jan Mühlemann et al. (MIT License, https://www.i18next.com/)
 - onnxruntime-web by Microsoft (MIT License, https://www.npmjs.com/package/onnxruntime-web)
+- meyda by (MIT License, )

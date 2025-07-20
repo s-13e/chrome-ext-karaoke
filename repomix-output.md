@@ -364,9 +364,6 @@ export const DualHighlightSubtitle: React.FC<DualHighlightSubtitleProps> = ({ ly
   const adjustedTime = currentTime - (offset ?? 0); // offset 사용!
   const { top, bottom, highlightTop, highlightBottom } = getDisplayLines(lyrics, adjustedTime);
 
-  //const lines = useMemo(() => parseLyrics(lyrics) ?? [], [lyrics]);
-  //const { top, bottom, highlightTop, highlightBottom } = getDisplayLines(lines, currentTime);
-
   return (
     <div className={styles.dualHighlightSubtitle}>
       <div className={highlightTop ? styles.highlight : ''}>{top}</div>
@@ -484,7 +481,6 @@ export function injectLyricsOverlayRoot() {
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = 'lyrics-cc-overlay';
-    // 여기서 CSS 모듈 클래스 적용!
     overlay.className = styles.overlayRoot!;
 
     const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR);
@@ -571,7 +567,30 @@ export function injectLyricsOverlayRoot() {
   white-space: nowrap;
   text-align: center;
   transition: all 0.3s ease;
+  font-weight: bold; /* 굵게 */
 }
+
+.animated {
+  /* 왼쪽에서 오른쪽으로 빨간색이 채워지는 효과 */
+  background: linear-gradient(to right, red 50%, #fff 50%);
+  background-size: 200% 100%;
+  background-position: left bottom;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: revealText 1.5s linear forwards;
+}
+
+@keyframes revealText {
+  0% { background-position: right bottom; }
+  100% { background-position: left bottom; }
+}
+
+/* 이미 부른 줄 (전체 빨간색) */
+.past {
+  color: red;
+}
+
 .overlayRoot {
   position: absolute !important;
   left: 0 !important;
@@ -660,6 +679,7 @@ export const EXTRA_KEYWORDS = [
   // 'live',
   'full cam',
   'clean ver.',
+  'Show! MusicCore',
   // 한국어
   '뮤직뱅크',
   '음악중심',
@@ -669,6 +689,10 @@ export const EXTRA_KEYWORDS = [
   '직캠',
   '원테이크',
   '교차편집',
+  '풀캠',
+  '안방1열',
+  '직캠4k',
+  'stage mix',
 ];
 ```
 
@@ -939,399 +963,414 @@ import { DualHighlightSubtitle } from '@components/lyrics/DualHighlightSubtitle'
 import { isAdPlaying } from '@lib/utils/domUtils';
 import { parseLyrics } from '@lib/utils/lyricsParser';
 import { Line } from '@lib/types/lyrics';
-import 'normalize.css';
 import { tryDetectVideoChange } from '@lib/utils/videoDetection';
 
-interface DetectionObserverManager {
-  spaObserver: MutationObserver | null;
-  lyricsObserver: MutationObserver | null;
-}
-let detectionObserverManager: DetectionObserverManager = {
-  spaObserver: null,
-  lyricsObserver: null,
-  // ...other observers
-};
+import 'normalize.css';
 
-// 2. 초기값을 chrome.storage에서 읽어옴
-chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED], (result) => {
-  contentEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
-});
-
-let contentEnabled = false;
-const getContentEnabled = () => contentEnabled; // 전역 변수 접근
-
-const uiManager = new UIResourceManager();
-
-// ✅ UI 요소들을 완전히 정리하는 함수
-const cleanupAllUIElements = () => {
-  uiManager.cleanup();
-
-  // 3. 주입된 스타일 제거
-  const injectedStyles = document.querySelectorAll('#karaoke-player-styles, #karaoke-styles');
-  injectedStyles.forEach((style) => style.remove());
-
-  // 4. body 클래스 정리
-  document.body.classList.remove('karaoke-mode');
-
-  console.log('[Cleanup] UI cleanup completed');
-};
-
-// 루트 엘리먼트 생성
-const createRootElement = () => {
-  const root = document.createElement('div');
-  root.id = DOM_IDS.ROOT_CONTAINER;
-  document.body.appendChild(root);
-  return root;
-};
-
-const injectCSS = () => {
-  const cssId = 'karaoke-styles';
-  if (document.getElementById(cssId)) return;
-
-  const link = document.createElement('link');
-  link.id = cssId;
-  link.rel = 'stylesheet';
-  link.href = chrome.runtime.getURL('content/style.css');
-  document.head.appendChild(link);
-};
-
-let lyricsOverlayRoot: Root | null = null; // 렌더링된 root 인스턴스 보관
-let lyricsOverlayElement: HTMLElement | null = null;
-
-function hideLyricsOverlay() {
-  const overlay = document.getElementById('lyrics-cc-overlay');
-  if (overlay && overlay.parentNode) {
-    overlay.parentNode.removeChild(overlay); // 1. 오버레이 DOM 완전 제거
+(() => {
+  // 새로고침 시 contentscript 내 중복 실행 방지
+  if (window.__LYRICS_OVERLAY_INITED) {
+    console.log('[LyricsExt] Already initialized. Skipping...');
+    return;
   }
-  lyricsOverlayRoot = null; // 2. React Root 인스턴스 해제
-  lyricsOverlayElement = null; // 3. 전역 DOM 참조 변수 초기화
-}
+  window.__LYRICS_OVERLAY_INITED = true;
 
-export function showLyricsOverlay(lyrics: Line[], offset?: number) {
-  if (!lyricsOverlayElement) {
-    lyricsOverlayElement = injectLyricsOverlayRoot();
-    lyricsOverlayElement.style.display = '';
+  // ↓↓↓ 여기에 기존의 나머지 index.tsx 코드 전체 (함수, 플래그 정의, initializeApp 호출 등)
+
+  // --- 플래그 및 관리 객체 ---
+  let isDetectionActive = false; // 감지 시스템 활성화 여부
+  let isDetecting = false; // 영상 감지 함수 진입 여부(동시 실행 방지)
+  let lastVideoId: string | null = null;
+  let lastRenderedLyrics = '';
+  let latestLyrics: Line[] = [];
+  let contentEnabled = false;
+  let lyricsOverlayRoot: Root | null = null; // 렌더링된 root 인스턴스 보관
+  let lyricsOverlayElement: HTMLElement | null = null;
+  let lastUrl = window.location.href;
+
+  const getContentEnabled = () => contentEnabled;
+  const uiManager = new UIResourceManager();
+  const RETRY_DELAY = 300;
+
+  interface DetectionObserverManager {
+    spaObserver: MutationObserver | null;
+    lyricsObserver: MutationObserver | null;
   }
-  // React Root 인스턴스도 한 번만 생성
-  if (!lyricsOverlayRoot) {
-    lyricsOverlayRoot = createRoot(lyricsOverlayElement);
-  }
+  const detectionObserverManager: DetectionObserverManager = {
+    spaObserver: null,
+    lyricsObserver: null,
+    // ...other observers
+  };
 
-  lyricsOverlayRoot.render(<DualHighlightSubtitle lyrics={lyrics} offset={offset} />);
-}
-export function renderLyricsOverlay(lyrics: Line[]) {
-  const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR);
-  if (!player) return;
-
-  // Observer 중복 생성 방지
-  if (detectionObserverManager.lyricsObserver) {
-    detectionObserverManager.lyricsObserver.disconnect();
+  // --- Observer 및 리스너 관리 함수 ---
+  const removeAllObservers = (): void => {
+    Object.values(detectionObserverManager).forEach((obs) => obs?.disconnect && obs.disconnect());
+    detectionObserverManager.spaObserver = null;
     detectionObserverManager.lyricsObserver = null;
+  };
+  const cleanupAllResources = (): void => {
+    listenerManager.removeAll();
+    removeAllObservers();
+    cleanupAllUIElements();
+  };
+
+  // 2. 초기값을 chrome.storage에서 읽어옴
+  chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED], (result) => {
+    contentEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
+  });
+
+  // ✅ UI 요소들을 완전히 정리하는 함수
+  const cleanupAllUIElements = () => {
+    uiManager.cleanup();
+
+    // 3. 주입된 스타일 제거
+    const injectedStyles = document.querySelectorAll('#karaoke-player-styles, #karaoke-styles');
+    injectedStyles.forEach((style) => {
+      console.log('[cleanupAllUIElements] 스타일 제거:', style.id || style);
+      style.remove();
+    });
+
+    // 4. body 클래스 정리
+    document.body.classList.remove('karaoke-mode');
+    console.log('[Cleanup] UI cleanup completed, karaoke-mode class removed');
+  };
+
+  // 루트 엘리먼트 생성
+  const createRootElement = () => {
+    const root = document.createElement('div');
+    root.id = DOM_IDS.ROOT_CONTAINER;
+    document.body.appendChild(root);
+    return root;
+  };
+
+  const injectCSS = () => {
+    const cssId = 'karaoke-styles';
+    if (document.getElementById(cssId)) return;
+
+    const link = document.createElement('link');
+    link.id = cssId;
+    link.rel = 'stylesheet';
+    link.href = chrome.runtime.getURL('content/style.css');
+    document.head.appendChild(link);
+  };
+
+  function hideLyricsOverlay() {
+    const overlay = document.getElementById('lyrics-cc-overlay');
+    if (overlay && overlay.parentNode) {
+      overlay.parentNode.removeChild(overlay); // 1. 오버레이 DOM 완전 제거
+      console.log('[hideLyricsOverlay] lyrics-cc-overlay 제거');
+    }
+    lyricsOverlayRoot = null; // 2. React Root 인스턴스 해제
+    lyricsOverlayElement = null; // 3. 전역 DOM 참조 변수 초기화
   }
 
-  // 광고 상태에 맞게 초기 표시
-  if (isAdPlaying()) {
-    hideLyricsOverlay();
-  } else {
-    showLyricsOverlay(lyrics);
+  function showLyricsOverlay(lyrics: Line[], offset?: number) {
+    if (!lyricsOverlayElement) {
+      injectCSS();
+      console.log('[showLyricsOverlay] injectCSS 호출');
+      lyricsOverlayElement = injectLyricsOverlayRoot();
+      lyricsOverlayElement.style.display = '';
+    }
+    // React Root 인스턴스도 한 번만 생성
+    if (!lyricsOverlayRoot) {
+      lyricsOverlayRoot = createRoot(lyricsOverlayElement);
+    }
+
+    lyricsOverlayRoot.render(<DualHighlightSubtitle lyrics={lyrics} offset={offset} />);
   }
 
-  // 광고 감지: 클래스 속성 변경 시마다 실행
-  detectionObserverManager.lyricsObserver = new MutationObserver(() => {
+  function showLyricsIfNotAd(lyrics: Line[], offset?: number) {
     if (isAdPlaying()) {
       hideLyricsOverlay();
     } else {
-      showLyricsOverlay(lyrics);
+      showLyricsOverlay(lyrics, offset);
     }
-  });
-  detectionObserverManager.lyricsObserver.observe(player, { attributes: true, attributeFilter: ['class'] });
-}
-async function fetchLyricsBySearchFirst(artist: string, title: string): Promise<string | Line[] | undefined> {
-  const query = `${artist} ${title}`;
-  const searchRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(query)}`);
-  const searchData = await searchRes.json();
-
-  for (const candidate of searchData) {
-    const detailRes = await fetch(`https://lrclib.net/api/get/${candidate.id}`);
-    const detail = await detailRes.json();
-    const lyrics = detail.syncedLyrics || detail.plainLyrics;
-    console.log('가사:', lyrics);
-
-    if (lyrics) return lyrics;
   }
 
-  return undefined;
-}
+  function renderLyricsOverlay(lyrics: Line[]) {
+    const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR);
+    if (!player) return;
 
-let lastUrl = window.location.href;
+    latestLyrics = lyrics;
 
-// ✅ URL 변경 핸들러 개선
-const handleUrlChange = (url: string) => {
-  if (url === lastUrl) return; // URL이 실제로 바뀌었을 때만 실행
-  lastUrl = url;
+    const lyricsStr = JSON.stringify(lyrics);
+    if (lastRenderedLyrics === lyricsStr) return;
+    lastRenderedLyrics = lyricsStr;
 
-  const isWatchPage = url.includes(YOUTUBE_WATCH_PATH);
-
-  console.log(`[URL Change] ${url}, isWatchPage: ${isWatchPage}`);
-  console.log(`[URL Change] ${url}, isWatchPage: ${isWatchPage}`);
-  if (isWatchPage) {
-    const videoData = detectYouTubeVideo();
-    tryDetectVideoChange(videoData?.videoId || null, debouncedDetection);
-  }
-};
-const handleUrlChangeGuarded = withContentEnabled(getContentEnabled, handleUrlChange);
-
-const RETRY_DELAY = 300;
-
-let isDetectionActive = false; // 감지 시스템 활성화 여부
-let isDetecting = false; // 영상 감지 함수 진입 여부(동시 실행 방지)
-let lastVideoId: string | null = null;
-
-// 영상 감지 핸들러 (순수 로직)
-const handleVideoDetection = async () => {
-  console.log('handleVideoDetection 실행');
-  if (isDetecting) {
-    console.log('[SKIP] 감지 함수 실행 중 (동시 실행 방지)');
-    return;
-  }
-  try {
-    const videoData = detectYouTubeVideo();
-    if (!videoData) {
-      console.log('[SKIP] 비디오 감지 실패');
-      setTimeout(debouncedDetection, RETRY_DELAY);
-      return;
+    // Observer 중복 생성 방지
+    if (detectionObserverManager.lyricsObserver) {
+      detectionObserverManager.lyricsObserver.disconnect();
+      detectionObserverManager.lyricsObserver = null;
     }
-    if (videoData.videoId === lastVideoId) {
-      console.log('[SKIP] 같은 videoId에 대해 이미 실행됨');
-      return;
-    }
-    isDetecting = true;
-    lastVideoId = videoData.videoId;
-
-    // 1. YouTube Data API로 메타데이터 요청
-    const meta = await fetchYouTubeVideoMeta(videoData.videoId, process.env.YOUTUBE_API_KEY!);
-    if (!meta) {
-      console.log('fetchYouTubeVideoMeta 실패');
-      return;
-    }
-    hideLyricsOverlay();
-
-    if (!isMusicVideo(meta)) {
-      console.log('isMusicVideo 판별 실패');
-      return;
-    }
-
-    const parsed = extractArtistAndTitle(meta.title);
-    if (!parsed) {
-      console.log('extractArtistAndTitle 실패', meta.title);
-      return;
-    }
-
-    const refined = extractArtistAndTitleCustom(`${parsed.artist} - ${parsed.title}`);
-    if (!refined) {
-      console.log('extractArtistAndTitleCustom 실패', meta.title);
-      return;
-    }
-
-    const artist = cleanUp(refined.artist);
-    let title = cleanUp(refined.title);
-    title = removeEmptyBrackets(title);
-
-    console.log('아티스트:', artist, '곡명:', title);
-
-    // 1. 비디오 엘리먼트 선택
-    const videoElem = document.querySelector('video');
-    if (!videoElem) return;
-
-    const lyrics = await fetchLyricsBySearchFirst(artist, title);
-
-    if (!lyrics) {
-      console.log('가사 없음');
-      return;
-    }
-    const parsedLyrics: Line[] = typeof lyrics === 'string' ? parseLyrics(lyrics) : lyrics;
-
-    const syncOffset = 0;
-
-    // 예시 - lyrics에 타임스탬프가 있다면 첫 줄 기준 offset 계산만 남겨도 됨
-    try {
-      // const firstLyricTime = extractFirstLrcTimestamp(lyrics);
-      // 예: 새 분석 엔진의 음악 시작시점(초)가 있다면 diff로 offset 계산 (지금은 0으로)
-      // syncOffset = detectedIntroStartSec - firstLyricTime;
-      // fallback (없으면 0)
-    } catch (e) {
-      console.warn('[Fallback] 첫 가사 타임스탬프 추출 실패:', e);
-    } finally {
-      isDetecting = false;
-    }
-
-    showLyricsOverlay(parsedLyrics, syncOffset);
-
-    chrome.runtime.sendMessage({
-      type: MESSAGE_TYPES.VIDEO_DETECTED,
-      payload: videoData,
+    // 최신 lyrics를 클로저로 안전하게 캡처
+    detectionObserverManager.lyricsObserver = new MutationObserver(() => {
+      showLyricsIfNotAd(latestLyrics);
     });
-  } finally {
-    isDetecting = false;
+
+    detectionObserverManager.lyricsObserver.observe(player, { attributes: true, attributeFilter: ['class'] });
+    showLyricsIfNotAd(lyrics);
   }
-};
-const handleVideoDetectionGuarded = withContentEnabled(getContentEnabled, handleVideoDetection);
-const debouncedDetection = debounce(handleVideoDetectionGuarded, 300);
+  async function fetchLyricsBySearchFirst(artist: string, title: string): Promise<string | Line[] | undefined> {
+    const query = `${artist} ${title}`;
+    const searchRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(query)}`);
+    const searchData = await searchRes.json();
 
-detectionObserverManager.spaObserver = setupSPAObserver(() => {
-  const videoData = detectYouTubeVideo();
-  tryDetectVideoChange(videoData?.videoId || null, debouncedDetection);
-});
-// 감지 시스템 활성화
-const enableDetection = () => {
-  if (detectionObserverManager.spaObserver) {
-    detectionObserverManager.spaObserver.disconnect();
-    detectionObserverManager.spaObserver = null;
+    for (const candidate of searchData) {
+      const detailRes = await fetch(`https://lrclib.net/api/get/${candidate.id}`);
+      const detail = await detailRes.json();
+      const lyrics = detail.syncedLyrics || detail.plainLyrics;
+      console.log('가사:', lyrics);
+
+      if (lyrics) return lyrics;
+    }
+
+    return undefined;
   }
-  detectionObserverManager.spaObserver = setupSPAObserver(() => {
-    const videoData = detectYouTubeVideo();
-    tryDetectVideoChange(videoData?.videoId || null, debouncedDetection);
-  });
 
-  if (isDetectionActive) {
-    console.log('[SKIP] 감지 시스템 이미 활성화됨');
-    return;
-  }
-  isDetectionActive = true;
+  // ✅ URL 변경 핸들러 개선
+  const handleUrlChange = (url: string) => {
+    if (url === lastUrl) return; // URL이 실제로 바뀌었을 때만 실행
+    lastUrl = url;
 
-  // 기존 observer/리스너 있으면 무조건 해제
-  if (detectionObserverManager.spaObserver) {
-    detectionObserverManager.spaObserver.disconnect();
-  }
-  listenerManager.removeAll(); // 리스너 해제 등
+    const isWatchPage = url.includes(YOUTUBE_WATCH_PATH);
 
-  // 리스너 재등록
-  // registerAllListeners(setDetectionState);
-
-  // 새로운 감지 시스템 설정
-  // 감지 시스템 새로 등록 및 observer 세팅
-
-  // 초기 감지 실행
-  debouncedDetection();
-  console.log('[Detection] 감지 시스템 활성화 및 observer/이벤트 등록 완료');
-};
-// 감지 시스템 완전 비활성화
-const disableDetection = () => {
-  if (detectionObserverManager.spaObserver) {
-    detectionObserverManager.spaObserver.disconnect();
-    detectionObserverManager.spaObserver = null;
-  }
-  if (!isDetectionActive) {
-    console.log('[SKIP] 감지 시스템 이미 비활성화됨');
-    return;
-  }
-  isDetectionActive = false;
-
-  listenerManager.removeAll(); // 등록된 모든 리스너 해제
-  detectionObserverManager = {
-    spaObserver: null,
-    lyricsObserver: null,
-  };
-};
-
-// 저장소 상태에 따른 감지 시스템 제어
-const setDetectionState = (enabled: boolean) => {
-  if (enabled) {
-    enableDetection();
-    console.log('[STATUS] 감지 시스템 활성화');
-  } else {
-    disableDetection();
-    cleanupAllUIElements();
-    console.log('[STATUS] 감지 시스템 비활성화');
-  }
-};
-
-// function setupKaraokeContainer() {
-//   let karaokeRoot = document.getElementById('karaoke-root');
-//   if (!karaokeRoot) {
-//     karaokeRoot = document.createElement('div');
-//     karaokeRoot.id = 'karaoke-root';
-//     document.body.appendChild(karaokeRoot);
-//     uiManager.register(karaokeRoot);
-//   }
-//   const karaokeRootInstance = createRoot(karaokeRoot);
-//   //karaokeRootInstance.render(<KaraokePlayerContainer />);
-// }
-
-// SPA 네비게이션 메시지 핸들러
-chrome.runtime.onMessage.addListener((message) => {
-  if (message.type === MESSAGE_TYPES.SPA_NAVIGATION_DETECTED) {
-    if (!contentEnabled) return; // 비활성화 시 아무 동작도 하지 않음
-    const { url, isWatchPage } = message.payload;
-    console.log(`[SPA Navigation] ${url}, isWatchPage: ${isWatchPage}`);
+    console.log(`[URL Change] ${url}, isWatchPage: ${isWatchPage}`);
+    console.log(`[URL Change] ${url}, isWatchPage: ${isWatchPage}`);
     if (isWatchPage) {
-      // 기존: handleUrlChangeGuarded(url);
-      // 변경: 아래처럼 직접 videoId 확인 후 감지 (혹은 handleUrlChangeGuarded 내부에서 이미 적용되어 있다면 중복 생략)
       const videoData = detectYouTubeVideo();
       tryDetectVideoChange(videoData?.videoId || null, debouncedDetection);
     }
-  }
-});
+  };
+  const handleUrlChangeGuarded = withContentEnabled(getContentEnabled, handleUrlChange);
 
-// ✅ 페이지 언로드 시 정리
-window.addEventListener('beforeunload', () => {
-  cleanupAllUIElements();
-  disableDetection();
-});
+  // 영상 감지 핸들러 (순수 로직)
+  const handleVideoDetection = async () => {
+    console.log('handleVideoDetection 실행');
+    if (isDetecting) {
+      console.log('[SKIP] 감지 함수 실행 중 (동시 실행 방지)');
+      return;
+    }
 
-// ✅ Visibility API를 통한 추가 감지
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') {
-    // 페이지가 다시 보이면 현재 URL 확인
-    const videoData = detectYouTubeVideo();
-    tryDetectVideoChange(videoData?.videoId || null, debouncedDetection);
-  }
-});
+    try {
+      const videoData = detectYouTubeVideo();
+      if (!videoData) {
+        console.log('[SKIP] 비디오 감지 실패');
+        setTimeout(debouncedDetection, RETRY_DELAY);
+        return;
+      }
+      if (videoData.videoId === lastVideoId) {
+        console.log('[SKIP] 같은 videoId에 대해 이미 실행됨');
+        return;
+      }
+      isDetecting = true;
+      lastVideoId = videoData.videoId;
 
-// 에러 바운더리 리셋 핸들러
-const handleReset = () => {
-  window.location.reload();
-};
+      // 1. YouTube Data API로 메타데이터 요청
+      const meta = await fetchYouTubeVideoMeta(videoData.videoId, process.env.YOUTUBE_API_KEY!);
+      if (!meta) {
+        console.log('fetchYouTubeVideoMeta 실패');
+        return;
+      }
+      hideLyricsOverlay();
 
-// 앱 초기화
-const initializeApp = async () => {
-  console.log('content app initializeApp 시작');
-  try {
-    injectCSS();
-    await initializeI18n();
-    console.log('i18n 했음');
+      if (!isMusicVideo(meta)) {
+        console.log('isMusicVideo 판별 실패');
+        return;
+      }
 
-    // 루트 컨테이너 준비 및 렌더링
-    const rootElement = document.getElementById(DOM_IDS.ROOT_CONTAINER) || createRootElement();
-    const root = createRoot(rootElement);
-    root.render(
-      <ErrorBoundary FallbackComponent={ErrorFallback} onReset={handleReset}>
-        <I18nextProvider i18n={i18nInstance}>
-          <App />
-        </I18nextProvider>
-      </ErrorBoundary>,
-    );
+      const parsed = extractArtistAndTitle(meta.title);
+      if (!parsed) {
+        console.log('extractArtistAndTitle 실패', meta.title);
+        return;
+      }
 
-    // 가라오케/가사 컨테이너 준비 및 렌더링
-    // setupKaraokeContainer();
+      const refined = extractArtistAndTitleCustom(`${parsed.artist} - ${parsed.title}`);
+      if (!refined) {
+        console.log('extractArtistAndTitleCustom 실패', meta.title);
+        return;
+      }
 
-    // 초기 URL 감지 및 UI/감지 시스템 활성화
-    handleUrlChangeGuarded(window.location.href);
+      const artist = cleanUp(refined.artist);
+      let title = cleanUp(refined.title);
+      title = removeEmptyBrackets(title);
 
-    // 감지 시스템 활성/비활성 상태 동기화
-    chrome.storage.sync.get(STORAGE_KEYS.CONTENT_ENABLED, (result) => {
-      const enabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? true;
-      setDetectionState(enabled);
+      console.log('아티스트:', artist, '곡명:', title);
+
+      // 1. 비디오 엘리먼트 선택
+      const videoElem = document.querySelector('video');
+      if (!videoElem) return;
+
+      const lyrics = await fetchLyricsBySearchFirst(artist, title);
+
+      // 다음 영상에 이전 가사 나오는 거 방지
+      if (!lyrics) {
+        console.log('가사 없음');
+        hideLyricsOverlay();
+        latestLyrics = [];
+        return;
+      }
+
+      const parsedLyrics: Line[] = typeof lyrics === 'string' ? parseLyrics(lyrics) : lyrics;
+
+      // const syncOffset = 0;
+
+      try {
+        // const firstLyricTime = extractFirstLrcTimestamp(lyrics);
+        // 예: 새 분석 엔진의 음악 시작시점(초)가 있다면 diff로 offset 계산 (지금은 0으로)
+        // syncOffset = detectedIntroStartSec - firstLyricTime;
+        // fallback (없으면 0)
+      } catch (e) {
+        console.warn('[Fallback] 첫 가사 타임스탬프 추출 실패:', e);
+      } finally {
+        isDetecting = false;
+      }
+
+      latestLyrics = parsedLyrics;
+      renderLyricsOverlay(parsedLyrics);
+
+      chrome.runtime.sendMessage({
+        type: MESSAGE_TYPES.VIDEO_DETECTED,
+        payload: videoData,
+      });
+    } finally {
+      isDetecting = false;
+    }
+  };
+  const handleVideoDetectionGuarded = withContentEnabled(getContentEnabled, handleVideoDetection);
+  const debouncedDetection = debounce(handleVideoDetectionGuarded, 300);
+
+  // --- 스토리지, UI, SPA 이벤트, visibility 이벤트 일괄 관리 ---
+  // SPA 네비게이션 메시지 핸들러
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.type === MESSAGE_TYPES.SPA_NAVIGATION_DETECTED) {
+      if (!contentEnabled) return; // 비활성화 시 아무 동작도 하지 않음
+      const { url, isWatchPage } = message.payload;
+      console.log(`[SPA Navigation] ${url}, isWatchPage: ${isWatchPage}`);
+      if (url !== lastUrl) {
+        handleUrlChangeGuarded(url);
+      }
+    }
+  });
+  // ✅ 페이지 언로드 시 정리
+  window.addEventListener('beforeunload', () => {
+    cleanupAllUIElements();
+    disableDetection();
+  });
+
+  // ✅ Visibility API를 통한 추가 감지
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      // 페이지가 다시 보이면 현재 URL 확인
+      const videoData = detectYouTubeVideo();
+      tryDetectVideoChange(videoData?.videoId || null, debouncedDetection);
+    }
+  });
+
+  // --- 감지 시스템 상태에 따라 enable/disable 제어 ---
+  // 저장소 상태에 따른 감지 시스템 제어
+  const setDetectionState = (enabled: boolean) => {
+    if (enabled) {
+      enableDetection();
+      console.log('[STATUS] 감지 시스템 활성화');
+    } else {
+      disableDetection();
+      cleanupAllUIElements();
+      console.log('[STATUS] 감지 시스템 비활성화');
+    }
+  };
+
+  // 감지 시스템 활성화
+  const enableDetection = () => {
+    if (isDetectionActive) {
+      console.log('[SKIP] 감지 시스템 이미 활성화됨');
+      return;
+    }
+
+    // 기존 자원 모두 정리
+    cleanupAllResources();
+
+    detectionObserverManager.spaObserver = setupSPAObserver(() => {
+      const videoData = detectYouTubeVideo();
+      tryDetectVideoChange(videoData?.videoId || null, debouncedDetection);
     });
-  } catch (error) {
-    // fallback UI 렌더링
-    const rootElement = document.getElementById(DOM_IDS.ROOT_CONTAINER) || createRootElement();
-    const root = createRoot(rootElement);
-    root.render(<ErrorFallback error={error} resetErrorBoundary={handleReset} />);
-  }
-};
 
-initializeApp();
+    isDetectionActive = true;
+
+    // 초기 감지 실행
+    debouncedDetection();
+    console.log('[Detection] 감지 시스템 활성화 및 observer/이벤트 등록 완료');
+  };
+  // 감지 시스템 완전 비활성화
+  const disableDetection = () => {
+    cleanupAllResources();
+
+    if (!isDetectionActive) {
+      console.log('[SKIP] 감지 시스템 이미 비활성화됨');
+      return;
+    }
+
+    isDetectionActive = false;
+    lastVideoId = null;
+    lastRenderedLyrics = '';
+    latestLyrics = [];
+    console.log('[Detection] 감지 시스템 완전 비활성화');
+  };
+
+  // function setupKaraokeContainer() {
+  //   let karaokeRoot = document.getElementById('karaoke-root');
+  //   if (!karaokeRoot) {
+  //     karaokeRoot = document.createElement('div');
+  //     karaokeRoot.id = 'karaoke-root';
+  //     document.body.appendChild(karaokeRoot);
+  //     uiManager.register(karaokeRoot);
+  //   }
+  //   const karaokeRootInstance = createRoot(karaokeRoot);
+  //   //karaokeRootInstance.render(<KaraokePlayerContainer />);
+  // }
+
+  // 에러 바운더리 리셋 핸들러
+  const handleReset = () => {
+    window.location.reload();
+  };
+
+  // 앱 초기화
+  const initializeApp = async () => {
+    console.log('content app initializeApp 시작');
+    try {
+      await initializeI18n();
+
+      // 루트 컨테이너 준비 및 렌더링
+      const rootElement = document.getElementById(DOM_IDS.ROOT_CONTAINER) || createRootElement();
+      const root = createRoot(rootElement);
+      root.render(
+        <ErrorBoundary FallbackComponent={ErrorFallback} onReset={handleReset}>
+          <I18nextProvider i18n={i18nInstance}>
+            <App />
+          </I18nextProvider>
+        </ErrorBoundary>,
+      );
+
+      // 가라오케/가사 컨테이너 준비 및 렌더링
+      // setupKaraokeContainer();
+
+      // 초기 URL 감지 및 UI/감지 시스템 활성화
+      handleUrlChangeGuarded(window.location.href);
+
+      // 감지 시스템 활성/비활성 상태 동기화
+      chrome.storage.sync.get(STORAGE_KEYS.CONTENT_ENABLED, (result) => {
+        const enabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? true;
+        setDetectionState(enabled);
+      });
+    } catch (error) {
+      // fallback UI 렌더링
+      const rootElement = document.getElementById(DOM_IDS.ROOT_CONTAINER) || createRootElement();
+      const root = createRoot(rootElement);
+      root.render(<ErrorFallback error={error} resetErrorBoundary={handleReset} />);
+    }
+  };
+
+  initializeApp();
+})();
 ```
 
 ## File: hooks/useChromeStorage.ts
@@ -1497,6 +1536,7 @@ declare module '*.css' {
 }
 interface Window {
   [key: string]: unknown;
+  __LYRICS_OVERLAY_INITED?: boolean;
 }
 ```
 
@@ -1877,7 +1917,12 @@ export function getDisplayLines(lines: Line[], currentTime: number): DisplayIndi
   }
 
   if (activeIndex === -1) {
-    activeIndex = lines.length - 1;
+    const firstLine = lines[0];
+    if (firstLine && currentTime < firstLine.time) {
+      // 첫 타임스탬프 전: 아무 자막도 출력하지 않음
+      return { top: '', bottom: '', highlightTop: false, highlightBottom: false };
+    }
+    activeIndex = lines.length - 1; // 곡이 끝난 뒤, 마지막 가사 유지
   }
 
   // 위치는 교대로: 0번째는 bottom, 1번째는 top, 2번째는 bottom, 3번째는 top ...
