@@ -134,16 +134,12 @@ export function extractArtistAndTitleCustom(rawTitle: string): { artist: string;
 
   return { artist, title };
 }
-export function extractEnglishName(name: string): string {
-  // 연속된 영어 단어(공백 포함)만 추출
-  const match = name.match(/([A-Za-z][A-Za-z\s'&.-]*)/g);
-  return match ? match.join(' ').trim() : name;
+export function extractEnglishOnly(str: string): string {
+  // 연속 영어 단어와 공백, 일부 특수문자만 추출
+  const match = str.match(/([A-Za-z][A-Za-z\s'’&.-]*)/g);
+  return match ? match.join(' ').trim() : '';
 }
-export function extractEnglishTitle(title: string): string {
-  // 영어 단어가 2개 이상 연속된 부분만 추출 (예시)
-  const match = title.match(/([A-Za-z][A-Za-z\s']{2,})/g);
-  return match ? match.join(' ').trim() : title;
-}
+
 export function removeEmptyBrackets(title: string): string {
   return title
     .replace(/\(\s*\)/g, '')

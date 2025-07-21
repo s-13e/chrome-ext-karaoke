@@ -31,6 +31,24 @@ export const formatSecondsToTime = (seconds: number): string => {
 };
 
 /**
+ * ISO 8601 duration (예: "PT4M13S")를 초 단위(숫자)로 변환
+ * @param isoString ISO 8601 duration 문자열 (예: "PT1H2M10S", "PT3M5S", "PT22S")
+ * @returns 초 단위 숫자 (실패시 0)
+ */
+export function parseISO8601Duration(isoString: string): number {
+  if (!isoString || typeof isoString !== 'string') return 0;
+  // 정규식: PT#H#M#S 각 단위 별 추출 (H, M, S는 생략 가능함)
+  const match = isoString.match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?$/);
+  if (!match) return 0;
+
+  const hours = parseInt(match[1] || '0', 10);
+  const minutes = parseInt(match[2] || '0', 10);
+  const seconds = parseFloat(match[3] || '0');
+
+  return hours * 3600 + minutes * 60 + seconds;
+}
+
+/**
  * 싱크 오차 보정 (±500ms 이내 조정)
  * @param currentTime - 현재 시간
  * @param targetTime - 목표 시간

@@ -1,7 +1,6 @@
-import { MUSIC_KEYWORDS } from '@constants/keywords';
-// import { extractPCMFromMediaElement } from './audio';
-
 // src/lib/utils/musicDetection.ts
+import { MUSIC_KEYWORDS } from '@constants/keywords';
+
 export interface MusicDetectionInput {
   categoryId?: string;
   title?: string;
@@ -30,8 +29,17 @@ export function scoreMusicVideo(meta: MusicDetectionInput): number {
   return score;
 }
 
-export function isMusicVideo(meta: MusicDetectionInput, threshold = 3): boolean {
-  return scoreMusicVideo(meta) >= threshold;
+export function isMusicVideo(meta: MusicDetectionInput, lyricsLengthSec?: number, threshold = 3): boolean {
+  const score = scoreMusicVideo(meta);
+
+  if (
+    lyricsLengthSec &&
+    meta.durationSec &&
+    Math.abs(lyricsLengthSec - meta.durationSec) / Math.max(lyricsLengthSec, meta.durationSec) > 0.35
+  ) {
+    return false;
+  }
+  return score >= threshold;
 }
 
 // // 음악 인트로 감지/온셋 계산 유틸

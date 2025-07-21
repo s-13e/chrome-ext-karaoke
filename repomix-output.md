@@ -75,27 +75,32 @@ lib/types/lyrics.ts
 lib/types/message.ts
 lib/types/translationKeys.ts
 lib/types/video.ts
-lib/utils/artistTitle.ts
-lib/utils/audio.ts
-lib/utils/common.ts
-lib/utils/contentGuard.ts
-lib/utils/domUtils.ts
-lib/utils/languageDetector.ts
-lib/utils/listenerManager.ts
-lib/utils/lyrics.ts
-lib/utils/lyricsDisplay.ts
-lib/utils/lyricsParser.ts
-lib/utils/musicDetection.ts
-lib/utils/playerUtils.ts
-lib/utils/registerAllListeners.ts
-lib/utils/singletonListener.ts
-lib/utils/stringUtils.ts
-lib/utils/styleInjection.ts
-lib/utils/time.ts
-lib/utils/typeGuards.ts
-lib/utils/uiResourceManager.ts
-lib/utils/vad.ts
-lib/utils/videoDetection.ts
+lib/utils/audio/audio.ts
+lib/utils/audio/audioAnalysis.ts
+lib/utils/audio/audioUtils.ts
+lib/utils/audio/musicDetection.ts
+lib/utils/audio/vad.ts
+lib/utils/cache/lyricsCache.ts
+lib/utils/common/common.ts
+lib/utils/common/stringUtils.ts
+lib/utils/common/time.ts
+lib/utils/common/typeGuards.ts
+lib/utils/dom/domUtils.ts
+lib/utils/dom/styleInjection.ts
+lib/utils/infra/listenerManager.ts
+lib/utils/infra/registerAllListeners.ts
+lib/utils/infra/singletonListener.ts
+lib/utils/infra/uiResourceManager.ts
+lib/utils/lyrics/artistTitle.ts
+lib/utils/lyrics/getLyricsFromCacheOrFetch.ts
+lib/utils/lyrics/languageDetector.ts
+lib/utils/lyrics/lyrics.ts
+lib/utils/lyrics/lyricsDisplay.ts
+lib/utils/lyrics/lyricsParser.ts
+lib/utils/lyrics/queryNormalizer.ts
+lib/utils/platform/contentGuard.ts
+lib/utils/platform/playerUtils.ts
+lib/utils/platform/videoDetection.ts
 lib/youtube.ts
 locales/en.json
 locales/ko.json
@@ -184,6 +189,15 @@ export async function fetchKSoftLyrics(artist: string, title: string): Promise<K
 
 ## File: background/api/lrclib.ts
 ```typescript
+import { Line } from '@lib/types/lyrics';
+export interface LrcLibLyricsResult {
+  lyrics: string | Line[];
+  duration?: number;
+  artist?: string;
+  title?: string;
+  id?: string;
+}
+
 // background/api/lrclib.ts
 export async function fetchLrclibLyrics(artist: string, title: string): Promise<string | null> {
   const endpoint = `https://lrclib.net/api/get?artist=${encodeURIComponent(artist)}&track=${encodeURIComponent(title)}`;
@@ -192,26 +206,69 @@ export async function fetchLrclibLyrics(artist: string, title: string): Promise<
   const data = await res.json();
   return data?.syncedLyrics || data?.plainLyrics || null;
 }
+
+export async function fetchLyricsBySearchFirst(artist: string, title: string): Promise<LrcLibLyricsResult | undefined> {
+  const query = `${artist} ${title}`;
+  const searchRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(query)}`);
+  const searchData = await searchRes.json();
+
+  for (const candidate of searchData) {
+    const detailRes = await fetch(`https://lrclib.net/api/get/${candidate.id}`);
+    const detail = await detailRes.json();
+    const lyrics = detail.syncedLyrics || detail.plainLyrics;
+    const duration = detail.duration; // LRCLIB에서 제공하는 초 단위 곡 길이(없을 수도 있으니 ?로)
+
+    console.log('길이', duration, '가사:', lyrics);
+
+    if (lyrics) {
+      return {
+        lyrics,
+        duration,
+        artist: detail.artist,
+        title: detail.title,
+        id: candidate.id,
+      };
+    }
+  }
+  return undefined;
+}
 ```
 
 ## File: background/api/youtube.ts
 ```typescript
+import { parseISO8601Duration } from '@lib/utils/common/time';
+import { getFromLyricsCache, setToLyricsCache } from '@lib/utils/cache/lyricsCache';
+
+// 만료시간 기본 1일(YouTube 메타는 update가 드물어서 넉넉히 잡을 것)
+const YT_META_CACHE_TTL = 24 * 60 * 60 * 1000;
+
 // background/api/youtube.ts
 export async function fetchYouTubeVideoMeta(videoId: string, apiKey: string) {
-  const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${apiKey}`;
-  const res = await fetch(url);
-  const data = await res.json();
+  const cacheKey = `videoMeta:${videoId}`;
+  const cached = getFromLyricsCache(cacheKey);
+  if (cached) return cached;
 
+  const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${apiKey}`;
+  const res = await fetch(url);
+
+  const data = await res.json();
   if (data.items && data.items.length > 0) {
     const snippet = data.items[0].snippet;
-    return {
+    const contentDetails = data.items[0].contentDetails;
+    let durationSec = 0;
+    if (contentDetails && contentDetails.duration) {
+      durationSec = parseISO8601Duration(contentDetails.duration);
+    }
+    const result = {
       categoryId: snippet.categoryId,
       title: snippet.title,
       description: snippet.description,
       tags: snippet.tags,
       channelTitle: snippet.channelTitle,
-      // duration은 videos.list에서 part=contentDetails 추가로 받아야 함
+      durationSec,
     };
+    setToLyricsCache(cacheKey, result, { ttl: YT_META_CACHE_TTL });
+    return result;
   }
   return null;
 }
@@ -350,7 +407,7 @@ LoadingOverlay.displayName = 'LoadingOverlay';
 import React from 'react';
 // import { parseLyrics } from '@lib/utils/lyricsParser';
 import { useCurrentTime } from '@hooks/useCurrentTime';
-import { getDisplayLines } from '@lib/utils/lyricsDisplay';
+import { getDisplayLines } from '@lib/utils/lyrics/lyricsDisplay';
 import styles from './styles.module.css';
 import { Line } from '@lib/types/lyrics';
 
@@ -640,6 +697,7 @@ export const ERROR_MESSAGES = {
 ## File: constants/keywords.ts
 ```typescript
 export const SPECIAL_MUSIC_KEYWORDS = ['ed', 'op', 'mv', 'ost'];
+export const INTRO_OUTRO_KEYWORDS = ['mv', 'remix', 'stage', 'full cam', '직캠', 'fan cam', 'stage mix', '최초 공개'];
 export const MUSIC_KEYWORDS = [
   // 영어
   'official',
@@ -794,7 +852,7 @@ export const YOUTUBE_REGEX = /youtube\.com\/watch\?v=[\w-]{11}/;
 // src/content/App.tsx
 import { useEffect } from 'react';
 import { i18nInstance } from '@services/i18n';
-import { isToggleContentMessage } from '@lib/utils/typeGuards';
+import { isToggleContentMessage } from '@lib/utils/common/typeGuards';
 import { ContentScriptMessage } from '@lib/types/message';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 // import { LyricsContainer } from './components/LyricsContainer';
@@ -898,7 +956,7 @@ export const initLyricsContainer = (data: { lyrics: string }) => {
 ## File: content/components/SyncSubtitle.tsx
 ```typescript
 import React from 'react';
-import { parseTimeToSeconds } from '@lib/utils/time';
+import { parseTimeToSeconds } from '@lib/utils/common/time';
 import { Line } from '@lib/types/lyrics';
 
 export const SyncSubtitle: React.FC<{
@@ -946,26 +1004,35 @@ import { ErrorFallback } from '@components/common/ErrorFallback';
 import { I18nextProvider } from 'react-i18next';
 import { ErrorBoundary } from 'react-error-boundary';
 import { detectYouTubeVideo, setupSPAObserver } from '@lib/youtube';
-import { debounce } from '@lib/utils/common';
+import { debounce } from '@lib/utils/common/common';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 import { MESSAGE_TYPES } from '@constants/messageTypes';
 import { DOM_IDS } from '@constants/doomIds';
 import { fetchYouTubeVideoMeta } from '@background/api/youtube';
-import { isMusicVideo } from '@lib/utils/musicDetection';
-import { UIResourceManager } from '@lib/utils/uiResourceManager';
+import { isMusicVideo } from '@lib/utils/audio/musicDetection';
+import { UIResourceManager } from '@lib/utils/infra/uiResourceManager';
 import { YOUTUBE_PLAYER_SELECTOR, YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
-import { extractArtistAndTitle } from '@lib/utils/artistTitle';
-import { cleanUp, extractArtistAndTitleCustom, removeEmptyBrackets } from '@lib/utils/stringUtils';
-import { listenerManager } from '@lib/utils/listenerManager';
-import { withContentEnabled } from '@lib/utils/contentGuard';
+import { extractArtistAndTitle } from '@lib/utils/lyrics/artistTitle';
+import {
+  cleanUp,
+  extractArtistAndTitleCustom,
+  extractEnglishOnly,
+  removeEmptyBrackets,
+} from '@lib/utils/common/stringUtils';
+import { listenerManager } from '@lib/utils/infra/listenerManager';
+import { withContentEnabled } from '@lib/utils/platform/contentGuard';
 import { injectLyricsOverlayRoot } from '@components/lyrics/LyricsOverlayRoot';
 import { DualHighlightSubtitle } from '@components/lyrics/DualHighlightSubtitle';
-import { isAdPlaying } from '@lib/utils/domUtils';
-import { parseLyrics } from '@lib/utils/lyricsParser';
+import { isAdPlaying } from '@lib/utils/dom/domUtils';
+import { parseLyrics } from '@lib/utils/lyrics/lyricsParser';
 import { Line } from '@lib/types/lyrics';
-import { tryDetectVideoChange } from '@lib/utils/videoDetection';
+import { tryDetectVideoChange } from '@lib/utils/platform/videoDetection';
+import { analyzeAudioFeatures } from '@lib/utils/audio/audioAnalysis';
+import { fetchLyricsBySearchFirst } from '@background/api/lrclib';
 
 import 'normalize.css';
+import { setToLyricsCache } from '@lib/utils/cache/lyricsCache';
+import { normalizeLyricsQuery } from '@lib/utils/lyrics/queryNormalizer';
 
 (() => {
   // 새로고침 시 contentscript 내 중복 실행 방지
@@ -974,8 +1041,6 @@ import 'normalize.css';
     return;
   }
   window.__LYRICS_OVERLAY_INITED = true;
-
-  // ↓↓↓ 여기에 기존의 나머지 index.tsx 코드 전체 (함수, 플래그 정의, initializeApp 호출 등)
 
   // --- 플래그 및 관리 객체 ---
   let isDetectionActive = false; // 감지 시스템 활성화 여부
@@ -1110,22 +1175,6 @@ import 'normalize.css';
     detectionObserverManager.lyricsObserver.observe(player, { attributes: true, attributeFilter: ['class'] });
     showLyricsIfNotAd(lyrics);
   }
-  async function fetchLyricsBySearchFirst(artist: string, title: string): Promise<string | Line[] | undefined> {
-    const query = `${artist} ${title}`;
-    const searchRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(query)}`);
-    const searchData = await searchRes.json();
-
-    for (const candidate of searchData) {
-      const detailRes = await fetch(`https://lrclib.net/api/get/${candidate.id}`);
-      const detail = await detailRes.json();
-      const lyrics = detail.syncedLyrics || detail.plainLyrics;
-      console.log('가사:', lyrics);
-
-      if (lyrics) return lyrics;
-    }
-
-    return undefined;
-  }
 
   // ✅ URL 변경 핸들러 개선
   const handleUrlChange = (url: string) => {
@@ -1190,39 +1239,73 @@ import 'normalize.css';
         return;
       }
 
-      const artist = cleanUp(refined.artist);
+      let artist = cleanUp(refined.artist);
       let title = cleanUp(refined.title);
       title = removeEmptyBrackets(title);
+
+      artist = extractEnglishOnly(artist);
+      title = extractEnglishOnly(title);
 
       console.log('아티스트:', artist, '곡명:', title);
 
       // 1. 비디오 엘리먼트 선택
       const videoElem = document.querySelector('video');
       if (!videoElem) return;
-
-      const lyrics = await fetchLyricsBySearchFirst(artist, title);
+      const result = await fetchLyricsBySearchFirst(artist, title);
 
       // 다음 영상에 이전 가사 나오는 거 방지
-      if (!lyrics) {
+      if (!result) {
         console.log('가사 없음');
         hideLyricsOverlay();
         latestLyrics = [];
         return;
       }
-
+      setToLyricsCache(normalizeLyricsQuery(artist, title, {}), {
+        lyrics: result.lyrics,
+        duration: result.duration,
+        artist: result.artist, // 정답 artist
+        title: result.title, // 정답 title
+        id: result.id, // (선택) LRCLIB id
+      });
+      const { lyrics, duration: lyricsDuration } = result;
       const parsedLyrics: Line[] = typeof lyrics === 'string' ? parseLyrics(lyrics) : lyrics;
+      const lastLine = parsedLyrics[parsedLyrics.length - 1];
+      const lyricsLengthSec = lastLine?.time ?? 0;
 
-      // const syncOffset = 0;
+      // duration 필드가 존재하면 우선적으로 사용, 없으면 마지막 가사줄 기준
+      const effectiveLyricsDuration = lyricsDuration ?? lyricsLengthSec;
+      if ((typeof lyricsDuration === 'number' && lyricsDuration <= 2) || lyricsLengthSec <= 10) {
+        console.warn(
+          `[audioAnalysis] 분석 스킵: duration(${lyricsDuration ?? '-'}) < 2초 또는 lyricsLengthSec(${lyricsLengthSec}) ≤ 10초`,
+        );
+        return; // 분석 생략, 이후 정상 흐름만 계속
+      }
 
-      try {
-        // const firstLyricTime = extractFirstLrcTimestamp(lyrics);
-        // 예: 새 분석 엔진의 음악 시작시점(초)가 있다면 diff로 offset 계산 (지금은 0으로)
-        // syncOffset = detectedIntroStartSec - firstLyricTime;
-        // fallback (없으면 0)
-      } catch (e) {
-        console.warn('[Fallback] 첫 가사 타임스탬프 추출 실패:', e);
-      } finally {
-        isDetecting = false;
+      if (!parsedLyrics || parsedLyrics.length === 0) {
+        console.log('parsedLyrics is empty or undefined');
+        hideLyricsOverlay();
+        return;
+      }
+
+      if (!isMusicVideo(meta, lyricsLengthSec)) {
+        console.log('isMusicVideo 판별 실패');
+        hideLyricsOverlay();
+        return;
+      }
+
+      const videoDurationSec = meta.durationSec ?? 0;
+      const durationSec = videoDurationSec - effectiveLyricsDuration;
+
+      if (durationSec <= 0) {
+        console.warn(
+          `[audioAnalysis] 분석 스킵: 영상 길이(${videoDurationSec}s) - 가사 길이(${effectiveLyricsDuration}s) <= 0`,
+        );
+      } else {
+        if (!isAdPlaying()) {
+          // const analysisResult = await analyzeAudioFeatures(videoElem, { durationSec });
+          console.warn(`[audioAnalysis] 분석: 영상 길이(${videoDurationSec}s), 가사 길이(${effectiveLyricsDuration}s)`);
+          // console.log('durationSec:', durationSec, '[audioAnalysis] 성공:', analysisResult);
+        }
       }
 
       latestLyrics = parsedLyrics;
@@ -1237,7 +1320,7 @@ import 'normalize.css';
     }
   };
   const handleVideoDetectionGuarded = withContentEnabled(getContentEnabled, handleVideoDetection);
-  const debouncedDetection = debounce(handleVideoDetectionGuarded, 300);
+  const debouncedDetection = debounce(handleVideoDetectionGuarded, RETRY_DELAY);
 
   // --- 스토리지, UI, SPA 이벤트, visibility 이벤트 일괄 관리 ---
   // SPA 네비게이션 메시지 핸들러
@@ -1604,67 +1687,38 @@ export type TranslationKey = (typeof TRANSLATION_KEYS)[number];
 // }
 ```
 
-## File: lib/utils/artistTitle.ts
+## File: lib/utils/audio/audio.ts
 ```typescript
-import getArtistTitle from 'get-artist-title';
+import { getSharedAudioContext } from "./audioUtils";
 
 /**
- * 유튜브 영상 제목에서 [아티스트, 타이틀] 추출
+ * HTMLMediaElement에서 Mono PCM 추출 (Singleton AudioContext 활용)
  */
-export function extractArtistAndTitle(title: string): { artist: string; title: string } | null {
-  const [artist, songTitle] = getArtistTitle(title) || [];
-  if (artist && songTitle) {
-    return { artist, title: songTitle };
-  }
-  return null;
-}
-```
-
-## File: lib/utils/audio.ts
-```typescript
-/**
- * HTMLMediaElement(YouTube <video> 등)에서 지정 구간(초)의 Mono PCM을 추출
- * @param elem HTMLMediaElement (video/audio)
- * @param durationSec 분석 구간(초), 기본 15
- * @param sampleRate 목표 샘플레이트 (기본 44100)
- * @returns { pcm: Float32Array, sampleRate: number }
- */
-
-let cachedAudioCtx: AudioContext | null = null;
-let cachedSourceNode: MediaElementAudioSourceNode | null = null;
-
 export async function extractPCMFromMediaElement(
   elem: HTMLMediaElement,
   durationSec = 15,
   sampleRate = 44100,
 ): Promise<{ pcm: Float32Array; sampleRate: number }> {
-  // AudioContext 재사용 (required for createMediaElementSource)
-  if (!cachedAudioCtx || cachedAudioCtx.sampleRate !== sampleRate) {
-    cachedAudioCtx?.close(); // 이전거 clean up (옵션)
-    cachedAudioCtx = new AudioContext({ sampleRate });
-  }
-  const audioCtx = cachedAudioCtx;
+  const audioCtx = getSharedAudioContext();
   const analyser = audioCtx.createAnalyser();
 
-  // ⛔ createMediaElementSource는 한 번만! → memoization
-  if (!cachedSourceNode) {
-    cachedSourceNode = audioCtx.createMediaElementSource(elem);
-    cachedSourceNode.connect(analyser);
-    analyser.connect(audioCtx.destination);
+  // 단일 SourceNode 재사용: 기존 연결이 있을 경우 분리
+  let sourceNode = (extractPCMFromMediaElement as any)._sourceNode as MediaElementAudioSourceNode | null;
+  if (sourceNode) {
+    try {
+      sourceNode.disconnect();
+    } catch (_) {}
   }
+  sourceNode = audioCtx.createMediaElementSource(elem);
+  (extractPCMFromMediaElement as any)._sourceNode = sourceNode;
 
-  // 버퍼의 길이(초)
+  sourceNode.connect(analyser);
+  analyser.connect(audioCtx.destination);
+
   const frameSize = analyser.fftSize;
   const framesNeeded = Math.ceil((sampleRate * durationSec) / frameSize);
   const pcmResult = new Float32Array(sampleRate * durationSec);
 
-  // 미디어 위치 백업 → 0 시작
-  const prevCurrentTime = elem.currentTime;
-  elem.currentTime = 0;
-
-  await elem.play();
-
-  // 각 프레임마다 PCM 추출
   let written = 0;
   for (let i = 0; i < framesNeeded; i++) {
     await new Promise((res) => setTimeout(res, (frameSize / sampleRate) * 1000));
@@ -1675,9 +1729,6 @@ export async function extractPCMFromMediaElement(
     written += slice.length;
     if (written >= pcmResult.length) break;
   }
-  audioCtx.close(); // 리소스 해제
-
-  elem.currentTime = prevCurrentTime; // 원복
 
   return { pcm: pcmResult, sampleRate };
 }
@@ -1690,7 +1741,272 @@ export function stereoToMono(buffer: AudioBuffer, channelIndex = 0): Float32Arra
 }
 ```
 
-## File: lib/utils/common.ts
+## File: lib/utils/audio/audioAnalysis.ts
+```typescript
+import Meyda, { MeydaFeaturesObject } from 'meyda';
+import { getSharedAudioContext } from './audioUtils';
+
+/**
+ * 고수준 오디오 특징 분석 – Meyda 기반, Worklet 싱글톤 관리 및 예외/자원 처리 반영
+ */
+export async function analyzeAudioFeatures(
+  videoEl: HTMLMediaElement,
+  options: { durationSec?: number; bufferSize?: number; threshold?: number } = {},
+) {
+  const { durationSec = 15, bufferSize = 1024, threshold = 0.04 } = options;
+  const audioContext = getSharedAudioContext();
+  let source: MediaElementAudioSourceNode | null = null;
+  let analyzer: ReturnType<typeof Meyda.createMeydaAnalyzer> | null = null;
+
+  try {
+    source = audioContext.createMediaElementSource(videoEl);
+
+    const rms: number[] = [];
+    const spectralCentroid: number[] = [];
+    const timestamps: number[] = [];
+
+    analyzer = Meyda.createMeydaAnalyzer({
+      audioContext,
+      source,
+      bufferSize,
+      featureExtractors: ['rms', 'spectralCentroid'],
+      callback: (features: MeydaFeaturesObject) => {
+        rms.push(features.rms ?? 0);
+        spectralCentroid.push(features.spectralCentroid ?? 0);
+        timestamps.push(videoEl.currentTime);
+      },
+    });
+
+    // 영상상태 백업 및 play
+    const wasPaused = videoEl.paused;
+    const prevTime = videoEl.currentTime;
+    if (wasPaused) await videoEl.play();
+    analyzer.start();
+
+    // 분석 타임아웃 및 자원 정리만 실행 (싱글톤 audioContext는 close하지 않음)
+    await new Promise<void>((resolve) => {
+      setTimeout(() => {
+        try {
+          analyzer?.stop();
+        } catch {}
+        if (source) {
+          try {
+            source.disconnect();
+          } catch {}
+        }
+        resolve();
+      }, durationSec * 1000);
+    });
+
+    // 영상상태 복구
+    if (wasPaused) videoEl.pause();
+    videoEl.currentTime = prevTime;
+
+    // threshold 값 기준으로 onset index 탐색
+    const onsetIdx = rms.findIndex((value) => value > threshold);
+
+
+    return {
+      rms,
+      spectralCentroid,
+      rmsTimestamps: timestamps,
+      centroidTimestamps: timestamps,
+      onsetTime: onsetIdx !== -1 ? timestamps[onsetIdx] : undefined,
+    };
+  } catch (error) {
+    // 분석 실패 및 자원 안전 정리
+    console.error('오디오 분석 중 오류 발생:', error);
+    try {
+      analyzer?.stop();
+    } catch {}
+    if (source) {
+      try {
+        source.disconnect();
+      } catch {}
+    }
+    // audioContext는 싱글톤이라 close하지 않음
+    return null;
+  }
+}
+```
+
+## File: lib/utils/audio/audioUtils.ts
+```typescript
+// audioUtils.ts
+let sharedAudioContext: AudioContext | null = null;
+
+export function getSharedAudioContext(): AudioContext {
+  if (!sharedAudioContext) sharedAudioContext = new AudioContext();
+  return sharedAudioContext;
+}
+```
+
+## File: lib/utils/audio/musicDetection.ts
+```typescript
+// src/lib/utils/musicDetection.ts
+import { MUSIC_KEYWORDS } from '@constants/keywords';
+
+export interface MusicDetectionInput {
+  categoryId?: string;
+  title?: string;
+  description?: string;
+  tags?: string[];
+  channelTitle?: string;
+  durationSec?: number;
+}
+const specialMusicPattern = /([^A-Za-z]|^)(OP|ED|OST|MV)([^A-Za-z]|$)/i;
+
+export function scoreMusicVideo(meta: MusicDetectionInput): number {
+  let score = 0;
+  if (meta.categoryId === '10') score += 3;
+
+  if (meta.title && MUSIC_KEYWORDS.some((k) => meta.title?.toLowerCase().includes(k))) score += 2;
+  if (meta.description && MUSIC_KEYWORDS.some((k) => meta.description?.toLowerCase().includes(k))) score += 1;
+  if (meta.tags && meta.tags.some((tag) => MUSIC_KEYWORDS.some((k) => tag.toLowerCase().includes(k)))) score += 1;
+  if (meta.durationSec && meta.durationSec >= 60 && meta.durationSec <= 600) score += 1;
+  // 채널명 등 추가 휴리스틱 가능
+
+  // OP/ED/OST/MV가 앞뒤 영어 없이 등장할 때 추가 가산점
+  if (meta.title && specialMusicPattern.test(meta.title)) score += 1;
+  if (meta.description && specialMusicPattern.test(meta.description)) score += 1;
+  if (meta.tags && meta.tags.some((tag) => specialMusicPattern.test(tag))) score += 1;
+
+  return score;
+}
+
+export function isMusicVideo(meta: MusicDetectionInput, lyricsLengthSec?: number, threshold = 3): boolean {
+  const score = scoreMusicVideo(meta);
+
+  if (
+    lyricsLengthSec &&
+    meta.durationSec &&
+    Math.abs(lyricsLengthSec - meta.durationSec) / Math.max(lyricsLengthSec, meta.durationSec) > 0.35
+  ) {
+    return false;
+  }
+  return score >= threshold;
+}
+
+// // 음악 인트로 감지/온셋 계산 유틸
+// export async function detectMusicIntro(
+//   videoElem: HTMLVideoElement,
+//   introDurationSec = 15,
+//   introThresholdSec = 3,
+// ): Promise<{
+//   introOnsetSec: number | null;
+//   isMusicInIntro: boolean;
+//   onsetOffset: number | null; // ✅ 수정됨
+// }> {
+//   const { pcm, sampleRate } = await extractPCMFromMediaElement(videoElem, introDurationSec);
+//   //const onsetOffset = getFirstOnsetOffset(pcm, sampleRate); // ✅ 단일 값 (number | null)
+
+//   const introOnsetSec = onsetOffset !== null ? onsetOffset : null;
+//   const isMusicInIntro = introOnsetSec !== null && introOnsetSec < introThresholdSec;
+
+//   return {
+//     introOnsetSec,
+//     isMusicInIntro,
+//     onsetOffset,
+//   };
+// }
+```
+
+## File: lib/utils/audio/vad.ts
+```typescript
+// import { VAD } from '@ricky0123/vad';
+
+// let vadInstance: VAD | null = null;
+
+// // 음성 구간을 프레임(30ms) 단위로 감지하여 결과(음성: true/무음: false) 배열을 반환
+// export async function runVAD(audioBuffer: Float32Array): Promise<boolean[]> {
+//   if (!vadInstance) {
+//     vadInstance = new VAD();
+//     await vadInstance.init();
+//   }
+
+//   const sampleRate = 16000; // 표준 VAD 입력 샘플레이트
+//   const frameDurationMs = 30;
+//   const frameSize = (sampleRate * frameDurationMs) / 1000; // 480개 샘플 (30ms @16kHz)
+
+//   const vadResults: boolean[] = [];
+//   const totalFrames = Math.floor(audioBuffer.length / frameSize);
+
+//   for (let i = 0; i < totalFrames; i++) {
+//     const start = i * frameSize;
+//     const end = start + frameSize;
+//     const frame = audioBuffer.subarray(start, end);
+//     // VAD가 이 프레임에서 음성이 감지되면 true 반환
+//     const isSpeech = await vadInstance.isSpeech(frame as Float32Array);
+//     vadResults.push(isSpeech);
+//   }
+//   return vadResults;
+// }
+```
+
+## File: lib/utils/cache/lyricsCache.ts
+```typescript
+// lib/utils/cache/lyricsCache.ts
+
+const MEMORY_CACHE: Record<string, { value: any; expire: number; etag?: string }> = {};
+const DEFAULT_TTL = 6 * 60 * 60 * 1000; // 6시간
+
+export function getFromLyricsCache(key: string) {
+  // 1. localStorage 우선 체크
+  const ls = localStorage.getItem(key);
+  if (ls) {
+    try {
+      const obj = JSON.parse(ls);
+      if (obj.expire > Date.now()) {
+        console.log(`[LyricsCache] 캐시 히트 (localStorage): key=${key}`);
+        return obj.value;
+      } else {
+        localStorage.removeItem(key);
+        console.log(`[LyricsCache] 캐시 만료 (localStorage): key=${key}`);
+      }
+    } catch {
+      // 파싱 에러 등은 무시하고 계속 진행
+    }
+  }
+  // 2. in-memory fallback
+  const item = MEMORY_CACHE[key];
+  if (item) {
+    if (item.expire > Date.now()) {
+      console.log(`[LyricsCache] 캐시 히트 (memory): key=${key}`);
+      return item.value;
+    } else {
+      delete MEMORY_CACHE[key];
+      console.log(`[LyricsCache] 캐시 만료 (memory): key=${key}`);
+    }
+  }
+  // 3. 완전 miss
+  console.log(`[LyricsCache] 캐시 미스: key=${key}`);
+  return null;
+}
+
+export function setToLyricsCache(
+  key: string,
+  value: any,
+  { ttl = DEFAULT_TTL, etag }: { ttl?: number; etag?: string } = {},
+) {
+  const expire = Date.now() + ttl;
+  // 메모리 저장
+  MEMORY_CACHE[key] = { value, expire, etag };
+  // localStorage 동기화
+  try {
+    localStorage.setItem(key, JSON.stringify({ value, expire, etag }));
+    console.log(`[LyricsCache] 캐시 저장됨(localStorage): key=${key}, 만료=${ttl / 1000}s`);
+  } catch {
+    // localStorage 용량 초과 등 무시 (메모리 캐시만 보허)
+    console.warn(`[LyricsCache] localStorage 저장 실패: key=${key}`);
+  }
+}
+
+export function getETagForLyrics(key: string): string | undefined {
+  return MEMORY_CACHE[key]?.etag;
+}
+```
+
+## File: lib/utils/common/common.ts
 ```typescript
 // 디바운싱
 export const debounce = <T extends (...args: unknown[]) => unknown>(
@@ -1720,423 +2036,7 @@ export const throttle = <T extends (...args: unknown[]) => unknown>(
 };
 ```
 
-## File: lib/utils/contentGuard.ts
-```typescript
-// lib/utils/contentGuard.ts
-// contents 비활성화/활성화 여부에 따라 진행되는 함수의 경우 해당 함수 사용
-// 함수 실행 전 콘텐츠 활성화 여부를 검사하는 함수
-export function withContentEnabled<Args extends unknown[], R>(
-  getContentEnabled: () => boolean,
-  fn: (...args: Args) => R,
-): (...args: Args) => R | undefined {
-  return function (...args: Args): R | undefined {
-    if (!getContentEnabled()) return;
-    return fn(...args);
-  };
-}
-```
-
-## File: lib/utils/domUtils.ts
-```typescript
-// src/lib/utils/domUtils.ts
-
-import { YOUTUBE_PLAYER_SELECTOR } from '@constants/youtubeSelectors';
-
-// 요소 대기 함수
-export const waitForElement = <T extends Element>(selector: string, timeout = 5000): Promise<T> => {
-  return new Promise((resolve, reject) => {
-    const element = document.querySelector<T>(selector);
-    if (element) return resolve(element);
-
-    const observer = new MutationObserver(() => {
-      const found = document.querySelector<T>(selector);
-      if (found) {
-        cleanup();
-        resolve(found);
-      }
-    });
-
-    const timeoutId = setTimeout(() => {
-      cleanup();
-      reject(new Error(`Element ${selector} not found in ${timeout}ms`));
-    }, timeout);
-
-    const cleanup = () => {
-      observer.disconnect();
-      clearTimeout(timeoutId);
-    };
-
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-    });
-  });
-};
-
-// 요소 생성 함수
-export const createElement = <K extends keyof HTMLElementTagNameMap>(
-  tagName: K,
-  options?: ElementCreationOptions,
-): HTMLElementTagNameMap[K] => {
-  return document.createElement(tagName, options);
-};
-
-// 안전한 요소 삽입
-export const safeAppendChild = (parent: Node, child: Node): boolean => {
-  try {
-    parent.appendChild(child);
-    return true;
-  } catch (error) {
-    console.error('DOM append failed:', error);
-    return false;
-  }
-};
-// 요소 제거 유틸리티
-export const removeElement = (selector: string): boolean => {
-  const element = document.querySelector(selector);
-  if (!element) return false;
-  element.remove();
-  return true;
-};
-
-// CSS 클래스 토글
-export const toggleClass = (element: Element, className: string, force?: boolean): boolean => {
-  if (!element) return false;
-  element.classList.toggle(className, force);
-  return true;
-};
-
-export function isAdPlaying() {
-  const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR);
-  return player && (player.classList.contains('ad-showing') || player.classList.contains('ad-interrupting'));
-}
-```
-
-## File: lib/utils/languageDetector.ts
-```typescript
-// 가사의 언어 감지
-```
-
-## File: lib/utils/listenerManager.ts
-```typescript
-// src/lib/utils/listenerManager.ts
-
-type UnregisterFn = () => void;
-
-class ListenerManager {
-  private unregisterFns: UnregisterFn[] = [];
-
-  /**
-   * 리스너 등록 함수
-   * @param register 등록 함수 (리스너 등록 시 호출, 해제 함수 반환)
-   */
-  public add(register: () => UnregisterFn): void {
-    const unregister = register();
-    this.unregisterFns.push(unregister);
-  }
-
-  /**
-   * 모든 리스너 해제 (cleanup)
-   */
-  public removeAll(): void {
-    this.unregisterFns.forEach((unregister) => {
-      try {
-        unregister();
-      } catch {
-        // 해제 중 에러 무시
-      }
-    });
-    this.unregisterFns = [];
-  }
-}
-
-// 싱글 인스턴스 export (프로젝트 전체에서 공유)
-export const listenerManager = new ListenerManager();
-```
-
-## File: lib/utils/lyrics.ts
-```typescript
-import { Line } from '@lib/types/lyrics';
-
-// src/lib/utils/lyrics.ts
-export function extractFirstLrcTimestamp(lyrics: string | Line[]): number {
-  // 1. 배열(파싱된 LRC)인 경우:
-  if (Array.isArray(lyrics)) {
-    if (!lyrics.length) return 0;
-    const firstLine = lyrics[0];
-    if (!firstLine || typeof firstLine.time !== 'number') return 0;
-    return firstLine.time;
-  }
-
-  // 2. string(LRC 원문)인 경우, 정규식으로 파싱
-  const match = lyrics.match(/\[(\d+):(\d+[.\d+]*)\]/);
-  if (!match || typeof match[1] !== 'string' || typeof match[2] !== 'string') return 0;
-
-  const min = parseInt(match[1], 10);
-  const sec = parseFloat(match[2]);
-
-  if (isNaN(min) || isNaN(sec)) return 0;
-  return min * 60 + sec;
-}
-```
-
-## File: lib/utils/lyricsDisplay.ts
-```typescript
-// utils/lyricsDisplay.ts
-import { Line } from '@lib/types/lyrics';
-
-export interface DisplayIndices {
-  top: string;
-  bottom: string;
-  highlightTop: boolean;
-  highlightBottom: boolean;
-}
-
-export function getDisplayLines(lines: Line[], currentTime: number): DisplayIndices {
-  if (lines.length === 0) {
-    return { top: '', bottom: '', highlightTop: false, highlightBottom: false };
-  }
-
-  let activeIndex = -1;
-
-  for (let i = 0; i < lines.length; i++) {
-    const cur = lines[i];
-    const next = lines[i + 1];
-    if (!cur) continue;
-
-    const endTime = next?.time ?? Infinity;
-    const previewTime = cur.time + (endTime - cur.time) * 0.5;
-
-    if (currentTime >= cur.time && currentTime < previewTime) {
-      activeIndex = i;
-      break;
-    } else if (currentTime >= previewTime && currentTime < endTime) {
-      activeIndex = i + 1;
-      break;
-    }
-  }
-
-  if (activeIndex === -1) {
-    const firstLine = lines[0];
-    if (firstLine && currentTime < firstLine.time) {
-      // 첫 타임스탬프 전: 아무 자막도 출력하지 않음
-      return { top: '', bottom: '', highlightTop: false, highlightBottom: false };
-    }
-    activeIndex = lines.length - 1; // 곡이 끝난 뒤, 마지막 가사 유지
-  }
-
-  // 위치는 교대로: 0번째는 bottom, 1번째는 top, 2번째는 bottom, 3번째는 top ...
-  const isEven = activeIndex % 2 === 0;
-
-  const topIdx = isEven ? activeIndex - 1 : activeIndex;
-  const bottomIdx = isEven ? activeIndex : activeIndex - 1;
-
-  return {
-    top: topIdx >= 0 ? (lines[topIdx]?.text ?? '') : '',
-    bottom: bottomIdx >= 0 ? (lines[bottomIdx]?.text ?? '') : '',
-    highlightTop: !isEven, // 홀수 번째 줄이면 top 강조
-    highlightBottom: isEven, // 짝수 번째 줄이면 bottom 강조
-  };
-}
-```
-
-## File: lib/utils/lyricsParser.ts
-```typescript
-// LRC 등 싱크 가사 포맷을 파싱해, [time, text] 배열로 변환합니다.
-// 싱크 자막, 전체 가사, 하이라이트 등 다양한 곳에서 재사용할 수 있습니다.
-
-import { Line } from '@lib/types/lyrics';
-import { parseTimeToSeconds } from '@lib/utils/time';
-
-/**
- * LRC 형식의 가사 문자열을 파싱하여 [{ time, text }] 배열로 반환
- */ export function parseLyrics(lyrics: string): Line[] {
-  if (!lyrics || lyrics.trim() === '') {
-    console.warn('[lyricsParser] 입력된 lyrics가 비어 있음');
-    return [];
-  }
-  const result = lyrics.split('\n').reduce<Line[]>((acc, line) => {
-    const match = line.match(/\[(\d+):(\d+\.\d+)\](.*)/);
-    if (!match) return acc;
-    const [, min, sec, text] = match;
-    const safeText = (text ?? '').trim();
-    if (safeText === '') return acc;
-    acc.push({ time: parseTimeToSeconds(`${min}:${sec}`), text: safeText });
-    return acc;
-  }, []);
-  if (!result.length) {
-    console.warn('[lyricsParser] LRC 파싱 결과가 없음');
-  }
-  return result;
-}
-```
-
-## File: lib/utils/musicDetection.ts
-```typescript
-import { MUSIC_KEYWORDS } from '@constants/keywords';
-// import { extractPCMFromMediaElement } from './audio';
-
-// src/lib/utils/musicDetection.ts
-export interface MusicDetectionInput {
-  categoryId?: string;
-  title?: string;
-  description?: string;
-  tags?: string[];
-  channelTitle?: string;
-  durationSec?: number;
-}
-const specialMusicPattern = /([^A-Za-z]|^)(OP|ED|OST|MV)([^A-Za-z]|$)/i;
-
-export function scoreMusicVideo(meta: MusicDetectionInput): number {
-  let score = 0;
-  if (meta.categoryId === '10') score += 3;
-
-  if (meta.title && MUSIC_KEYWORDS.some((k) => meta.title?.toLowerCase().includes(k))) score += 2;
-  if (meta.description && MUSIC_KEYWORDS.some((k) => meta.description?.toLowerCase().includes(k))) score += 1;
-  if (meta.tags && meta.tags.some((tag) => MUSIC_KEYWORDS.some((k) => tag.toLowerCase().includes(k)))) score += 1;
-  if (meta.durationSec && meta.durationSec >= 60 && meta.durationSec <= 600) score += 1;
-  // 채널명 등 추가 휴리스틱 가능
-
-  // OP/ED/OST/MV가 앞뒤 영어 없이 등장할 때 추가 가산점
-  if (meta.title && specialMusicPattern.test(meta.title)) score += 1;
-  if (meta.description && specialMusicPattern.test(meta.description)) score += 1;
-  if (meta.tags && meta.tags.some((tag) => specialMusicPattern.test(tag))) score += 1;
-
-  return score;
-}
-
-export function isMusicVideo(meta: MusicDetectionInput, threshold = 3): boolean {
-  return scoreMusicVideo(meta) >= threshold;
-}
-
-// // 음악 인트로 감지/온셋 계산 유틸
-// export async function detectMusicIntro(
-//   videoElem: HTMLVideoElement,
-//   introDurationSec = 15,
-//   introThresholdSec = 3,
-// ): Promise<{
-//   introOnsetSec: number | null;
-//   isMusicInIntro: boolean;
-//   onsetOffset: number | null; // ✅ 수정됨
-// }> {
-//   const { pcm, sampleRate } = await extractPCMFromMediaElement(videoElem, introDurationSec);
-//   //const onsetOffset = getFirstOnsetOffset(pcm, sampleRate); // ✅ 단일 값 (number | null)
-
-//   const introOnsetSec = onsetOffset !== null ? onsetOffset : null;
-//   const isMusicInIntro = introOnsetSec !== null && introOnsetSec < introThresholdSec;
-
-//   return {
-//     introOnsetSec,
-//     isMusicInIntro,
-//     onsetOffset,
-//   };
-// }
-```
-
-## File: lib/utils/playerUtils.ts
-```typescript
-// src/utils/playerUtils.ts
-
-// YouTube 플레이어 이동 유틸리티
-export const moveYouTubePlayer = (targetContainer: HTMLElement, playerSelector = '#movie_player'): boolean => {
-  const player = document.querySelector(playerSelector) as HTMLElement;
-  if (!player || !targetContainer) {
-    console.error('[moveYouTubePlayer] 플레이어 또는 컨테이너를 찾을 수 없음');
-    return false;
-  }
-
-  try {
-    console.log('[moveYouTubePlayer] 플레이어 이동 시작');
-
-    // // 플레이어 스타일 백업
-    // const originalStyles = {
-    //   position: player.style.position,
-    //   zIndex: player.style.zIndex,
-    //   opacity: player.style.opacity,
-    //   visibility: player.style.visibility
-    // };
-
-    // 플레이어 강제 표시
-    player.style.opacity = '1';
-    player.style.visibility = 'visible';
-    player.style.display = 'block';
-    player.style.position = 'relative';
-    player.style.zIndex = '1000';
-
-    // 플레이어 이동
-    targetContainer.appendChild(player);
-
-    console.log('[moveYouTubePlayer] 플레이어 이동 완료');
-
-    // 리사이즈 트리거
-    setTimeout(() => {
-      window.dispatchEvent(new Event('resize'));
-    }, 100);
-
-    return true;
-  } catch (error) {
-    console.error('[moveYouTubePlayer] 플레이어 이동 실패:', error);
-    return false;
-  }
-};
-
-// 플레이어 상태 체크
-export const isPlayerReady = (): boolean => {
-  return !!document.querySelector('video');
-};
-```
-
-## File: lib/utils/registerAllListeners.ts
-```typescript
-import { listenerManager } from './listenerManager';
-import { STORAGE_KEYS } from '@constants/storageKeys';
-
-// 필요한 핸들러 함수도 이 파일에서 선언하거나 import
-export function registerAllListeners(setDetectionState: (enabled: boolean) => void) {
-  // 1. chrome.storage.onChanged 리스너
-  listenerManager.add(() => {
-    const handler = (
-      changes: { [key: string]: chrome.storage.StorageChange },
-      // areaName?: 'sync' | 'local' | 'managed' | 'session'
-    ) => {
-      const contentEnabledChange = changes[STORAGE_KEYS.CONTENT_ENABLED];
-      if (contentEnabledChange && typeof contentEnabledChange.newValue === 'boolean') {
-        setDetectionState(contentEnabledChange.newValue);
-      }
-    };
-    chrome.storage.onChanged.addListener(handler);
-    return () => chrome.storage.onChanged.removeListener(handler);
-  });
-
-  // 2. window resize 리스너
-  listenerManager.add(() => {
-    const onResize = (/*event: UIEvent*/) => {
-      // 예: 가사 UI 레이아웃 동기화 등
-      // updateLyricsContainerLayout();
-    };
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  });
-
-  // 3. 필요한 다른 리스너도 이곳에 추가
-}
-```
-
-## File: lib/utils/singletonListener.ts
-```typescript
-// src/lib/utils/singletonListener.ts
-// 공통 리스너 관리 모듈
-export function registerSingletonListener(flagName: string, registerFn: () => void) {
-  // 타입 안전하게 window에 동적 속성 부여
-  const win = window as unknown as Record<string, unknown>;
-  if (!win[flagName]) {
-    registerFn();
-    win[flagName] = true;
-  }
-}
-```
-
-## File: lib/utils/stringUtils.ts
+## File: lib/utils/common/stringUtils.ts
 ```typescript
 // src/lib/utils/stringUtils.ts
 import { EXTRA_KEYWORDS } from '@constants/keywords';
@@ -2274,16 +2174,12 @@ export function extractArtistAndTitleCustom(rawTitle: string): { artist: string;
 
   return { artist, title };
 }
-export function extractEnglishName(name: string): string {
-  // 연속된 영어 단어(공백 포함)만 추출
-  const match = name.match(/([A-Za-z][A-Za-z\s'&.-]*)/g);
-  return match ? match.join(' ').trim() : name;
+export function extractEnglishOnly(str: string): string {
+  // 연속 영어 단어와 공백, 일부 특수문자만 추출
+  const match = str.match(/([A-Za-z][A-Za-z\s'’&.-]*)/g);
+  return match ? match.join(' ').trim() : '';
 }
-export function extractEnglishTitle(title: string): string {
-  // 영어 단어가 2개 이상 연속된 부분만 추출 (예시)
-  const match = title.match(/([A-Za-z][A-Za-z\s']{2,})/g);
-  return match ? match.join(' ').trim() : title;
-}
+
 export function removeEmptyBrackets(title: string): string {
   return title
     .replace(/\(\s*\)/g, '')
@@ -2293,34 +2189,7 @@ export function removeEmptyBrackets(title: string): string {
 }
 ```
 
-## File: lib/utils/styleInjection.ts
-```typescript
-// utils/styleInjection.ts
-export const injectGlobalStyles = () => {
-  const styleId = 'karaoke-global-styles';
-  if (document.getElementById(styleId)) return;
-
-  const style = document.createElement('style');
-  style.id = styleId;
-  style.textContent = `
-    /* YouTube 기본 요소 숨기기 */
-    ytd-watch-flexy[theater] #player-wide-container,
-    ytd-watch-flexy #player-wide-container {
-      display: none !important;
-    }
-
-    /* 스크롤 방지 */
-    body.karaoke-mode {
-      overflow: hidden !important;
-    }
-  `;
-  document.head.appendChild(style);
-};
-
-injectGlobalStyles();
-```
-
-## File: lib/utils/time.ts
+## File: lib/utils/common/time.ts
 ```typescript
 /**
  * 시간 문자열 파싱 (MM:SS.ms → 초 단위)
@@ -2355,6 +2224,24 @@ export const formatSecondsToTime = (seconds: number): string => {
 };
 
 /**
+ * ISO 8601 duration (예: "PT4M13S")를 초 단위(숫자)로 변환
+ * @param isoString ISO 8601 duration 문자열 (예: "PT1H2M10S", "PT3M5S", "PT22S")
+ * @returns 초 단위 숫자 (실패시 0)
+ */
+export function parseISO8601Duration(isoString: string): number {
+  if (!isoString || typeof isoString !== 'string') return 0;
+  // 정규식: PT#H#M#S 각 단위 별 추출 (H, M, S는 생략 가능함)
+  const match = isoString.match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?$/);
+  if (!match) return 0;
+
+  const hours = parseInt(match[1] || '0', 10);
+  const minutes = parseInt(match[2] || '0', 10);
+  const seconds = parseFloat(match[3] || '0');
+
+  return hours * 3600 + minutes * 60 + seconds;
+}
+
+/**
  * 싱크 오차 보정 (±500ms 이내 조정)
  * @param currentTime - 현재 시간
  * @param targetTime - 목표 시간
@@ -2365,7 +2252,7 @@ export const adjustSyncOffset = (currentTime: number, targetTime: number): numbe
 };
 ```
 
-## File: lib/utils/typeGuards.ts
+## File: lib/utils/common/typeGuards.ts
 ```typescript
 // src/utils/typeGuards.ts
 import { ToggleContentMessage } from '@lib/types/message';
@@ -2387,7 +2274,197 @@ export const isArrayOfType = <T>(arr: unknown, guard: (item: unknown) => item is
 };
 ```
 
-## File: lib/utils/uiResourceManager.ts
+## File: lib/utils/dom/domUtils.ts
+```typescript
+// src/lib/utils/domUtils.ts
+
+import { YOUTUBE_PLAYER_SELECTOR } from '@constants/youtubeSelectors';
+
+// 요소 대기 함수
+export const waitForElement = <T extends Element>(selector: string, timeout = 5000): Promise<T> => {
+  return new Promise((resolve, reject) => {
+    const element = document.querySelector<T>(selector);
+    if (element) return resolve(element);
+
+    const observer = new MutationObserver(() => {
+      const found = document.querySelector<T>(selector);
+      if (found) {
+        cleanup();
+        resolve(found);
+      }
+    });
+
+    const timeoutId = setTimeout(() => {
+      cleanup();
+      reject(new Error(`Element ${selector} not found in ${timeout}ms`));
+    }, timeout);
+
+    const cleanup = () => {
+      observer.disconnect();
+      clearTimeout(timeoutId);
+    };
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+  });
+};
+
+// 요소 생성 함수
+export const createElement = <K extends keyof HTMLElementTagNameMap>(
+  tagName: K,
+  options?: ElementCreationOptions,
+): HTMLElementTagNameMap[K] => {
+  return document.createElement(tagName, options);
+};
+
+// 안전한 요소 삽입
+export const safeAppendChild = (parent: Node, child: Node): boolean => {
+  try {
+    parent.appendChild(child);
+    return true;
+  } catch (error) {
+    console.error('DOM append failed:', error);
+    return false;
+  }
+};
+// 요소 제거 유틸리티
+export const removeElement = (selector: string): boolean => {
+  const element = document.querySelector(selector);
+  if (!element) return false;
+  element.remove();
+  return true;
+};
+
+// CSS 클래스 토글
+export const toggleClass = (element: Element, className: string, force?: boolean): boolean => {
+  if (!element) return false;
+  element.classList.toggle(className, force);
+  return true;
+};
+
+export function isAdPlaying() {
+  const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR);
+  return player && (player.classList.contains('ad-showing') || player.classList.contains('ad-interrupting'));
+}
+```
+
+## File: lib/utils/dom/styleInjection.ts
+```typescript
+// utils/styleInjection.ts
+export const injectGlobalStyles = () => {
+  const styleId = 'karaoke-global-styles';
+  if (document.getElementById(styleId)) return;
+
+  const style = document.createElement('style');
+  style.id = styleId;
+  style.textContent = `
+    /* YouTube 기본 요소 숨기기 */
+    ytd-watch-flexy[theater] #player-wide-container,
+    ytd-watch-flexy #player-wide-container {
+      display: none !important;
+    }
+
+    /* 스크롤 방지 */
+    body.karaoke-mode {
+      overflow: hidden !important;
+    }
+  `;
+  document.head.appendChild(style);
+};
+
+injectGlobalStyles();
+```
+
+## File: lib/utils/infra/listenerManager.ts
+```typescript
+// src/lib/utils/listenerManager.ts
+
+type UnregisterFn = () => void;
+
+class ListenerManager {
+  private unregisterFns: UnregisterFn[] = [];
+
+  /**
+   * 리스너 등록 함수
+   * @param register 등록 함수 (리스너 등록 시 호출, 해제 함수 반환)
+   */
+  public add(register: () => UnregisterFn): void {
+    const unregister = register();
+    this.unregisterFns.push(unregister);
+  }
+
+  /**
+   * 모든 리스너 해제 (cleanup)
+   */
+  public removeAll(): void {
+    this.unregisterFns.forEach((unregister) => {
+      try {
+        unregister();
+      } catch {
+        // 해제 중 에러 무시
+      }
+    });
+    this.unregisterFns = [];
+  }
+}
+
+// 싱글 인스턴스 export (프로젝트 전체에서 공유)
+export const listenerManager = new ListenerManager();
+```
+
+## File: lib/utils/infra/registerAllListeners.ts
+```typescript
+import { listenerManager } from './listenerManager';
+import { STORAGE_KEYS } from '@constants/storageKeys';
+
+// 필요한 핸들러 함수도 이 파일에서 선언하거나 import
+export function registerAllListeners(setDetectionState: (enabled: boolean) => void) {
+  // 1. chrome.storage.onChanged 리스너
+  listenerManager.add(() => {
+    const handler = (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      // areaName?: 'sync' | 'local' | 'managed' | 'session'
+    ) => {
+      const contentEnabledChange = changes[STORAGE_KEYS.CONTENT_ENABLED];
+      if (contentEnabledChange && typeof contentEnabledChange.newValue === 'boolean') {
+        setDetectionState(contentEnabledChange.newValue);
+      }
+    };
+    chrome.storage.onChanged.addListener(handler);
+    return () => chrome.storage.onChanged.removeListener(handler);
+  });
+
+  // 2. window resize 리스너
+  listenerManager.add(() => {
+    const onResize = (/*event: UIEvent*/) => {
+      // 예: 가사 UI 레이아웃 동기화 등
+      // updateLyricsContainerLayout();
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  });
+
+  // 3. 필요한 다른 리스너도 이곳에 추가
+}
+```
+
+## File: lib/utils/infra/singletonListener.ts
+```typescript
+// src/lib/utils/singletonListener.ts
+// 공통 리스너 관리 모듈
+export function registerSingletonListener(flagName: string, registerFn: () => void) {
+  // 타입 안전하게 window에 동적 속성 부여
+  const win = window as unknown as Record<string, unknown>;
+  if (!win[flagName]) {
+    registerFn();
+    win[flagName] = true;
+  }
+}
+```
+
+## File: lib/utils/infra/uiResourceManager.ts
 ```typescript
 // src/lib/utils/uiResourceManager.ts
 type RemovableElement = HTMLElement | HTMLStyleElement;
@@ -2408,39 +2485,280 @@ export class UIResourceManager {
 }
 ```
 
-## File: lib/utils/vad.ts
+## File: lib/utils/lyrics/artistTitle.ts
 ```typescript
-// import { VAD } from '@ricky0123/vad';
+import getArtistTitle from 'get-artist-title';
 
-// let vadInstance: VAD | null = null;
-
-// // 음성 구간을 프레임(30ms) 단위로 감지하여 결과(음성: true/무음: false) 배열을 반환
-// export async function runVAD(audioBuffer: Float32Array): Promise<boolean[]> {
-//   if (!vadInstance) {
-//     vadInstance = new VAD();
-//     await vadInstance.init();
-//   }
-
-//   const sampleRate = 16000; // 표준 VAD 입력 샘플레이트
-//   const frameDurationMs = 30;
-//   const frameSize = (sampleRate * frameDurationMs) / 1000; // 480개 샘플 (30ms @16kHz)
-
-//   const vadResults: boolean[] = [];
-//   const totalFrames = Math.floor(audioBuffer.length / frameSize);
-
-//   for (let i = 0; i < totalFrames; i++) {
-//     const start = i * frameSize;
-//     const end = start + frameSize;
-//     const frame = audioBuffer.subarray(start, end);
-//     // VAD가 이 프레임에서 음성이 감지되면 true 반환
-//     const isSpeech = await vadInstance.isSpeech(frame as Float32Array);
-//     vadResults.push(isSpeech);
-//   }
-//   return vadResults;
-// }
+/**
+ * 유튜브 영상 제목에서 [아티스트, 타이틀] 추출
+ */
+export function extractArtistAndTitle(title: string): { artist: string; title: string } | null {
+  const [artist, songTitle] = getArtistTitle(title) || [];
+  if (artist && songTitle) {
+    return { artist, title: songTitle };
+  }
+  return null;
+}
 ```
 
-## File: lib/utils/videoDetection.ts
+## File: lib/utils/lyrics/getLyricsFromCacheOrFetch.ts
+```typescript
+// lib/utils/lyrics/getLyricsFromCacheOrFetch.ts
+
+import { normalizeLyricsQuery } from './queryNormalizer';
+import { getFromLyricsCache, setToLyricsCache } from '@lib/utils/cache/lyricsCache';
+
+export async function getLyricsFromCacheOrFetch(
+  artist: string,
+  title: string,
+  options: {
+    lang?: string;
+    fetch: (apiOpts: {
+      etag?: string;
+    }) => Promise<{ lyrics: string; artist?: string; title?: string; duration?: number; id?: string; etag?: string }>;
+  },
+): Promise<{ lyrics: string; artist?: string; title?: string; duration?: number }> {
+  const key = normalizeLyricsQuery(artist, title, { lang: options.lang });
+
+  // 1. 캐시 시도
+  const cached = getFromLyricsCache(key);
+  if (cached) return cached;
+
+  // fetch
+  const fetchResult = await options.fetch({});
+  setToLyricsCache(key, fetchResult);
+
+  return fetchResult;
+}
+```
+
+## File: lib/utils/lyrics/languageDetector.ts
+```typescript
+// 가사의 언어 감지
+```
+
+## File: lib/utils/lyrics/lyrics.ts
+```typescript
+import { Line } from '@lib/types/lyrics';
+
+// src/lib/utils/lyrics.ts
+export function extractFirstLrcTimestamp(lyrics: string | Line[]): number {
+  // 1. 배열(파싱된 LRC)인 경우:
+  if (Array.isArray(lyrics)) {
+    if (!lyrics.length) return 0;
+    const firstLine = lyrics[0];
+    if (!firstLine || typeof firstLine.time !== 'number') return 0;
+    return firstLine.time;
+  }
+
+  // 2. string(LRC 원문)인 경우, 정규식으로 파싱
+  const match = lyrics.match(/\[(\d+):(\d+[.\d+]*)\]/);
+  if (!match || typeof match[1] !== 'string' || typeof match[2] !== 'string') return 0;
+
+  const min = parseInt(match[1], 10);
+  const sec = parseFloat(match[2]);
+
+  if (isNaN(min) || isNaN(sec)) return 0;
+  return min * 60 + sec;
+}
+```
+
+## File: lib/utils/lyrics/lyricsDisplay.ts
+```typescript
+// utils/lyricsDisplay.ts
+import { Line } from '@lib/types/lyrics';
+
+export interface DisplayIndices {
+  top: string;
+  bottom: string;
+  highlightTop: boolean;
+  highlightBottom: boolean;
+}
+
+export function getDisplayLines(lines: Line[], currentTime: number): DisplayIndices {
+  if (lines.length === 0) {
+    return { top: '', bottom: '', highlightTop: false, highlightBottom: false };
+  }
+
+  let activeIndex = -1;
+
+  for (let i = 0; i < lines.length; i++) {
+    const cur = lines[i];
+    const next = lines[i + 1];
+    if (!cur) continue;
+
+    const endTime = next?.time ?? Infinity;
+    const previewTime = cur.time + (endTime - cur.time) * 0.5;
+
+    if (currentTime >= cur.time && currentTime < previewTime) {
+      activeIndex = i;
+      break;
+    } else if (currentTime >= previewTime && currentTime < endTime) {
+      activeIndex = i + 1;
+      break;
+    }
+  }
+
+  if (activeIndex === -1) {
+    const firstLine = lines[0];
+    if (firstLine && currentTime < firstLine.time) {
+      // 첫 타임스탬프 전: 아무 자막도 출력하지 않음
+      return { top: '', bottom: '', highlightTop: false, highlightBottom: false };
+    }
+    activeIndex = lines.length - 1; // 곡이 끝난 뒤, 마지막 가사 유지
+  }
+
+  // 위치는 교대로: 0번째는 bottom, 1번째는 top, 2번째는 bottom, 3번째는 top ...
+  const isEven = activeIndex % 2 === 0;
+
+  const topIdx = isEven ? activeIndex - 1 : activeIndex;
+  const bottomIdx = isEven ? activeIndex : activeIndex - 1;
+
+  return {
+    top: topIdx >= 0 ? (lines[topIdx]?.text ?? '') : '',
+    bottom: bottomIdx >= 0 ? (lines[bottomIdx]?.text ?? '') : '',
+    highlightTop: !isEven, // 홀수 번째 줄이면 top 강조
+    highlightBottom: isEven, // 짝수 번째 줄이면 bottom 강조
+  };
+}
+```
+
+## File: lib/utils/lyrics/lyricsParser.ts
+```typescript
+// LRC 등 싱크 가사 포맷을 파싱해, [time, text] 배열로 변환합니다.
+// 싱크 자막, 전체 가사, 하이라이트 등 다양한 곳에서 재사용할 수 있습니다.
+
+import { Line } from '@lib/types/lyrics';
+import { parseTimeToSeconds } from '@lib/utils/common/time';
+
+/**
+ * LRC 형식의 가사 문자열을 파싱하여 [{ time, text }] 배열로 반환
+ */ export function parseLyrics(lyrics: string): Line[] {
+  if (!lyrics || lyrics.trim() === '') {
+    console.warn('[lyricsParser] 입력된 lyrics가 비어 있음');
+    return [];
+  }
+  const result = lyrics.split('\n').reduce<Line[]>((acc, line) => {
+    const match = line.match(/\[(\d+):(\d+\.\d+)\](.*)/);
+    if (!match) return acc;
+    const [, min, sec, text] = match;
+    const safeText = (text ?? '').trim();
+    if (safeText === '') return acc;
+    acc.push({ time: parseTimeToSeconds(`${min}:${sec}`), text: safeText });
+    return acc;
+  }, []);
+  if (!result.length) {
+    console.warn('[lyricsParser] LRC 파싱 결과가 없음');
+  }
+  return result;
+}
+```
+
+## File: lib/utils/lyrics/queryNormalizer.ts
+```typescript
+// lib/utils/lyrics/queryNormalizer.ts
+
+/**
+ * 가사 검색 쿼리를 유니크한 캐시 키로 정규화합니다.
+ * artist, title, lang, 기타 옵션까지 모두 key에 포함.
+ */
+export function normalizeLyricsQuery(
+  artist: string,
+  title: string,
+  options?: { lang?: string; [key: string]: any },
+): string {
+  const normArtist = artist.trim().toLowerCase().replace(/\s+/g, ' ');
+  const normTitle = title.trim().toLowerCase().replace(/\s+/g, ' ');
+  let key = `${normArtist}::${normTitle}`;
+
+  if (options?.lang) {
+    key += `::${options.lang.toLowerCase()}`;
+  }
+
+  // 필요시 기타 옵션 정규화 추가
+  // (예: 키워드, 정렬 순서 등)
+  if (options) {
+    Object.entries(options)
+      .filter(([k]) => k !== 'lang')
+      .sort()
+      .forEach(([k, v]) => {
+        key += `::${k}=${String(v).toLowerCase()}`;
+      });
+  }
+  return key;
+}
+```
+
+## File: lib/utils/platform/contentGuard.ts
+```typescript
+// lib/utils/contentGuard.ts
+// contents 비활성화/활성화 여부에 따라 진행되는 함수의 경우 해당 함수 사용
+// 함수 실행 전 콘텐츠 활성화 여부를 검사하는 함수
+export function withContentEnabled<Args extends unknown[], R>(
+  getContentEnabled: () => boolean,
+  fn: (...args: Args) => R,
+): (...args: Args) => R | undefined {
+  return function (...args: Args): R | undefined {
+    if (!getContentEnabled()) return;
+    return fn(...args);
+  };
+}
+```
+
+## File: lib/utils/platform/playerUtils.ts
+```typescript
+// src/utils/playerUtils.ts
+
+// YouTube 플레이어 이동 유틸리티
+export const moveYouTubePlayer = (targetContainer: HTMLElement, playerSelector = '#movie_player'): boolean => {
+  const player = document.querySelector(playerSelector) as HTMLElement;
+  if (!player || !targetContainer) {
+    console.error('[moveYouTubePlayer] 플레이어 또는 컨테이너를 찾을 수 없음');
+    return false;
+  }
+
+  try {
+    console.log('[moveYouTubePlayer] 플레이어 이동 시작');
+
+    // // 플레이어 스타일 백업
+    // const originalStyles = {
+    //   position: player.style.position,
+    //   zIndex: player.style.zIndex,
+    //   opacity: player.style.opacity,
+    //   visibility: player.style.visibility
+    // };
+
+    // 플레이어 강제 표시
+    player.style.opacity = '1';
+    player.style.visibility = 'visible';
+    player.style.display = 'block';
+    player.style.position = 'relative';
+    player.style.zIndex = '1000';
+
+    // 플레이어 이동
+    targetContainer.appendChild(player);
+
+    console.log('[moveYouTubePlayer] 플레이어 이동 완료');
+
+    // 리사이즈 트리거
+    setTimeout(() => {
+      window.dispatchEvent(new Event('resize'));
+    }, 100);
+
+    return true;
+  } catch (error) {
+    console.error('[moveYouTubePlayer] 플레이어 이동 실패:', error);
+    return false;
+  }
+};
+
+// 플레이어 상태 체크
+export const isPlayerReady = (): boolean => {
+  return !!document.querySelector('video');
+};
+```
+
+## File: lib/utils/platform/videoDetection.ts
 ```typescript
 // lib/utils/videoDetection.ts
 let lastVideoId: string | null = null;
