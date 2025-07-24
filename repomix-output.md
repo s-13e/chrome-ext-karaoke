@@ -189,6 +189,7 @@ export async function fetchKSoftLyrics(artist: string, title: string): Promise<K
 
 ## File: background/api/lrclib.ts
 ```typescript
+// background/api/lrclib.ts
 import { Line } from '@lib/types/lyrics';
 export interface LrcLibLyricsResult {
   lyrics: string | Line[];
@@ -196,15 +197,64 @@ export interface LrcLibLyricsResult {
   artist?: string;
   title?: string;
   id?: string;
+  etag?: string;
 }
 
-// background/api/lrclib.ts
-export async function fetchLrclibLyrics(artist: string, title: string): Promise<string | null> {
-  const endpoint = `https://lrclib.net/api/get?artist=${encodeURIComponent(artist)}&track=${encodeURIComponent(title)}`;
-  const res = await fetch(endpoint);
-  if (!res.ok) return null;
-  const data = await res.json();
-  return data?.syncedLyrics || data?.plainLyrics || null;
+// artist_name과 track_name으로 한정 검색: 오탐지를 줄이기 위한 별도 함수
+export async function fetchLyricsByArtistAndTrack(
+  artist: string,
+  title: string,
+): Promise<LrcLibLyricsResult | undefined> {
+  const endpoint = `https://lrclib.net/api/search?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(title)}`;
+
+  const searchRes = await fetch(endpoint);
+  if (!searchRes.ok) return undefined;
+
+  const searchData = await searchRes.json();
+
+  let fallbackResult: LrcLibLyricsResult | undefined = undefined;
+  const normalizedReqTitle = title.trim().toLowerCase();
+
+  for (const candidate of searchData) {
+    const detailRes = await fetch(`https://lrclib.net/api/get/${candidate.id}`);
+    if (!detailRes.ok) continue;
+
+    const detail = await detailRes.json();
+
+    const lyrics = detail.syncedLyrics || detail.plainLyrics;
+    if (!lyrics) continue;
+
+    const candidateTitle = detail.title?.trim().toLowerCase() ?? '';
+
+    if (candidateTitle === normalizedReqTitle) {
+      console.log('가사:', lyrics);
+
+      // 타이틀 완전 일치시 즉시 반환
+      return {
+        lyrics,
+        duration: detail.duration,
+        artist: detail.artist,
+        title: detail.title,
+        id: candidate.id,
+      };
+    }
+
+    // 완전 일치가 없을 경우 대비 첫 가사 있는 후보 저장
+    if (!fallbackResult) {
+      console.log('2nd 가사:', lyrics);
+
+      fallbackResult = {
+        lyrics,
+        duration: detail.duration,
+        artist: detail.artist,
+        title: detail.title,
+        id: candidate.id,
+      };
+    }
+  }
+
+  // 완전 일치가 없으면 fallback 결과 반환
+  return fallbackResult;
 }
 
 export async function fetchLyricsBySearchFirst(artist: string, title: string): Promise<LrcLibLyricsResult | undefined> {
@@ -239,6 +289,15 @@ export async function fetchLyricsBySearchFirst(artist: string, title: string): P
 import { parseISO8601Duration } from '@lib/utils/common/time';
 import { getFromLyricsCache, setToLyricsCache } from '@lib/utils/cache/lyricsCache';
 
+export interface YouTubeVideoMetaCacheValue {
+  categoryId: string;
+  title: string;
+  description: string;
+  tags: string[];
+  channelTitle: string;
+  durationSec: number;
+}
+
 // 만료시간 기본 1일(YouTube 메타는 update가 드물어서 넉넉히 잡을 것)
 const YT_META_CACHE_TTL = 24 * 60 * 60 * 1000;
 
@@ -259,7 +318,7 @@ export async function fetchYouTubeVideoMeta(videoId: string, apiKey: string) {
     if (contentDetails && contentDetails.duration) {
       durationSec = parseISO8601Duration(contentDetails.duration);
     }
-    const result = {
+    const result: YouTubeVideoMetaCacheValue = {
       categoryId: snippet.categoryId,
       title: snippet.title,
       description: snippet.description,
@@ -267,6 +326,7 @@ export async function fetchYouTubeVideoMeta(videoId: string, apiKey: string) {
       channelTitle: snippet.channelTitle,
       durationSec,
     };
+
     setToLyricsCache(cacheKey, result, { ttl: YT_META_CACHE_TTL });
     return result;
   }
@@ -1013,12 +1073,7 @@ import { isMusicVideo } from '@lib/utils/audio/musicDetection';
 import { UIResourceManager } from '@lib/utils/infra/uiResourceManager';
 import { YOUTUBE_PLAYER_SELECTOR, YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
 import { extractArtistAndTitle } from '@lib/utils/lyrics/artistTitle';
-import {
-  cleanUp,
-  extractArtistAndTitleCustom,
-  extractEnglishOnly,
-  removeEmptyBrackets,
-} from '@lib/utils/common/stringUtils';
+import { extractArtistAndTitleCustom, preprocessArtistOrTitle } from '@lib/utils/common/stringUtils';
 import { listenerManager } from '@lib/utils/infra/listenerManager';
 import { withContentEnabled } from '@lib/utils/platform/contentGuard';
 import { injectLyricsOverlayRoot } from '@components/lyrics/LyricsOverlayRoot';
@@ -1027,12 +1082,13 @@ import { isAdPlaying } from '@lib/utils/dom/domUtils';
 import { parseLyrics } from '@lib/utils/lyrics/lyricsParser';
 import { Line } from '@lib/types/lyrics';
 import { tryDetectVideoChange } from '@lib/utils/platform/videoDetection';
-import { analyzeAudioFeatures } from '@lib/utils/audio/audioAnalysis';
-import { fetchLyricsBySearchFirst } from '@background/api/lrclib';
+// import { analyzeAudioFeatures } from '@lib/utils/audio/audioAnalysis';
+import { fetchLyricsByArtistAndTrack, fetchLyricsBySearchFirst } from '@background/api/lrclib';
 
 import 'normalize.css';
 import { setToLyricsCache } from '@lib/utils/cache/lyricsCache';
 import { normalizeLyricsQuery } from '@lib/utils/lyrics/queryNormalizer';
+import { getLyricsFromCacheOrFetch } from '@lib/utils/lyrics/getLyricsFromCacheOrFetch';
 
 (() => {
   // 새로고침 시 contentscript 내 중복 실행 방지
@@ -1175,6 +1231,17 @@ import { normalizeLyricsQuery } from '@lib/utils/lyrics/queryNormalizer';
     detectionObserverManager.lyricsObserver.observe(player, { attributes: true, attributeFilter: ['class'] });
     showLyricsIfNotAd(lyrics);
   }
+  function shiftFirstLyricEarlier(lyrics: Line[], advanceSec: number): Line[] {
+    if (!lyrics || lyrics.length === 0) return lyrics;
+    const [first, ...rest] = lyrics;
+    if (!first) return lyrics;
+    const newFirstLine: Line = {
+      ...first,
+      time: Math.max(0, first.time - advanceSec),
+      text: first.text ?? '',
+    };
+    return [newFirstLine, ...rest];
+  }
 
   // ✅ URL 변경 핸들러 개선
   const handleUrlChange = (url: string) => {
@@ -1221,6 +1288,7 @@ import { normalizeLyricsQuery } from '@lib/utils/lyrics/queryNormalizer';
         return;
       }
       hideLyricsOverlay();
+      latestLyrics = [];
 
       if (!isMusicVideo(meta)) {
         console.log('isMusicVideo 판별 실패');
@@ -1239,36 +1307,42 @@ import { normalizeLyricsQuery } from '@lib/utils/lyrics/queryNormalizer';
         return;
       }
 
-      let artist = cleanUp(refined.artist);
-      let title = cleanUp(refined.title);
-      title = removeEmptyBrackets(title);
-
-      artist = extractEnglishOnly(artist);
-      title = extractEnglishOnly(title);
+      let artist = preprocessArtistOrTitle(refined.artist);
+      let title = preprocessArtistOrTitle(refined.title);
 
       console.log('아티스트:', artist, '곡명:', title);
 
       // 1. 비디오 엘리먼트 선택
       const videoElem = document.querySelector('video');
       if (!videoElem) return;
-      const result = await fetchLyricsBySearchFirst(artist, title);
+
+      const lyricsResult = await getLyricsFromCacheOrFetch(artist, title, {
+        fetch: async () => {
+          const result = await fetchLyricsByArtistAndTrack(artist, title);
+          if (!result) throw new Error('LRCLIB에서 가사 정보를 찾을 수 없습니다!');
+          return result;
+        },
+      });
 
       // 다음 영상에 이전 가사 나오는 거 방지
-      if (!result) {
+      if (!lyricsResult) {
         console.log('가사 없음');
         hideLyricsOverlay();
         latestLyrics = [];
         return;
       }
       setToLyricsCache(normalizeLyricsQuery(artist, title, {}), {
-        lyrics: result.lyrics,
-        duration: result.duration,
-        artist: result.artist, // 정답 artist
-        title: result.title, // 정답 title
-        id: result.id, // (선택) LRCLIB id
+        lyrics: lyricsResult.lyrics,
+        duration: lyricsResult.duration,
+        artist: lyricsResult.artist, // 정답 artist
+        title: lyricsResult.title, // 정답 title
+        id: lyricsResult.id, // (선택) LRCLIB id
       });
-      const { lyrics, duration: lyricsDuration } = result;
+      const { lyrics, duration: lyricsDuration } = lyricsResult;
       const parsedLyrics: Line[] = typeof lyrics === 'string' ? parseLyrics(lyrics) : lyrics;
+
+      const ADVANCE_SEC = 3; // 앞당길 초(3초 예시)
+      const shiftedLyrics = shiftFirstLyricEarlier(parsedLyrics, ADVANCE_SEC);
       const lastLine = parsedLyrics[parsedLyrics.length - 1];
       const lyricsLengthSec = lastLine?.time ?? 0;
 
@@ -1308,13 +1382,15 @@ import { normalizeLyricsQuery } from '@lib/utils/lyrics/queryNormalizer';
         }
       }
 
-      latestLyrics = parsedLyrics;
-      renderLyricsOverlay(parsedLyrics);
+      latestLyrics = shiftedLyrics;
+      renderLyricsOverlay(shiftedLyrics);
 
-      chrome.runtime.sendMessage({
-        type: MESSAGE_TYPES.VIDEO_DETECTED,
-        payload: videoData,
-      });
+      if (window.chrome && chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({
+          type: MESSAGE_TYPES.VIDEO_DETECTED,
+          payload: videoData,
+        });
+      }
     } finally {
       isDetecting = false;
     }
@@ -1689,8 +1765,10 @@ export type TranslationKey = (typeof TRANSLATION_KEYS)[number];
 
 ## File: lib/utils/audio/audio.ts
 ```typescript
-import { getSharedAudioContext } from "./audioUtils";
-
+import { getSharedAudioContext } from './audioUtils';
+interface PCMExtractorWithSourceNode {
+  _sourceNode?: MediaElementAudioSourceNode | null;
+}
 /**
  * HTMLMediaElement에서 Mono PCM 추출 (Singleton AudioContext 활용)
  */
@@ -1701,16 +1779,19 @@ export async function extractPCMFromMediaElement(
 ): Promise<{ pcm: Float32Array; sampleRate: number }> {
   const audioCtx = getSharedAudioContext();
   const analyser = audioCtx.createAnalyser();
+  const ext = extractPCMFromMediaElement as PCMExtractorWithSourceNode;
 
   // 단일 SourceNode 재사용: 기존 연결이 있을 경우 분리
-  let sourceNode = (extractPCMFromMediaElement as any)._sourceNode as MediaElementAudioSourceNode | null;
+  let sourceNode = ext._sourceNode as MediaElementAudioSourceNode | null;
   if (sourceNode) {
     try {
       sourceNode.disconnect();
-    } catch (_) {}
+    } catch {
+      // console.warn('뭔 오류남');
+    }
   }
   sourceNode = audioCtx.createMediaElementSource(elem);
-  (extractPCMFromMediaElement as any)._sourceNode = sourceNode;
+  ext._sourceNode = sourceNode;
 
   sourceNode.connect(analyser);
   analyser.connect(audioCtx.destination);
@@ -1788,11 +1869,15 @@ export async function analyzeAudioFeatures(
       setTimeout(() => {
         try {
           analyzer?.stop();
-        } catch {}
+        } catch {
+          // console.warn('뭔 오류남');
+        }
         if (source) {
           try {
             source.disconnect();
-          } catch {}
+          } catch {
+            // console.warn('뭔 오류남');
+          }
         }
         resolve();
       }, durationSec * 1000);
@@ -1804,7 +1889,6 @@ export async function analyzeAudioFeatures(
 
     // threshold 값 기준으로 onset index 탐색
     const onsetIdx = rms.findIndex((value) => value > threshold);
-
 
     return {
       rms,
@@ -1818,11 +1902,15 @@ export async function analyzeAudioFeatures(
     console.error('오디오 분석 중 오류 발생:', error);
     try {
       analyzer?.stop();
-    } catch {}
+    } catch {
+      // console.warn('뭔 오류남');
+    }
     if (source) {
       try {
         source.disconnect();
-      } catch {}
+      } catch {
+        // console.warn('뭔 오류남');
+      }
     }
     // audioContext는 싱글톤이라 close하지 않음
     return null;
@@ -1945,9 +2033,16 @@ export function isMusicVideo(meta: MusicDetectionInput, lyricsLengthSec?: number
 
 ## File: lib/utils/cache/lyricsCache.ts
 ```typescript
-// lib/utils/cache/lyricsCache.ts
+import { LrcLibLyricsResult } from '@background/api/lrclib';
 
-const MEMORY_CACHE: Record<string, { value: any; expire: number; etag?: string }> = {};
+// lib/utils/cache/lyricsCache.ts
+interface MemoryCacheItem<T = unknown> {
+  value: T;
+  expire: number;
+  etag?: string;
+}
+const MEMORY_CACHE: Record<string, MemoryCacheItem<LrcLibLyricsResult>> = {};
+
 const DEFAULT_TTL = 6 * 60 * 60 * 1000; // 6시간
 
 export function getFromLyricsCache(key: string) {
@@ -1983,14 +2078,13 @@ export function getFromLyricsCache(key: string) {
   return null;
 }
 
-export function setToLyricsCache(
+export function setToLyricsCache<T>(
   key: string,
-  value: any,
+  value: T,
   { ttl = DEFAULT_TTL, etag }: { ttl?: number; etag?: string } = {},
 ) {
   const expire = Date.now() + ttl;
-  // 메모리 저장
-  MEMORY_CACHE[key] = { value, expire, etag };
+
   // localStorage 동기화
   try {
     localStorage.setItem(key, JSON.stringify({ value, expire, etag }));
@@ -2050,7 +2144,7 @@ export function cleanUp(str: string): string {
     .replace(/\\s{2,}/g, ' ') // 이중 공백 정리
     .trim();
 }
-
+// op, ed, ost, mv는 해당 단어만 삭제해 예를 들어 open the door -> en the door이 되지 않게끔
 function cleanMusicKeyword(str: string): string {
   return str
     .replace(/([^A-Za-z]|^)(OP|ED|OST|MV)([^A-Za-z]|$)/gi, (_match, p1, _p2, p3) => {
@@ -2058,6 +2152,7 @@ function cleanMusicKeyword(str: string): string {
     })
     .trim();
 }
+// 키워드 정제
 export function removeExtraInfo(title: string): string {
   const extraKeywords = EXTRA_KEYWORDS.slice().sort((a, b) => b.length - a.length); // 긴 키워드 우선
   let result = title;
@@ -2094,21 +2189,22 @@ export function removeExtraInfo(title: string): string {
 
   return result;
 }
-
+// 해시태그 삭제
 export function removeTrailingHashtags(title: string): string {
   // 곡명 끝에 연속된 해시태그만 제거
   return title.replace(/(\s*#[\p{L}\p{N}._-]+)+\s*$/gu, '').trim();
 }
-
+// 방송 날짜 기재된 경우
 export function removeDatePattern(str: string): string {
   return str.replace(/\b\d{2}[01]\d(?:3[0-2]|[0-2][0-9])\b/g, '').trim();
 }
-
+//
 export function extractArtistAndTitleCustom(rawTitle: string): { artist: string; title: string } | null {
   const cleaned = cleanUp(rawTitle);
+  const quotePattern = /^(.+?)\s*['"'“”‘’](.+?)['"'“”‘’]/;
 
   // 1. 쌍따옴표(“ ” 또는 " ") 패턴 우선 적용
-  const match = cleaned.match(/^(.+?)\s*[“"](.+?)[”"]/);
+  const match = cleaned.match(quotePattern);
   let artist = '',
     title = '';
   if (match) {
@@ -2133,16 +2229,6 @@ export function extractArtistAndTitleCustom(rawTitle: string): { artist: string;
   title = removeExtraInfo(title);
   artist = cleanMusicKeyword(artist);
   title = cleanMusicKeyword(title);
-
-  // 3. 추가 패턴: "아티스트 '곡명'" 또는 "아티스트 \"곡명\""
-  if (!artist || !title) {
-    // 따옴표
-    const match = cleaned.match(/^(.+?)\s*['"](.+?)['"]/);
-    if (match) {
-      artist = match[1]?.trim() ?? '';
-      title = match[2]?.trim() ?? '';
-    }
-  }
 
   // 4. 추가 패턴: 괄호
   if (!artist || !title) {
@@ -2175,17 +2261,32 @@ export function extractArtistAndTitleCustom(rawTitle: string): { artist: string;
   return { artist, title };
 }
 export function extractEnglishOnly(str: string): string {
-  // 연속 영어 단어와 공백, 일부 특수문자만 추출
-  const match = str.match(/([A-Za-z][A-Za-z\s'’&.-]*)/g);
-  return match ? match.join(' ').trim() : '';
+  // 영문자가 포함되어 있는지
+  const hasEnglish = /[A-Za-z]/.test(str);
+  // 비영문자가 포함되어 있는지 (영어, 숫자, 공백, 특수문자 제외)
+  const hasNonEnglish = /[^\sA-Za-z0-9'’&.\-]/.test(str);
+
+  // 둘 다(영어+비영어)가 있을 때만 "영어만 남기기"
+  if (hasEnglish && hasNonEnglish) {
+    const match = str.match(/([A-Za-z][A-Za-z\s'’&.-]*)/g);
+    return match ? match.join(' ').trim() : '';
+  }
+  // 영어만 있거나, 비영어만 있으면 원본 반환
+  return str;
 }
 
-export function removeEmptyBrackets(title: string): string {
-  return title
+export function removeEmptyBrackets(str: string): string {
+  return str
     .replace(/\(\s*\)/g, '')
     .replace(/\[\s*\]/g, '')
     .replace(/\{\s*\}/g, '')
     .trim();
+}
+export function preprocessArtistOrTitle(str: string): string {
+  let s = cleanUp(str);
+  s = removeEmptyBrackets(s);
+  s = extractEnglishOnly(s);
+  return s;
 }
 ```
 
@@ -2505,6 +2606,7 @@ export function extractArtistAndTitle(title: string): { artist: string; title: s
 ```typescript
 // lib/utils/lyrics/getLyricsFromCacheOrFetch.ts
 
+import { LrcLibLyricsResult } from '@background/api/lrclib';
 import { normalizeLyricsQuery } from './queryNormalizer';
 import { getFromLyricsCache, setToLyricsCache } from '@lib/utils/cache/lyricsCache';
 
@@ -2513,16 +2615,18 @@ export async function getLyricsFromCacheOrFetch(
   title: string,
   options: {
     lang?: string;
-    fetch: (apiOpts: {
-      etag?: string;
-    }) => Promise<{ lyrics: string; artist?: string; title?: string; duration?: number; id?: string; etag?: string }>;
+    fetch: (apiOpts: { etag?: string }) => Promise<LrcLibLyricsResult>;
   },
-): Promise<{ lyrics: string; artist?: string; title?: string; duration?: number }> {
+): Promise<LrcLibLyricsResult | undefined> {
   const key = normalizeLyricsQuery(artist, title, { lang: options.lang });
 
   // 1. 캐시 시도
   const cached = getFromLyricsCache(key);
-  if (cached) return cached;
+  if (cached) {
+    console.log('[LYRICS APPLY] 캐시사용:', cached);
+    return cached;
+  }
+  console.log('[LYRICS APPLY] 캐시없음, fetch진행');
 
   // fetch
   const fetchResult = await options.fetch({});
@@ -2657,16 +2761,16 @@ import { parseTimeToSeconds } from '@lib/utils/common/time';
 ## File: lib/utils/lyrics/queryNormalizer.ts
 ```typescript
 // lib/utils/lyrics/queryNormalizer.ts
+export interface NormalizeLyricsQueryOptions {
+  lang?: string;
+  [key: string]: string | undefined;
+}
 
 /**
  * 가사 검색 쿼리를 유니크한 캐시 키로 정규화합니다.
  * artist, title, lang, 기타 옵션까지 모두 key에 포함.
  */
-export function normalizeLyricsQuery(
-  artist: string,
-  title: string,
-  options?: { lang?: string; [key: string]: any },
-): string {
+export function normalizeLyricsQuery(artist: string, title: string, options?: NormalizeLyricsQueryOptions): string {
   const normArtist = artist.trim().toLowerCase().replace(/\s+/g, ' ');
   const normTitle = title.trim().toLowerCase().replace(/\s+/g, ' ');
   let key = `${normArtist}::${normTitle}`;

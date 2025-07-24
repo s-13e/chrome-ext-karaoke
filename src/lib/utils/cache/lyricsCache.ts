@@ -63,3 +63,20 @@ export function setToLyricsCache<T>(
 export function getETagForLyrics(key: string): string | undefined {
   return MEMORY_CACHE[key]?.etag;
 }
+
+export function clearLyricsCache() {
+  // localStorage 내 캐시 키가 '::'를 포함하는 경우 모두 삭제
+  Object.keys(localStorage).forEach((key) => {
+    if (key.includes('::') || key.startsWith('videoMeta:')) {
+      localStorage.removeItem(key);
+      console.log(`[LyricsCache] localStorage 캐시 삭제: key=${key}`);
+    }
+  });
+
+  // 메모리 캐시 비우기
+  for (const key in MEMORY_CACHE) {
+    delete MEMORY_CACHE[key];
+  }
+
+  console.log('[LyricsCache] 전체 캐시 초기화 완료');
+}

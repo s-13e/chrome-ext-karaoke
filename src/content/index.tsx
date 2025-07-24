@@ -15,12 +15,7 @@ import { isMusicVideo } from '@lib/utils/audio/musicDetection';
 import { UIResourceManager } from '@lib/utils/infra/uiResourceManager';
 import { YOUTUBE_PLAYER_SELECTOR, YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
 import { extractArtistAndTitle } from '@lib/utils/lyrics/artistTitle';
-import {
-  cleanUp,
-  extractArtistAndTitleCustom,
-  extractEnglishOnly,
-  removeEmptyBrackets,
-} from '@lib/utils/common/stringUtils';
+import { extractArtistAndTitleCustom, preprocessArtistOrTitle } from '@lib/utils/common/stringUtils';
 import { listenerManager } from '@lib/utils/infra/listenerManager';
 import { withContentEnabled } from '@lib/utils/platform/contentGuard';
 import { injectLyricsOverlayRoot } from '@components/lyrics/LyricsOverlayRoot';
@@ -30,12 +25,12 @@ import { parseLyrics } from '@lib/utils/lyrics/lyricsParser';
 import { Line } from '@lib/types/lyrics';
 import { tryDetectVideoChange } from '@lib/utils/platform/videoDetection';
 // import { analyzeAudioFeatures } from '@lib/utils/audio/audioAnalysis';
-import { fetchLyricsBySearchFirst } from '@background/api/lrclib';
-
-import 'normalize.css';
+import { fetchLyricsByArtistAndTrack } from '@background/api/lrclib';
 import { setToLyricsCache } from '@lib/utils/cache/lyricsCache';
 import { normalizeLyricsQuery } from '@lib/utils/lyrics/queryNormalizer';
 import { getLyricsFromCacheOrFetch } from '@lib/utils/lyrics/getLyricsFromCacheOrFetch';
+
+import 'normalize.css';
 
 (() => {
   // 새로고침 시 contentscript 내 중복 실행 방지
@@ -178,6 +173,17 @@ import { getLyricsFromCacheOrFetch } from '@lib/utils/lyrics/getLyricsFromCacheO
     detectionObserverManager.lyricsObserver.observe(player, { attributes: true, attributeFilter: ['class'] });
     showLyricsIfNotAd(lyrics);
   }
+  function shiftFirstLyricEarlier(lyrics: Line[], advanceSec: number): Line[] {
+    if (!lyrics || lyrics.length === 0) return lyrics;
+    const [first, ...rest] = lyrics;
+    if (!first) return lyrics;
+    const newFirstLine: Line = {
+      ...first,
+      time: Math.max(0, first.time - advanceSec),
+      text: first.text ?? '',
+    };
+    return [newFirstLine, ...rest];
+  }
 
   // ✅ URL 변경 핸들러 개선
   const handleUrlChange = (url: string) => {
@@ -224,6 +230,8 @@ import { getLyricsFromCacheOrFetch } from '@lib/utils/lyrics/getLyricsFromCacheO
         return;
       }
       hideLyricsOverlay();
+      latestLyrics = [];
+      // clearLyricsCache();
 
       if (!isMusicVideo(meta)) {
         console.log('isMusicVideo 판별 실패');
@@ -242,21 +250,18 @@ import { getLyricsFromCacheOrFetch } from '@lib/utils/lyrics/getLyricsFromCacheO
         return;
       }
 
-      let artist = cleanUp(refined.artist);
-      let title = cleanUp(refined.title);
-      title = removeEmptyBrackets(title);
-
-      artist = extractEnglishOnly(artist);
-      title = extractEnglishOnly(title);
+      const artist = preprocessArtistOrTitle(refined.artist);
+      const title = preprocessArtistOrTitle(refined.title);
 
       console.log('아티스트:', artist, '곡명:', title);
 
       // 1. 비디오 엘리먼트 선택
       const videoElem = document.querySelector('video');
       if (!videoElem) return;
+
       const lyricsResult = await getLyricsFromCacheOrFetch(artist, title, {
         fetch: async () => {
-          const result = await fetchLyricsBySearchFirst(artist, title);
+          const result = await fetchLyricsByArtistAndTrack(artist, title);
           if (!result) throw new Error('LRCLIB에서 가사 정보를 찾을 수 없습니다!');
           return result;
         },
@@ -278,6 +283,9 @@ import { getLyricsFromCacheOrFetch } from '@lib/utils/lyrics/getLyricsFromCacheO
       });
       const { lyrics, duration: lyricsDuration } = lyricsResult;
       const parsedLyrics: Line[] = typeof lyrics === 'string' ? parseLyrics(lyrics) : lyrics;
+
+      const ADVANCE_SEC = 3; // 앞당길 초(3초 예시)
+      const shiftedLyrics = shiftFirstLyricEarlier(parsedLyrics, ADVANCE_SEC);
       const lastLine = parsedLyrics[parsedLyrics.length - 1];
       const lyricsLengthSec = lastLine?.time ?? 0;
 
@@ -317,13 +325,15 @@ import { getLyricsFromCacheOrFetch } from '@lib/utils/lyrics/getLyricsFromCacheO
         }
       }
 
-      latestLyrics = parsedLyrics;
-      renderLyricsOverlay(parsedLyrics);
+      latestLyrics = shiftedLyrics;
+      renderLyricsOverlay(shiftedLyrics);
 
-      chrome.runtime.sendMessage({
-        type: MESSAGE_TYPES.VIDEO_DETECTED,
-        payload: videoData,
-      });
+      if (window.chrome && chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({
+          type: MESSAGE_TYPES.VIDEO_DETECTED,
+          payload: videoData,
+        });
+      }
     } finally {
       isDetecting = false;
     }

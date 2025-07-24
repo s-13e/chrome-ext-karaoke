@@ -10,7 +10,7 @@ export function cleanUp(str: string): string {
     .replace(/\\s{2,}/g, ' ') // 이중 공백 정리
     .trim();
 }
-
+// op, ed, ost, mv는 해당 단어만 삭제해 예를 들어 open the door -> en the door이 되지 않게끔
 function cleanMusicKeyword(str: string): string {
   return str
     .replace(/([^A-Za-z]|^)(OP|ED|OST|MV)([^A-Za-z]|$)/gi, (_match, p1, _p2, p3) => {
@@ -18,6 +18,7 @@ function cleanMusicKeyword(str: string): string {
     })
     .trim();
 }
+// 키워드 정제
 export function removeExtraInfo(title: string): string {
   const extraKeywords = EXTRA_KEYWORDS.slice().sort((a, b) => b.length - a.length); // 긴 키워드 우선
   let result = title;
@@ -54,21 +55,22 @@ export function removeExtraInfo(title: string): string {
 
   return result;
 }
-
+// 해시태그 삭제
 export function removeTrailingHashtags(title: string): string {
   // 곡명 끝에 연속된 해시태그만 제거
   return title.replace(/(\s*#[\p{L}\p{N}._-]+)+\s*$/gu, '').trim();
 }
-
+// 방송 날짜 기재된 경우
 export function removeDatePattern(str: string): string {
   return str.replace(/\b\d{2}[01]\d(?:3[0-2]|[0-2][0-9])\b/g, '').trim();
 }
-
+//
 export function extractArtistAndTitleCustom(rawTitle: string): { artist: string; title: string } | null {
   const cleaned = cleanUp(rawTitle);
+  const quotePattern = /^(.+?)\s*['"'“”‘’](.+?)['"'“”‘’]/;
 
   // 1. 쌍따옴표(“ ” 또는 " ") 패턴 우선 적용
-  const match = cleaned.match(/^(.+?)\s*[“"](.+?)[”"]/);
+  const match = cleaned.match(quotePattern);
   let artist = '',
     title = '';
   if (match) {
@@ -93,16 +95,6 @@ export function extractArtistAndTitleCustom(rawTitle: string): { artist: string;
   title = removeExtraInfo(title);
   artist = cleanMusicKeyword(artist);
   title = cleanMusicKeyword(title);
-
-  // 3. 추가 패턴: "아티스트 '곡명'" 또는 "아티스트 \"곡명\""
-  if (!artist || !title) {
-    // 따옴표
-    const match = cleaned.match(/^(.+?)\s*['"](.+?)['"]/);
-    if (match) {
-      artist = match[1]?.trim() ?? '';
-      title = match[2]?.trim() ?? '';
-    }
-  }
 
   // 4. 추가 패턴: 괄호
   if (!artist || !title) {
@@ -135,15 +127,30 @@ export function extractArtistAndTitleCustom(rawTitle: string): { artist: string;
   return { artist, title };
 }
 export function extractEnglishOnly(str: string): string {
-  // 연속 영어 단어와 공백, 일부 특수문자만 추출
-  const match = str.match(/([A-Za-z][A-Za-z\s'’&.-]*)/g);
-  return match ? match.join(' ').trim() : '';
+  // 영문자가 포함되어 있는지
+  const hasEnglish = /[A-Za-z]/.test(str);
+  // 비영문자가 포함되어 있는지 (영어, 숫자, 공백, 특수문자 제외)
+  const hasNonEnglish = /[^\sA-Za-z0-9'’&.-]/.test(str);
+
+  // 둘 다(영어+비영어)가 있을 때만 "영어만 남기기"
+  if (hasEnglish && hasNonEnglish) {
+    const match = str.match(/([A-Za-z][A-Za-z\s'’&.-]*)/g);
+    return match ? match.join(' ').trim() : '';
+  }
+  // 영어만 있거나, 비영어만 있으면 원본 반환
+  return str;
 }
 
-export function removeEmptyBrackets(title: string): string {
-  return title
+export function removeEmptyBrackets(str: string): string {
+  return str
     .replace(/\(\s*\)/g, '')
     .replace(/\[\s*\]/g, '')
     .replace(/\{\s*\}/g, '')
     .trim();
+}
+export function preprocessArtistOrTitle(str: string): string {
+  let s = cleanUp(str);
+  s = removeEmptyBrackets(s);
+  s = extractEnglishOnly(s);
+  return s;
 }

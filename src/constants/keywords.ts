@@ -36,6 +36,7 @@ export const EXTRA_KEYWORDS = [
   'mbc',
   'jtbc',
   'music bank',
+  'inkigayo',
   // 'live',
   'full cam',
   'clean ver.',
