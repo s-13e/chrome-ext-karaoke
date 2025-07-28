@@ -1,12 +1,16 @@
 // src/content/App.tsx
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { i18nInstance } from '@services/i18n';
 import { isToggleContentMessage } from '@lib/utils/common/typeGuards';
 import { ContentScriptMessage } from '@lib/types/message';
 import { STORAGE_KEYS } from '@constants/storageKeys';
+import { useChromeStorage } from '@hooks/useChromeStorage';
+import { MusicNoteButton } from '@components/karaoke-player-settings/MusicNoteButton';
+import MainMenu from '@components/karaoke-player-settings/MainMenu';
 // import { LyricsContainer } from './components/LyricsContainer';
 
 export function App() {
+  // 버튼 클릭 핸들러(토글)
   useEffect(() => {
     console.log('[Content] Setting up storage listener');
 
@@ -58,5 +62,36 @@ export function App() {
     };
   }, []);
 
-  return null;
+  const [contentEnabled] = useChromeStorage('contentEnabled', true);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const MENU_HEIGHT = 200; // 원하는 메뉴 높이(px)
+
+  const handleMusicNoteClick = () => {
+    const btn = document.querySelector('.ytp-music-note-button');
+    if (btn) {
+      const rect = btn.getBoundingClientRect();
+      console.log('Button rect:', rect); // 꼭 찍어서 확인해보세요.
+
+      setMenuPosition({
+        left: rect.left + rect.width / 2 + window.scrollX, // 수평 중앙
+        top: rect.bottom + window.scrollY - MENU_HEIGHT - 100,
+      });
+    }
+    setMenuVisible((v) => !v);
+  };
+
+  return (
+    <>
+      {contentEnabled && (
+        <MusicNoteButton
+          iconPath={chrome.runtime.getURL('assets/icons/music_note.png')}
+          contentEnabled={contentEnabled}
+          onClick={handleMusicNoteClick}
+        />
+      )}
+
+      <MainMenu visible={menuVisible} position={menuPosition} onClose={() => setMenuVisible(false)} />
+    </>
+  );
 }

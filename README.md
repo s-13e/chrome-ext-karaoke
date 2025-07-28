@@ -6,10 +6,12 @@
 
 ### icons
 
+- [Icon 이름] by [저작자] ([라이선스], [원본 링크])
+
 - Setting icon by [feen] from [Freepik](https://www.freepik.com/icon/setting_2697857).  
   Free for personal and commercial use with attribution.
 
-- [Icon 이름] by [저작자] ([라이선스], [원본 링크])
+- Setting icon by [user18946159(PLANBSTUDIO)] from [Freepik](https://kr.freepik.com/icon/music_11771933)
 
 ### library
 

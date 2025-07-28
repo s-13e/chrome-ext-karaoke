@@ -14,8 +14,8 @@ import { fetchYouTubeVideoMeta } from '@background/api/youtube';
 import { isMusicVideo } from '@lib/utils/audio/musicDetection';
 import { UIResourceManager } from '@lib/utils/infra/uiResourceManager';
 import { YOUTUBE_PLAYER_SELECTOR, YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
-import { extractArtistAndTitle } from '@lib/utils/lyrics/artistTitle';
-import { extractArtistAndTitleCustom, preprocessArtistOrTitle } from '@lib/utils/common/stringUtils';
+import { extractArtistAndTitle, fallbackArtistAndTitle } from '@lib/utils/lyrics/artistTitle';
+import { cleanTopicName, extractArtistAndTitleCustom, preprocessArtistOrTitle } from '@lib/utils/common/stringUtils';
 import { listenerManager } from '@lib/utils/infra/listenerManager';
 import { withContentEnabled } from '@lib/utils/platform/contentGuard';
 import { injectLyricsOverlayRoot } from '@components/lyrics/LyricsOverlayRoot';
@@ -26,7 +26,7 @@ import { Line } from '@lib/types/lyrics';
 import { tryDetectVideoChange } from '@lib/utils/platform/videoDetection';
 // import { analyzeAudioFeatures } from '@lib/utils/audio/audioAnalysis';
 import { fetchLyricsByArtistAndTrack } from '@background/api/lrclib';
-import { setToLyricsCache } from '@lib/utils/cache/lyricsCache';
+import { clearLyricsCache, setToLyricsCache } from '@lib/utils/cache/lyricsCache';
 import { normalizeLyricsQuery } from '@lib/utils/lyrics/queryNormalizer';
 import { getLyricsFromCacheOrFetch } from '@lib/utils/lyrics/getLyricsFromCacheOrFetch';
 
@@ -231,20 +231,29 @@ import 'normalize.css';
       }
       hideLyricsOverlay();
       latestLyrics = [];
-      // clearLyricsCache();
+      clearLyricsCache();
 
       if (!isMusicVideo(meta)) {
         console.log('isMusicVideo 판별 실패');
         return;
       }
 
-      const parsed = extractArtistAndTitle(meta.title);
+      let parsed = extractArtistAndTitle(meta.title);
       if (!parsed) {
-        console.log('extractArtistAndTitle 실패', meta.title);
-        return;
+        // 아티스트-타이틀 추출 실패 시 fallback 시도
+        const fallback = fallbackArtistAndTitle(meta);
+        if (!fallback) {
+          console.log('extractArtistAndTitle 및 fallback 모두 실패', meta.title);
+          return;
+        }
+        // fallback으로 추출한 artist/title 사용
+        fallback.title = cleanTopicName(fallback.title);
+        fallback.artist = cleanTopicName(fallback.artist);
+        parsed = fallback;
       }
 
       const refined = extractArtistAndTitleCustom(`${parsed.artist} - ${parsed.title}`);
+
       if (!refined) {
         console.log('extractArtistAndTitleCustom 실패', meta.title);
         return;

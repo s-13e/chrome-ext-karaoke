@@ -41,6 +41,13 @@ background/api/youtube.ts
 background/background.ts
 components/common/ErrorFallback.tsx
 components/common/LoadingOverlay.tsx
+components/karaoke-player-settings/AdvancedSettingsMenu.tsx
+components/karaoke-player-settings/FontStyleMenu.tsx
+components/karaoke-player-settings/LyricsDisplayMenu.tsx
+components/karaoke-player-settings/MainMenu.module.css
+components/karaoke-player-settings/MainMenu.tsx
+components/karaoke-player-settings/MusicNoteButton.tsx
+components/karaoke-player-settings/styles.module.css
 components/lyrics/DualHighlightSubtitle.tsx
 components/lyrics/KaraokePlayerContainer/index.tsx
 components/lyrics/KaraokePlayerContainer/styles.module.css
@@ -205,56 +212,61 @@ export async function fetchLyricsByArtistAndTrack(
   artist: string,
   title: string,
 ): Promise<LrcLibLyricsResult | undefined> {
-  const endpoint = `https://lrclib.net/api/search?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(title)}`;
+  async function searchWithParams(artistParam: string, titleParam: string) {
+    const endpoint = `https://lrclib.net/api/search?artist_name=${encodeURIComponent(artistParam)}&track_name=${encodeURIComponent(titleParam)}`;
+    const searchRes = await fetch(endpoint);
+    if (!searchRes.ok) return undefined;
+    const searchData = await searchRes.json();
 
-  const searchRes = await fetch(endpoint);
-  if (!searchRes.ok) return undefined;
+    let fallbackResult: LrcLibLyricsResult | undefined = undefined;
+    const normalizedReqTitle = titleParam.trim().toLowerCase();
 
-  const searchData = await searchRes.json();
+    for (const candidate of searchData) {
+      const detailRes = await fetch(`https://lrclib.net/api/get/${candidate.id}`);
+      if (!detailRes.ok) continue;
+      const detail = await detailRes.json();
 
-  let fallbackResult: LrcLibLyricsResult | undefined = undefined;
-  const normalizedReqTitle = title.trim().toLowerCase();
+      const lyrics = detail.syncedLyrics || detail.plainLyrics;
+      if (!lyrics) continue;
 
-  for (const candidate of searchData) {
-    const detailRes = await fetch(`https://lrclib.net/api/get/${candidate.id}`);
-    if (!detailRes.ok) continue;
+      const candidateTitle = detail.title?.trim().toLowerCase() ?? '';
 
-    const detail = await detailRes.json();
+      if (candidateTitle === normalizedReqTitle) {
+        console.log('가사:', lyrics);
+        return {
+          lyrics,
+          duration: detail.duration,
+          artist: detail.artist,
+          title: detail.title,
+          id: candidate.id,
+        };
+      }
 
-    const lyrics = detail.syncedLyrics || detail.plainLyrics;
-    if (!lyrics) continue;
-
-    const candidateTitle = detail.title?.trim().toLowerCase() ?? '';
-
-    if (candidateTitle === normalizedReqTitle) {
-      console.log('가사:', lyrics);
-
-      // 타이틀 완전 일치시 즉시 반환
-      return {
-        lyrics,
-        duration: detail.duration,
-        artist: detail.artist,
-        title: detail.title,
-        id: candidate.id,
-      };
+      if (!fallbackResult) {
+        console.log('2nd 가사:', lyrics);
+        fallbackResult = {
+          lyrics,
+          duration: detail.duration,
+          artist: detail.artist,
+          title: detail.title,
+          id: candidate.id,
+        };
+      }
     }
-
-    // 완전 일치가 없을 경우 대비 첫 가사 있는 후보 저장
-    if (!fallbackResult) {
-      console.log('2nd 가사:', lyrics);
-
-      fallbackResult = {
-        lyrics,
-        duration: detail.duration,
-        artist: detail.artist,
-        title: detail.title,
-        id: candidate.id,
-      };
-    }
+    return fallbackResult;
   }
 
-  // 완전 일치가 없으면 fallback 결과 반환
-  return fallbackResult;
+  // 1차 시도: 정상 아티스트-곡명 순서
+  const result1 = await searchWithParams(artist, title);
+  if (result1) return result1;
+
+  // 2차 시도: 아티스트와 곡명을 뒤바꿔서 검색
+  if (artist.toLowerCase() !== title.toLowerCase()) {
+    const result2 = await searchWithParams(title, artist);
+    if (result2) return result2;
+  }
+
+  return undefined;
 }
 
 export async function fetchLyricsBySearchFirst(artist: string, title: string): Promise<LrcLibLyricsResult | undefined> {
@@ -460,6 +472,398 @@ export const LoadingOverlay = React.memo(() => (
   </Container>
 ));
 LoadingOverlay.displayName = 'LoadingOverlay';
+```
+
+## File: components/karaoke-player-settings/AdvancedSettingsMenu.tsx
+```typescript
+// 기타 메뉴
+// src/components/karaoke-player-settings/AdvancedSettingsMenu.tsx
+import React from 'react';
+
+interface AdvancedSettingsMenuProps {
+  onBack: () => void;
+}
+
+const AdvancedSettingsMenu: React.FC<AdvancedSettingsMenuProps> = ({ onBack }) => {
+  return (
+    <div>
+      <button onClick={onBack}>← 뒤로</button>
+      <h3>기타 설정</h3>
+      <ul>
+        <li>
+          <button onClick={() => alert('설정 초기화 완료!')}>설정 초기화</button>
+        </li>
+        <li>
+          {/* 필요 시 추가 고급 옵션 */}
+          {/* <button>고급 동기화</button> */}
+        </li>
+      </ul>
+    </div>
+  );
+};
+
+export default AdvancedSettingsMenu;
+```
+
+## File: components/karaoke-player-settings/FontStyleMenu.tsx
+```typescript
+// 글꼴 스타일 메뉴 2차// src/components/karaoke-player-settings/FontStyleMenu.tsx
+import React from 'react';
+
+interface FontStyleMenuProps {
+  onBack: () => void;
+}
+
+const FontStyleMenu: React.FC<FontStyleMenuProps> = ({ onBack }) => {
+  return (
+    <div>
+      <button onClick={onBack}>← 뒤로</button>
+      <h3>글자(자막 스타일) 설정</h3>
+      <ul>
+        <li>
+          <label>
+            폰트 종류
+            <select defaultValue="default">
+              <option value="default">기본</option>
+              <option value="serif">세리프</option>
+              <option value="monospace">모노스페이스</option>
+            </select>
+          </label>
+        </li>
+        <li>
+          <label>
+            글자 크기
+            <input type="range" min="10" max="40" defaultValue="16" />
+          </label>
+        </li>
+        <li>
+          <label>
+            글자 색상
+            <input type="color" defaultValue="#ffffff" />
+          </label>
+        </li>
+        <li>
+          <label>
+            <input type="checkbox" /> 테두리 효과
+          </label>
+        </li>
+      </ul>
+    </div>
+  );
+};
+
+export default FontStyleMenu;
+```
+
+## File: components/karaoke-player-settings/LyricsDisplayMenu.tsx
+```typescript
+// 가사 디스플레이 상세 메뉴
+// src/components/karaoke-player-settings/LyricsDisplayMenu.tsx
+import React from 'react';
+
+interface LyricsDisplayMenuProps {
+  onBack: () => void;
+}
+
+const LyricsDisplayMenu: React.FC<LyricsDisplayMenuProps> = ({ onBack }) => {
+  return (
+    <div>
+      <button onClick={onBack}>← 뒤로</button>
+      <h3>가사 디스플레이 설정</h3>
+      <ul>
+        <li>
+          {/* 여기서부터는 ToggleItem 등 재사용 UI 컴포넌트로 대체 가능 */}
+          <label>
+            <input type="checkbox" /> 실시간 가사 On/Off
+          </label>
+        </li>
+        <li>
+          <label>
+            <input type="checkbox" /> 발음 가사 On/Off
+          </label>
+        </li>
+        <li>
+          가사 표시 방식
+          <select defaultValue="adjacent">
+            <option value="adjacent">인접 가사만 보기</option>
+            <option value="full">전체 가사 보기</option>
+          </select>
+        </li>
+        <li>
+          <label>
+            <input type="checkbox" /> 전주(첫 가사까지) 건너뛰기 On/Off
+          </label>
+        </li>
+      </ul>
+    </div>
+  );
+};
+
+export default LyricsDisplayMenu;
+```
+
+## File: components/karaoke-player-settings/MainMenu.module.css
+```css
+/* MainMenu.module.css */
+.container {
+  width: 220px;
+  height: 200px;
+  background: rgba(28, 28, 28, 0.85);
+  box-shadow: 0 2px 10px 0 rgba(0, 0, 0, 0.8);
+  color: #fff;
+  padding: 24px;
+  min-width: 230px;
+  min-height: 100px;
+  border-radius: 10px;
+  border: 1px solid rgba(72, 72, 72, 0.5);
+  backdrop-filter: blur(8px); /* 일부 브라우저 지원 */
+  /* position, left, top, z-index는 인라인스타일로만! */
+}
+.menuList {
+  list-style: none;
+  padding: 4px 0;
+  margin: 0;
+}
+.menuItem + .menuItem {
+  margin-top: 6px;  /* 항목 사이 간격 */
+}
+.menuButton {
+  all: unset;
+  cursor: pointer;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center; /* 텍스트 중앙 정렬 */
+  padding: 12px 0; /* 버튼 위아래 여유 */
+  border-radius: 4px;
+  font-size: 1rem;
+  color: #fff;
+  background: none;
+  transition: background 0.13s;
+}
+.menuButton:hover,
+.menuButton:focus-visible {
+  background: rgba(255, 255, 255, 0.13);
+}
+.menuButton:active {
+  background: rgba(255, 255, 255, 0.22);
+}
+```
+
+## File: components/karaoke-player-settings/MainMenu.tsx
+```typescript
+// 1차 메뉴
+
+import { useEffect, useRef, useState } from 'react';
+import LyricsDisplayMenu from './LyricsDisplayMenu';
+import FontStyleMenu from './FontStyleMenu';
+import AdvancedSettingsMenu from './AdvancedSettingsMenu';
+import styles from './MainMenu.module.css';
+
+interface Position {
+  top: number;
+  left: number;
+}
+
+interface MainMenuProps {
+  visible: boolean;
+  position?: Position;
+  onClose: () => void; // 외부 클릭시 호출하기 위해 onClose 필수
+}
+
+// MainMenu.tsx (메뉴 컨테이너 및 1차 메뉴 관리)
+const MainMenu: React.FC<MainMenuProps> = ({ visible, position, onClose }) => {
+  const [currentSubMenu, setCurrentSubMenu] = useState<string | null>(null);
+
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // visible false 시 드릴다운 상태 초기화
+  useEffect(() => {
+    if (!visible) {
+      setCurrentSubMenu(null);
+    }
+  }, [visible]);
+
+  // 메뉴 외부 클릭 감지해서 닫기
+  useEffect(() => {
+    if (!visible) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        onClose();
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [visible, onClose]);
+
+  if (!visible) return null;
+
+  // 드릴다운: 하위 메뉴가 있으면 그 컴포넌트로 전환
+  if (currentSubMenu === 'lyrics') {
+    return <LyricsDisplayMenu onBack={() => setCurrentSubMenu(null)} />;
+  }
+  if (currentSubMenu === 'font') {
+    return <FontStyleMenu onBack={() => setCurrentSubMenu(null)} />;
+  }
+  if (currentSubMenu === 'advanced') {
+    return <AdvancedSettingsMenu onBack={() => setCurrentSubMenu(null)} />;
+  }
+
+  return (
+    <div
+      ref={menuRef}
+      className={styles.container}
+      style={{
+        position: 'absolute',
+        left: position?.left ?? 100,
+        top: position?.top ?? 100,
+        transform: 'translate(-50%, 0)',
+      }}
+    >
+      <h2 className={styles.title}>설정</h2>
+      <ul className={styles.menuList}>
+        <li className={styles.menuItem}>
+          <button className={styles.menuButton} onClick={() => setCurrentSubMenu('lyrics')}>
+            가사 디스플레이
+          </button>
+        </li>
+        <li className={styles.menuItem}>
+          <button className={styles.menuButton} onClick={() => setCurrentSubMenu('font')}>
+            글자(자막 스타일)
+          </button>
+        </li>
+        <li className={styles.menuItem}>
+          <button className={styles.menuButton} onClick={() => setCurrentSubMenu('advanced')}>
+            기타
+          </button>
+        </li>
+      </ul>
+    </div>
+  );
+};
+
+export default MainMenu;
+```
+
+## File: components/karaoke-player-settings/MusicNoteButton.tsx
+```typescript
+// MusicNoteButton.tsx
+import { useEffect } from 'react';
+import styles from './styles.module.css';
+
+interface Props {
+  iconPath: string;
+  contentEnabled: boolean;
+  onClick?: () => void;
+}
+
+export const MusicNoteButton: React.FC<Props> = ({ iconPath, contentEnabled, onClick }) => {
+  useEffect(() => {
+    const rightControls = document.querySelector('.ytp-right-controls');
+    if (!rightControls || !contentEnabled) return;
+
+    if (document.querySelector(`.${styles.musicNoteButton}`)) return;
+
+    const autonavBtn = rightControls.querySelector('button[data-tooltip-target-id="ytp-autonav-toggle-button"]');
+
+    const btn = document.createElement('button');
+    btn.className = `${styles.musicNoteButton} ytp-button ytp-music-note-button`;
+    btn.title = '노트';
+    btn.setAttribute('aria-label', '노트');
+    btn.tabIndex = 0;
+
+    const iconImg = document.createElement('img');
+    iconImg.src = iconPath;
+    iconImg.alt = 'music note';
+    iconImg.width = 24;
+    iconImg.height = 24;
+    iconImg.style.pointerEvents = 'none';
+    iconImg.className = styles.icon || '';
+
+    btn.appendChild(iconImg);
+
+    btn.setAttribute('data-title', '노트');
+
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onClick?.();
+    });
+
+    if (autonavBtn) {
+      rightControls.insertBefore(btn, autonavBtn);
+    } else {
+      rightControls.insertBefore(btn, rightControls.firstChild);
+    }
+
+    return () => {
+      btn.remove();
+    };
+  }, [iconPath, contentEnabled, onClick]);
+
+  return null;
+};
+```
+
+## File: components/karaoke-player-settings/styles.module.css
+```css
+/* styles.module.css */
+
+.musicNoteButton {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  margin: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  height: 36px;      /* 유튜브 컨트롤러 높이와 맞춤 */
+  width: 36px;       /* 버튼 클릭 영역 확대 */
+  justify-content: center;
+  box-sizing: border-box;
+  opacity: 0.8;
+  transition: opacity 0.15s;
+}
+.musicNoteButton:hover {
+  opacity: 1;
+}
+.icon {
+  width: 24px;      /* 유튜브 기본 아이콘 크기 */
+  height: 24px;
+  pointer-events: none;
+  filter: brightness(0) invert(1); /* 흰색 아이콘 효과 */
+  transition: filter 0.15s;
+}
+#my-custom-music-menu {
+  position: absolute;
+  background: #222;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+  z-index: 10000;
+  font-size: 14px;
+  user-select: none;
+}
+
+#my-custom-music-menu div {
+  padding: 6px 10px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  transition: background 0.2s;
+}
+
+#my-custom-music-menu div:last-child {
+  border-bottom: none;
+}
+
+#my-custom-music-menu div:hover {
+  background: rgba(255,255,255,0.1);
+}
 ```
 
 ## File: components/lyrics/DualHighlightSubtitle.tsx
@@ -794,6 +1198,7 @@ export const EXTRA_KEYWORDS = [
   'mbc',
   'jtbc',
   'music bank',
+  'inkigayo',
   // 'live',
   'full cam',
   'clean ver.',
@@ -910,14 +1315,18 @@ export const YOUTUBE_REGEX = /youtube\.com\/watch\?v=[\w-]{11}/;
 ## File: content/App.tsx
 ```typescript
 // src/content/App.tsx
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { i18nInstance } from '@services/i18n';
 import { isToggleContentMessage } from '@lib/utils/common/typeGuards';
 import { ContentScriptMessage } from '@lib/types/message';
 import { STORAGE_KEYS } from '@constants/storageKeys';
+import { useChromeStorage } from '@hooks/useChromeStorage';
+import { MusicNoteButton } from '@components/karaoke-player-settings/MusicNoteButton';
+import MainMenu from '@components/karaoke-player-settings/MainMenu';
 // import { LyricsContainer } from './components/LyricsContainer';
 
 export function App() {
+  // 버튼 클릭 핸들러(토글)
   useEffect(() => {
     console.log('[Content] Setting up storage listener');
 
@@ -969,7 +1378,38 @@ export function App() {
     };
   }, []);
 
-  return null;
+  const [contentEnabled] = useChromeStorage('contentEnabled', true);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const MENU_HEIGHT = 200; // 원하는 메뉴 높이(px)
+
+  const handleMusicNoteClick = () => {
+    const btn = document.querySelector('.ytp-music-note-button');
+    if (btn) {
+      const rect = btn.getBoundingClientRect();
+      console.log('Button rect:', rect); // 꼭 찍어서 확인해보세요.
+
+      setMenuPosition({
+        left: rect.left + rect.width / 2 + window.scrollX, // 수평 중앙
+        top: rect.bottom + window.scrollY - MENU_HEIGHT - 100,
+      });
+    }
+    setMenuVisible((v) => !v);
+  };
+
+  return (
+    <>
+      {contentEnabled && (
+        <MusicNoteButton
+          iconPath={chrome.runtime.getURL('assets/icons/music_note.png')}
+          contentEnabled={contentEnabled}
+          onClick={handleMusicNoteClick}
+        />
+      )}
+
+      <MainMenu visible={menuVisible} position={menuPosition} onClose={() => setMenuVisible(false)} />
+    </>
+  );
 }
 ```
 
@@ -1083,12 +1523,12 @@ import { parseLyrics } from '@lib/utils/lyrics/lyricsParser';
 import { Line } from '@lib/types/lyrics';
 import { tryDetectVideoChange } from '@lib/utils/platform/videoDetection';
 // import { analyzeAudioFeatures } from '@lib/utils/audio/audioAnalysis';
-import { fetchLyricsByArtistAndTrack, fetchLyricsBySearchFirst } from '@background/api/lrclib';
-
-import 'normalize.css';
+import { fetchLyricsByArtistAndTrack } from '@background/api/lrclib';
 import { setToLyricsCache } from '@lib/utils/cache/lyricsCache';
 import { normalizeLyricsQuery } from '@lib/utils/lyrics/queryNormalizer';
 import { getLyricsFromCacheOrFetch } from '@lib/utils/lyrics/getLyricsFromCacheOrFetch';
+
+import 'normalize.css';
 
 (() => {
   // 새로고침 시 contentscript 내 중복 실행 방지
@@ -1289,6 +1729,7 @@ import { getLyricsFromCacheOrFetch } from '@lib/utils/lyrics/getLyricsFromCacheO
       }
       hideLyricsOverlay();
       latestLyrics = [];
+      // clearLyricsCache();
 
       if (!isMusicVideo(meta)) {
         console.log('isMusicVideo 판별 실패');
@@ -1307,8 +1748,8 @@ import { getLyricsFromCacheOrFetch } from '@lib/utils/lyrics/getLyricsFromCacheO
         return;
       }
 
-      let artist = preprocessArtistOrTitle(refined.artist);
-      let title = preprocessArtistOrTitle(refined.title);
+      const artist = preprocessArtistOrTitle(refined.artist);
+      const title = preprocessArtistOrTitle(refined.title);
 
       console.log('아티스트:', artist, '곡명:', title);
 
@@ -2098,6 +2539,23 @@ export function setToLyricsCache<T>(
 export function getETagForLyrics(key: string): string | undefined {
   return MEMORY_CACHE[key]?.etag;
 }
+
+export function clearLyricsCache() {
+  // localStorage 내 캐시 키가 '::'를 포함하는 경우 모두 삭제
+  Object.keys(localStorage).forEach((key) => {
+    if (key.includes('::') || key.startsWith('videoMeta:')) {
+      localStorage.removeItem(key);
+      console.log(`[LyricsCache] localStorage 캐시 삭제: key=${key}`);
+    }
+  });
+
+  // 메모리 캐시 비우기
+  for (const key in MEMORY_CACHE) {
+    delete MEMORY_CACHE[key];
+  }
+
+  console.log('[LyricsCache] 전체 캐시 초기화 완료');
+}
 ```
 
 ## File: lib/utils/common/common.ts
@@ -2264,7 +2722,7 @@ export function extractEnglishOnly(str: string): string {
   // 영문자가 포함되어 있는지
   const hasEnglish = /[A-Za-z]/.test(str);
   // 비영문자가 포함되어 있는지 (영어, 숫자, 공백, 특수문자 제외)
-  const hasNonEnglish = /[^\sA-Za-z0-9'’&.\-]/.test(str);
+  const hasNonEnglish = /[^\sA-Za-z0-9'’&.-]/.test(str);
 
   // 둘 다(영어+비영어)가 있을 때만 "영어만 남기기"
   if (hasEnglish && hasNonEnglish) {

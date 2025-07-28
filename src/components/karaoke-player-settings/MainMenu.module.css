@@ -1,0 +1,44 @@
+/* MainMenu.module.css */
+.container {
+  width: 220px;
+  height: 200px;
+  background: rgba(28, 28, 28, 0.85);
+  box-shadow: 0 2px 10px 0 rgba(0, 0, 0, 0.8);
+  color: #fff;
+  padding: 24px;
+  min-width: 230px;
+  min-height: 100px;
+  border-radius: 10px;
+  border: 1px solid rgba(72, 72, 72, 0.5);
+  backdrop-filter: blur(8px); /* 일부 브라우저 지원 */
+  /* position, left, top, z-index는 인라인스타일로만! */
+}
+.menuList {
+  list-style: none;
+  padding: 4px 0;
+  margin: 0;
+}
+.menuItem + .menuItem {
+  margin-top: 6px;  /* 항목 사이 간격 */
+}
+.menuButton {
+  all: unset;
+  cursor: pointer;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center; /* 텍스트 중앙 정렬 */
+  padding: 12px 0; /* 버튼 위아래 여유 */
+  border-radius: 4px;
+  font-size: 1rem;
+  color: #fff;
+  background: none;
+  transition: background 0.13s;
+}
+.menuButton:hover,
+.menuButton:focus-visible {
+  background: rgba(255, 255, 255, 0.13);
+}
+.menuButton:active {
+  background: rgba(255, 255, 255, 0.22);
+}
