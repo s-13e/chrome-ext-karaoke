@@ -6,7 +6,10 @@ const TRAILING_DELIMITERS_REGEX = /[\s\-/|]+$/;
 function trimTrailingDelimiters(str: string): string {
   return str.replace(TRAILING_DELIMITERS_REGEX, '').trim();
 }
-
+// 영어 여부 판단 함수 (공백, 하이픈, 작은따옴표 포함)
+export function isEnglishText(text: string): boolean {
+  return /^[A-Za-z\s\-']+$/.test(text);
+}
 /**
  * 문자열에서 부가정보(괄호, 대괄호, 파이프 등)를 제거합니다.
  */

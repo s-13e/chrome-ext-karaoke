@@ -15,7 +15,12 @@ import { isMusicVideo } from '@lib/utils/audio/musicDetection';
 import { UIResourceManager } from '@lib/utils/infra/uiResourceManager';
 import { YOUTUBE_PLAYER_SELECTOR, YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
 import { extractArtistAndTitle, fallbackArtistAndTitle } from '@lib/utils/lyrics/artistTitle';
-import { cleanTopicName, extractArtistAndTitleCustom, preprocessArtistOrTitle } from '@lib/utils/common/stringUtils';
+import {
+  cleanTopicName,
+  extractArtistAndTitleCustom,
+  isEnglishText,
+  preprocessArtistOrTitle,
+} from '@lib/utils/common/stringUtils';
 import { listenerManager } from '@lib/utils/infra/listenerManager';
 import { withContentEnabled } from '@lib/utils/platform/contentGuard';
 import { injectLyricsOverlayRoot } from '@components/lyrics/LyricsOverlayRoot';
@@ -25,12 +30,13 @@ import { parseLyrics } from '@lib/utils/lyrics/lyricsParser';
 import { Line } from '@lib/types/lyrics';
 import { tryDetectVideoChange } from '@lib/utils/platform/videoDetection';
 // import { analyzeAudioFeatures } from '@lib/utils/audio/audioAnalysis';
-import { fetchLyricsByArtistAndTrack } from '@background/api/lrclib';
+import { fetchLyricsByArtistAndTrack, LrcLibLyricsResult } from '@background/api/lrclib';
 import { clearLyricsCache, setToLyricsCache } from '@lib/utils/cache/lyricsCache';
 import { normalizeLyricsQuery } from '@lib/utils/lyrics/queryNormalizer';
 import { getLyricsFromCacheOrFetch } from '@lib/utils/lyrics/getLyricsFromCacheOrFetch';
 
 import 'normalize.css';
+import { fetchEnglishAliasForArtist } from '@background/api/musicBrainz';
 
 (() => {
   // 새로고침 시 contentscript 내 중복 실행 방지
@@ -270,9 +276,40 @@ import 'normalize.css';
 
       const lyricsResult = await getLyricsFromCacheOrFetch(artist, title, {
         fetch: async () => {
-          const result = await fetchLyricsByArtistAndTrack(artist, title);
-          if (!result) throw new Error('LRCLIB에서 가사 정보를 찾을 수 없습니다!');
-          return result;
+          const areBothEnglish = isEnglishText(artist) && isEnglishText(title);
+          // 가사 검색 결과를 저장할 변수 초기화
+          let result: LrcLibLyricsResult | undefined = undefined;
+
+          // 둘 다 영어일 경우
+          if (areBothEnglish) {
+            result = await fetchLyricsByArtistAndTrack(artist, title);
+            if (result) return result;
+
+            // 실패하면, MusicBrainz API를 통해 영어 공식 아티스트명 또는 별칭(aliases)을 가져옴
+            const englishArtist = await fetchEnglishAliasForArtist(artist);
+            // 공식 영문 아티스트명이 존재하고, 현재 아티스트명과 다르면
+            if (englishArtist && englishArtist !== artist) {
+              result = await fetchLyricsByArtistAndTrack(englishArtist, title);
+              if (result) {
+                console.log(`[Info] 영어 alias (${englishArtist})로 가사 검색 성공: ${englishArtist} - ${title}`);
+                return result;
+              }
+            }
+
+            throw new Error('LRCLIB에서 가사 정보를 찾을 수 없습니다! (영문 공식/별칭 모두 실패)');
+          } else {
+            // 아티스트명 또는 곡명이 영어가 아닌 경우
+            const englishArtist = await fetchEnglishAliasForArtist(artist);
+            if (englishArtist && englishArtist !== artist) {
+              result = await fetchLyricsByArtistAndTrack(englishArtist, title);
+              if (result) {
+                console.log(`[Info] 영어 공식명 (${englishArtist})로 가사 검색 성공: ${englishArtist} - ${title}`);
+                return result;
+              }
+            }
+
+            throw new Error('LRCLIB에서 가사 정보를 찾을 수 없습니다! (공식 영어명 매핑 실패)');
+          }
         },
       });
 

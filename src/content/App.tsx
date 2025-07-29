@@ -6,7 +6,7 @@ import { ContentScriptMessage } from '@lib/types/message';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 import { useChromeStorage } from '@hooks/useChromeStorage';
 import { MusicNoteButton } from '@components/karaoke-player-settings/MusicNoteButton';
-import MainMenu from '@components/karaoke-player-settings/MainMenu';
+import { MainMenu } from '@components/karaoke-player-settings/MainMenu';
 // import { LyricsContainer } from './components/LyricsContainer';
 
 export function App() {

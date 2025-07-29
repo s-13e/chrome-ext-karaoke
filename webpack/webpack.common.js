@@ -115,6 +115,7 @@ module.exports = {
     }),
     new webpack.DefinePlugin({
       'process.env.YOUTUBE_API_KEY': JSON.stringify(process.env.YOUTUBE_API_KEY),
+      'process.env.MUSICBRAINZ_USER_AGENT': JSON.stringify(process.env.MUSICBRAINZ_USER_AGENT),
     }),
   ],
 };
