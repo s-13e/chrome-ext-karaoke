@@ -1,3 +1,5 @@
+import { isEnglishText } from '@lib/utils/common/stringUtils';
+
 // background/api/musicBrainz.ts
 const BASE_URL = 'https://musicbrainz.org/ws/2';
 const USER_AGENT = process.env.MUSICBRAINZ_USER_AGENT!;
@@ -55,35 +57,77 @@ export async function fetchEnglishAliasForArtist(artistName: string): Promise<st
       return null;
     }
 
-    // 1순위: aliases 배열에서 영어(primary 또는 locale='en') 별칭 찾기
-    for (const artist of data.artists) {
-      if (artist.aliases && artist.aliases.length > 0) {
-        let englishAlias = artist.aliases.find(
-          (alias) => typeof alias.locale === 'string' && alias.locale.toLowerCase() === 'en',
-        );
-        // 2. 영어 locale alias 없으면, primary이고 영어 이름인 별칭 찾기
-        if (!englishAlias) {
-          englishAlias = artist.aliases.find((alias) => alias.primary === true && /^[A-Za-z\s\-']+$/.test(alias.name));
-        }
-        if (englishAlias?.name) {
-          console.log(`[MusicBrainz] 영어 alias 발견: ${englishAlias.name}`);
-          return englishAlias.name;
-        }
-      }
-
-      // 아티스트명이 이미 영어(알파벳, 공백, 하이픈, 작은따옴표)만 포함하면 바로 반환
-      if (/^[A-Za-z\s\-']+$/.test(artist.name)) {
-        console.log('[MusicBrainz] 아티스트명이 이미 영어로 추정됨:', artist.name);
-        return artist.name;
-      }
-    }
-
-    console.warn('[MusicBrainz] 영어 alias/이름을 찾지 못함');
-    return null;
+    return extractEnglishAliasFromArtists(data.artists);
   } catch (error) {
     console.error('[MusicBrainz] API 호출 중 오류 발생:', error);
     return null;
   }
+}
+
+/**
+ * 프리텍스트로 MusicBrainz에서 아티스트를 검색
+ *
+ * @param queryStr 검색어 (비영문, 오타, 별칭 등 포함 가능)
+ * @returns Artist[] | null
+ */
+export async function searchArtistByFreeText(queryStr: string): Promise<Artist[] | null> {
+  if (!queryStr) return null;
+
+  const query = encodeURIComponent(queryStr);
+  const url = `${BASE_URL}/artist?query=${query}&fmt=json&limit=5`;
+
+  try {
+    if (!USER_AGENT) {
+      throw new Error('MUSICBRAINZ_USER_AGENT 환경변수가 설정되어 있지 않습니다.');
+    }
+
+    console.log(`[MusicBrainz] [FreeText] 프리텍스트 artist 검색: "${queryStr}"`);
+    const res = await fetch(url, {
+      headers: { 'User-Agent': USER_AGENT },
+    });
+
+    if (!res.ok) {
+      console.error(`[MusicBrainz] [FreeText] API 응답 실패: ${res.status} ${res.statusText}`);
+      return null;
+    }
+
+    const data: MusicBrainzResponse = await res.json();
+    console.log(`[MusicBrainz] [FreeText] 결과 artist 수: ${data.artists?.length || 0}`);
+
+    if (!data.artists || data.artists.length === 0) {
+      return null;
+    }
+
+    // 결과로 Artist[] 반환 (alias 추출은 호출부에서 담당)
+    return data.artists;
+  } catch (error) {
+    console.error('[MusicBrainz] [FreeText] API 호출 중 오류 발생:', error);
+    return null;
+  }
+}
+
+// 기존 fetchEnglishAliasForArtist 내부에 있던 alias 파싱 로직을 따로 함수로
+export function extractEnglishAliasFromArtists(artists: Artist[]): string | null {
+  for (const artist of artists) {
+    if (artist.aliases && artist.aliases.length > 0) {
+      let englishAlias = artist.aliases.find(
+        (alias) => typeof alias.locale === 'string' && alias.locale.toLowerCase() === 'en',
+      );
+      if (!englishAlias) {
+        englishAlias = artist.aliases.find((alias) => alias.primary === true && isEnglishText(alias.name));
+      }
+      if (englishAlias?.name) {
+        console.log(`[MusicBrainz] 영어 alias 발견: ${englishAlias.name}`);
+        return englishAlias.name;
+      }
+    }
+
+    if (isEnglishText(artist.name)) {
+      console.log(`[MusicBrainz] 아티스트명이 이미 영어로 추정됨: ${artist.name}`);
+      return artist.name;
+    }
+  }
+  return null;
 }
 
 /**

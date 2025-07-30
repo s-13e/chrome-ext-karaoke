@@ -34,9 +34,8 @@ The content is organized as follows:
 
 # Directory Structure
 ```
-background/api/genius.ts
-background/api/ksoftsi.ts
 background/api/lrclib.ts
+background/api/musicBrainz.ts
 background/api/youtube.ts
 background/background.ts
 components/common/ErrorFallback.tsx
@@ -55,7 +54,6 @@ components/lyrics/LyricsOverlayRoot.tsx
 components/lyrics/LyricsSidebar/index.tsx
 components/lyrics/LyricsSidebar/LyricsPanel.tsx
 components/lyrics/styles.module.css
-constants/api.ts
 constants/doomIds.ts
 constants/errorCodes.ts
 constants/errorMessages.ts
@@ -125,74 +123,6 @@ styles/GlobalStyle.ts
 ```
 
 # Files
-
-## File: background/api/genius.ts
-```typescript
-import { GENIUS_API_URL } from '@constants/api';
-
-export const fetchGeniusLyrics = async (title: string): Promise<string> => {
-  console.log('[GENIUS] 가사 요청 시작', { title });
-  const searchUrl = `${GENIUS_API_URL}/search?q=${encodeURIComponent(title)}`;
-  const headers = {
-    Authorization: `Bearer ${process.env.GENIUS_ACCESS_TOKEN}`,
-  };
-
-  // 1. 검색을 통해 트랙 ID 획득
-  const searchRes = await fetch(searchUrl, { headers });
-  const searchData = await searchRes.json();
-  const trackId = searchData.response.hits[0]?.result.id;
-
-  if (!trackId) throw new Error('No lyrics found');
-
-  // 2. 트랙 ID로 가사 조회
-  const lyricsUrl = `${GENIUS_API_URL}/songs/${trackId}`;
-  const lyricsRes = await fetch(lyricsUrl, { headers });
-  const lyricsData = await lyricsRes.json();
-
-  return lyricsData.response.song.lyrics;
-};
-```
-
-## File: background/api/ksoftsi.ts
-```typescript
-// src/lib/api/ksoftsi.ts
-import axios from 'axios';
-
-const KSOFT_API_KEY = process.env.KSOFT_API_KEY; // 환경변수로 관리 권장
-
-const KSOFT_BASE_URL = 'https://api.ksoft.si/lyrics/search';
-
-export interface KSoftLyricsResult {
-  name: string;
-  artist: string;
-  lyrics: string;
-  url: string;
-  // 기타 필요한 필드 추가
-}
-
-export async function fetchKSoftLyrics(artist: string, title: string): Promise<KSoftLyricsResult | null> {
-  try {
-    const response = await axios.get(KSOFT_BASE_URL, {
-      params: { q: `${artist} ${title}` },
-      headers: { Authorization: `Bearer ${KSOFT_API_KEY}` },
-    });
-
-    if (response.data && response.data.data && response.data.data.length > 0) {
-      const result = response.data.data[0];
-      return {
-        name: result.name,
-        artist: result.artist,
-        lyrics: result.lyrics,
-        url: result.url,
-      };
-    }
-    return null;
-  } catch (error) {
-    console.error('KSoft.Si API error:', error);
-    return null;
-  }
-}
-```
 
 ## File: background/api/lrclib.ts
 ```typescript
@@ -294,6 +224,107 @@ export async function fetchLyricsBySearchFirst(artist: string, title: string): P
   }
   return undefined;
 }
+```
+
+## File: background/api/musicBrainz.ts
+```typescript
+// background/api/musicBrainz.ts
+const BASE_URL = 'https://musicbrainz.org/ws/2';
+const USER_AGENT = process.env.MUSICBRAINZ_USER_AGENT!;
+
+type Alias = {
+  name: string;
+  locale?: string;
+  primary?: boolean;
+  type?: string;
+};
+
+type Artist = {
+  name: string;
+  aliases?: Alias[];
+};
+
+type MusicBrainzResponse = {
+  artists?: Artist[];
+};
+
+/**
+ * MusicBrainz API 호출 시 반드시 User-Agent 헤더를 포함해야 함
+ * 아티스트명에 대한 영문명(alias) 자동 추출 함수
+ */
+export async function fetchEnglishAliasForArtist(artistName: string): Promise<string | null> {
+  if (!artistName) {
+    console.warn('[MusicBrainz] artistName is empty or falsy');
+    return null;
+  }
+  const query = encodeURIComponent(artistName);
+  const url = `${BASE_URL}/artist?query=artist:${query}&fmt=json&limit=3`;
+
+  try {
+    if (!USER_AGENT) {
+      throw new Error('MUSICBRAINZ_USER_AGENT 환경변수가 설정되어 있지 않습니다.');
+    }
+
+    console.log(`[MusicBrainz] Requesting artist alias for: "${artistName}"`);
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': USER_AGENT,
+      },
+    });
+
+    if (!res.ok) {
+      console.error(`[MusicBrainz] API 응답 실패: ${res.status} ${res.statusText}`);
+      return null;
+    }
+
+    const data: MusicBrainzResponse = await res.json();
+    console.log(`[MusicBrainz] API 응답 JSON 아티스트 수: ${data.artists?.length || 0}`);
+
+    if (!data.artists || data.artists.length === 0) {
+      console.warn('[MusicBrainz] artists 배열이 빈 배열이거나 없음');
+      return null;
+    }
+
+    // 1순위: aliases 배열에서 영어(primary 또는 locale='en') 별칭 찾기
+    for (const artist of data.artists) {
+      if (artist.aliases && artist.aliases.length > 0) {
+        let englishAlias = artist.aliases.find(
+          (alias) => typeof alias.locale === 'string' && alias.locale.toLowerCase() === 'en',
+        );
+        // 2. 영어 locale alias 없으면, primary이고 영어 이름인 별칭 찾기
+        if (!englishAlias) {
+          englishAlias = artist.aliases.find((alias) => alias.primary === true && /^[A-Za-z\s\-']+$/.test(alias.name));
+        }
+        if (englishAlias?.name) {
+          console.log(`[MusicBrainz] 영어 alias 발견: ${englishAlias.name}`);
+          return englishAlias.name;
+        }
+      }
+
+      // 아티스트명이 이미 영어(알파벳, 공백, 하이픈, 작은따옴표)만 포함하면 바로 반환
+      if (/^[A-Za-z\s\-']+$/.test(artist.name)) {
+        console.log('[MusicBrainz] 아티스트명이 이미 영어로 추정됨:', artist.name);
+        return artist.name;
+      }
+    }
+
+    console.warn('[MusicBrainz] 영어 alias/이름을 찾지 못함');
+    return null;
+  } catch (error) {
+    console.error('[MusicBrainz] API 호출 중 오류 발생:', error);
+    return null;
+  }
+}
+
+/**
+ * 곡명에 대한 영문명 변환 함수 (work, recording 검색) - 필요시 구현 가능
+ */
+//export async function fetchEnglishAliasForTitle(title: string): Promise<string | null> {
+// MusicBrainz는 곡명 검색이 아티스트 검색보다 약간 복잡
+// ws/2/recording 또는 ws/2/work를 활용해야 함
+// 구현 필요 시 알려주세요
+// return null;
+//}
 ```
 
 ## File: background/api/youtube.ts
@@ -484,7 +515,7 @@ interface AdvancedSettingsMenuProps {
   onBack: () => void;
 }
 
-const AdvancedSettingsMenu: React.FC<AdvancedSettingsMenuProps> = ({ onBack }) => {
+export const AdvancedSettingsMenu: React.FC<AdvancedSettingsMenuProps> = ({ onBack }) => {
   return (
     <div>
       <button onClick={onBack}>← 뒤로</button>
@@ -501,8 +532,6 @@ const AdvancedSettingsMenu: React.FC<AdvancedSettingsMenuProps> = ({ onBack }) =
     </div>
   );
 };
-
-export default AdvancedSettingsMenu;
 ```
 
 ## File: components/karaoke-player-settings/FontStyleMenu.tsx
@@ -514,7 +543,7 @@ interface FontStyleMenuProps {
   onBack: () => void;
 }
 
-const FontStyleMenu: React.FC<FontStyleMenuProps> = ({ onBack }) => {
+export const FontStyleMenu: React.FC<FontStyleMenuProps> = ({ onBack }) => {
   return (
     <div>
       <button onClick={onBack}>← 뒤로</button>
@@ -551,8 +580,6 @@ const FontStyleMenu: React.FC<FontStyleMenuProps> = ({ onBack }) => {
     </div>
   );
 };
-
-export default FontStyleMenu;
 ```
 
 ## File: components/karaoke-player-settings/LyricsDisplayMenu.tsx
@@ -565,7 +592,7 @@ interface LyricsDisplayMenuProps {
   onBack: () => void;
 }
 
-const LyricsDisplayMenu: React.FC<LyricsDisplayMenuProps> = ({ onBack }) => {
+export const LyricsDisplayMenu: React.FC<LyricsDisplayMenuProps> = ({ onBack }) => {
   return (
     <div>
       <button onClick={onBack}>← 뒤로</button>
@@ -598,8 +625,6 @@ const LyricsDisplayMenu: React.FC<LyricsDisplayMenuProps> = ({ onBack }) => {
     </div>
   );
 };
-
-export default LyricsDisplayMenu;
 ```
 
 ## File: components/karaoke-player-settings/MainMenu.module.css
@@ -654,10 +679,10 @@ export default LyricsDisplayMenu;
 ```typescript
 // 1차 메뉴
 
-import { useEffect, useRef, useState } from 'react';
-import LyricsDisplayMenu from './LyricsDisplayMenu';
-import FontStyleMenu from './FontStyleMenu';
-import AdvancedSettingsMenu from './AdvancedSettingsMenu';
+import React, { useEffect, useRef, useState } from 'react';
+import { LyricsDisplayMenu } from './LyricsDisplayMenu';
+import { FontStyleMenu } from './FontStyleMenu';
+import { AdvancedSettingsMenu } from './AdvancedSettingsMenu';
 import styles from './MainMenu.module.css';
 
 interface Position {
@@ -672,7 +697,7 @@ interface MainMenuProps {
 }
 
 // MainMenu.tsx (메뉴 컨테이너 및 1차 메뉴 관리)
-const MainMenu: React.FC<MainMenuProps> = ({ visible, position, onClose }) => {
+export const MainMenu: React.FC<MainMenuProps> = ({ visible, position, onClose }) => {
   const [currentSubMenu, setCurrentSubMenu] = useState<string | null>(null);
 
   const menuRef = useRef<HTMLDivElement>(null);
@@ -746,13 +771,12 @@ const MainMenu: React.FC<MainMenuProps> = ({ visible, position, onClose }) => {
     </div>
   );
 };
-
-export default MainMenu;
 ```
 
 ## File: components/karaoke-player-settings/MusicNoteButton.tsx
 ```typescript
 // MusicNoteButton.tsx
+import React from 'react';
 import { useEffect } from 'react';
 import styles from './styles.module.css';
 
@@ -1125,12 +1149,6 @@ export function injectLyricsOverlayRoot() {
 }
 ```
 
-## File: constants/api.ts
-```typescript
-// src/constants/api.ts
-export const GENIUS_API_URL = 'https://api.genius.com';
-```
-
 ## File: constants/doomIds.ts
 ```typescript
 export const DOM_IDS = {
@@ -1322,7 +1340,7 @@ import { ContentScriptMessage } from '@lib/types/message';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 import { useChromeStorage } from '@hooks/useChromeStorage';
 import { MusicNoteButton } from '@components/karaoke-player-settings/MusicNoteButton';
-import MainMenu from '@components/karaoke-player-settings/MainMenu';
+import { MainMenu } from '@components/karaoke-player-settings/MainMenu';
 // import { LyricsContainer } from './components/LyricsContainer';
 
 export function App() {
@@ -1512,8 +1530,13 @@ import { fetchYouTubeVideoMeta } from '@background/api/youtube';
 import { isMusicVideo } from '@lib/utils/audio/musicDetection';
 import { UIResourceManager } from '@lib/utils/infra/uiResourceManager';
 import { YOUTUBE_PLAYER_SELECTOR, YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
-import { extractArtistAndTitle } from '@lib/utils/lyrics/artistTitle';
-import { extractArtistAndTitleCustom, preprocessArtistOrTitle } from '@lib/utils/common/stringUtils';
+import { extractArtistAndTitle, fallbackArtistAndTitle } from '@lib/utils/lyrics/artistTitle';
+import {
+  cleanTopicName,
+  extractArtistAndTitleCustom,
+  isEnglishText,
+  preprocessArtistOrTitle,
+} from '@lib/utils/common/stringUtils';
 import { listenerManager } from '@lib/utils/infra/listenerManager';
 import { withContentEnabled } from '@lib/utils/platform/contentGuard';
 import { injectLyricsOverlayRoot } from '@components/lyrics/LyricsOverlayRoot';
@@ -1523,12 +1546,13 @@ import { parseLyrics } from '@lib/utils/lyrics/lyricsParser';
 import { Line } from '@lib/types/lyrics';
 import { tryDetectVideoChange } from '@lib/utils/platform/videoDetection';
 // import { analyzeAudioFeatures } from '@lib/utils/audio/audioAnalysis';
-import { fetchLyricsByArtistAndTrack } from '@background/api/lrclib';
-import { setToLyricsCache } from '@lib/utils/cache/lyricsCache';
+import { fetchLyricsByArtistAndTrack, LrcLibLyricsResult } from '@background/api/lrclib';
+import { clearLyricsCache, setToLyricsCache } from '@lib/utils/cache/lyricsCache';
 import { normalizeLyricsQuery } from '@lib/utils/lyrics/queryNormalizer';
 import { getLyricsFromCacheOrFetch } from '@lib/utils/lyrics/getLyricsFromCacheOrFetch';
 
 import 'normalize.css';
+import { fetchEnglishAliasForArtist } from '@background/api/musicBrainz';
 
 (() => {
   // 새로고침 시 contentscript 내 중복 실행 방지
@@ -1729,20 +1753,29 @@ import 'normalize.css';
       }
       hideLyricsOverlay();
       latestLyrics = [];
-      // clearLyricsCache();
+      clearLyricsCache();
 
       if (!isMusicVideo(meta)) {
         console.log('isMusicVideo 판별 실패');
         return;
       }
 
-      const parsed = extractArtistAndTitle(meta.title);
+      let parsed = extractArtistAndTitle(meta.title);
       if (!parsed) {
-        console.log('extractArtistAndTitle 실패', meta.title);
-        return;
+        // 아티스트-타이틀 추출 실패 시 fallback 시도
+        const fallback = fallbackArtistAndTitle(meta);
+        if (!fallback) {
+          console.log('extractArtistAndTitle 및 fallback 모두 실패', meta.title);
+          return;
+        }
+        // fallback으로 추출한 artist/title 사용
+        fallback.title = cleanTopicName(fallback.title);
+        fallback.artist = cleanTopicName(fallback.artist);
+        parsed = fallback;
       }
 
       const refined = extractArtistAndTitleCustom(`${parsed.artist} - ${parsed.title}`);
+
       if (!refined) {
         console.log('extractArtistAndTitleCustom 실패', meta.title);
         return;
@@ -1759,9 +1792,40 @@ import 'normalize.css';
 
       const lyricsResult = await getLyricsFromCacheOrFetch(artist, title, {
         fetch: async () => {
-          const result = await fetchLyricsByArtistAndTrack(artist, title);
-          if (!result) throw new Error('LRCLIB에서 가사 정보를 찾을 수 없습니다!');
-          return result;
+          const areBothEnglish = isEnglishText(artist) && isEnglishText(title);
+          // 가사 검색 결과를 저장할 변수 초기화
+          let result: LrcLibLyricsResult | undefined = undefined;
+
+          // 둘 다 영어일 경우
+          if (areBothEnglish) {
+            result = await fetchLyricsByArtistAndTrack(artist, title);
+            if (result) return result;
+
+            // 실패하면, MusicBrainz API를 통해 영어 공식 아티스트명 또는 별칭(aliases)을 가져옴
+            const englishArtist = await fetchEnglishAliasForArtist(artist);
+            // 공식 영문 아티스트명이 존재하고, 현재 아티스트명과 다르면
+            if (englishArtist && englishArtist !== artist) {
+              result = await fetchLyricsByArtistAndTrack(englishArtist, title);
+              if (result) {
+                console.log(`[Info] 영어 alias (${englishArtist})로 가사 검색 성공: ${englishArtist} - ${title}`);
+                return result;
+              }
+            }
+
+            throw new Error('LRCLIB에서 가사 정보를 찾을 수 없습니다! (영문 공식/별칭 모두 실패)');
+          } else {
+            // 아티스트명 또는 곡명이 영어가 아닌 경우
+            const englishArtist = await fetchEnglishAliasForArtist(artist);
+            if (englishArtist && englishArtist !== artist) {
+              result = await fetchLyricsByArtistAndTrack(englishArtist, title);
+              if (result) {
+                console.log(`[Info] 영어 공식명 (${englishArtist})로 가사 검색 성공: ${englishArtist} - ${title}`);
+                return result;
+              }
+            }
+
+            throw new Error('LRCLIB에서 가사 정보를 찾을 수 없습니다! (공식 영어명 매핑 실패)');
+          }
         },
       });
 
@@ -2593,6 +2657,15 @@ export const throttle = <T extends (...args: unknown[]) => unknown>(
 // src/lib/utils/stringUtils.ts
 import { EXTRA_KEYWORDS } from '@constants/keywords';
 
+const TRAILING_DELIMITERS_REGEX = /[\s\-/|]+$/;
+
+function trimTrailingDelimiters(str: string): string {
+  return str.replace(TRAILING_DELIMITERS_REGEX, '').trim();
+}
+// 영어 여부 판단 함수 (공백, 하이픈, 작은따옴표 포함)
+export function isEnglishText(text: string): boolean {
+  return /^[A-Za-z\s\-']+$/.test(text);
+}
 /**
  * 문자열에서 부가정보(괄호, 대괄호, 파이프 등)를 제거합니다.
  */
@@ -2611,40 +2684,43 @@ function cleanMusicKeyword(str: string): string {
     .trim();
 }
 // 키워드 정제
-export function removeExtraInfo(title: string): string {
+export function removeExtraInfo(str: string): string {
   const extraKeywords = EXTRA_KEYWORDS.slice().sort((a, b) => b.length - a.length); // 긴 키워드 우선
-  let result = title;
+  let result = str;
 
   // 1. 복합 키워드(공백/특수문자 포함) 전체 제거
   for (const kw of extraKeywords) {
+    const escapedKw = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     // 키워드가 특수문자 포함 가능하므로 escape 처리
-    const regex = new RegExp(`(\\s*${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    const regex = new RegExp(`(\\s*${escapedKw})`, 'gi');
     result = result.replace(regex, '').trim();
   }
 
-  // 2. 기존 구분자 분할(남아있는 경우만)
+  // 2. 구분자(-, /, |) 기준 분할 후, 끝부분 부가 키워드 포함 파트 제거
   const parts = result.split(/\s*[-/|]\s*/);
-  while (parts.length > 1 && extraKeywords.some((kw) => parts[parts.length - 1]?.toLowerCase().includes(kw))) {
+  while (
+    parts.length > 1 &&
+    extraKeywords.some((kw) => parts[parts.length - 1]?.toLowerCase().includes(kw.toLowerCase()))
+  ) {
     parts.pop();
   }
+
+  // 3. 조합한 결과 문자열로 재설정
   result = parts.join(' - ');
 
-  // 3. 끝에 남아있는 부가정보 반복 제거
+  // 4. 반복적으로 문자열 끝에 부가 키워드 남아있는지 검사해서 제거
   let found = true;
   while (found) {
     found = false;
     for (const kw of extraKeywords) {
-      const regex = new RegExp(`(\\s*${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})$`, 'i');
+      const escapedKw = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`(\\s*${escapedKw})$`, 'i'); // 끝에 위치한 키워드 제거
       if (regex.test(result)) {
         result = result.replace(regex, '').trim();
         found = true;
       }
     }
   }
-
-  result = parts.filter(Boolean).join(' - '); // 빈 값 제거 후 합치기
-  result = result.replace(/[-/|]+$/, '').trim(); // 끝에 남은 구분자 제거
-
   return result;
 }
 // 해시태그 삭제
@@ -2700,7 +2776,7 @@ export function extractArtistAndTitleCustom(rawTitle: string): { artist: string;
   // 5. 추가 패턴: 아티스트와 곡명이 모두 영문/숫자/공백으로만 구성된 경우
   if (!artist || !title) {
     // 대문자로 시작하는 두 단어 이상이면 첫 단어를 아티스트, 나머지를 곡명으로 추정
-    const match = cleaned.match(/^([A-Za-z가-힣0-9]+)\s+(.+)$/);
+    const match = cleaned.match(/^([A-Za-z0-9]+|[^A-Za-z0-9\s]+)\s+(.+)$/);
     if (match) {
       artist = match[1]?.trim() ?? '';
       title = match[2]?.trim() ?? '';
@@ -2711,7 +2787,6 @@ export function extractArtistAndTitleCustom(rawTitle: string): { artist: string;
   title = removeExtraInfo(title);
   title = removeTrailingHashtags(title);
   title = removeDatePattern(title);
-  title = title.replace(/[-/|]+$/, '').trim(); // 끝에 남은 구분자도 제거
 
   if (!artist || !title) return null;
   artist = removeEmptyBrackets(removeExtraInfo(artist));
@@ -2732,7 +2807,18 @@ export function extractEnglishOnly(str: string): string {
   // 영어만 있거나, 비영어만 있으면 원본 반환
   return str;
 }
+// 유튜브 DATA API를 통해 나온 음악 타이틀에서 Topic을 제거함
+export function cleanTopicName(name: string): string {
+  let result = name;
 
+  // 앞쪽 접두사 "Topic - "
+  result = result.replace(/^topic\s*-\s*/i, '');
+
+  // 뒤쪽 접미사 " - Topic"
+  result = result.replace(/\s*-\s*topic$/i, '');
+
+  return result.trim();
+}
 export function removeEmptyBrackets(str: string): string {
   return str
     .replace(/\(\s*\)/g, '')
@@ -2744,6 +2830,7 @@ export function preprocessArtistOrTitle(str: string): string {
   let s = cleanUp(str);
   s = removeEmptyBrackets(s);
   s = extractEnglishOnly(s);
+  s = trimTrailingDelimiters(s);
   return s;
 }
 ```
@@ -3055,6 +3142,52 @@ export function extractArtistAndTitle(title: string): { artist: string; title: s
   const [artist, songTitle] = getArtistTitle(title) || [];
   if (artist && songTitle) {
     return { artist, title: songTitle };
+  }
+  return null;
+}
+
+export function fallbackArtistAndTitle(meta: {
+  title: string;
+  channelTitle?: string;
+  description?: string;
+  artist?: string;
+}): { artist: string; title: string } | null {
+  // 1. 곡명만 title로 일단 설정
+  const title = meta.title?.trim();
+  if (!title) return null;
+
+  // 2. 아티스트 추정 우선순위:
+  //    (1) YouTube 제공 artist 필드 > (2) 채널명 > (3) 설명문에서 탐색 > (4) 기타
+
+  // (1) meta.artist가 있으면(YouTube Music/자동 생성 영상)
+  if (meta.artist && meta.artist.trim() && meta.artist.trim().toLowerCase() !== title.toLowerCase()) {
+    return { artist: meta.artist.trim(), title };
+  }
+
+  // (2) 채널명이 아티스트명일 확률이 높음. (ex, "aimyon" 등)
+  if (meta.channelTitle && meta.channelTitle.trim().toLowerCase() !== title.toLowerCase()) {
+    return { artist: meta.channelTitle.trim(), title };
+  }
+
+  // (3) description에서 by/작곡/노래/歌/MUSIC BY/Performer/Produced by 등 패턴 찾기
+  if (meta.description) {
+    // 아주 간단한 예시: "by XXX", "performed by XXX", "作詞：", "歌：", "アーティスト："
+    // 더 똑똑한 정규식으로 패턴 추가 필요
+    const patterns = [
+      /by\s+([^\n\r,]+)/i,
+      /Performed\s+by\s+([^\n\r,]+)/i,
+      /歌[:：]\s*([^\n\r,]+)/,
+      /アーティスト[:：]\s*([^\n\r,]+)/,
+      /artist[:：]\s*([^\n\r,]+)/i,
+      /作曲[:：]\s*([^\n\r,]+)/,
+      /作詞[:：]\s*([^\n\r,]+)/,
+    ];
+    for (const regex of patterns) {
+      const m = meta.description.match(regex);
+      if (m && m[1]) {
+        return { artist: m[1].trim(), title };
+      }
+    }
   }
   return null;
 }
