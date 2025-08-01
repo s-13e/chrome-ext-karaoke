@@ -56,7 +56,6 @@ export function extractArtistAndTitleCustom(rawTitle: string): { artist: string;
     quoteMatch[2].trim().length > 0
   ) {
     artist = quoteMatch[1]?.trim() ?? '';
-    console.log('quoteMatch 직후 artist:', artist);
     title = quoteMatch[2]?.trim() ?? '';
   } else {
     // 3. 구분자 기준 추출 (하이픈, 슬래시, 파이프)
@@ -66,8 +65,6 @@ export function extractArtistAndTitleCustom(rawTitle: string): { artist: string;
         const parts = cleaned.split(delim);
         if (parts.length >= 2) {
           artist = parts[0]?.trim() ?? '';
-          console.log('quoteMatch else문으로 빠진 후의 artist:', artist);
-
           title = parts.slice(1).join(delim).trim();
           break;
         }

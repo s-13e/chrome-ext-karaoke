@@ -24,12 +24,14 @@ import { isAdPlaying } from '@lib/utils/dom/domUtils';
 import { parseLyrics } from '@lib/utils/lyrics/lyricsParser';
 import { Line } from '@lib/types/lyrics';
 import { tryDetectVideoChange } from '@lib/utils/platform/videoDetection';
-// import { analyzeAudioFeatures } from '@lib/utils/audio/audioAnalysis';
-import { clearLyricsCache, setToLyricsCache } from '@lib/utils/cache/lyricsCache';
+import { setToLyricsCache } from '@lib/utils/cache/lyricsCache';
 import { normalizeLyricsQuery } from '@lib/utils/lyrics/queryNormalizer';
 import { getLyricsFromCacheOrFetch } from '@lib/utils/lyrics/getLyricsFromCacheOrFetch';
 import { fetchLyricsWithAliasFallback } from '@background/api/lyrics';
 import 'normalize.css';
+// import { detectMusicStart } from '@lib/utils/audio/audioAnalysis';
+import { cleanupMediaElementSource } from '@lib/utils/audio/audio';
+import { startAdWatcher } from '@lib/utils/infra/adWatcher';
 
 (() => {
   // 새로고침 시 contentscript 내 중복 실행 방지
@@ -49,6 +51,11 @@ import 'normalize.css';
   let lyricsOverlayRoot: Root | null = null; // 렌더링된 root 인스턴스 보관
   let lyricsOverlayElement: HTMLElement | null = null;
   let lastUrl = window.location.href;
+  let stopAdWatcher: (() => void) | null = null;
+
+  // 중복 가사 호출 방지
+  let lastCollectedVideoId: string | null = null;
+  let isCollecting = false;
 
   const getContentEnabled = () => contentEnabled;
   const uiManager = new UIResourceManager();
@@ -192,13 +199,157 @@ import 'normalize.css';
     const isWatchPage = url.includes(YOUTUBE_WATCH_PATH);
 
     console.log(`[URL Change] ${url}, isWatchPage: ${isWatchPage}`);
-    console.log(`[URL Change] ${url}, isWatchPage: ${isWatchPage}`);
+
     if (isWatchPage) {
       const videoData = detectYouTubeVideo();
       tryDetectVideoChange(videoData?.videoId || null, debouncedDetection);
     }
   };
   const handleUrlChangeGuarded = withContentEnabled(getContentEnabled, handleUrlChange);
+
+  // 1. 영상과 크게 무관한 메타데이터, 가사 정보를 확보하는 함수
+  async function collectMetadataAndLyrics(videoId: string) {
+    // YouTube Video Meta 호출
+    const meta = await fetchYouTubeVideoMeta(videoId, process.env.YOUTUBE_API_KEY!);
+    if (!meta) {
+      console.log('[collectMetadataAndLyrics] 메타 정보 없음');
+      throw new Error('메타 정보 없음');
+    }
+
+    if (!isMusicVideo(meta)) {
+      console.log('[collectMetadataAndLyrics] 음악 영상 아님');
+      throw new Error('음악 영상 아님');
+    }
+
+    // 아티스트, 타이틀 파싱(기존 처리 로직 사용)
+    let parsed = extractArtistAndTitle(meta.title);
+    if (!parsed) {
+      const fallback = fallbackArtistAndTitle(meta);
+      if (!fallback) {
+        throw new Error('곡명/아티스트 파싱 실패');
+      }
+      fallback.title = cleanTopicName(fallback.title);
+      fallback.artist = cleanTopicName(fallback.artist);
+      parsed = fallback;
+    }
+
+    const refined = extractArtistAndTitleCustom(`${parsed.artist} - ${parsed.title}`);
+    if (!refined) {
+      throw new Error('정제된 곡명/아티스트 파싱 실패');
+    }
+
+    const artist = preprocessArtistOrTitle(refined.artist);
+    const title = preprocessArtistOrTitle(refined.title);
+
+    // 가사 캐시 혹은 서버에서 가사 fetch
+    const lyricsResult = await getLyricsFromCacheOrFetch(artist, title, {
+      fetch: async () => fetchLyricsWithAliasFallback(artist, title),
+    });
+
+    if (!lyricsResult) {
+      throw new Error('가사 없음');
+    }
+    // ----------- 여기서 캐시 저장 추가 -----------
+    setToLyricsCache(normalizeLyricsQuery(artist, title, {}), {
+      lyrics: lyricsResult.lyrics,
+      duration: lyricsResult.duration,
+      artist: lyricsResult.artist,
+      title: lyricsResult.title,
+      id: lyricsResult.id,
+    });
+
+    const { lyrics, duration: lyricsDuration } = lyricsResult;
+
+    // 가사 파싱, 기본 전처리 + 앞당기기(3초 예시)
+    const parsedLyrics: Line[] = typeof lyrics === 'string' ? parseLyrics(lyrics) : lyrics;
+    const shiftedLyrics = shiftFirstLyricEarlier(parsedLyrics, 3);
+
+    latestLyrics = shiftedLyrics;
+
+    // 이 함수는 성공시 meta 및 shiftedLyrics 반환 (후속 분석용)
+    return { meta, lyricsDuration, shiftedLyrics };
+  }
+
+  // 2. 영상 엘리먼트가 준비된 후, 실제 분석 및 렌더링 수행하는 함수
+  async function analyzeAudioAndRenderLyrics(
+    meta: { durationSec?: number },
+    lyricsDuration: number | undefined,
+    videoElem: HTMLMediaElement,
+    shiftedLyrics: Line[],
+  ) {
+    if (!videoElem) {
+      console.log('[analyzeAudioAndRenderLyrics] 비디오 엘리먼트가 없음');
+      return;
+    }
+
+    const videoDurationSec = meta.durationSec ?? 0;
+    const effectiveLyricsDuration =
+      lyricsDuration ?? (shiftedLyrics.length > 0 ? (shiftedLyrics[shiftedLyrics.length - 1]?.time ?? 0) : 0);
+
+    const durationSec = videoDurationSec - effectiveLyricsDuration;
+
+    if (durationSec <= 0) {
+      console.warn(
+        `[analyzeAudioAndRenderLyrics] 분석 스킵: 영상 길이(${videoDurationSec}s) - 가사 길이(${effectiveLyricsDuration}s) <= 0`,
+      );
+      hideLyricsOverlay();
+      return;
+    }
+
+    if (isAdPlaying()) {
+      console.warn('[analyzeAudioAndRenderLyrics] 광고 중이므로 분석 스킵');
+      hideLyricsOverlay();
+      return;
+    }
+
+    // 중복 audio source 연결 방지 및 안전한 초기화
+    cleanupMediaElementSource(videoElem);
+
+    try {
+      // // detectMusicStart 호출 -> 음악 시작 offset 탐지
+      // const analysisResult = await detectMusicStart(videoElem, {
+      //   threshold: 0.07,
+      //   requiredContinuousFrames: 6,
+      // });
+
+      // const musicStartOffset = analysisResult?.timestamp ?? 0;
+      // console.log('[detectMusicStart] 음악 시작점 offset:', musicStartOffset, '초');
+
+      // // 가사 타임에 offset 적용
+      // const applyOffsetToLyrics = (lyrics: Line[], offset: number): Line[] =>
+      //   lyrics.map((line) => ({
+      //     ...line,
+      //     time: Math.max(0, line.time + offset),
+      //   }));
+
+      // const offsettedLyrics = applyOffsetToLyrics(shiftedLyrics, musicStartOffset);
+
+      latestLyrics = shiftedLyrics;
+      renderLyricsOverlay(shiftedLyrics);
+    } catch (error) {
+      console.warn('[analyzeAudioAndRenderLyrics] 분석 실패:', error);
+      // 실패 시 자막 감춤 또는 기본 렌더로 유지할 수 있음
+    }
+  }
+
+  async function tryCollectMetadataAndLyrics(videoId: string) {
+    if (isCollecting) {
+      console.log('[Lyrics] 수집 중복 방지 중...');
+      return; // 필요시 캐시된 데이터 반환하도록 개선 가능
+    }
+    if (videoId === lastCollectedVideoId) {
+      console.log('[Lyrics] 이미 처리한 videoId, 수집 스킵:', videoId);
+      return;
+    }
+    try {
+      isCollecting = true;
+      const data = await collectMetadataAndLyrics(videoId);
+      lastCollectedVideoId = videoId;
+      return data;
+    } finally {
+      isCollecting = false;
+    }
+  }
 
   // 영상 감지 핸들러 (순수 로직)
   const handleVideoDetection = async () => {
@@ -209,143 +360,77 @@ import 'normalize.css';
     }
 
     try {
-      const videoData = detectYouTubeVideo();
-      if (!videoData) {
-        console.log('[SKIP] 비디오 감지 실패');
-        setTimeout(debouncedDetection, RETRY_DELAY);
-        return;
-      }
-      if (videoData.videoId === lastVideoId) {
-        console.log('[SKIP] 같은 videoId에 대해 이미 실행됨');
-        return;
-      }
       isDetecting = true;
-      lastVideoId = videoData.videoId;
 
-      // 1. YouTube Data API로 메타데이터 요청
-      const meta = await fetchYouTubeVideoMeta(videoData.videoId, process.env.YOUTUBE_API_KEY!);
-      if (!meta) {
-        console.log('fetchYouTubeVideoMeta 실패');
+      const videoData = detectYouTubeVideo();
+      if (!videoData || !videoData.videoId) {
+        console.log('[handleVideoDetection] 비디오 감지 실패');
         return;
       }
+
+      if (videoData.videoId === lastVideoId) {
+        console.log('[handleVideoDetection] 이미 처리한 videoId');
+        return;
+      }
+
+      // 새 영상이 들어왔으므로 이전 자막 제거
       hideLyricsOverlay();
       latestLyrics = [];
-      clearLyricsCache();
 
-      if (!isMusicVideo(meta)) {
-        console.log('isMusicVideo 판별 실패');
+      lastVideoId = videoData.videoId;
+
+      // 1. 메타데이터 및 가사 수집 (영상 로드 여부 무관)
+      const collected = await tryCollectMetadataAndLyrics(videoData.videoId);
+      if (!collected) {
+        console.warn('가사 수집 데이터 없음');
         return;
       }
+      const { meta, lyricsDuration, shiftedLyrics } = collected;
 
-      // !! 수정 요망 '가 gruoping 목적이 아닐 경우 title과 artist를 잘못 구분하는 경우 있음!!
-      // extractArtistAndTitle의 사용을 줄이던지, 다시 전처리하도록 해야함! 일단 검색은 되니까 놔뒀음.
-      let parsed = extractArtistAndTitle(meta.title);
-      if (!parsed) {
-        // 아티스트-타이틀 추출 실패 시 fallback 시도
-        const fallback = fallbackArtistAndTitle(meta);
-        if (!fallback) {
-          console.log('extractArtistAndTitle 및 fallback 모두 실패', meta.title);
-          return;
-        }
-        // fallback으로 추출한 artist/title 사용
-        fallback.title = cleanTopicName(fallback.title);
-        fallback.artist = cleanTopicName(fallback.artist);
-        parsed = fallback;
-      }
-
-      const refined = extractArtistAndTitleCustom(`${parsed.artist} - ${parsed.title}`);
-
-      if (!refined) {
-        console.log('extractArtistAndTitleCustom 실패', meta.title);
-        return;
-      }
-
-      const artist = preprocessArtistOrTitle(refined.artist);
-      const title = preprocessArtistOrTitle(refined.title);
-
-      console.log('아티스트:', artist, '곡명:', title);
-
-      // 1. 비디오 엘리먼트 선택
+      // 2. 비디오 엘리먼트가 준비되었으면 본 분석 및 렌더링 실행
       const videoElem = document.querySelector('video');
-      if (!videoElem) return;
 
-      const lyricsResult = await getLyricsFromCacheOrFetch(artist, title, {
-        fetch: async () => fetchLyricsWithAliasFallback(artist, title),
-      });
-
-      // 다음 영상에 이전 가사 나오는 거 방지
-      if (!lyricsResult) {
-        console.log('가사 없음');
-        hideLyricsOverlay();
-        latestLyrics = [];
+      if (!videoElem) {
+        console.log('[handleVideoDetection] video element 미존재, 렌더링 생략');
         return;
       }
-      setToLyricsCache(normalizeLyricsQuery(artist, title, {}), {
-        lyrics: lyricsResult.lyrics,
-        duration: lyricsResult.duration,
-        artist: lyricsResult.artist, // 정답 artist
-        title: lyricsResult.title, // 정답 title
-        id: lyricsResult.id, // (선택) LRCLIB id
-      });
-      const { lyrics, duration: lyricsDuration } = lyricsResult;
-      const parsedLyrics: Line[] = typeof lyrics === 'string' ? parseLyrics(lyrics) : lyrics;
-
-      const ADVANCE_SEC = 3; // 앞당길 초(3초 예시)
-      const shiftedLyrics = shiftFirstLyricEarlier(parsedLyrics, ADVANCE_SEC);
-      const lastLine = parsedLyrics[parsedLyrics.length - 1];
-      const lyricsLengthSec = lastLine?.time ?? 0;
-
-      // duration 필드가 존재하면 우선적으로 사용, 없으면 마지막 가사줄 기준
-      const effectiveLyricsDuration = lyricsDuration ?? lyricsLengthSec;
-      if ((typeof lyricsDuration === 'number' && lyricsDuration <= 2) || lyricsLengthSec <= 10) {
-        console.warn(
-          `[audioAnalysis] 분석 스킵: duration(${lyricsDuration ?? '-'}) < 2초 또는 lyricsLengthSec(${lyricsLengthSec}) ≤ 10초`,
-        );
-        return; // 분석 생략, 이후 정상 흐름만 계속
-      }
-
-      if (!parsedLyrics || parsedLyrics.length === 0) {
-        console.log('parsedLyrics is empty or undefined');
-        hideLyricsOverlay();
-        return;
-      }
-
-      if (!isMusicVideo(meta, lyricsLengthSec)) {
-        console.log('isMusicVideo 판별 실패');
-        hideLyricsOverlay();
-        return;
-      }
-
-      const videoDurationSec = meta.durationSec ?? 0;
-      const durationSec = videoDurationSec - effectiveLyricsDuration;
-
-      if (durationSec <= 0) {
-        console.warn(
-          `[audioAnalysis] 분석 스킵: 영상 길이(${videoDurationSec}s) - 가사 길이(${effectiveLyricsDuration}s) <= 0`,
-        );
-      } else {
-        if (!isAdPlaying()) {
-          // const analysisResult = await analyzeAudioFeatures(videoElem, { durationSec });
-          console.warn(`[audioAnalysis] 분석: 영상 길이(${videoDurationSec}s), 가사 길이(${effectiveLyricsDuration}s)`);
-          // console.log('durationSec:', durationSec, '[audioAnalysis] 성공:', analysisResult);
-        }
-      }
-
-      latestLyrics = shiftedLyrics;
-      renderLyricsOverlay(shiftedLyrics);
-
-      if (window.chrome && chrome.runtime && chrome.runtime.sendMessage) {
-        chrome.runtime.sendMessage({
-          type: MESSAGE_TYPES.VIDEO_DETECTED,
-          payload: videoData,
-        });
-      }
+      await analyzeAudioAndRenderLyrics(meta, lyricsDuration, videoElem, shiftedLyrics);
+    } catch (error) {
+      console.error('[handleVideoDetection] 에러 발생:', error);
     } finally {
       isDetecting = false;
     }
   };
   const handleVideoDetectionGuarded = withContentEnabled(getContentEnabled, handleVideoDetection);
   const debouncedDetection = debounce(handleVideoDetectionGuarded, RETRY_DELAY);
+
+  // 1) 광고 종료 감지 콜백용 별도 함수 (가사/메타 수집에 집중)
+  async function prefetchMetadataAndLyricsOnAdEnd() {
+    const videoData = detectYouTubeVideo();
+    if (!videoData?.videoId) {
+      console.log('[AdWatcher] videoId 미존재, 수집 중단');
+      return;
+    }
+    try {
+      // 광고 중이라도 가사/메타 데이터는 미리 가져오기 가능
+      await tryCollectMetadataAndLyrics(videoData.videoId);
+      console.log('[AdWatcher] 광고 종료 후 메타/가사 선수집 완료');
+    } catch (error) {
+      console.warn('[AdWatcher] 광고 종료 후 메타/가사 선수집 실패:', error);
+    }
+  }
+
+  // 2) 광고 감시 초기화 함수, 광고 종료 시 prefetch 후 handleVideoDetection 호출
+  function initAdWatcher() {
+    if (stopAdWatcher) return; // 중복 실행 방지
+    stopAdWatcher = startAdWatcher(async () => {
+      console.log('[AdWatcher] 광고 종료 감지, 선수집 -> 본 감지 순서 시작');
+      lastVideoId = null;
+
+      await prefetchMetadataAndLyricsOnAdEnd();
+      await handleVideoDetectionGuarded();
+    });
+  }
 
   // --- 스토리지, UI, SPA 이벤트, visibility 이벤트 일괄 관리 ---
   // SPA 네비게이션 메시지 핸들러
@@ -388,7 +473,7 @@ import 'normalize.css';
   };
 
   // 감지 시스템 활성화
-  const enableDetection = () => {
+  const enableDetection = async () => {
     if (isDetectionActive) {
       console.log('[SKIP] 감지 시스템 이미 활성화됨');
       return;
@@ -397,10 +482,14 @@ import 'normalize.css';
     // 기존 자원 모두 정리
     cleanupAllResources();
 
+    // spa observer 설정
     detectionObserverManager.spaObserver = setupSPAObserver(() => {
       const videoData = detectYouTubeVideo();
       tryDetectVideoChange(videoData?.videoId || null, debouncedDetection);
     });
+
+    // 광고 감지 시작
+    initAdWatcher();
 
     isDetectionActive = true;
 

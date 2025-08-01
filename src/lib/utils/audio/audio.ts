@@ -1,50 +1,51 @@
-import { getSharedAudioContext } from './audioUtils';
-interface PCMExtractorWithSourceNode {
-  _sourceNode?: MediaElementAudioSourceNode | null;
+let sharedAudioContext: AudioContext | null = null;
+
+// MediaElementAudioSourceNode 캐시: 비디오 엘리먼트별 저장 (WeakMap 사용해 GC 최적화)
+const sourceNodeCache = new WeakMap<HTMLMediaElement, MediaElementAudioSourceNode>();
+
+/**
+ * 싱글톤 AudioContext 반환
+ */
+export function getSharedAudioContext(): AudioContext {
+  if (!sharedAudioContext) {
+    sharedAudioContext = new AudioContext();
+  }
+  return sharedAudioContext;
 }
 /**
- * HTMLMediaElement에서 Mono PCM 추출 (Singleton AudioContext 활용)
+ * MediaElementAudioSourceNode를 비디오 엘리먼트별로 캐싱 후 재사용
+ *
+ * 이미 존재하면 재활용, 없으면 새로 생성 후 저장
  */
-export async function extractPCMFromMediaElement(
-  elem: HTMLMediaElement,
-  durationSec = 15,
-  sampleRate = 44100,
-): Promise<{ pcm: Float32Array; sampleRate: number }> {
-  const audioCtx = getSharedAudioContext();
-  const analyser = audioCtx.createAnalyser();
-  const ext = extractPCMFromMediaElement as PCMExtractorWithSourceNode;
+export function getOrCreateMediaElementSource(el: HTMLMediaElement): MediaElementAudioSourceNode {
+  const context = getSharedAudioContext();
 
-  // 단일 SourceNode 재사용: 기존 연결이 있을 경우 분리
-  let sourceNode = ext._sourceNode as MediaElementAudioSourceNode | null;
-  if (sourceNode) {
-    try {
-      sourceNode.disconnect();
-    } catch {
-      // console.warn('뭔 오류남');
-    }
+  const cachedNode = sourceNodeCache.get(el);
+  if (cachedNode) return cachedNode;
+
+  const newNode = context.createMediaElementSource(el);
+  sourceNodeCache.set(el, newNode);
+  return newNode;
+}
+
+/**
+ * MediaElementAudioSourceNode가 필요없어졌을 때 캐시 및 연결 해제
+ */
+export function cleanupMediaElementSource(el: HTMLMediaElement): void {
+  const cachedNode = sourceNodeCache.get(el);
+  if (cachedNode) {
+    cachedNode.disconnect();
+    sourceNodeCache.delete(el);
   }
-  sourceNode = audioCtx.createMediaElementSource(elem);
-  ext._sourceNode = sourceNode;
+}
 
-  sourceNode.connect(analyser);
-  analyser.connect(audioCtx.destination);
-
-  const frameSize = analyser.fftSize;
-  const framesNeeded = Math.ceil((sampleRate * durationSec) / frameSize);
-  const pcmResult = new Float32Array(sampleRate * durationSec);
-
-  let written = 0;
-  for (let i = 0; i < framesNeeded; i++) {
-    await new Promise((res) => setTimeout(res, (frameSize / sampleRate) * 1000));
-    const buf = new Float32Array(frameSize);
-    analyser.getFloatTimeDomainData(buf);
-    const slice = buf.slice(0, Math.min(frameSize, pcmResult.length - written));
-    pcmResult.set(slice, written);
-    written += slice.length;
-    if (written >= pcmResult.length) break;
-  }
-
-  return { pcm: pcmResult, sampleRate };
+/**
+ * HTMLMediaElement로부터 MediaElementAudioSourceNode 생성
+ * (YouTube video 등 오디오 입력 스트림 연결용)
+ */
+export function createMediaElementSource(el: HTMLMediaElement): MediaElementAudioSourceNode {
+  const context = getSharedAudioContext();
+  return context.createMediaElementSource(el);
 }
 
 /**

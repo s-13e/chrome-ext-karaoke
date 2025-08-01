@@ -41,7 +41,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["_locales/**/*.json","content/style.css", "assets/icons/music_note.png"],
+      "resources": ["_locales/**/*.json","content/style.css", "assets/icons/music_note.png", "content/audioProcessor.js"],
       "matches": ["*://*.youtube.com/*"]
     }
   ]
