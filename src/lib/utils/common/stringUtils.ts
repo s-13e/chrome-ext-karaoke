@@ -11,7 +11,14 @@ const TRAILING_DELIMITERS_REGEX = /[\s\-/|]+$/;
 export function isEnglishText(text: string): boolean {
   return /^[A-Za-z\s\-'/]+$/.test(text); // 슬래시(/)도 허용
 }
-
+// &를 and로 대체
+export function replaceAmpersand(str: string, replacement: string = 'and') {
+  // 양쪽 공백을 유지하며 &를 " and "로 치환 (또는 필요시 ',')
+  return str
+    .replace(/\s*&\s*/g, ` ${replacement} `)
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
 // 유튜브 DATA API를 통해 나온 음악 타이틀에서 Topic을 제거함
 export function cleanTopicName(name: string): string {
   let result = name;
@@ -109,8 +116,9 @@ export function extractArtistAndTitleCustom(rawTitle: string): { artist: string;
 // preprocessing for artist or title string: clean up + extract English only + trim trailing delimiters
 export function preprocessArtistOrTitle(str: string): string {
   let s = cleanUp(str);
+  console.log('cleanup:', s);
   s = removeEmptyBrackets(s);
-  s = extractEnglishOnly(s);
+  s = preprocessTitleOrArtist(s);
   s = trimTrailingDelimiters(s);
   return s;
 }
@@ -142,7 +150,6 @@ function removeFeaturingParentheses(str: string): string {
   }
   return str.trim();
 }
-
 // 키워드 정제, 부가정보 제거
 function removeExtraInfo(str: string): string {
   const extraKeywords = EXTRA_KEYWORDS.slice().sort((a, b) => b.length - a.length); // 긴 키워드 우선
@@ -216,18 +223,42 @@ function trimTrailingDelimiters(str: string): string {
   return str.replace(TRAILING_DELIMITERS_REGEX, '').trim();
 }
 
-// 영문자가 포함되어 있고 비영문자도 포함될 때 영문만 추출, 그 외에는 원본 반환
-function extractEnglishOnly(str: string): string {
-  // 영문자가 포함되어 있는지
-  const hasEnglish = /[A-Za-z]/.test(str);
-  // 비영문자가 포함되어 있는지 (영어, 숫자, 공백, 특수문자 제외)
-  const hasNonEnglish = /[^\sA-Za-z0-9'’&.-]/.test(str);
+function removeDiacritics(str: string): string {
+  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
 
-  // 둘 다(영어+비영어)가 있을 때만 "영어만 남기기"
+// 최상위 전처리 파이프라인 함수
+function preprocessTitleOrArtist(str: string): string {
+  // 1) 합성문자 NFC 통일
+  const normalized = str.normalize('NFC');
+
+  // 2) 악센트 제거
+  const noDiacritics = removeDiacritics(normalized);
+
+  // 3) 악센트 제거된 문자열 넘겨서 영어 추출 및 특수문자 정리
+  return extractEnglishOnly(noDiacritics);
+}
+
+function extractEnglishOnly(str: string): string {
+  const LETTERS = 'A-Za-z'; // 악센트 제거 후라 기본 알파벳만 사용
+  const hasEnglish = new RegExp(`[${LETTERS}]`).test(str);
+  // 악센트 제거 후 비교를 위해 미리 처리
+  const strNoDiacritics = removeDiacritics(str);
+
+  // 비영문자 검사 - 악센트 제거 전 원본에서 처리
+  const hasNonEnglish = new RegExp(`[^\\s${LETTERS}0-9'’&.,-]`).test(strNoDiacritics);
+
   if (hasEnglish && hasNonEnglish) {
-    const match = str.match(/([A-Za-z][A-Za-z\s'’&./-]*)/g);
-    return match ? match.join(' ').trim() : '';
+    // 원본에서 악센트 제거한 문자를 토큰화 (공백, 특수문자 포함)
+    const processedStr = removeDiacritics(str);
+    const match = processedStr.match(new RegExp(`([${LETTERS}][${LETTERS}\\s'’./-]*|&|,)`, 'g'));
+    let result = match ? match.join(' ').trim() : '';
+
+    // 쉼표 앞뒤 공백 정리
+    result = result.replace(/\s+,/g, ',');
+    result = result.replace(/,\s+/g, ', ');
+
+    return result;
   }
-  // 영어만 있거나, 비영어만 있으면 원본 반환
   return str;
 }

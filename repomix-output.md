@@ -75,6 +75,7 @@ hooks/useCurrentTime.ts
 hooks/useLangLoader.ts
 lib/types/audio-worklet.d.ts
 lib/types/config.ts
+lib/types/cssmodules.d.ts
 lib/types/errors.ts
 lib/types/global.d.ts
 lib/types/i18next.d.ts
@@ -82,6 +83,7 @@ lib/types/lyrics.ts
 lib/types/message.ts
 lib/types/translationKeys.ts
 lib/types/video.ts
+lib/types/wasm-js.d.ts
 lib/utils/audio/audio.ts
 lib/utils/audio/audioAnalysis.ts
 lib/utils/audio/audioProcessor.ts
@@ -101,7 +103,6 @@ lib/utils/infra/singletonListener.ts
 lib/utils/infra/uiResourceManager.ts
 lib/utils/lyrics/artistTitle.ts
 lib/utils/lyrics/getLyricsFromCacheOrFetch.ts
-lib/utils/lyrics/languageDetector.ts
 lib/utils/lyrics/lyrics.ts
 lib/utils/lyrics/lyricsDisplay.ts
 lib/utils/lyrics/lyricsParser.ts
@@ -201,56 +202,35 @@ export async function fetchLyricsByArtistAndTrack(
 
   return undefined;
 }
-
-export async function fetchLyricsBySearchFirst(artist: string, title: string): Promise<LrcLibLyricsResult | undefined> {
-  const query = `${artist} ${title}`;
-  const searchRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(query)}`);
-  const searchData = await searchRes.json();
-
-  for (const candidate of searchData) {
-    const detailRes = await fetch(`https://lrclib.net/api/get/${candidate.id}`);
-    const detail = await detailRes.json();
-    const lyrics = detail.syncedLyrics || detail.plainLyrics;
-    const duration = detail.duration; // LRCLIB에서 제공하는 초 단위 곡 길이(없을 수도 있으니 ?로)
-
-    console.log('길이', duration, '가사:', lyrics);
-
-    if (lyrics) {
-      return {
-        lyrics,
-        duration,
-        artist: detail.artist,
-        title: detail.title,
-        id: candidate.id,
-      };
-    }
-  }
-  return undefined;
-}
 ```
 
 ## File: background/api/lyrics.ts
 ```typescript
-import { isEnglishText } from '@lib/utils/common/stringUtils';
+import { isEnglishText, replaceAmpersand } from '@lib/utils/common/stringUtils';
 import { fetchLyricsByArtistAndTrack, LrcLibLyricsResult } from './lrclib';
 import { extractEnglishAliasFromArtists, fetchEnglishAliasForArtist, searchArtistByFreeText } from './musicBrainz';
 
 export async function fetchLyricsWithAliasFallback(artist: string, title: string): Promise<LrcLibLyricsResult> {
-  const areBothEnglish = isEnglishText(artist) && isEnglishText(title);
+  let artistForSearch = replaceAmpersand(artist, 'and');
+  let titleForSearch = replaceAmpersand(title, 'and');
+  console.log('artist:', artistForSearch, 'title:', titleForSearch);
+
+  const areBothEnglish = isEnglishText(artistForSearch) && isEnglishText(titleForSearch);
+
   let result = null;
 
   // 둘 다 영어일 경우
   if (areBothEnglish) {
     // 1차: 기존 아티스트명으로 먼저 시도
-    result = await fetchLyricsByArtistAndTrack(artist, title);
+    result = await fetchLyricsByArtistAndTrack(artistForSearch, titleForSearch);
     if (result) return result;
 
     // 2차: 영문 alias 조회 및 재시도
-    const englishArtist = await fetchEnglishAliasForArtist(artist);
-    if (englishArtist && englishArtist !== artist) {
-      result = await fetchLyricsByArtistAndTrack(englishArtist, title);
+    const englishArtist = await fetchEnglishAliasForArtist(artistForSearch);
+    if (englishArtist && englishArtist !== artistForSearch) {
+      result = await fetchLyricsByArtistAndTrack(englishArtist, titleForSearch);
       if (result) {
-        console.log(`[Info] 영어 alias (${englishArtist})로 가사 검색 성공: ${englishArtist} - ${title}`);
+        console.log(`[Info] 영어 alias (${englishArtist})로 가사 검색 성공: ${englishArtist} - ${titleForSearch}`);
         return result;
       }
     }
@@ -1664,6 +1644,7 @@ import 'normalize.css';
 // import { detectMusicStart } from '@lib/utils/audio/audioAnalysis';
 import { cleanupMediaElementSource } from '@lib/utils/audio/audio';
 import { startAdWatcher } from '@lib/utils/infra/adWatcher';
+//import { detectLyricsLanguage } from '@lib/utils/lyrics/languageDetector';
 
 (() => {
   // 새로고침 시 contentscript 내 중복 실행 방지
@@ -1684,6 +1665,10 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
   let lyricsOverlayElement: HTMLElement | null = null;
   let lastUrl = window.location.href;
   let stopAdWatcher: (() => void) | null = null;
+
+  // 중복 가사 호출 방지
+  let lastCollectedVideoId: string | null = null;
+  let isCollecting = false;
 
   const getContentEnabled = () => contentEnabled;
   const uiManager = new UIResourceManager();
@@ -1848,8 +1833,6 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       console.log('[collectMetadataAndLyrics] 음악 영상 아님');
       throw new Error('음악 영상 아님');
     }
-    clearLyricsCache();
-
     // 아티스트, 타이틀 파싱(기존 처리 로직 사용)
     let parsed = extractArtistAndTitle(meta.title);
     if (!parsed) {
@@ -1869,6 +1852,8 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
 
     const artist = preprocessArtistOrTitle(refined.artist);
     const title = preprocessArtistOrTitle(refined.title);
+
+    clearLyricsCache();
 
     // 가사 캐시 혹은 서버에서 가사 fetch
     const lyricsResult = await getLyricsFromCacheOrFetch(artist, title, {
@@ -1894,6 +1879,10 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     const shiftedLyrics = shiftFirstLyricEarlier(parsedLyrics, 3);
 
     latestLyrics = shiftedLyrics;
+
+    // shiftedLyrics: Line[] 배열 (각 원소에 'text'가 있다고 가정)
+    //const lyricsText = shiftedLyrics.map((line) => line.text).join('\n');
+    //const lyricsLang = await detectLyricsLanguage(lyricsText, 2);
 
     // 이 함수는 성공시 meta 및 shiftedLyrics 반환 (후속 분석용)
     return { meta, lyricsDuration, shiftedLyrics };
@@ -1960,6 +1949,26 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       // 실패 시 자막 감춤 또는 기본 렌더로 유지할 수 있음
     }
   }
+
+  async function tryCollectMetadataAndLyrics(videoId: string) {
+    if (isCollecting) {
+      console.log('[Lyrics] 수집 중복 방지 중...');
+      return; // 필요시 캐시된 데이터 반환하도록 개선 가능
+    }
+    if (videoId === lastCollectedVideoId) {
+      console.log('[Lyrics] 이미 처리한 videoId, 수집 스킵:', videoId);
+      return;
+    }
+    try {
+      isCollecting = true;
+      const data = await collectMetadataAndLyrics(videoId);
+      lastCollectedVideoId = videoId;
+      return data;
+    } finally {
+      isCollecting = false;
+    }
+  }
+
   // 영상 감지 핸들러 (순수 로직)
   const handleVideoDetection = async () => {
     console.log('handleVideoDetection 실행');
@@ -1982,10 +1991,19 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
         return;
       }
 
+      // 새 영상이 들어왔으므로 이전 자막 제거
+      hideLyricsOverlay();
+      latestLyrics = [];
+
       lastVideoId = videoData.videoId;
 
       // 1. 메타데이터 및 가사 수집 (영상 로드 여부 무관)
-      const { meta, lyricsDuration, shiftedLyrics } = await collectMetadataAndLyrics(videoData.videoId);
+      const collected = await tryCollectMetadataAndLyrics(videoData.videoId);
+      if (!collected) {
+        console.warn('가사 수집 데이터 없음');
+        return;
+      }
+      const { meta, lyricsDuration, shiftedLyrics } = collected;
 
       // 2. 비디오 엘리먼트가 준비되었으면 본 분석 및 렌더링 실행
       const videoElem = document.querySelector('video');
@@ -2013,7 +2031,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     }
     try {
       // 광고 중이라도 가사/메타 데이터는 미리 가져오기 가능
-      await collectMetadataAndLyrics(videoData.videoId);
+      await tryCollectMetadataAndLyrics(videoData.videoId);
       console.log('[AdWatcher] 광고 종료 후 메타/가사 선수집 완료');
     } catch (error) {
       console.warn('[AdWatcher] 광고 종료 후 메타/가사 선수집 실패:', error);
@@ -2025,11 +2043,9 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     if (stopAdWatcher) return; // 중복 실행 방지
     stopAdWatcher = startAdWatcher(async () => {
       console.log('[AdWatcher] 광고 종료 감지, 선수집 -> 본 감지 순서 시작');
-      lastVideoId = null; // 강제 초기화
+      lastVideoId = null;
 
       await prefetchMetadataAndLyricsOnAdEnd();
-
-      // handleVideoDetection 직접 호출 대신 가드 함수로 호출
       await handleVideoDetectionGuarded();
     });
   }
@@ -2084,23 +2100,14 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     // 기존 자원 모두 정리
     cleanupAllResources();
 
+    // spa observer 설정
     detectionObserverManager.spaObserver = setupSPAObserver(() => {
       const videoData = detectYouTubeVideo();
       tryDetectVideoChange(videoData?.videoId || null, debouncedDetection);
     });
 
-    initAdWatcher(); // << 광고 감지기 시작
-    // 광고 중 여부 및 영상 준비 상태와 관계없이 최초 빠른 데이터 수집 명시적 호출 (Optional)
-    // 2. 현재 페이지 영상 ID 먼저 감지하고, 메타/가사 데이터를 미리 수집
-    const videoData = detectYouTubeVideo();
-    if (videoData?.videoId) {
-      try {
-        await collectMetadataAndLyrics(videoData.videoId);
-        console.log('[enableDetection] 초기 메타/가사 데이터 선수집 완료');
-      } catch (error) {
-        console.warn('[enableDetection] 초기 메타/가사 선수집 실패:', error);
-      }
-    }
+    // 광고 감지 시작
+    initAdWatcher();
 
     isDetectionActive = true;
 
@@ -2311,6 +2318,24 @@ export interface PlatformConfig extends DetectionConfig {
 }
 ```
 
+## File: lib/types/cssmodules.d.ts
+```typescript
+declare module '*.module.css' {
+  const classes: { [key: string]: string };
+  export default classes;
+}
+
+declare module '*.module.scss' {
+  const classes: { [key: string]: string };
+  export default classes;
+}
+
+declare module '*.css' {
+  const content: { [className: string]: string };
+  export default content;
+}
+```
+
 ## File: lib/types/errors.ts
 ```typescript
 // src/types/errors.ts
@@ -2341,23 +2366,16 @@ export function isI18nError(error: unknown): error is I18nError {
 ## File: lib/types/global.d.ts
 ```typescript
 // src/types/global.d.ts
-declare module '*.module.css' {
-  const classes: { [key: string]: string };
-  export default classes;
-}
+export {}; // 모듈 확장
 
-declare module '*.module.scss' {
-  const classes: { [key: string]: string };
-  export default classes;
-}
+declare global {
+  interface Window {
+    [key: string]: unknown;
+    __LYRICS_OVERLAY_INITED?: boolean;
+    ModuleFactory?: MediaPipeModuleFactory;
+  }
 
-declare module '*.css' {
-  const content: { [className: string]: string };
-  export default content;
-}
-interface Window {
-  [key: string]: unknown;
-  __LYRICS_OVERLAY_INITED?: boolean;
+  var ModuleFactory: MediaPipeModuleFactory | undefined;
 }
 ```
 
@@ -2423,6 +2441,14 @@ export type TranslationKey = (typeof TRANSLATION_KEYS)[number];
 //   channelTitle?: string;
 //   durationSec?: number;
 // }
+```
+
+## File: lib/types/wasm-js.d.ts
+```typescript
+declare module '@assets/wasm/*.js' {
+  const value: any;
+  export default value;
+}
 ```
 
 ## File: lib/utils/audio/audio.ts
@@ -2651,29 +2677,6 @@ export function isMusicVideo(meta: MusicDetectionInput, lyricsLengthSec?: number
   }
   return score >= threshold;
 }
-
-// // 음악 인트로 감지/온셋 계산 유틸
-// export async function detectMusicIntro(
-//   videoElem: HTMLVideoElement,
-//   introDurationSec = 15,
-//   introThresholdSec = 3,
-// ): Promise<{
-//   introOnsetSec: number | null;
-//   isMusicInIntro: boolean;
-//   onsetOffset: number | null; // ✅ 수정됨
-// }> {
-//   const { pcm, sampleRate } = await extractPCMFromMediaElement(videoElem, introDurationSec);
-//   //const onsetOffset = getFirstOnsetOffset(pcm, sampleRate); // ✅ 단일 값 (number | null)
-
-//   const introOnsetSec = onsetOffset !== null ? onsetOffset : null;
-//   const isMusicInIntro = introOnsetSec !== null && introOnsetSec < introThresholdSec;
-
-//   return {
-//     introOnsetSec,
-//     isMusicInIntro,
-//     onsetOffset,
-//   };
-// }
 ```
 
 ## File: lib/utils/audio/vad.ts
@@ -2839,7 +2842,14 @@ const TRAILING_DELIMITERS_REGEX = /[\s\-/|]+$/;
 export function isEnglishText(text: string): boolean {
   return /^[A-Za-z\s\-'/]+$/.test(text); // 슬래시(/)도 허용
 }
-
+// &를 and로 대체
+export function replaceAmpersand(str: string, replacement: string = 'and') {
+  // 양쪽 공백을 유지하며 &를 " and "로 치환 (또는 필요시 ',')
+  return str
+    .replace(/\s*&\s*/g, ` ${replacement} `)
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
 // 유튜브 DATA API를 통해 나온 음악 타이틀에서 Topic을 제거함
 export function cleanTopicName(name: string): string {
   let result = name;
@@ -2884,7 +2894,6 @@ export function extractArtistAndTitleCustom(rawTitle: string): { artist: string;
     quoteMatch[2].trim().length > 0
   ) {
     artist = quoteMatch[1]?.trim() ?? '';
-    console.log('quoteMatch 직후 artist:', artist);
     title = quoteMatch[2]?.trim() ?? '';
   } else {
     // 3. 구분자 기준 추출 (하이픈, 슬래시, 파이프)
@@ -2938,8 +2947,9 @@ export function extractArtistAndTitleCustom(rawTitle: string): { artist: string;
 // preprocessing for artist or title string: clean up + extract English only + trim trailing delimiters
 export function preprocessArtistOrTitle(str: string): string {
   let s = cleanUp(str);
+  console.log('cleanup:', s);
   s = removeEmptyBrackets(s);
-  s = extractEnglishOnly(s);
+  s = preprocessTitleOrArtist(s);
   s = trimTrailingDelimiters(s);
   return s;
 }
@@ -2971,7 +2981,6 @@ function removeFeaturingParentheses(str: string): string {
   }
   return str.trim();
 }
-
 // 키워드 정제, 부가정보 제거
 function removeExtraInfo(str: string): string {
   const extraKeywords = EXTRA_KEYWORDS.slice().sort((a, b) => b.length - a.length); // 긴 키워드 우선
@@ -3045,19 +3054,43 @@ function trimTrailingDelimiters(str: string): string {
   return str.replace(TRAILING_DELIMITERS_REGEX, '').trim();
 }
 
-// 영문자가 포함되어 있고 비영문자도 포함될 때 영문만 추출, 그 외에는 원본 반환
-function extractEnglishOnly(str: string): string {
-  // 영문자가 포함되어 있는지
-  const hasEnglish = /[A-Za-z]/.test(str);
-  // 비영문자가 포함되어 있는지 (영어, 숫자, 공백, 특수문자 제외)
-  const hasNonEnglish = /[^\sA-Za-z0-9'’&.-]/.test(str);
+function removeDiacritics(str: string): string {
+  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
 
-  // 둘 다(영어+비영어)가 있을 때만 "영어만 남기기"
+// 최상위 전처리 파이프라인 함수
+function preprocessTitleOrArtist(str: string): string {
+  // 1) 합성문자 NFC 통일
+  const normalized = str.normalize('NFC');
+
+  // 2) 악센트 제거
+  const noDiacritics = removeDiacritics(normalized);
+
+  // 3) 악센트 제거된 문자열 넘겨서 영어 추출 및 특수문자 정리
+  return extractEnglishOnly(noDiacritics);
+}
+
+function extractEnglishOnly(str: string): string {
+  const LETTERS = 'A-Za-z'; // 악센트 제거 후라 기본 알파벳만 사용
+  const hasEnglish = new RegExp(`[${LETTERS}]`).test(str);
+  // 악센트 제거 후 비교를 위해 미리 처리
+  const strNoDiacritics = removeDiacritics(str);
+
+  // 비영문자 검사 - 악센트 제거 전 원본에서 처리
+  const hasNonEnglish = new RegExp(`[^\\s${LETTERS}0-9'’&.,-]`).test(strNoDiacritics);
+
   if (hasEnglish && hasNonEnglish) {
-    const match = str.match(/([A-Za-z][A-Za-z\s'’&./-]*)/g);
-    return match ? match.join(' ').trim() : '';
+    // 원본에서 악센트 제거한 문자를 토큰화 (공백, 특수문자 포함)
+    const processedStr = removeDiacritics(str);
+    const match = processedStr.match(new RegExp(`([${LETTERS}][${LETTERS}\\s'’./-]*|&|,)`, 'g'));
+    let result = match ? match.join(' ').trim() : '';
+
+    // 쉼표 앞뒤 공백 정리
+    result = result.replace(/\s+,/g, ',');
+    result = result.replace(/,\s+/g, ', ');
+
+    return result;
   }
-  // 영어만 있거나, 비영어만 있으면 원본 반환
   return str;
 }
 ```
@@ -3252,7 +3285,7 @@ injectGlobalStyles();
 
 ## File: lib/utils/infra/adWatcher.ts
 ```typescript
-import { isAdPlaying } from "../dom/domUtils";
+import { isAdPlaying } from '../dom/domUtils';
 
 // adWatcher.ts
 let lastAdPlaying = isAdPlaying();
@@ -3479,11 +3512,6 @@ export async function getLyricsFromCacheOrFetch(
 
   return fetchResult;
 }
-```
-
-## File: lib/utils/lyrics/languageDetector.ts
-```typescript
-// 가사의 언어 감지
 ```
 
 ## File: lib/utils/lyrics/lyrics.ts

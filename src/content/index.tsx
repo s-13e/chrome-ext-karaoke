@@ -24,7 +24,7 @@ import { isAdPlaying } from '@lib/utils/dom/domUtils';
 import { parseLyrics } from '@lib/utils/lyrics/lyricsParser';
 import { Line } from '@lib/types/lyrics';
 import { tryDetectVideoChange } from '@lib/utils/platform/videoDetection';
-import { setToLyricsCache } from '@lib/utils/cache/lyricsCache';
+import { clearLyricsCache, setToLyricsCache } from '@lib/utils/cache/lyricsCache';
 import { normalizeLyricsQuery } from '@lib/utils/lyrics/queryNormalizer';
 import { getLyricsFromCacheOrFetch } from '@lib/utils/lyrics/getLyricsFromCacheOrFetch';
 import { fetchLyricsWithAliasFallback } from '@background/api/lyrics';
@@ -32,6 +32,7 @@ import 'normalize.css';
 // import { detectMusicStart } from '@lib/utils/audio/audioAnalysis';
 import { cleanupMediaElementSource } from '@lib/utils/audio/audio';
 import { startAdWatcher } from '@lib/utils/infra/adWatcher';
+//import { detectLyricsLanguage } from '@lib/utils/lyrics/languageDetector';
 
 (() => {
   // 새로고침 시 contentscript 내 중복 실행 방지
@@ -220,7 +221,6 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       console.log('[collectMetadataAndLyrics] 음악 영상 아님');
       throw new Error('음악 영상 아님');
     }
-
     // 아티스트, 타이틀 파싱(기존 처리 로직 사용)
     let parsed = extractArtistAndTitle(meta.title);
     if (!parsed) {
@@ -240,6 +240,8 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
 
     const artist = preprocessArtistOrTitle(refined.artist);
     const title = preprocessArtistOrTitle(refined.title);
+
+    clearLyricsCache();
 
     // 가사 캐시 혹은 서버에서 가사 fetch
     const lyricsResult = await getLyricsFromCacheOrFetch(artist, title, {
@@ -265,6 +267,10 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     const shiftedLyrics = shiftFirstLyricEarlier(parsedLyrics, 3);
 
     latestLyrics = shiftedLyrics;
+
+    // shiftedLyrics: Line[] 배열 (각 원소에 'text'가 있다고 가정)
+    //const lyricsText = shiftedLyrics.map((line) => line.text).join('\n');
+    //const lyricsLang = await detectLyricsLanguage(lyricsText, 2);
 
     // 이 함수는 성공시 meta 및 shiftedLyrics 반환 (후속 분석용)
     return { meta, lyricsDuration, shiftedLyrics };

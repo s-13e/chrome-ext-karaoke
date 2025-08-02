@@ -41,26 +41,3 @@ export function isMusicVideo(meta: MusicDetectionInput, lyricsLengthSec?: number
   }
   return score >= threshold;
 }
-
-// // 음악 인트로 감지/온셋 계산 유틸
-// export async function detectMusicIntro(
-//   videoElem: HTMLVideoElement,
-//   introDurationSec = 15,
-//   introThresholdSec = 3,
-// ): Promise<{
-//   introOnsetSec: number | null;
-//   isMusicInIntro: boolean;
-//   onsetOffset: number | null; // ✅ 수정됨
-// }> {
-//   const { pcm, sampleRate } = await extractPCMFromMediaElement(videoElem, introDurationSec);
-//   //const onsetOffset = getFirstOnsetOffset(pcm, sampleRate); // ✅ 단일 값 (number | null)
-
-//   const introOnsetSec = onsetOffset !== null ? onsetOffset : null;
-//   const isMusicInIntro = introOnsetSec !== null && introOnsetSec < introThresholdSec;
-
-//   return {
-//     introOnsetSec,
-//     isMusicInIntro,
-//     onsetOffset,
-//   };
-// }

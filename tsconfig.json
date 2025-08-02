@@ -22,7 +22,7 @@
       "@lib/*": ["src/lib/*"]
     },
     "types": ["chrome", "jest"],
-    "allowJs": true,
+    "allowJs": false,
     "noUncheckedIndexedAccess": true, // 인덱스 접근 시 undefined 체크 강제화
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,
@@ -31,7 +31,7 @@
   },
   "include": [
     "src/**/*",
-    "src/lib/types/global.d.ts",
+    "src/lib/types/*.d.ts",
   ],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist", "public", "public/**"]
 }

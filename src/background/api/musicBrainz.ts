@@ -129,13 +129,3 @@ export function extractEnglishAliasFromArtists(artists: Artist[]): string | null
   }
   return null;
 }
-
-/**
- * 곡명에 대한 영문명 변환 함수 (work, recording 검색) - 필요시 구현 가능
- */
-//export async function fetchEnglishAliasForTitle(title: string): Promise<string | null> {
-// MusicBrainz는 곡명 검색이 아티스트 검색보다 약간 복잡
-// ws/2/recording 또는 ws/2/work를 활용해야 함
-// 구현 필요 시 알려주세요
-// return null;
-//}
