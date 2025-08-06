@@ -1,5 +1,6 @@
-// 글꼴 스타일 메뉴 2차// src/components/karaoke-player-settings/FontStyleMenu.tsx
 import React from 'react';
+import { BackButton } from '@components/common/BackButton';
+import styles from './MainMenu.module.css';
 
 interface FontStyleMenuProps {
   onBack: () => void;
@@ -7,38 +8,63 @@ interface FontStyleMenuProps {
 
 export const FontStyleMenu: React.FC<FontStyleMenuProps> = ({ onBack }) => {
   return (
-    <div>
-      <button onClick={onBack}>← 뒤로</button>
-      <h3>글자(자막 스타일) 설정</h3>
-      <ul>
-        <li>
-          <label>
-            폰트 종류
-            <select defaultValue="default">
-              <option value="default">기본</option>
-              <option value="serif">세리프</option>
-              <option value="monospace">모노스페이스</option>
+    <>
+      <div className={styles.horizontalHeader}>
+        <BackButton onClick={onBack} />
+        <h2 className={styles.menuTitle}>글꼴 스타일</h2>
+      </div>
+      <hr className={styles.divider} />
+
+      <div className={styles.subSectionScrollable}>
+        {/* 현재 가사 */}
+        <div className={styles.subSection}>
+          <h3 className={styles.subSectionTitle}>현재 가사</h3>
+          <div className={styles.settingItem}>
+            <span className={styles.settingLabel}>글꼴 종류</span>
+            <select className={styles.settingSelect}>
+              <option>기본</option>
+              <option>세리프</option>
+              <option>모노스페이스</option>
             </select>
-          </label>
-        </li>
-        <li>
-          <label>
-            글자 크기
-            <input type="range" min="10" max="40" defaultValue="16" />
-          </label>
-        </li>
-        <li>
-          <label>
-            글자 색상
-            <input type="color" defaultValue="#ffffff" />
-          </label>
-        </li>
-        <li>
-          <label>
-            <input type="checkbox" /> 테두리 효과
-          </label>
-        </li>
-      </ul>
-    </div>
+          </div>
+          <div className={styles.settingItem}>
+            <span className={styles.settingLabel}>글꼴 크기</span>
+            <select className={styles.settingSelect}>
+              <option>작게</option>
+              <option>보통</option>
+              <option>크게</option>
+            </select>
+          </div>
+          <div className={styles.settingItem}>
+            <span className={styles.settingLabel}>글꼴 색상</span>
+            <input type="color" className={styles.colorPicker} />
+          </div>
+        </div>
+        {/* 발음 가사 */}
+        <div className={styles.subSection}>
+          <h3 className={styles.subSectionTitle}>발음 가사</h3>
+          <div className={styles.settingItem}>
+            <span className={styles.settingLabel}>글꼴 종류</span>
+            <select className={styles.settingSelect}>
+              <option>기본</option>
+              <option>세리프</option>
+              <option>모노스페이스</option>
+            </select>
+          </div>
+          <div className={styles.settingItem}>
+            <span className={styles.settingLabel}>글꼴 크기</span>
+            <select className={styles.settingSelect}>
+              <option>작게</option>
+              <option>보통</option>
+              <option>크게</option>
+            </select>
+          </div>
+          <div className={styles.settingItem}>
+            <span className={styles.settingLabel}>글꼴 색상</span>
+            <input type="color" className={styles.colorPicker} />
+          </div>
+        </div>
+      </div>
+    </>
   );
 };

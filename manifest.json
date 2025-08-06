@@ -35,13 +35,13 @@
     {
       "matches": ["https://www.youtube.com/watch*"],
       "js": ["content/content.js"],
-      "css": ["content/content.css"],
+      "css": ["content/style.css"],
       "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["_locales/**/*.json","content/style.css", "assets/icons/music_note.png", "content/audioProcessor.js"],
+      "resources": ["_locales/**/*.json","content/style.css", "assets/icons/move.svg", "assets/icons/music_note.png", "content/audioProcessor.js"],
       "matches": ["*://*.youtube.com/*"]
     }
   ]

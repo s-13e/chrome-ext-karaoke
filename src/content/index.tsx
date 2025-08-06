@@ -294,12 +294,10 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
 
     const durationSec = videoDurationSec - effectiveLyricsDuration;
 
-    if (durationSec <= 0) {
-      console.warn(
-        `[analyzeAudioAndRenderLyrics] 분석 스킵: 영상 길이(${videoDurationSec}s) - 가사 길이(${effectiveLyricsDuration}s) <= 0`,
-      );
-      hideLyricsOverlay();
-      return;
+    if (durationSec <= 0 || durationSec >= 4) {
+      console.log(`영상 길이(${videoDurationSec}s) - 가사 길이(${effectiveLyricsDuration}s) 얼마 차이 안 남.`);
+    } else {
+      console.log('싱크 오류 가능성 높음.');
     }
 
     if (isAdPlaying()) {

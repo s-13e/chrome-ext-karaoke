@@ -13,7 +13,8 @@
     "paths": {
       "@background/*": ["src/background/*"],
       "@locales/*": ["src/locales/*"],
-      "@assets/*": ["public/assets/*"],
+      "@assets/*": ["src/assets/*"],
+      "@public_assets/*": ["public/assets/*"],
       "@components/*": ["src/components/*"],
       "@constants/*": ["src/constants/*"],
       "@hooks/*": ["src/hooks/*"],

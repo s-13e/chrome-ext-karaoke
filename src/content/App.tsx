@@ -63,22 +63,24 @@ export function App() {
   }, []);
 
   const [contentEnabled] = useChromeStorage('contentEnabled', true);
+
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
-  const MENU_HEIGHT = 200; // 원하는 메뉴 높이(px)
+
+  const MENU_WIDTH = 266;
+  const MENU_HEIGHT = 257;
 
   const handleMusicNoteClick = () => {
     const btn = document.querySelector('.ytp-music-note-button');
     if (btn) {
       const rect = btn.getBoundingClientRect();
-      console.log('Button rect:', rect); // 꼭 찍어서 확인해보세요.
-
       setMenuPosition({
-        left: rect.left + rect.width / 2 + window.scrollX, // 수평 중앙
-        top: rect.bottom + window.scrollY - MENU_HEIGHT - 100,
+        left: rect.left + rect.width / 2 + window.scrollX - MENU_WIDTH / 2,
+        top: rect.bottom + window.scrollY - MENU_HEIGHT - 60,
       });
+
+      setMenuVisible((v) => !v);
     }
-    setMenuVisible((v) => !v);
   };
 
   return (
@@ -87,6 +89,7 @@ export function App() {
         <MusicNoteButton
           iconPath={chrome.runtime.getURL('assets/icons/music_note.png')}
           contentEnabled={contentEnabled}
+          menuVisible={menuVisible}
           onClick={handleMusicNoteClick}
         />
       )}

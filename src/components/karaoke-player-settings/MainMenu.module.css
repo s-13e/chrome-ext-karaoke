@@ -1,44 +1,277 @@
-/* MainMenu.module.css */
 .container {
-  width: 220px;
-  height: 200px;
-  background: rgba(28, 28, 28, 0.85);
-  box-shadow: 0 2px 10px 0 rgba(0, 0, 0, 0.8);
+  min-width: 266px;
+  min-height: 220px;
+  max-width: 300px;
+  max-height: 300px;
+  background: rgba(28, 28, 28, 0.9);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
   color: #fff;
-  padding: 24px;
-  min-width: 230px;
-  min-height: 100px;
-  border-radius: 10px;
+  padding: 0;
+  border-radius: 12px;
   border: 1px solid rgba(72, 72, 72, 0.5);
-  backdrop-filter: blur(8px); /* 일부 브라우저 지원 */
-  /* position, left, top, z-index는 인라인스타일로만! */
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  user-select: none;
 }
+.submenuContainer {
+  width: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+.submenuContainer .menuTitle {
+  font-size: 1.2rem;
+  font-weight: 600;
+  text-align: center;
+  align-items: center; /* flex 안에서 수직 정렬 */
+}
+.horizontalHeader {
+  display: flex;
+  align-items: center; /* 수직 가운데 정렬 */
+  gap: 8px; /* 아이콘과 제목 사이 간격 */
+  height: 50px;
+}
+.menuTitle {
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin: 0;
+  padding: 0;
+  line-height: 1.2;
+  /* 왼쪽 정렬 */
+  text-align: left;
+}
+
 .menuList {
   list-style: none;
-  padding: 4px 0;
   margin: 0;
+  padding: 0;
+  font-size: 1;
 }
-.menuItem + .menuItem {
-  margin-top: 6px;  /* 항목 사이 간격 */
-}
+
+
 .menuButton {
   all: unset;
-  cursor: pointer;
-  width: 100%;
   display: flex;
   align-items: center;
-  justify-content: center; /* 텍스트 중앙 정렬 */
-  padding: 12px 0; /* 버튼 위아래 여유 */
-  border-radius: 4px;
-  font-size: 1rem;
+  width: 100%;
+  height: 100%;
+  justify-content: space-between; /* 텍스트는 왼쪽, 아이콘은 오른쪽 끝 */
+  padding: 15px 5px;
+  text-align: center;
+  cursor: pointer;
   color: #fff;
-  background: none;
-  transition: background 0.13s;
+  font-size: 1rem;
+  background: transparent;
+  transition: background-color 0.15s ease;
+}
+.menuButton svg {
+  width: 1em;
+  height: 1em;
+  margin-left: 8px; /* 텍스트와 화살표 간격 */
 }
 .menuButton:hover,
 .menuButton:focus-visible {
-  background: rgba(255, 255, 255, 0.13);
+  background-color: rgba(255, 255, 255, 0.13);
 }
+
 .menuButton:active {
-  background: rgba(255, 255, 255, 0.22);
+  background-color: rgba(255, 255, 255, 0.22);
+}
+.menuButtonText {
+  font-size: 118%;
+  margin-left: 4px;
+  font-weight: 500;
+}
+
+/* 하위 메뉴 공통 스타일 */
+.menuItem {
+  display: flex;
+  justify-content: space-between; /* 좌우 분리 */
+  align-items: center; /* 수직 중앙정렬 */
+  padding: 0; /* 위아래 여백 */
+  font-size: 1.3rem; /* 본문 폰트 크기 */
+}
+
+.menuItem span {
+  margin-left: 26px;
+}
+.menuToggle {
+  margin-right: 26px; /* 원하는 만큼 여백 */
+}
+
+.menuItem label {
+  cursor: pointer;
+  user-select: none;
+}
+.menuItem select {
+  margin-top: 4px;
+  margin-right: 26px;
+  width: 30%;
+  height: 20px;
+  justify-content: space-between;
+  background: #444;
+  border: none;
+  color: #fff;
+  border-radius: 4px;
+  padding-left: 6px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.menuItem select:focus {
+  outline: 2px solid #fff;
+}
+.divider {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.17); /* 또는 원하는 색상 */
+  margin: 8px 0; /* 상하 여백 */
+  width: 100%;
+}
+
+/**/
+.lyricsOffsetContainer {
+  color: #fff;
+  font-size: 1rem;
+}
+
+.controlButton {
+  background: rgba(255 255 255 / 0.1);
+  border: none;
+  border-radius: 4px;
+  font-size: 1.5rem;
+  color: #fff;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.controlButton:hover {
+  background: rgba(255 255 255 / 0.2);
+}
+
+.slider {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255 255 255 / 0.25);
+  cursor: pointer;
+  outline: none;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.slider::-webkit-slider-thumb:hover {
+  background: #ddd;
+}
+
+.slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.slider::-moz-range-thumb:hover {
+  background: #ddd;
+}
+
+.subSectionScrollable {
+  max-height: 190px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+/* 일반 섹션 */
+.subSection {
+  margin-left: 16px;
+  margin-bottom: 16px;
+}
+
+.subSectionTitle {
+  margin-left: 8px;
+  margin-bottom: 6px;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.settingItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 3px 10px 15px;
+  font-size: 1rem;
+}
+
+.settingLabel {
+  flex: 1 0 60px;
+  min-width: 60px;
+  font-size: 0.98em;
+}
+
+.settingSelect {
+  flex: 0 0 46%;
+  min-width: 95px;
+  max-width: 146px;
+  background: #444;
+  color: #fff;
+  border-radius: 5px;
+  border: none;
+  padding: 6px 10px;
+  font-size: 1em;
+  margin-left: 10px;
+  outline: none;
+  cursor: pointer;
+}
+.settingSelect:focus {
+  outline: 2px solid #fff;
+}
+
+/* color picker (input[type=color]) */
+.colorPicker {
+  margin-left: 10px;
+  width: 40px;
+  height: 30px;
+  border-radius: 6px;
+  border: none;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  box-shadow: none;
+}
+.colorPicker::-webkit-color-swatch {
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+}
+.colorPicker::-moz-color-swatch {
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+}
+.colorPicker::-ms-color-swatch {
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+}/* MainMenu.module.css */
+
+.lyricsMenuItem {
+  /* 기존 menuItem과 유사하되 padding만 달리 조정 */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 3px 10px 15px;
+  font-size: 1.25rem;
+  /* 필요한 스타일 추가 가능 */
 }

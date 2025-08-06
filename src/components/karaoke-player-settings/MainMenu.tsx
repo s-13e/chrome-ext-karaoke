@@ -4,6 +4,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { LyricsDisplayMenu } from './LyricsDisplayMenu';
 import { FontStyleMenu } from './FontStyleMenu';
 import { AdvancedSettingsMenu } from './AdvancedSettingsMenu';
+import { LyricsOffsetMenu } from './LyricsOffsetMenu';
+import { ArrowIcon } from '@components/icons/ArrowIcon';
 import styles from './MainMenu.module.css';
 
 interface Position {
@@ -14,21 +16,13 @@ interface Position {
 interface MainMenuProps {
   visible: boolean;
   position?: Position;
-  onClose: () => void; // 외부 클릭시 호출하기 위해 onClose 필수
+  onClose: () => void;
 }
 
 // MainMenu.tsx (메뉴 컨테이너 및 1차 메뉴 관리)
 export const MainMenu: React.FC<MainMenuProps> = ({ visible, position, onClose }) => {
   const [currentSubMenu, setCurrentSubMenu] = useState<string | null>(null);
-
   const menuRef = useRef<HTMLDivElement>(null);
-
-  // visible false 시 드릴다운 상태 초기화
-  useEffect(() => {
-    if (!visible) {
-      setCurrentSubMenu(null);
-    }
-  }, [visible]);
 
   // 메뉴 외부 클릭 감지해서 닫기
   useEffect(() => {
@@ -47,48 +41,57 @@ export const MainMenu: React.FC<MainMenuProps> = ({ visible, position, onClose }
     };
   }, [visible, onClose]);
 
-  if (!visible) return null;
+  // visible false 시 드릴다운 상태 초기화
+  useEffect(() => {
+    if (!visible) {
+      setCurrentSubMenu(null);
+    }
+  }, [visible]);
 
-  // 드릴다운: 하위 메뉴가 있으면 그 컴포넌트로 전환
-  if (currentSubMenu === 'lyrics') {
-    return <LyricsDisplayMenu onBack={() => setCurrentSubMenu(null)} />;
-  }
-  if (currentSubMenu === 'font') {
-    return <FontStyleMenu onBack={() => setCurrentSubMenu(null)} />;
-  }
-  if (currentSubMenu === 'advanced') {
-    return <AdvancedSettingsMenu onBack={() => setCurrentSubMenu(null)} />;
-  }
+  if (!visible) return null;
 
   return (
     <div
       ref={menuRef}
-      className={styles.container}
+      className={styles.container} // MainMenu.module.css 내 container 클래스 적용
       style={{
         position: 'absolute',
-        left: position?.left ?? 100,
-        top: position?.top ?? 100,
-        transform: 'translate(-50%, 0)',
+        top: position?.top,
+        left: position?.left,
       }}
     >
-      <h2 className={styles.title}>설정</h2>
-      <ul className={styles.menuList}>
-        <li className={styles.menuItem}>
-          <button className={styles.menuButton} onClick={() => setCurrentSubMenu('lyrics')}>
-            가사 디스플레이
-          </button>
-        </li>
-        <li className={styles.menuItem}>
-          <button className={styles.menuButton} onClick={() => setCurrentSubMenu('font')}>
-            글자(자막 스타일)
-          </button>
-        </li>
-        <li className={styles.menuItem}>
-          <button className={styles.menuButton} onClick={() => setCurrentSubMenu('advanced')}>
-            기타
-          </button>
-        </li>
-      </ul>
+      {currentSubMenu === null && (
+        <ul className={styles.menuList}>
+          <li className={styles.menuItem}>
+            <button className={styles.menuButton} onClick={() => setCurrentSubMenu('lyricsOffset')}>
+              <span className={styles.menuButtonText}>가사 싱크 조절</span>
+              <ArrowIcon direction="right" style={{ marginRight: 12 }} />
+            </button>
+          </li>
+          <li className={styles.menuItem}>
+            <button className={styles.menuButton} onClick={() => setCurrentSubMenu('lyrics')}>
+              <span className={styles.menuButtonText}>가사 디스플레이</span>
+              <ArrowIcon direction="right" style={{ marginRight: 12 }} />
+            </button>
+          </li>
+          <li className={styles.menuItem}>
+            <button className={styles.menuButton} onClick={() => setCurrentSubMenu('font')}>
+              <span className={styles.menuButtonText}>글꼴</span>
+              <ArrowIcon direction="right" style={{ marginRight: 12 }} />
+            </button>
+          </li>
+          <li className={styles.menuItem}>
+            <button className={styles.menuButton} onClick={() => setCurrentSubMenu('advanced')}>
+              <span className={styles.menuButtonText}>기타</span>
+              <ArrowIcon direction="right" style={{ marginRight: 12 }} />
+            </button>
+          </li>
+        </ul>
+      )}
+      {currentSubMenu === 'lyricsOffset' && <LyricsOffsetMenu onBack={() => setCurrentSubMenu(null)} />}
+      {currentSubMenu === 'lyrics' && <LyricsDisplayMenu onBack={() => setCurrentSubMenu(null)} />}
+      {currentSubMenu === 'font' && <FontStyleMenu onBack={() => setCurrentSubMenu(null)} />}
+      {currentSubMenu === 'advanced' && <AdvancedSettingsMenu onBack={() => setCurrentSubMenu(null)} />}
     </div>
   );
 };

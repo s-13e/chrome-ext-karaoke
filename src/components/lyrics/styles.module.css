@@ -5,7 +5,7 @@
   bottom: 10% !important;
   width: 100% !important;
   pointer-events: none !important;
-  z-index: 3000 !important;
+  z-index: 25 !important;
   display: flex !important;
   justify-content: center !important;
 }
@@ -59,7 +59,7 @@
   bottom: 10% !important;
   width: 100% !important;
   pointer-events: none !important;
-  z-index: 3000 !important;
+  z-index: 25 !important;
   display: flex !important;
   justify-content: center !important;
 }

@@ -37,6 +37,10 @@ module.exports = {
   module: {
     rules: [
       {
+        test: /\.svg$/,
+        use: ['@svgr/webpack'],
+      },
+      {
         test: /\.tsx?$/,
         use: 'ts-loader',
         exclude: /node_modules/,
@@ -74,7 +78,8 @@ module.exports = {
     alias: {
       '@background': path.resolve(__dirname, '../src/background'),
       '@locales': path.resolve(__dirname, '../src/locales'),
-      '@assets': path.resolve(__dirname, '../public/assets'),
+      '@assets': path.resolve(__dirname, '../src/assets'),
+      '@public_assets': path.resolve(__dirname, '../public/assets'),
       '@components': path.resolve(__dirname, '../src/components'),
       '@constants': path.resolve(__dirname, '../src/constants'),
       '@hooks': path.resolve(__dirname, '../src/hooks'),

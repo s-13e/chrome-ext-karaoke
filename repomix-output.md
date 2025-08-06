@@ -39,11 +39,13 @@ background/api/lyrics.ts
 background/api/musicBrainz.ts
 background/api/youtube.ts
 background/background.ts
+components/common/BackButton.tsx
 components/common/ErrorFallback.tsx
 components/common/LoadingOverlay.tsx
 components/karaoke-player-settings/AdvancedSettingsMenu.tsx
 components/karaoke-player-settings/FontStyleMenu.tsx
 components/karaoke-player-settings/LyricsDisplayMenu.tsx
+components/karaoke-player-settings/LyricsOffsetMenu.tsx
 components/karaoke-player-settings/MainMenu.module.css
 components/karaoke-player-settings/MainMenu.tsx
 components/karaoke-player-settings/MusicNoteButton.tsx
@@ -81,9 +83,9 @@ lib/types/global.d.ts
 lib/types/i18next.d.ts
 lib/types/lyrics.ts
 lib/types/message.ts
+lib/types/svg.d.ts
 lib/types/translationKeys.ts
 lib/types/video.ts
-lib/types/wasm-js.d.ts
 lib/utils/audio/audio.ts
 lib/utils/audio/audioAnalysis.ts
 lib/utils/audio/audioProcessor.ts
@@ -211,24 +213,37 @@ import { fetchLyricsByArtistAndTrack, LrcLibLyricsResult } from './lrclib';
 import { extractEnglishAliasFromArtists, fetchEnglishAliasForArtist, searchArtistByFreeText } from './musicBrainz';
 
 export async function fetchLyricsWithAliasFallback(artist: string, title: string): Promise<LrcLibLyricsResult> {
-  let artistForSearch = replaceAmpersand(artist, 'and');
-  let titleForSearch = replaceAmpersand(title, 'and');
+  const artistForSearch = replaceAmpersand(artist, 'and');
+  const titleForSearch = replaceAmpersand(title, 'and');
+
   console.log('artist:', artistForSearch, 'title:', titleForSearch);
 
   const areBothEnglish = isEnglishText(artistForSearch) && isEnglishText(titleForSearch);
 
-  let result = null;
+  let result: LrcLibLyricsResult | null = null;
+
+  // Function to perform double lookup (artist/title and title/artist)
+  async function doubleLookup(a: string, t: string) {
+    let res = await fetchLyricsByArtistAndTrack(a, t);
+    if (res) return res;
+
+    if (a.toLowerCase() !== t.toLowerCase()) {
+      res = await fetchLyricsByArtistAndTrack(t, a);
+      if (res) return res;
+    }
+    return null;
+  }
 
   // 둘 다 영어일 경우
   if (areBothEnglish) {
     // 1차: 기존 아티스트명으로 먼저 시도
-    result = await fetchLyricsByArtistAndTrack(artistForSearch, titleForSearch);
+    result = await doubleLookup(artistForSearch, titleForSearch);
     if (result) return result;
 
     // 2차: 영문 alias 조회 및 재시도
     const englishArtist = await fetchEnglishAliasForArtist(artistForSearch);
     if (englishArtist && englishArtist !== artistForSearch) {
-      result = await fetchLyricsByArtistAndTrack(englishArtist, titleForSearch);
+      result = await doubleLookup(englishArtist, titleForSearch);
       if (result) {
         console.log(`[Info] 영어 alias (${englishArtist})로 가사 검색 성공: ${englishArtist} - ${titleForSearch}`);
         return result;
@@ -242,7 +257,7 @@ export async function fetchLyricsWithAliasFallback(artist: string, title: string
       console.log(`[Info] FreeText 검색에서 추출된 영어 별칭: ${extractedAlias}`);
 
       if (extractedAlias && extractedAlias !== artist) {
-        result = await fetchLyricsByArtistAndTrack(extractedAlias, title);
+        result = await doubleLookup(extractedAlias, title);
         if (result) {
           console.log(
             `[Info] FreeText 검색에서 영어 alias (${extractedAlias})로 가사 검색 성공: ${extractedAlias} - ${title}`,
@@ -266,7 +281,7 @@ export async function fetchLyricsWithAliasFallback(artist: string, title: string
     }
 
     if (englishArtist && englishArtist !== artist) {
-      result = await fetchLyricsByArtistAndTrack(englishArtist, title);
+      result = await doubleLookup(artistForSearch, titleForSearch);
       if (result) {
         console.log(`[Info] 영어 공식명 (${englishArtist})로 가사 검색 성공: ${englishArtist} - ${title}`);
         return result;
@@ -410,16 +425,6 @@ export function extractEnglishAliasFromArtists(artists: Artist[]): string | null
   }
   return null;
 }
-
-/**
- * 곡명에 대한 영문명 변환 함수 (work, recording 검색) - 필요시 구현 가능
- */
-//export async function fetchEnglishAliasForTitle(title: string): Promise<string | null> {
-// MusicBrainz는 곡명 검색이 아티스트 검색보다 약간 복잡
-// ws/2/recording 또는 ws/2/work를 활용해야 함
-// 구현 필요 시 알려주세요
-// return null;
-//}
 ```
 
 ## File: background/api/youtube.ts
@@ -537,6 +542,53 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 });
 ```
 
+## File: components/common/BackButton.tsx
+```typescript
+import React from 'react';
+
+interface BackButtonProps {
+  onClick: () => void;
+  ariaLabel?: string;
+  className?: string;
+}
+
+export const BackButton: React.FC<BackButtonProps> = ({ onClick, ariaLabel = '뒤로', className = '' }) => {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={ariaLabel}
+      style={{
+        width: 16,
+        height: 16,
+        padding: 0,
+        border: 'none',
+        background: 'transparent',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+      className={`backButton ${className}`.trim()}
+    >
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="#fff"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ verticalAlign: 'middle', display: 'block' }}
+      >
+        <path d="M8 4l8 8-8 8" transform="scale(-1,1) translate(-24,0)" />
+      </svg>
+    </button>
+  );
+};
+```
+
 ## File: components/common/ErrorFallback.tsx
 ```typescript
 import { FallbackProps } from 'react-error-boundary';
@@ -605,6 +657,8 @@ LoadingOverlay.displayName = 'LoadingOverlay';
 // 기타 메뉴
 // src/components/karaoke-player-settings/AdvancedSettingsMenu.tsx
 import React from 'react';
+import { BackButton } from '@components/common/BackButton';
+import styles from './MainMenu.module.css';
 
 interface AdvancedSettingsMenuProps {
   onBack: () => void;
@@ -613,8 +667,10 @@ interface AdvancedSettingsMenuProps {
 export const AdvancedSettingsMenu: React.FC<AdvancedSettingsMenuProps> = ({ onBack }) => {
   return (
     <div>
-      <button onClick={onBack}>← 뒤로</button>
-      <h3>기타 설정</h3>
+      <div className={styles.horizontalHeader}>
+        <BackButton onClick={onBack} />
+        <h3>기타 설정</h3>
+      </div>
       <ul>
         <li>
           <button onClick={() => alert('설정 초기화 완료!')}>설정 초기화</button>
@@ -633,6 +689,8 @@ export const AdvancedSettingsMenu: React.FC<AdvancedSettingsMenuProps> = ({ onBa
 ```typescript
 // 글꼴 스타일 메뉴 2차// src/components/karaoke-player-settings/FontStyleMenu.tsx
 import React from 'react';
+import { BackButton } from '@components/common/BackButton';
+import styles from './MainMenu.module.css';
 
 interface FontStyleMenuProps {
   onBack: () => void;
@@ -641,37 +699,37 @@ interface FontStyleMenuProps {
 export const FontStyleMenu: React.FC<FontStyleMenuProps> = ({ onBack }) => {
   return (
     <div>
-      <button onClick={onBack}>← 뒤로</button>
-      <h3>글자(자막 스타일) 설정</h3>
-      <ul>
-        <li>
-          <label>
-            폰트 종류
-            <select defaultValue="default">
-              <option value="default">기본</option>
-              <option value="serif">세리프</option>
-              <option value="monospace">모노스페이스</option>
-            </select>
-          </label>
-        </li>
-        <li>
-          <label>
-            글자 크기
-            <input type="range" min="10" max="40" defaultValue="16" />
-          </label>
-        </li>
-        <li>
-          <label>
-            글자 색상
-            <input type="color" defaultValue="#ffffff" />
-          </label>
-        </li>
-        <li>
-          <label>
-            <input type="checkbox" /> 테두리 효과
-          </label>
-        </li>
-      </ul>
+      <div className={styles.horizontalHeader}>
+        <BackButton onClick={onBack} />
+        <h3>글자(자막 스타일) 설정</h3>
+      </div>
+      <div>
+        <label>
+          폰트 종류
+          <select>
+            <option value="default">기본</option>
+            <option value="serif">세리프</option>
+            <option value="monospace">모노스페이스</option>
+          </select>
+        </label>
+      </div>
+      <div>
+        <label>
+          글자 크기
+          <input type="range" min="10" max="40" defaultValue="16" />
+        </label>
+      </div>
+      <div>
+        <label>
+          글자 색상
+          <input type="color" defaultValue="#ffffff" />
+        </label>
+      </div>
+      <div>
+        <label>
+          <input type="checkbox" /> 테두리 효과
+        </label>
+      </div>
     </div>
   );
 };
@@ -682,91 +740,193 @@ export const FontStyleMenu: React.FC<FontStyleMenuProps> = ({ onBack }) => {
 // 가사 디스플레이 상세 메뉴
 // src/components/karaoke-player-settings/LyricsDisplayMenu.tsx
 import React from 'react';
+import { BackButton } from '@components/common/BackButton';
+import styles from './MainMenu.module.css';
 
 interface LyricsDisplayMenuProps {
   onBack: () => void;
 }
-
-export const LyricsDisplayMenu: React.FC<LyricsDisplayMenuProps> = ({ onBack }) => {
-  return (
-    <div>
-      <button onClick={onBack}>← 뒤로</button>
-      <h3>가사 디스플레이 설정</h3>
-      <ul>
-        <li>
-          {/* 여기서부터는 ToggleItem 등 재사용 UI 컴포넌트로 대체 가능 */}
-          <label>
-            <input type="checkbox" /> 실시간 가사 On/Off
-          </label>
-        </li>
-        <li>
-          <label>
-            <input type="checkbox" /> 발음 가사 On/Off
-          </label>
-        </li>
-        <li>
-          가사 표시 방식
-          <select defaultValue="adjacent">
-            <option value="adjacent">인접 가사만 보기</option>
-            <option value="full">전체 가사 보기</option>
-          </select>
-        </li>
-        <li>
-          <label>
-            <input type="checkbox" /> 전주(첫 가사까지) 건너뛰기 On/Off
-          </label>
-        </li>
-      </ul>
+export const LyricsDisplayMenu: React.FC<LyricsDisplayMenuProps> = ({ onBack }) => (
+  <div className={styles.submenuContainer}>
+    <div className={styles.horizontalHeader}>
+      <BackButton onClick={onBack} />
+      <h2 className={styles.menuTitle}>가사 디스플레이 설정</h2>
     </div>
-  );
-};
+    <div className={styles.menuItem}>
+      <label>
+        <input type="checkbox" /> 실시간 가사
+      </label>
+    </div>
+
+    <div className={styles.menuItem}>
+      <label>
+        <input type="checkbox" /> 발음 가사
+      </label>
+    </div>
+
+    <div className={styles.menuItem}>
+      가사 표시 방식
+      <select>
+        <option>인접 가사만 보기</option>
+        <option>전체 가사 보기</option>
+      </select>
+    </div>
+
+    <div className={styles.menuItem}>
+      <label>
+        <input type="checkbox" /> 첫 가사 전주 건너뛰기
+      </label>
+    </div>
+  </div>
+);
+```
+
+## File: components/karaoke-player-settings/LyricsOffsetMenu.tsx
+```typescript
+// 가사 싱크
+// src/components/karaoke-player-settings/LyricsOffsetMenuMenu.tsx
+import { BackButton } from '@components/common/BackButton';
+import React from 'react';
+import styles from './MainMenu.module.css';
+
+interface LyricsOffsetMenuProps {
+  onBack: () => void;
+}
+export const LyricsOffsetMenu: React.FC<LyricsOffsetMenuProps> = ({ onBack }) => (
+  <div className="submenuContainer">
+    <div className={styles.horizontalHeader}>
+      <BackButton onClick={onBack} />
+      <h2 className={styles.menuTitle}>가사 오프셋 설정</h2>
+    </div>
+  </div>
+);
 ```
 
 ## File: components/karaoke-player-settings/MainMenu.module.css
 ```css
-/* MainMenu.module.css */
 .container {
-  width: 220px;
-  height: 200px;
+  width: 240px;
   background: rgba(28, 28, 28, 0.85);
-  box-shadow: 0 2px 10px 0 rgba(0, 0, 0, 0.8);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
   color: #fff;
-  padding: 24px;
-  min-width: 230px;
-  min-height: 100px;
-  border-radius: 10px;
+  padding: 20px;
+  border-radius: 8px;
   border: 1px solid rgba(72, 72, 72, 0.5);
-  backdrop-filter: blur(8px); /* 일부 브라우저 지원 */
-  /* position, left, top, z-index는 인라인스타일로만! */
+  backdrop-filter: blur(8px);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  user-select: none;
 }
+.horizontalHeader {
+  display: flex;
+  align-items: center; /* 수직 가운데 정렬 */
+  gap: 8px; /* 아이콘과 제목 사이 간격 */
+}
+.menuTitle {
+  font-weight: 600;
+  font-size: 1.3rem;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
 .menuList {
   list-style: none;
-  padding: 4px 0;
   margin: 0;
+  padding: 0;
 }
+
 .menuItem + .menuItem {
-  margin-top: 6px;  /* 항목 사이 간격 */
+  margin-top: 8px;
+}
+.menuItem {
+  font-size: 1.15em; /* 항목별로 조금 더 키울 수도 있음 */
 }
 .menuButton {
   all: unset;
-  cursor: pointer;
+  display: block;
   width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center; /* 텍스트 중앙 정렬 */
-  padding: 12px 0; /* 버튼 위아래 여유 */
-  border-radius: 4px;
-  font-size: 1rem;
+  padding: 12px 0;
+  text-align: center;
+  cursor: pointer;
+  border-radius: 5px;
   color: #fff;
-  background: none;
-  transition: background 0.13s;
+  font-size: 1rem;
+  background: transparent;
+  transition: background-color 0.15s ease;
 }
+
 .menuButton:hover,
 .menuButton:focus-visible {
-  background: rgba(255, 255, 255, 0.13);
+  background-color: rgba(255, 255, 255, 0.13);
 }
+
 .menuButton:active {
-  background: rgba(255, 255, 255, 0.22);
+  background-color: rgba(255, 255, 255, 0.22);
+}
+/* 하위 메뉴 공통 스타일 */
+
+.submenuContainer {
+  display: flex;
+  flex-direction: column;
+}
+
+.backButton {
+  all: unset;
+  cursor: pointer;
+  color: #fff;
+  font-size: 1.1rem;
+  margin-bottom: 14px;
+  user-select: none;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background-color 0.15s ease;
+}
+
+.backButton:hover,
+.backButton:focus-visible {
+  background-color: rgba(255, 255, 255, 0.13);
+}
+
+.backButton:active {
+  background-color: rgba(255, 255, 255, 0.22);
+}
+
+.submenuContainer .menuTitle {
+  margin-bottom: 10px;
+  font-size: 1.2rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.menuItem {
+  margin-bottom: 10px;
+  font-size: 0.95rem;
+}
+
+.menuItem label {
+  cursor: pointer;
+  user-select: none;
+}
+
+.menuItem input[type='checkbox'] {
+  margin-right: 8px;
+  cursor: pointer;
+}
+
+.menuItem select {
+  margin-top: 4px;
+  width: 100%;
+  height: 30px;
+  background: #444;
+  border: none;
+  color: #fff;
+  border-radius: 4px;
+  padding-left: 6px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.menuItem select:focus {
+  outline: 2px solid #fff;
 }
 ```
 
@@ -779,6 +939,7 @@ import { LyricsDisplayMenu } from './LyricsDisplayMenu';
 import { FontStyleMenu } from './FontStyleMenu';
 import { AdvancedSettingsMenu } from './AdvancedSettingsMenu';
 import styles from './MainMenu.module.css';
+import { LyricsOffsetMenu } from './LyricsOffsetMenu';
 
 interface Position {
   top: number;
@@ -788,21 +949,13 @@ interface Position {
 interface MainMenuProps {
   visible: boolean;
   position?: Position;
-  onClose: () => void; // 외부 클릭시 호출하기 위해 onClose 필수
+  onClose: () => void;
 }
 
 // MainMenu.tsx (메뉴 컨테이너 및 1차 메뉴 관리)
 export const MainMenu: React.FC<MainMenuProps> = ({ visible, position, onClose }) => {
   const [currentSubMenu, setCurrentSubMenu] = useState<string | null>(null);
-
   const menuRef = useRef<HTMLDivElement>(null);
-
-  // visible false 시 드릴다운 상태 초기화
-  useEffect(() => {
-    if (!visible) {
-      setCurrentSubMenu(null);
-    }
-  }, [visible]);
 
   // 메뉴 외부 클릭 감지해서 닫기
   useEffect(() => {
@@ -821,48 +974,56 @@ export const MainMenu: React.FC<MainMenuProps> = ({ visible, position, onClose }
     };
   }, [visible, onClose]);
 
-  if (!visible) return null;
+  // visible false 시 드릴다운 상태 초기화
+  useEffect(() => {
+    if (!visible) {
+      setCurrentSubMenu(null);
+    }
+  }, [visible]);
 
-  // 드릴다운: 하위 메뉴가 있으면 그 컴포넌트로 전환
-  if (currentSubMenu === 'lyrics') {
-    return <LyricsDisplayMenu onBack={() => setCurrentSubMenu(null)} />;
-  }
-  if (currentSubMenu === 'font') {
-    return <FontStyleMenu onBack={() => setCurrentSubMenu(null)} />;
-  }
-  if (currentSubMenu === 'advanced') {
-    return <AdvancedSettingsMenu onBack={() => setCurrentSubMenu(null)} />;
-  }
+  if (!visible) return null;
 
   return (
     <div
       ref={menuRef}
-      className={styles.container}
+      className={styles.container} // MainMenu.module.css 내 container 클래스 적용
       style={{
         position: 'absolute',
-        left: position?.left ?? 100,
-        top: position?.top ?? 100,
-        transform: 'translate(-50%, 0)',
+        top: position?.top,
+        left: position?.left,
       }}
     >
-      <h2 className={styles.title}>설정</h2>
-      <ul className={styles.menuList}>
-        <li className={styles.menuItem}>
-          <button className={styles.menuButton} onClick={() => setCurrentSubMenu('lyrics')}>
-            가사 디스플레이
-          </button>
-        </li>
-        <li className={styles.menuItem}>
-          <button className={styles.menuButton} onClick={() => setCurrentSubMenu('font')}>
-            글자(자막 스타일)
-          </button>
-        </li>
-        <li className={styles.menuItem}>
-          <button className={styles.menuButton} onClick={() => setCurrentSubMenu('advanced')}>
-            기타
-          </button>
-        </li>
-      </ul>
+      {currentSubMenu === null && (
+        <>
+          <div className={styles.menuTitle}>설정</div>
+          <ul className={styles.menuList}>
+            <li className={styles.menuItem}>
+              <button className={styles.menuButton} onClick={() => setCurrentSubMenu('lyricsOffset')}>
+                가사 싱크 조절
+              </button>
+            </li>
+            <li className={styles.menuItem}>
+              <button className={styles.menuButton} onClick={() => setCurrentSubMenu('lyrics')}>
+                가사 디스플레이
+              </button>
+            </li>
+            <li className={styles.menuItem}>
+              <button className={styles.menuButton} onClick={() => setCurrentSubMenu('font')}>
+                글자(자막 스타일)
+              </button>
+            </li>
+            <li className={styles.menuItem}>
+              <button className={styles.menuButton} onClick={() => setCurrentSubMenu('advanced')}>
+                기타
+              </button>
+            </li>
+          </ul>
+        </>
+      )}
+      {currentSubMenu === 'lyricsOffset' && <LyricsOffsetMenu onBack={() => setCurrentSubMenu(null)} />}
+      {currentSubMenu === 'lyrics' && <LyricsDisplayMenu onBack={() => setCurrentSubMenu(null)} />}
+      {currentSubMenu === 'font' && <FontStyleMenu onBack={() => setCurrentSubMenu(null)} />}
+      {currentSubMenu === 'advanced' && <AdvancedSettingsMenu onBack={() => setCurrentSubMenu(null)} />}
     </div>
   );
 };
@@ -888,7 +1049,8 @@ export const MusicNoteButton: React.FC<Props> = ({ iconPath, contentEnabled, onC
 
     if (document.querySelector(`.${styles.musicNoteButton}`)) return;
 
-    const autonavBtn = rightControls.querySelector('button[data-tooltip-target-id="ytp-autonav-toggle-button"]');
+    const captionsBtn = rightControls.querySelector('.ytp-subtitles-button');
+    const settingsBtn = rightControls.querySelector('.ytp-settings-button');
 
     const btn = document.createElement('button');
     btn.className = `${styles.musicNoteButton} ytp-button ytp-music-note-button`;
@@ -899,9 +1061,6 @@ export const MusicNoteButton: React.FC<Props> = ({ iconPath, contentEnabled, onC
     const iconImg = document.createElement('img');
     iconImg.src = iconPath;
     iconImg.alt = 'music note';
-    iconImg.width = 24;
-    iconImg.height = 24;
-    iconImg.style.pointerEvents = 'none';
     iconImg.className = styles.icon || '';
 
     btn.appendChild(iconImg);
@@ -913,10 +1072,16 @@ export const MusicNoteButton: React.FC<Props> = ({ iconPath, contentEnabled, onC
       onClick?.();
     });
 
-    if (autonavBtn) {
-      rightControls.insertBefore(btn, autonavBtn);
+    // 버튼 위치 지정
+    if (captionsBtn) {
+      // 자막 버튼 바로 뒤(우측)에 삽입 (최우선)
+      captionsBtn.after(btn);
+    } else if (settingsBtn) {
+      // 설정 버튼 바로 뒤(우측)에 삽입 (차선)
+      settingsBtn.after(btn);
     } else {
-      rightControls.insertBefore(btn, rightControls.firstChild);
+      // 못 찾으면 맨 끝에 (append)
+      rightControls.appendChild(btn);
     }
 
     return () => {
@@ -935,15 +1100,12 @@ export const MusicNoteButton: React.FC<Props> = ({ iconPath, contentEnabled, onC
 .musicNoteButton {
   background: none;
   border: none;
-  cursor: pointer;
-  padding: 0;
-  margin: 0 4px;
-  display: inline-flex;
-  align-items: center;
-  height: 36px;      /* 유튜브 컨트롤러 높이와 맞춤 */
-  width: 36px;       /* 버튼 클릭 영역 확대 */
-  justify-content: center;
   box-sizing: border-box;
+  cursor: pointer;
+  display: inline-flex;
+  padding: 0;
+  height: 48px;
+  width: 48px;
   opacity: 0.8;
   transition: opacity 0.15s;
 }
@@ -951,10 +1113,14 @@ export const MusicNoteButton: React.FC<Props> = ({ iconPath, contentEnabled, onC
   opacity: 1;
 }
 .icon {
-  width: 24px;      /* 유튜브 기본 아이콘 크기 */
+  width: 24px;
   height: 24px;
+  margin: auto;
+  display: block;
   pointer-events: none;
-  filter: brightness(0) invert(1); /* 흰색 아이콘 효과 */
+  filter: brightness(0) invert(1)
+          drop-shadow(0 1px 0 rgba(32, 32, 32, 0.4))
+          drop-shadow(0 0px 2px #323232);
   transition: filter 0.15s;
 }
 #my-custom-music-menu {
@@ -963,7 +1129,7 @@ export const MusicNoteButton: React.FC<Props> = ({ iconPath, contentEnabled, onC
   color: white;
   padding: 8px 12px;
   border-radius: 4px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
   z-index: 10000;
   font-size: 14px;
   user-select: none;
@@ -972,7 +1138,7 @@ export const MusicNoteButton: React.FC<Props> = ({ iconPath, contentEnabled, onC
 #my-custom-music-menu div {
   padding: 6px 10px;
   cursor: pointer;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   transition: background 0.2s;
 }
 
@@ -981,7 +1147,7 @@ export const MusicNoteButton: React.FC<Props> = ({ iconPath, contentEnabled, onC
 }
 
 #my-custom-music-menu div:hover {
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.1);
 }
 ```
 
@@ -1371,7 +1537,7 @@ export type MessageType = (typeof MESSAGE_TYPES)[keyof typeof MESSAGE_TYPES];
 export const PATHS = {
   CONTENT_SCRIPT: 'content/content.js',
   OPTIONS_HTML: 'options.html',
-  ICON_SETTING: '@assets/icons/setting.png',
+  ICON_SETTING: '@public_assets/icons/setting.png',
 };
 ```
 
@@ -1501,7 +1667,6 @@ export function App() {
     const btn = document.querySelector('.ytp-music-note-button');
     if (btn) {
       const rect = btn.getBoundingClientRect();
-      console.log('Button rect:', rect); // 꼭 찍어서 확인해보세요.
 
       setMenuPosition({
         left: rect.left + rect.width / 2 + window.scrollX, // 수평 중앙
@@ -2366,16 +2531,9 @@ export function isI18nError(error: unknown): error is I18nError {
 ## File: lib/types/global.d.ts
 ```typescript
 // src/types/global.d.ts
-export {}; // 모듈 확장
-
-declare global {
-  interface Window {
-    [key: string]: unknown;
-    __LYRICS_OVERLAY_INITED?: boolean;
-    ModuleFactory?: MediaPipeModuleFactory;
-  }
-
-  var ModuleFactory: MediaPipeModuleFactory | undefined;
+interface Window {
+  [key: string]: unknown;
+  __LYRICS_OVERLAY_INITED?: boolean;
 }
 ```
 
@@ -2419,6 +2577,14 @@ export type ContentScriptMessage = ToggleContentMessage;
 // | AnotherMessageType
 ```
 
+## File: lib/types/svg.d.ts
+```typescript
+declare module '*.svg' {
+  const content: string;
+  export default content;
+}
+```
+
 ## File: lib/types/translationKeys.ts
 ```typescript
 // types/translationKeys.ts
@@ -2441,14 +2607,6 @@ export type TranslationKey = (typeof TRANSLATION_KEYS)[number];
 //   channelTitle?: string;
 //   durationSec?: number;
 // }
-```
-
-## File: lib/types/wasm-js.d.ts
-```typescript
-declare module '@assets/wasm/*.js' {
-  const value: any;
-  export default value;
-}
 ```
 
 ## File: lib/utils/audio/audio.ts
@@ -3929,12 +4087,10 @@ if (root) {
   outline: none;
   /* 필요하다면 width, color 등도 추가 */
 }
-css
 /* 팝업, 옵션 공통 CSS */
 body:not([data-lang-loaded]) {
   opacity: 0;
 }
-
 body[data-lang-loaded] {
   opacity: 1;
   transition: opacity 0.3s;
