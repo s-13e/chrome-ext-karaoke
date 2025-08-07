@@ -11,6 +11,18 @@ const STORAGE_KEYS = {
   skipFirstLyrics: 'skipFirstLyrics',
 };
 
+const LYRICS_MODE_KEY = 'lyricsMode';
+const LYRICS_MODE = {
+  SYNC: 'sync',
+  FULL: 'full',
+};
+const labelToMode = {
+  '현재 가사만 보기': LYRICS_MODE.SYNC,
+  '전체 가사를 보기': LYRICS_MODE.FULL,
+} as const;
+
+type LyricsMode = (typeof LYRICS_MODE)[keyof typeof LYRICS_MODE];
+
 interface LyricsDisplayMenuProps {
   onBack: () => void;
 }
@@ -21,23 +33,29 @@ export const LyricsDisplayMenu: React.FC<LyricsDisplayMenuProps> = ({ onBack }) 
   const [isAnnounceLyricsOn, setIsAnnounceLyricsOn] = useState(true);
   const [skipFirstLyrics, setSkipFirstLyrics] = useState(false);
 
+  // 가사 모드
+  const [lyricsMode, setLyricsMode] = useState<LyricsMode>('sync');
+
   // 마운트시 스토리지에서 상태 불러오기
   useEffect(() => {
     chrome.storage.sync.get(
-      [STORAGE_KEYS.realtimeLyrics, STORAGE_KEYS.announceLyrics, STORAGE_KEYS.skipFirstLyrics],
+      [STORAGE_KEYS.realtimeLyrics, STORAGE_KEYS.announceLyrics, STORAGE_KEYS.skipFirstLyrics, LYRICS_MODE_KEY],
       (items) => {
         if (items[STORAGE_KEYS.realtimeLyrics] !== undefined) setIsRealtimeLyricsOn(items[STORAGE_KEYS.realtimeLyrics]);
         if (items[STORAGE_KEYS.announceLyrics] !== undefined) setIsAnnounceLyricsOn(items[STORAGE_KEYS.announceLyrics]);
         if (items[STORAGE_KEYS.skipFirstLyrics] !== undefined) setSkipFirstLyrics(items[STORAGE_KEYS.skipFirstLyrics]);
+        if (items[LYRICS_MODE_KEY]) setLyricsMode(items[LYRICS_MODE_KEY]);
       },
     );
   }, []);
 
   // 체크박스 토글 상태 변화 핸들러
   const handleToggleRealtimeLyrics = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setIsRealtimeLyricsOn(e.target.checked);
-    chrome.storage.sync.set({ [STORAGE_KEYS.realtimeLyrics]: e.target.checked });
+    const checked = e.target.checked;
+    setIsRealtimeLyricsOn(checked);
+    chrome.storage.sync.set({ realtimeLyrics: checked });
   };
+
   const handleToggleAnnounceLyrics = (e: React.ChangeEvent<HTMLInputElement>) => {
     setIsAnnounceLyricsOn(e.target.checked);
     chrome.storage.sync.set({ [STORAGE_KEYS.announceLyrics]: e.target.checked });
@@ -45,6 +63,13 @@ export const LyricsDisplayMenu: React.FC<LyricsDisplayMenuProps> = ({ onBack }) 
   const skipFirstLyricsToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSkipFirstLyrics(e.target.checked);
     chrome.storage.sync.set({ [STORAGE_KEYS.skipFirstLyrics]: e.target.checked });
+  };
+
+  // select value 변경 핸들러
+  const handleLyricsModeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = labelToMode[e.target.value as keyof typeof labelToMode];
+    setLyricsMode(value);
+    chrome.storage.sync.set({ [LYRICS_MODE_KEY]: value });
   };
 
   return (
@@ -70,7 +95,11 @@ export const LyricsDisplayMenu: React.FC<LyricsDisplayMenuProps> = ({ onBack }) 
 
           <div className={styles.lyricsMenuItem}>
             <span>가사 방식</span>
-            <select className={styles.settingSelect} defaultValue="현재 가사만 보기">
+            <select
+              className={styles.settingSelect}
+              value={lyricsMode === 'full' ? '전체 가사를 보기' : '현재 가사만 보기'}
+              onChange={handleLyricsModeChange}
+            >
               <option>현재 가사만 보기</option>
               <option>전체 가사를 보기</option>
             </select>

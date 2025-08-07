@@ -76,7 +76,7 @@ export function App() {
       const rect = btn.getBoundingClientRect();
       setMenuPosition({
         left: rect.left + rect.width / 2 + window.scrollX - MENU_WIDTH / 2,
-        top: rect.bottom + window.scrollY - MENU_HEIGHT - 60,
+        top: rect.bottom + window.scrollY - MENU_HEIGHT - 30,
       });
 
       setMenuVisible((v) => !v);

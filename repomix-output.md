@@ -42,21 +42,24 @@ background/background.ts
 components/common/BackButton.tsx
 components/common/ErrorFallback.tsx
 components/common/LoadingOverlay.tsx
+components/common/styles.module.css
+components/common/ToggleSwitch.tsx
+components/icons/ArrowIcon.tsx
 components/karaoke-player-settings/AdvancedSettingsMenu.tsx
 components/karaoke-player-settings/FontStyleMenu.tsx
 components/karaoke-player-settings/LyricsDisplayMenu.tsx
+components/karaoke-player-settings/LyricsOffsetControl.tsx
 components/karaoke-player-settings/LyricsOffsetMenu.tsx
 components/karaoke-player-settings/MainMenu.module.css
 components/karaoke-player-settings/MainMenu.tsx
 components/karaoke-player-settings/MusicNoteButton.tsx
 components/karaoke-player-settings/styles.module.css
-components/lyrics/DualHighlightSubtitle.tsx
-components/lyrics/KaraokePlayerContainer/index.tsx
-components/lyrics/KaraokePlayerContainer/styles.module.css
+components/lyrics/FullLyricsView/FullLyricsView.tsx
+components/lyrics/FullLyricsView/styles.module.css
+components/lyrics/LyricsOverlayRoot.module.css
 components/lyrics/LyricsOverlayRoot.tsx
-components/lyrics/LyricsSidebar/index.tsx
-components/lyrics/LyricsSidebar/LyricsPanel.tsx
-components/lyrics/styles.module.css
+components/lyrics/SyncLyricsDisplay/DualHighlightSubtitle.tsx
+components/lyrics/SyncLyricsDisplay/styles.module.css
 constants/doomIds.ts
 constants/errorCodes.ts
 constants/errorMessages.ts
@@ -545,14 +548,21 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 ## File: components/common/BackButton.tsx
 ```typescript
 import React from 'react';
+import { ArrowIcon } from '@components/icons/ArrowIcon';
 
 interface BackButtonProps {
   onClick: () => void;
   ariaLabel?: string;
   className?: string;
+  flip?: boolean;
 }
 
-export const BackButton: React.FC<BackButtonProps> = ({ onClick, ariaLabel = '뒤로', className = '' }) => {
+export const BackButton: React.FC<BackButtonProps> = ({
+  onClick,
+  ariaLabel = '뒤로',
+  className = '',
+  flip = false,
+}) => {
   return (
     <button
       type="button"
@@ -562,28 +572,19 @@ export const BackButton: React.FC<BackButtonProps> = ({ onClick, ariaLabel = '�
         width: 16,
         height: 16,
         padding: 0,
+        marginLeft: 10,
+        marginRight: 10,
         border: 'none',
         background: 'transparent',
         cursor: 'pointer',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
+        transform: flip ? 'scaleX(-1)' : undefined,
       }}
       className={`backButton ${className}`.trim()}
     >
-      <svg
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="#fff"
-        strokeWidth="3"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        style={{ verticalAlign: 'middle', display: 'block' }}
-      >
-        <path d="M8 4l8 8-8 8" transform="scale(-1,1) translate(-24,0)" />
-      </svg>
+      <ArrowIcon direction="left" />
     </button>
   );
 };
@@ -652,6 +653,157 @@ export const LoadingOverlay = React.memo(() => (
 LoadingOverlay.displayName = 'LoadingOverlay';
 ```
 
+## File: components/common/styles.module.css
+```css
+/* toggle switch css */
+.toggleWrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1em;
+}
+.toggleInput {
+  display: none;
+}
+.toggleSlider {
+  width: 36px;
+  height: 15px;
+  background: #888;
+  border-radius: 24px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.toggleInput:checked + .toggleSlider {
+  background: #3fa6ff;
+}
+/* 동그란 버튼(핸들)을 더 크게 */
+.toggleSlider:before {
+  content: '';
+  position: absolute;
+  width: 20px; /* ← width/height 모두 키움 */
+  height: 20px;
+  left: -1px;
+  top: -3px;
+  background: #bbb;
+  border-radius: 50%;
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.3),
+    0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s;
+}
+
+/* 토글 ON일 때 위치 이동 */
+.toggleInput:checked + .toggleSlider:before {
+  background: #fff;
+  transform: translateX(20px);
+}
+.toggleLabel {
+  margin-left: 6px;
+  font-size: 1em;
+}
+
+/* Tooltip */
+/* Tooltip.module.css */
+
+.tooltip {
+  position: fixed; /* body 기준 절대 위치 */
+  background: rgba(32, 32, 32, 0.95);
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 5px;
+  font-size: 0.96em;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none; /* 툴팁 자체 클릭 막음 */
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.13);
+  z-index: 10000;
+  user-select: none;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+  opacity: 0.95;
+}
+```
+
+## File: components/common/ToggleSwitch.tsx
+```typescript
+import React from 'react';
+import styles from './styles.module.css';
+
+interface ToggleSwitchProps {
+  checked: boolean;
+  onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  label?: string;
+  className?: string;
+}
+
+export const ToggleSwitch: React.FC<ToggleSwitchProps> = ({ checked, onChange, label, className = '' }) => (
+  <label className={`${styles.toggleWrap} ${className}`.trim()}>
+    {label && <span className={styles.toggleLabel}>{label}</span>}
+    <input type="checkbox" checked={checked} onChange={onChange} className={styles.toggleInput} />
+    <span className={styles.toggleSlider}></span>
+  </label>
+);
+```
+
+## File: components/icons/ArrowIcon.tsx
+```typescript
+// src/components/icons/ArrowIcon.tsx
+import React from 'react';
+
+interface ArrowIconProps {
+  direction?: 'right' | 'left' | 'up' | 'down';
+  size?: number;
+  color?: string;
+  className?: string;
+  style?: React.CSSProperties;
+}
+
+export const ArrowIcon: React.FC<ArrowIconProps> = ({
+  direction = 'right',
+  size = 18,
+  color = '#fff',
+  className = '',
+  style = {},
+}) => {
+  let transform = '';
+  switch (direction) {
+    case 'left':
+      transform = 'scaleX(-1)';
+      break;
+    case 'up':
+      transform = 'rotate(-90deg)';
+      break;
+    case 'down':
+      transform = 'rotate(90deg)';
+      break;
+    case 'right':
+    default:
+      transform = '';
+      break;
+  }
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color}
+      strokeWidth="4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      style={{ verticalAlign: 'middle', display: 'block', transform, ...style }}
+      aria-hidden="true"
+    >
+      <path d="M8 4l8 8-8 8" />
+    </svg>
+  );
+};
+```
+
 ## File: components/karaoke-player-settings/AdvancedSettingsMenu.tsx
 ```typescript
 // 기타 메뉴
@@ -671,15 +823,7 @@ export const AdvancedSettingsMenu: React.FC<AdvancedSettingsMenuProps> = ({ onBa
         <BackButton onClick={onBack} />
         <h3>기타 설정</h3>
       </div>
-      <ul>
-        <li>
-          <button onClick={() => alert('설정 초기화 완료!')}>설정 초기화</button>
-        </li>
-        <li>
-          {/* 필요 시 추가 고급 옵션 */}
-          {/* <button>고급 동기화</button> */}
-        </li>
-      </ul>
+      <hr className={styles.divider} />
     </div>
   );
 };
@@ -687,8 +831,7 @@ export const AdvancedSettingsMenu: React.FC<AdvancedSettingsMenuProps> = ({ onBa
 
 ## File: components/karaoke-player-settings/FontStyleMenu.tsx
 ```typescript
-// 글꼴 스타일 메뉴 2차// src/components/karaoke-player-settings/FontStyleMenu.tsx
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { BackButton } from '@components/common/BackButton';
 import styles from './MainMenu.module.css';
 
@@ -697,40 +840,106 @@ interface FontStyleMenuProps {
 }
 
 export const FontStyleMenu: React.FC<FontStyleMenuProps> = ({ onBack }) => {
+  const [lyricsFontColorCurrent, setLyricsFontColorCurrent] = useState('#FFFFFF');
+  const [lyricsFontColorPronunciation, setLyricsFontColorPronunciation] = useState('#FFFFFF');
+
+  const handleFontColorChangeCurrent = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setLyricsFontColorCurrent(e.target.value);
+  };
+  const handleFontColorChangePronunciation = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setLyricsFontColorPronunciation(e.target.value);
+  };
+
+  const handleFontColorCommitCurrent = () => {
+    chrome.storage.sync.set({ lyricsFontColorCurrent });
+  };
+  const handleFontColorCommitPronunciation = () => {
+    chrome.storage.sync.set({ lyricsFontColorPronunciation });
+  };
+
+  useEffect(() => {
+    chrome.storage.sync.get(['lyricsFontColorCurrent', 'lyricsFontColorPronunciation'], (items) => {
+      if (items.lyricsFontColorCurrent) setLyricsFontColorCurrent(items.lyricsFontColorCurrent);
+      if (items.lyricsFontColorPronunciation) setLyricsFontColorPronunciation(items.lyricsFontColorPronunciation);
+    });
+  }, []);
+
   return (
-    <div>
+    <>
       <div className={styles.horizontalHeader}>
         <BackButton onClick={onBack} />
-        <h3>글자(자막 스타일) 설정</h3>
+        <h2 className={styles.menuTitle}>글꼴 스타일</h2>
       </div>
-      <div>
-        <label>
-          폰트 종류
-          <select>
-            <option value="default">기본</option>
-            <option value="serif">세리프</option>
-            <option value="monospace">모노스페이스</option>
-          </select>
-        </label>
+      <hr className={styles.divider} />
+
+      <div className={styles.subSectionScrollable}>
+        {/* 현재 가사 */}
+        <div className={styles.subSection}>
+          <h3 className={styles.subSectionTitle}>현재 가사</h3>
+          <div className={styles.settingItem}>
+            <span className={styles.settingLabel}>글꼴 종류</span>
+            <select className={styles.settingSelect}>
+              <option>기본</option>
+              <option>세리프</option>
+              <option>모노스페이스</option>
+            </select>
+          </div>
+          <div className={styles.settingItem}>
+            <span className={styles.settingLabel}>글꼴 크기</span>
+            <select className={styles.settingSelect}>
+              <option>작게</option>
+              <option>보통</option>
+              <option>크게</option>
+            </select>
+          </div>
+          <div className={styles.settingItem}>
+            <span className={styles.settingLabel}>글꼴 색상</span>
+            <input
+              id="fontColorPickerCurrent"
+              type="color"
+              className={styles.colorPicker}
+              value={lyricsFontColorCurrent}
+              onChange={handleFontColorChangeCurrent}
+              onBlur={handleFontColorCommitCurrent}
+              onMouseUp={handleFontColorCommitCurrent}
+            />
+          </div>
+        </div>
+
+        {/* 발음 가사 */}
+        <div className={styles.subSection}>
+          <h3 className={styles.subSectionTitle}>발음 가사</h3>
+          <div className={styles.settingItem}>
+            <span className={styles.settingLabel}>글꼴 종류</span>
+            <select className={styles.settingSelect}>
+              <option>기본</option>
+              <option>세리프</option>
+              <option>모노스페이스</option>
+            </select>
+          </div>
+          <div className={styles.settingItem}>
+            <span className={styles.settingLabel}>글꼴 크기</span>
+            <select className={styles.settingSelect}>
+              <option>작게</option>
+              <option>보통</option>
+              <option>크게</option>
+            </select>
+          </div>
+          <div className={styles.settingItem}>
+            <span className={styles.settingLabel}>글꼴 색상</span>
+            <input
+              id="fontColorPickerPronunciation"
+              type="color"
+              className={styles.colorPicker}
+              value={lyricsFontColorPronunciation}
+              onChange={handleFontColorChangePronunciation}
+              onBlur={handleFontColorCommitPronunciation}
+              onMouseUp={handleFontColorCommitPronunciation}
+            />
+          </div>
+        </div>
       </div>
-      <div>
-        <label>
-          글자 크기
-          <input type="range" min="10" max="40" defaultValue="16" />
-        </label>
-      </div>
-      <div>
-        <label>
-          글자 색상
-          <input type="color" defaultValue="#ffffff" />
-        </label>
-      </div>
-      <div>
-        <label>
-          <input type="checkbox" /> 테두리 효과
-        </label>
-      </div>
-    </div>
+    </>
   );
 };
 ```
@@ -739,46 +948,235 @@ export const FontStyleMenu: React.FC<FontStyleMenuProps> = ({ onBack }) => {
 ```typescript
 // 가사 디스플레이 상세 메뉴
 // src/components/karaoke-player-settings/LyricsDisplayMenu.tsx
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { BackButton } from '@components/common/BackButton';
 import styles from './MainMenu.module.css';
+import { ToggleSwitch } from '@components/common/ToggleSwitch';
+
+const STORAGE_KEYS = {
+  realtimeLyrics: 'realtimeLyrics',
+  announceLyrics: 'announceLyrics',
+  skipFirstLyrics: 'skipFirstLyrics',
+};
+
+const LYRICS_MODE_KEY = 'lyricsMode';
+const LYRICS_MODE = {
+  SYNC: 'sync',
+  FULL: 'full',
+};
+const labelToMode = {
+  '현재 가사만 보기': LYRICS_MODE.SYNC,
+  '전체 가사를 보기': LYRICS_MODE.FULL,
+} as const;
+
+type LyricsMode = (typeof LYRICS_MODE)[keyof typeof LYRICS_MODE];
 
 interface LyricsDisplayMenuProps {
   onBack: () => void;
 }
-export const LyricsDisplayMenu: React.FC<LyricsDisplayMenuProps> = ({ onBack }) => (
-  <div className={styles.submenuContainer}>
-    <div className={styles.horizontalHeader}>
-      <BackButton onClick={onBack} />
-      <h2 className={styles.menuTitle}>가사 디스플레이 설정</h2>
-    </div>
-    <div className={styles.menuItem}>
-      <label>
-        <input type="checkbox" /> 실시간 가사
-      </label>
-    </div>
 
-    <div className={styles.menuItem}>
-      <label>
-        <input type="checkbox" /> 발음 가사
-      </label>
-    </div>
+export const LyricsDisplayMenu: React.FC<LyricsDisplayMenuProps> = ({ onBack }) => {
+  // 기본 토글 상태 (false = off)
+  const [isRealtimeLyricsOn, setIsRealtimeLyricsOn] = useState(true);
+  const [isAnnounceLyricsOn, setIsAnnounceLyricsOn] = useState(true);
+  const [skipFirstLyrics, setSkipFirstLyrics] = useState(false);
 
-    <div className={styles.menuItem}>
-      가사 표시 방식
-      <select>
-        <option>인접 가사만 보기</option>
-        <option>전체 가사 보기</option>
-      </select>
-    </div>
+  // 가사 모드
+  const [lyricsMode, setLyricsMode] = useState<LyricsMode>('sync');
 
-    <div className={styles.menuItem}>
-      <label>
-        <input type="checkbox" /> 첫 가사 전주 건너뛰기
-      </label>
+  // 마운트시 스토리지에서 상태 불러오기
+  useEffect(() => {
+    chrome.storage.sync.get(
+      [STORAGE_KEYS.realtimeLyrics, STORAGE_KEYS.announceLyrics, STORAGE_KEYS.skipFirstLyrics, LYRICS_MODE_KEY],
+      (items) => {
+        if (items[STORAGE_KEYS.realtimeLyrics] !== undefined) setIsRealtimeLyricsOn(items[STORAGE_KEYS.realtimeLyrics]);
+        if (items[STORAGE_KEYS.announceLyrics] !== undefined) setIsAnnounceLyricsOn(items[STORAGE_KEYS.announceLyrics]);
+        if (items[STORAGE_KEYS.skipFirstLyrics] !== undefined) setSkipFirstLyrics(items[STORAGE_KEYS.skipFirstLyrics]);
+        if (items[LYRICS_MODE_KEY]) setLyricsMode(items[LYRICS_MODE_KEY]);
+      },
+    );
+  }, []);
+
+  // 체크박스 토글 상태 변화 핸들러
+  const handleToggleRealtimeLyrics = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const checked = e.target.checked;
+    setIsRealtimeLyricsOn(checked);
+    chrome.storage.sync.set({ realtimeLyrics: checked });
+  };
+
+  const handleToggleAnnounceLyrics = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setIsAnnounceLyricsOn(e.target.checked);
+    chrome.storage.sync.set({ [STORAGE_KEYS.announceLyrics]: e.target.checked });
+  };
+  const skipFirstLyricsToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSkipFirstLyrics(e.target.checked);
+    chrome.storage.sync.set({ [STORAGE_KEYS.skipFirstLyrics]: e.target.checked });
+  };
+
+  // select value 변경 핸들러
+  const handleLyricsModeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = labelToMode[e.target.value as keyof typeof labelToMode];
+    setLyricsMode(value);
+    chrome.storage.sync.set({ [LYRICS_MODE_KEY]: value });
+  };
+
+  return (
+    <>
+      <div className={styles.horizontalHeader}>
+        <BackButton onClick={onBack} />
+        <h2 className={styles.menuTitle}>가사 디스플레이</h2>
+      </div>
+
+      <hr className={styles.divider} />
+
+      <div className={styles.subSectionScrollable}>
+        <div className={styles.subSection}>
+          <div className={styles.lyricsMenuItem}>
+            <span>현재 가사</span>
+            <ToggleSwitch checked={isRealtimeLyricsOn} onChange={handleToggleRealtimeLyrics} />
+          </div>
+
+          <div className={styles.lyricsMenuItem}>
+            <span>발음 표시</span>
+            <ToggleSwitch checked={isAnnounceLyricsOn} onChange={handleToggleAnnounceLyrics} />
+          </div>
+
+          <div className={styles.lyricsMenuItem}>
+            <span>가사 방식</span>
+            <select
+              className={styles.settingSelect}
+              value={lyricsMode === 'full' ? '전체 가사를 보기' : '현재 가사만 보기'}
+              onChange={handleLyricsModeChange}
+            >
+              <option>현재 가사만 보기</option>
+              <option>전체 가사를 보기</option>
+            </select>
+          </div>
+
+          <div className={styles.lyricsMenuItem}>
+            <span>전주 자동 건너뛰기</span>
+            <ToggleSwitch checked={skipFirstLyrics} onChange={skipFirstLyricsToggle} />
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+```
+
+## File: components/karaoke-player-settings/LyricsOffsetControl.tsx
+```typescript
+import React, { useState, useRef, useEffect } from 'react';
+import styles from './MainMenu.module.css';
+
+interface LyricsOffsetControlProps {
+  initialOffset?: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  onChange?: (value: number) => void;
+}
+
+export const LyricsOffsetControl: React.FC<LyricsOffsetControlProps> = ({
+  initialOffset = 0,
+  min = -30,
+  max = 30,
+  step = 1,
+  onChange,
+}) => {
+  const [offset, setOffset] = useState(initialOffset);
+  const sliderRef = useRef<HTMLInputElement | null>(null);
+  const [thumbPos, setThumbPos] = useState(0);
+
+  const updateOffset = (newOffset: number) => {
+    const bounded = Math.max(min, Math.min(max, newOffset));
+    setOffset(bounded);
+    onChange?.(bounded);
+  };
+
+  const reset = () => updateOffset(0);
+
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    updateOffset(Number(e.target.value));
+  };
+
+  // 썸 위치 계산
+  useEffect(() => {
+    if (sliderRef.current) {
+      const slider = sliderRef.current;
+      const minVal = Number(slider.min);
+      const maxVal = Number(slider.max);
+      const ratio = (offset - minVal) / (maxVal - minVal);
+      const width = slider.offsetWidth;
+      setThumbPos(ratio * width);
+    }
+  }, [offset]);
+
+  return (
+    <div className={styles.lyricsOffsetContainer} style={{ padding: '12px 16px', position: 'relative' }}>
+      <span>가사 싱크 조절</span>
+      {/* 슬라이더 */}
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={offset}
+        onChange={handleSliderChange}
+        ref={sliderRef}
+        className={styles.slider}
+        style={{ width: '100%', marginTop: 35, marginBottom: 5 }}
+        aria-label="가사 싱크 조절 슬라이더"
+      />
+
+      {/* 슬라이더 아래 눈금 및 값 표시 */}
+      <div className={styles.sliderTicks} style={{ position: 'relative', width: '100%', height: 28 }}>
+        {/* 왼쪽: -30 */}
+        <span style={{ position: 'absolute', left: 0, top: 8, color: '#bbb', fontSize: 13 }}>-30</span>
+        {/* 중앙: 0 */}
+        <span
+          style={{
+            position: 'absolute',
+            left: '50%',
+            top: 8,
+            transform: 'translateX(-50%)',
+            color: '#bbb',
+            fontSize: 13,
+          }}
+        >
+          0
+        </span>
+        {/* 오른쪽: 30 */}
+        <span style={{ position: 'absolute', right: 0, top: 8, color: '#bbb', fontSize: 13 }}>30</span>
+        {/* 현재값 표시 (버튼, 썸 위치에 고정) */}
+        <button
+          type="button"
+          onClick={reset}
+          style={{
+            position: 'absolute',
+            left: thumbPos,
+            top: -45,
+            transform: 'translateX(-50%)',
+            background: '#fff',
+            color: '#666',
+            boxShadow: '0 1px 6px rgba(0,0,0,0.06)',
+            border: 'none',
+            borderRadius: 8,
+            padding: '3px 8px',
+            cursor: 'pointer',
+            fontWeight: 500,
+            fontSize: 13,
+            zIndex: 2,
+            transition: 'background 0.1s',
+          }}
+          aria-label="가사 싱크 0초로 초기화"
+        >
+          {offset > 0 ? `+${offset}` : offset}
+        </button>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 ```
 
 ## File: components/karaoke-player-settings/LyricsOffsetMenu.tsx
@@ -788,6 +1186,7 @@ export const LyricsDisplayMenu: React.FC<LyricsDisplayMenuProps> = ({ onBack }) 
 import { BackButton } from '@components/common/BackButton';
 import React from 'react';
 import styles from './MainMenu.module.css';
+import { LyricsOffsetControl } from './LyricsOffsetControl';
 
 interface LyricsOffsetMenuProps {
   onBack: () => void;
@@ -798,6 +1197,21 @@ export const LyricsOffsetMenu: React.FC<LyricsOffsetMenuProps> = ({ onBack }) =>
       <BackButton onClick={onBack} />
       <h2 className={styles.menuTitle}>가사 오프셋 설정</h2>
     </div>
+    <hr className={styles.divider} />
+    <LyricsOffsetControl
+      initialOffset={0}
+      min={-30}
+      max={30}
+      step={1}
+      onChange={(val) => {
+        console.log('싱크 조절 값:', val);
+        // 여기에 실제 싱크 조절 로직 연결
+      }}
+    />
+    <hr className={styles.divider} />
+    <p style={{ padding: '12px 16px', color: '#ccc', fontSize: 14 }}>
+      가사 자막의 타이밍이 맞지 않을 때, 여기서 미세 조절하세요.
+    </p>
   </div>
 );
 ```
@@ -805,55 +1219,77 @@ export const LyricsOffsetMenu: React.FC<LyricsOffsetMenuProps> = ({ onBack }) =>
 ## File: components/karaoke-player-settings/MainMenu.module.css
 ```css
 .container {
-  width: 240px;
-  background: rgba(28, 28, 28, 0.85);
+  min-width: 266px;
+  min-height: 220px;
+  max-width: 300px;
+  max-height: 300px;
+  background: rgba(28, 28, 28, 0.9);
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
   color: #fff;
-  padding: 20px;
-  border-radius: 8px;
+  padding: 0;
+  border-radius: 12px;
   border: 1px solid rgba(72, 72, 72, 0.5);
-  backdrop-filter: blur(8px);
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   user-select: none;
+}
+.submenuContainer {
+  width: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+.submenuContainer .menuTitle {
+  font-size: 1.2rem;
+  font-weight: 600;
+  text-align: center;
+  align-items: center; /* flex 안에서 수직 정렬 */
 }
 .horizontalHeader {
   display: flex;
   align-items: center; /* 수직 가운데 정렬 */
   gap: 8px; /* 아이콘과 제목 사이 간격 */
+  height: 50px;
 }
 .menuTitle {
-  font-weight: 600;
   font-size: 1.3rem;
-  margin-bottom: 12px;
-  text-align: center;
+  font-weight: 600;
+  margin: 0;
+  padding: 0;
+  line-height: 1.2;
+  /* 왼쪽 정렬 */
+  text-align: left;
 }
 
 .menuList {
   list-style: none;
   margin: 0;
   padding: 0;
+  font-size: 1;
 }
 
-.menuItem + .menuItem {
-  margin-top: 8px;
-}
-.menuItem {
-  font-size: 1.15em; /* 항목별로 조금 더 키울 수도 있음 */
-}
+
 .menuButton {
   all: unset;
-  display: block;
+  display: flex;
+  align-items: center;
   width: 100%;
-  padding: 12px 0;
+  height: 100%;
+  justify-content: space-between; /* 텍스트는 왼쪽, 아이콘은 오른쪽 끝 */
+  padding: 15px 5px;
   text-align: center;
   cursor: pointer;
-  border-radius: 5px;
   color: #fff;
   font-size: 1rem;
   background: transparent;
   transition: background-color 0.15s ease;
 }
-
+.menuButton svg {
+  width: 1em;
+  height: 1em;
+  margin-left: 8px; /* 텍스트와 화살표 간격 */
+}
 .menuButton:hover,
 .menuButton:focus-visible {
   background-color: rgba(255, 255, 255, 0.13);
@@ -862,60 +1298,38 @@ export const LyricsOffsetMenu: React.FC<LyricsOffsetMenuProps> = ({ onBack }) =>
 .menuButton:active {
   background-color: rgba(255, 255, 255, 0.22);
 }
+.menuButtonText {
+  font-size: 118%;
+  margin-left: 4px;
+  font-weight: 500;
+}
+
 /* 하위 메뉴 공통 스타일 */
-
-.submenuContainer {
-  display: flex;
-  flex-direction: column;
-}
-
-.backButton {
-  all: unset;
-  cursor: pointer;
-  color: #fff;
-  font-size: 1.1rem;
-  margin-bottom: 14px;
-  user-select: none;
-  padding: 4px 8px;
-  border-radius: 6px;
-  transition: background-color 0.15s ease;
-}
-
-.backButton:hover,
-.backButton:focus-visible {
-  background-color: rgba(255, 255, 255, 0.13);
-}
-
-.backButton:active {
-  background-color: rgba(255, 255, 255, 0.22);
-}
-
-.submenuContainer .menuTitle {
-  margin-bottom: 10px;
-  font-size: 1.2rem;
-  font-weight: 600;
-  text-align: center;
-}
-
 .menuItem {
-  margin-bottom: 10px;
-  font-size: 0.95rem;
+  display: flex;
+  justify-content: space-between; /* 좌우 분리 */
+  align-items: center; /* 수직 중앙정렬 */
+  padding: 0; /* 위아래 여백 */
+  font-size: 1.3rem; /* 본문 폰트 크기 */
+}
+
+.menuItem span {
+  margin-left: 26px;
+}
+.menuToggle {
+  margin-right: 26px; /* 원하는 만큼 여백 */
 }
 
 .menuItem label {
   cursor: pointer;
   user-select: none;
 }
-
-.menuItem input[type='checkbox'] {
-  margin-right: 8px;
-  cursor: pointer;
-}
-
 .menuItem select {
   margin-top: 4px;
-  width: 100%;
-  height: 30px;
+  margin-right: 26px;
+  width: 30%;
+  height: 20px;
+  justify-content: space-between;
   background: #444;
   border: none;
   color: #fff;
@@ -928,6 +1342,159 @@ export const LyricsOffsetMenu: React.FC<LyricsOffsetMenuProps> = ({ onBack }) =>
 .menuItem select:focus {
   outline: 2px solid #fff;
 }
+.divider {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.17); /* 또는 원하는 색상 */
+  margin: 8px 0; /* 상하 여백 */
+  width: 100%;
+}
+
+/**/
+.lyricsOffsetContainer {
+  color: #fff;
+  font-size: 1rem;
+}
+
+.controlButton {
+  background: rgba(255 255 255 / 0.1);
+  border: none;
+  border-radius: 4px;
+  font-size: 1.5rem;
+  color: #fff;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.controlButton:hover {
+  background: rgba(255 255 255 / 0.2);
+}
+
+.slider {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255 255 255 / 0.25);
+  cursor: pointer;
+  outline: none;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.slider::-webkit-slider-thumb:hover {
+  background: #ddd;
+}
+
+.slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.slider::-moz-range-thumb:hover {
+  background: #ddd;
+}
+
+.subSectionScrollable {
+  max-height: 190px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+/* 일반 섹션 */
+.subSection {
+  margin-left: 16px;
+  margin-bottom: 16px;
+}
+
+.subSectionTitle {
+  margin-left: 8px;
+  margin-bottom: 6px;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.settingItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 3px 10px 15px;
+  font-size: 1rem;
+}
+
+.settingLabel {
+  flex: 1 0 60px;
+  min-width: 60px;
+  font-size: 0.98em;
+}
+
+.settingSelect {
+  flex: 0 0 46%;
+  min-width: 95px;
+  max-width: 146px;
+  background: #444;
+  color: #fff;
+  border-radius: 5px;
+  border: none;
+  padding: 6px 10px;
+  font-size: 1em;
+  margin-left: 10px;
+  outline: none;
+  cursor: pointer;
+}
+.settingSelect:focus {
+  outline: 2px solid #fff;
+}
+
+/* color picker (input[type=color]) */
+.colorPicker {
+  margin-left: 10px;
+  width: 40px;
+  height: 30px;
+  border-radius: 6px;
+  border: none;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  box-shadow: none;
+}
+.colorPicker::-webkit-color-swatch {
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+}
+.colorPicker::-moz-color-swatch {
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+}
+.colorPicker::-ms-color-swatch {
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+}/* MainMenu.module.css */
+
+.lyricsMenuItem {
+  /* 기존 menuItem과 유사하되 padding만 달리 조정 */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 3px 10px 15px;
+  font-size: 1.25rem;
+  /* 필요한 스타일 추가 가능 */
+}
 ```
 
 ## File: components/karaoke-player-settings/MainMenu.tsx
@@ -938,8 +1505,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { LyricsDisplayMenu } from './LyricsDisplayMenu';
 import { FontStyleMenu } from './FontStyleMenu';
 import { AdvancedSettingsMenu } from './AdvancedSettingsMenu';
-import styles from './MainMenu.module.css';
 import { LyricsOffsetMenu } from './LyricsOffsetMenu';
+import { ArrowIcon } from '@components/icons/ArrowIcon';
+import styles from './MainMenu.module.css';
 
 interface Position {
   top: number;
@@ -994,31 +1562,32 @@ export const MainMenu: React.FC<MainMenuProps> = ({ visible, position, onClose }
       }}
     >
       {currentSubMenu === null && (
-        <>
-          <div className={styles.menuTitle}>설정</div>
-          <ul className={styles.menuList}>
-            <li className={styles.menuItem}>
-              <button className={styles.menuButton} onClick={() => setCurrentSubMenu('lyricsOffset')}>
-                가사 싱크 조절
-              </button>
-            </li>
-            <li className={styles.menuItem}>
-              <button className={styles.menuButton} onClick={() => setCurrentSubMenu('lyrics')}>
-                가사 디스플레이
-              </button>
-            </li>
-            <li className={styles.menuItem}>
-              <button className={styles.menuButton} onClick={() => setCurrentSubMenu('font')}>
-                글자(자막 스타일)
-              </button>
-            </li>
-            <li className={styles.menuItem}>
-              <button className={styles.menuButton} onClick={() => setCurrentSubMenu('advanced')}>
-                기타
-              </button>
-            </li>
-          </ul>
-        </>
+        <ul className={styles.menuList}>
+          <li className={styles.menuItem}>
+            <button className={styles.menuButton} onClick={() => setCurrentSubMenu('lyricsOffset')}>
+              <span className={styles.menuButtonText}>가사 싱크 조절</span>
+              <ArrowIcon direction="right" style={{ marginRight: 12 }} />
+            </button>
+          </li>
+          <li className={styles.menuItem}>
+            <button className={styles.menuButton} onClick={() => setCurrentSubMenu('lyrics')}>
+              <span className={styles.menuButtonText}>가사 디스플레이</span>
+              <ArrowIcon direction="right" style={{ marginRight: 12 }} />
+            </button>
+          </li>
+          <li className={styles.menuItem}>
+            <button className={styles.menuButton} onClick={() => setCurrentSubMenu('font')}>
+              <span className={styles.menuButtonText}>글꼴</span>
+              <ArrowIcon direction="right" style={{ marginRight: 12 }} />
+            </button>
+          </li>
+          <li className={styles.menuItem}>
+            <button className={styles.menuButton} onClick={() => setCurrentSubMenu('advanced')}>
+              <span className={styles.menuButtonText}>기타</span>
+              <ArrowIcon direction="right" style={{ marginRight: 12 }} />
+            </button>
+          </li>
+        </ul>
       )}
       {currentSubMenu === 'lyricsOffset' && <LyricsOffsetMenu onBack={() => setCurrentSubMenu(null)} />}
       {currentSubMenu === 'lyrics' && <LyricsDisplayMenu onBack={() => setCurrentSubMenu(null)} />}
@@ -1032,29 +1601,30 @@ export const MainMenu: React.FC<MainMenuProps> = ({ visible, position, onClose }
 ## File: components/karaoke-player-settings/MusicNoteButton.tsx
 ```typescript
 // MusicNoteButton.tsx
-import React from 'react';
+import React, { useRef } from 'react';
 import { useEffect } from 'react';
 import styles from './styles.module.css';
 
 interface Props {
   iconPath: string;
   contentEnabled: boolean;
+  menuVisible: boolean; // 추가된 prop
   onClick?: () => void;
 }
+export const MusicNoteButton: React.FC<Props> = ({ iconPath, contentEnabled, menuVisible, onClick }) => {
+  const btnRef = useRef<HTMLButtonElement | null>(null);
 
-export const MusicNoteButton: React.FC<Props> = ({ iconPath, contentEnabled, onClick }) => {
   useEffect(() => {
     const rightControls = document.querySelector('.ytp-right-controls');
     if (!rightControls || !contentEnabled) return;
-
     if (document.querySelector(`.${styles.musicNoteButton}`)) return;
 
     const captionsBtn = rightControls.querySelector('.ytp-subtitles-button');
     const settingsBtn = rightControls.querySelector('.ytp-settings-button');
-
     const btn = document.createElement('button');
+    btnRef.current = btn;
+
     btn.className = `${styles.musicNoteButton} ytp-button ytp-music-note-button`;
-    btn.title = '노트';
     btn.setAttribute('aria-label', '노트');
     btn.tabIndex = 0;
 
@@ -1062,32 +1632,50 @@ export const MusicNoteButton: React.FC<Props> = ({ iconPath, contentEnabled, onC
     iconImg.src = iconPath;
     iconImg.alt = 'music note';
     iconImg.className = styles.icon || '';
-
     btn.appendChild(iconImg);
 
-    btn.setAttribute('data-title', '노트');
+    btn.setAttribute('data-tooltip', '노트');
 
+    // 클릭 이벤트: toggle clicked 클래스 + onClick 호출
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
+      // 클릭 시 클래스 토글은 지금 상태와 메뉴 상태 때문에 불필요, 아래 useEffect로 상태 반영 권장
       onClick?.();
     });
 
+    // 외부 클릭 시 clicked 클래스 제거 (툴팁 숨김 해제용)
+    const handleBodyClick = (event: MouseEvent) => {
+      const target = event.target;
+      if (target instanceof Node && !btn.contains(target)) {
+        btn.classList.remove('clicked');
+      }
+    };
+
+    document.body.addEventListener('click', handleBodyClick);
+
     // 버튼 위치 지정
     if (captionsBtn) {
-      // 자막 버튼 바로 뒤(우측)에 삽입 (최우선)
       captionsBtn.after(btn);
     } else if (settingsBtn) {
-      // 설정 버튼 바로 뒤(우측)에 삽입 (차선)
       settingsBtn.after(btn);
     } else {
-      // 못 찾으면 맨 끝에 (append)
       rightControls.appendChild(btn);
     }
 
+    // Cleanup
     return () => {
       btn.remove();
+      document.body.removeEventListener('click', handleBodyClick);
     };
   }, [iconPath, contentEnabled, onClick]);
+
+  // menuVisible 상태에 따라 클래스와 data 속성 조절
+  useEffect(() => {
+    const btn = btnRef.current;
+    if (!btn) return;
+    btn.classList.toggle('clicked', menuVisible);
+    btn.setAttribute('data-menu-visible', menuVisible ? 'true' : 'false');
+  }, [menuVisible]);
 
   return null;
 };
@@ -1112,15 +1700,38 @@ export const MusicNoteButton: React.FC<Props> = ({ iconPath, contentEnabled, onC
 .musicNoteButton:hover {
   opacity: 1;
 }
+.musicNoteButton[data-tooltip]:hover:after {
+  /* 기본 툴팁 스타일 */
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 130%;
+  left: 68%;
+  transform: translateX(-50%);
+  background: rgba(32, 32, 32, 0.95);
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 5px;
+  font-size: 0.96em;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.13);
+  z-index: 10;
+}
+
+/* 클릭됐거나 메뉴 뜬 상태에서는 툴팁 숨김 */
+.musicNoteButton.clicked[data-tooltip]:after,
+.musicNoteButton[data-menu-visible="true"][data-tooltip]:after {
+  display: none !important;
+}
+
 .icon {
   width: 24px;
   height: 24px;
   margin: auto;
   display: block;
   pointer-events: none;
-  filter: brightness(0) invert(1)
-          drop-shadow(0 1px 0 rgba(32, 32, 32, 0.4))
-          drop-shadow(0 0px 2px #323232);
+  filter: brightness(0) invert(1) drop-shadow(0 1px 0 rgba(32, 32, 32, 0.4)) drop-shadow(0 0px 2px #323232);
   transition: filter 0.15s;
 }
 #my-custom-music-menu {
@@ -1151,146 +1762,137 @@ export const MusicNoteButton: React.FC<Props> = ({ iconPath, contentEnabled, onC
 }
 ```
 
-## File: components/lyrics/DualHighlightSubtitle.tsx
+## File: components/lyrics/FullLyricsView/FullLyricsView.tsx
 ```typescript
-import React from 'react';
-// import { parseLyrics } from '@lib/utils/lyricsParser';
-import { useCurrentTime } from '@hooks/useCurrentTime';
-import { getDisplayLines } from '@lib/utils/lyrics/lyricsDisplay';
+// src/components/lyrics/FullLyricsView/FullLyricsView.tsx
+import React, { useRef, useEffect } from 'react';
 import styles from './styles.module.css';
 import { Line } from '@lib/types/lyrics';
+import { useCurrentTime } from '@hooks/useCurrentTime';
 
-interface DualHighlightSubtitleProps {
+interface FullLyricsViewProps {
   lyrics: Line[];
   offset?: number;
+  scrollToCurrent?: boolean;
+  fontColor?: string;
 }
 
-export const DualHighlightSubtitle: React.FC<DualHighlightSubtitleProps> = ({ lyrics, offset }) => {
+export const FullLyricsView: React.FC<FullLyricsViewProps> = ({ lyrics, scrollToCurrent = true,  fontColor = '#FFFFFF'}) => {
   const currentTime = useCurrentTime();
-  const adjustedTime = currentTime - (offset ?? 0); // offset 사용!
-  const { top, bottom, highlightTop, highlightBottom } = getDisplayLines(lyrics, adjustedTime);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const activeLineIndex = lyrics.findIndex((line, i) => {
+    const next = lyrics[i + 1];
+    return currentTime >= line.time && (!next || currentTime < next.time);
+  });
+
+  // 현재 줄로 스크롤 (선택사항)
+  useEffect(() => {
+    if (!scrollToCurrent || activeLineIndex < 0) return;
+    const el = containerRef.current?.querySelector(`[data-lyric-idx="${activeLineIndex}"]`);
+    if (el && el instanceof HTMLElement) {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }, [activeLineIndex, scrollToCurrent]);
 
   return (
-    <div className={styles.dualHighlightSubtitle}>
-      <div className={highlightTop ? styles.highlight : ''}>{top}</div>
-      <div className={highlightBottom ? styles.highlight : ''}>{bottom}</div>
+    <div className={styles.fullLyricsContainer} ref={containerRef}>
+      {lyrics.map((line, idx) => (
+        <div
+          key={idx}
+          className={idx === activeLineIndex ? `${styles.lyricLine} ${styles.active}` : styles.lyricLine}
+          data-lyric-idx={idx}
+          style={{ color: fontColor }}
+        >
+          {line.text}
+        </div>
+      ))}
     </div>
   );
 };
 ```
 
-## File: components/lyrics/KaraokePlayerContainer/index.tsx
-```typescript
-// // components/lyrics/KaraokePlayerContainer/index.tsx
-// import { useEffect, useRef } from 'react';
-// import styles from './styles.module.css';
-
-// const KARAOKE_STYLES = `
-//   ytd-app { padding-top: 0 !important; }
-//   ytd-watch-flexy {
-//     width: 75% !important;
-//     height: calc(100vh - var(--header-height, 56px)) !important; /* 헤더 높이 고려 */
-//     position: fixed !important;
-//     top: var(--header-height, 56px) !important; /* 헤더 아래 시작 */
-//     left: 0 !important;
-//     z-index: 1000 !important;
-//     margin: 0 !important;
-//     padding: 0 !important;
-//   }
-
-//   #movie_player {
-//     width: 100% !important;
-//     height: 100% !important;
-//     position: relative !important;
-//   }
-//   #secondary { display: none !important; }
-//   body { overflow: hidden !important; }
-// `;
-
-// export const KaraokePlayerContainer = () => {
-//   const styleRef = useRef<HTMLStyleElement | null>(null);
-
-//   useEffect(() => {
-//     // 1. 기존 스타일 제거 (중복 주입 방지)
-//     if (styleRef.current) {
-//       document.head.removeChild(styleRef.current);
-//     }
-
-//     // 2. 새 스타일 요소 생성
-//     const style = document.createElement('style');
-//     style.id = 'karaoke-player-styles';
-//     style.textContent = KARAOKE_STYLES;
-//     document.head.appendChild(style);
-//     styleRef.current = style;
-
-//     // 3. YouTube DOM 변경 감지 (SPA 대응)
-//     const observer = new MutationObserver(() => {
-//       if (!document.querySelector('ytd-watch-flexy')) return;
-
-//       // 스타일 재주입
-//       if (style.parentNode !== document.head) {
-//         document.head.appendChild(style);
-//       }
-//     });
-
-//     observer.observe(document.body, {
-//       childList: true,
-//       subtree: true,
-//     });
-
-//     return () => {
-//       // 4. 정리 함수에서 스타일 제거 및 관찰 중지
-//       if (styleRef.current) {
-//         document.head.removeChild(styleRef.current);
-//       }
-//       observer.disconnect();
-//     };
-//   }, []);
-
-//   return <div className={styles.lyricsContainer}>가사 컨테이너</div>;
-// };
+## File: components/lyrics/FullLyricsView/styles.module.css
+```css
+.fullLyricsContainer {
+  position: absolute;
+  top: 0; left: 0; width: 100%;
+  height: -webkit-fill-available;
+  pointer-events: none; /* 클릭은 통과 */
+  overflow-y: auto;
+  background: rgba(24, 24, 24, 0.6);
+  border-radius: 16px;
+  padding: 32px 0;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE, Edge */
+}
+.fullLyricsContainer::-webkit-scrollbar {
+  /* Chrome/Safari */
+  display: none;
+}
+.lyricLine {
+  font-size: 1.3vw;
+  line-height: 2.2;
+  color: #f3f3f3;
+  font-weight: 500;
+  transition:
+    color 0.15s,
+    font-size 0.15s;
+  /* 기타 spacing, margin, etc */
+}
+.active {
+  color: #fff;
+  font-size: 1.65vw;
+  font-weight: 700;
+  background: linear-gradient(90deg, #357aff, #e91e63 80%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
 ```
 
-## File: components/lyrics/KaraokePlayerContainer/styles.module.css
+## File: components/lyrics/LyricsOverlayRoot.module.css
 ```css
-/* styles.module.css */
-.karaokePlayerContainer {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  width: 100vw !important;
-  height: 100vh !important;
-  z-index: 1500 !important; /* YouTube보다 낮게 */
-  background: transparent !important; /* ✅ 투명 배경 */
-  pointer-events: none !important; /* ✅ 기본적으로 클릭 차단 해제 */
-}
-
-.lyricsContainer {
-  position: fixed !important;
-  top: 0 !important;
-  right: 0 !important; /* ✅ 오른쪽 고정 */
-  width: 25% !important;
-  height: 100vh !important;
-  background: RED !important;
-  pointer-events: auto !important; /* ✅ 가사 영역만 클릭 가능 */
-  z-index: 2000 !important;
+.overlayRoot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100%; width: 100%;
+  pointer-events: none;
+  z-index: 20;
+  display: flex;
+  justify-content: center;
 }
 ```
 
 ## File: components/lyrics/LyricsOverlayRoot.tsx
 ```typescript
 import { YOUTUBE_PLAYER_SELECTOR } from '@constants/youtubeSelectors';
-import styles from './styles.module.css';
+import styles from './LyricsOverlayRoot.module.css';
 
 export function injectLyricsOverlayRoot() {
+  console.log('[injectLyricsOverlayRoot] 실행, 기존 root:', document.getElementById('lyrics-cc-overlay'));
+
   let overlay = document.getElementById('lyrics-cc-overlay');
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = 'lyrics-cc-overlay';
     overlay.className = styles.overlayRoot!;
 
-    const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR);
+    const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR) as HTMLElement | null;
+
     if (player) {
+      // 부모 요소 position 체크 및 relative 지정 (필수)
+      const computedStyle = getComputedStyle(player);
+      if (computedStyle.position === 'static' || !computedStyle.position) {
+        player.style.position = 'relative';
+        console.log('[LyricsOverlayRoot] #movie_player에 position: relative 설정');
+      }
+
       player.appendChild(overlay);
       console.log('[LyricsOverlayRoot] 오버레이 루트 DOM 삽입 성공');
     } else {
@@ -1303,63 +1905,56 @@ export function injectLyricsOverlayRoot() {
 }
 ```
 
-## File: components/lyrics/LyricsSidebar/index.tsx
+## File: components/lyrics/SyncLyricsDisplay/DualHighlightSubtitle.tsx
 ```typescript
-// components/lyrics/LyricsSidebar/index.tsx
-// import React from 'react';
-// import MenuTabs from './MenuTabs';
-// import LyricsPanel from './LyricsPanel';
+import React, { useEffect } from 'react';
+import { useCurrentTime } from '@hooks/useCurrentTime';
+import { getDisplayLines } from '@lib/utils/lyrics/lyricsDisplay';
+import { Line } from '@lib/types/lyrics';
+import styles from './styles.module.css';
 
-// export const LyricsSidebar: React.FC = () => {
-//   return (
-//     <div className="lyrics-sidebar">
-//       {/* <MenuTabs />
-//       <LyricsPanel /> */}
-//     </div>
-//   );
-// };
-```
-
-## File: components/lyrics/LyricsSidebar/LyricsPanel.tsx
-```typescript
-// // components/lyrics/LyricsSidebar/LyricsPanel.tsx
-// import React from 'react';
-// import LyricsItem from '../../LyricsItem';
-
-// type LyricsType = { text: string; id: string };
-
-// const LyricsPanel: React.FC<{ lyrics?: LyricsType[] }> = ({ lyrics = [] }) => {
-//   return (
-//     <div className="lyrics-panel">
-//       {lyrics.map((line) => (
-//         <LyricsItem key={line.id} text={line.text} />
-//       ))}
-//     </div>
-//   );
-// };
-
-// export default LyricsPanel;
-```
-
-## File: components/lyrics/styles.module.css
-```css
-#lyrics-cc-overlay {
-  position: absolute !important;
-  left: 0 !important;
-  right: 0 !important;
-  bottom: 10% !important;
-  width: 100% !important;
-  pointer-events: none !important;
-  z-index: 3000 !important;
-  display: flex !important;
-  justify-content: center !important;
+interface DualHighlightSubtitleProps {
+  lyrics: Line[];
+  offset?: number;
+  fontColor?: string;
 }
+
+export const DualHighlightSubtitle: React.FC<DualHighlightSubtitleProps> = ({
+  lyrics,
+  offset,
+  fontColor = '#FFFFFF',
+}) => {
+  const currentTime = useCurrentTime();
+  const adjustedTime = currentTime - (offset ?? 0); // offset 사용!
+  const { top, bottom, highlightTop, highlightBottom } = getDisplayLines(lyrics, adjustedTime);
+  useEffect(() => {
+    console.log('[DualHighlightSubtitle] fontColor prop 변경:', fontColor);
+    // DOM에 실제 적용되는 style 로그
+    const el = document.getElementById('some-lyrics-elem-id');
+    if (el) console.log('[DualHighlightSubtitle] 실제 DOM color:', getComputedStyle(el).color);
+  }, [fontColor]);
+
+  return (
+    <div className={styles.dualHighlightSubtitle} style={{ color: fontColor }}>
+      <div className={highlightTop ? styles.highlight : ''}>{top}</div>
+      <div className={highlightBottom ? styles.highlight : ''}>{bottom}</div>
+    </div>
+  );
+};
+```
+
+## File: components/lyrics/SyncLyricsDisplay/styles.module.css
+```css
 .dual-highlight-subtitle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 70px; /* 하단바 위에 적절한 거리만큼 (조정 가능: 60~96px 등) */
   display: flex;
+  height: 2em;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  height: 2em;
   font-size: 2vw;
   line-height: 1.4;
   color: #fff;
@@ -1373,9 +1968,8 @@ export function injectLyricsOverlayRoot() {
   white-space: nowrap;
   text-align: center;
   transition: all 0.3s ease;
-  font-weight: bold; /* 굵게 */
+  font-weight: bold;
 }
-
 .animated {
   /* 왼쪽에서 오른쪽으로 빨간색이 채워지는 효과 */
   background: linear-gradient(to right, red 50%, #fff 50%);
@@ -1388,25 +1982,17 @@ export function injectLyricsOverlayRoot() {
 }
 
 @keyframes revealText {
-  0% { background-position: right bottom; }
-  100% { background-position: left bottom; }
+  0% {
+    background-position: right bottom;
+  }
+  100% {
+    background-position: left bottom;
+  }
 }
 
 /* 이미 부른 줄 (전체 빨간색) */
 .past {
   color: red;
-}
-
-.overlayRoot {
-  position: absolute !important;
-  left: 0 !important;
-  right: 0 !important;
-  bottom: 10% !important;
-  width: 100% !important;
-  pointer-events: none !important;
-  z-index: 3000 !important;
-  display: flex !important;
-  justify-content: center !important;
 }
 ```
 
@@ -1659,21 +2245,24 @@ export function App() {
   }, []);
 
   const [contentEnabled] = useChromeStorage('contentEnabled', true);
+
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
-  const MENU_HEIGHT = 200; // 원하는 메뉴 높이(px)
+
+  const MENU_WIDTH = 266;
+  const MENU_HEIGHT = 257;
 
   const handleMusicNoteClick = () => {
     const btn = document.querySelector('.ytp-music-note-button');
     if (btn) {
       const rect = btn.getBoundingClientRect();
-
       setMenuPosition({
-        left: rect.left + rect.width / 2 + window.scrollX, // 수평 중앙
-        top: rect.bottom + window.scrollY - MENU_HEIGHT - 100,
+        left: rect.left + rect.width / 2 + window.scrollX - MENU_WIDTH / 2,
+        top: rect.bottom + window.scrollY - MENU_HEIGHT - 30,
       });
+
+      setMenuVisible((v) => !v);
     }
-    setMenuVisible((v) => !v);
   };
 
   return (
@@ -1682,6 +2271,7 @@ export function App() {
         <MusicNoteButton
           iconPath={chrome.runtime.getURL('assets/icons/music_note.png')}
           contentEnabled={contentEnabled}
+          menuVisible={menuVisible}
           onClick={handleMusicNoteClick}
         />
       )}
@@ -1796,7 +2386,8 @@ import { cleanTopicName, extractArtistAndTitleCustom, preprocessArtistOrTitle } 
 import { listenerManager } from '@lib/utils/infra/listenerManager';
 import { withContentEnabled } from '@lib/utils/platform/contentGuard';
 import { injectLyricsOverlayRoot } from '@components/lyrics/LyricsOverlayRoot';
-import { DualHighlightSubtitle } from '@components/lyrics/DualHighlightSubtitle';
+import { DualHighlightSubtitle } from '@components/lyrics/SyncLyricsDisplay/DualHighlightSubtitle';
+import { FullLyricsView } from '@components/lyrics/FullLyricsView/FullLyricsView';
 import { isAdPlaying } from '@lib/utils/dom/domUtils';
 import { parseLyrics } from '@lib/utils/lyrics/lyricsParser';
 import { Line } from '@lib/types/lyrics';
@@ -1806,7 +2397,6 @@ import { normalizeLyricsQuery } from '@lib/utils/lyrics/queryNormalizer';
 import { getLyricsFromCacheOrFetch } from '@lib/utils/lyrics/getLyricsFromCacheOrFetch';
 import { fetchLyricsWithAliasFallback } from '@background/api/lyrics';
 import 'normalize.css';
-// import { detectMusicStart } from '@lib/utils/audio/audioAnalysis';
 import { cleanupMediaElementSource } from '@lib/utils/audio/audio';
 import { startAdWatcher } from '@lib/utils/infra/adWatcher';
 //import { detectLyricsLanguage } from '@lib/utils/lyrics/languageDetector';
@@ -1829,11 +2419,22 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
   let lyricsOverlayRoot: Root | null = null; // 렌더링된 root 인스턴스 보관
   let lyricsOverlayElement: HTMLElement | null = null;
   let lastUrl = window.location.href;
+
+  // font
+  let lyricsFontColorCurrent = '#FFFFFF';
+  let lyricsFontColorPronunciation = '#FFFFFF';
+  let isOverlayInitializing = false;
+
+  let showRealtimeLyrics = true; // 현재 가사 ui 보이게
+  let lyricsMode: 'sync' | 'full' = 'sync';
+
   let stopAdWatcher: (() => void) | null = null;
 
   // 중복 가사 호출 방지
   let lastCollectedVideoId: string | null = null;
   let isCollecting = false;
+
+  // 가사 모드
 
   const getContentEnabled = () => contentEnabled;
   const uiManager = new UIResourceManager();
@@ -1901,44 +2502,213 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     document.head.appendChild(link);
   };
 
+  // DOM 및 React root 생성 함수, 호출 시 existing overlay DOM 체크
+  function createOverlayRoot(): void {
+    injectCSS(); // CSS 한번만 주입
+
+    lyricsOverlayElement = injectLyricsOverlayRoot();
+
+    if (!lyricsOverlayRoot) {
+      lyricsOverlayRoot = createRoot(lyricsOverlayElement);
+      console.log('[createOverlayRoot] React Root 생성 완료');
+    }
+  }
+
+  function initListenersAndState() {
+    // 초기값 읽기
+    chrome.storage.sync.get(
+      ['lyricsFontColorCurrent', 'realtimeLyrics', 'lyricsMode', 'lyricsFontColorPronunciation'],
+      (items) => {
+        if (typeof items.lyricsFontColorCurrent === 'string') {
+          lyricsFontColorCurrent = items.lyricsFontColorCurrent;
+        }
+        if (typeof items.lyricsFontColorPronunciation === 'string') {
+          lyricsFontColorPronunciation = items.lyricsFontColorPronunciation;
+        }
+
+        // 기타 상태 초기화
+        showRealtimeLyrics = typeof items.realtimeLyrics === 'boolean' ? items.realtimeLyrics : showRealtimeLyrics;
+        lyricsMode = ['sync', 'full'].includes(items.lyricsMode) ? items.lyricsMode : lyricsMode;
+
+        // 최초 렌더 호출
+        if (latestLyrics.length > 0) {
+          rerenderLyricsOverlay();
+        }
+      },
+    );
+    // 2. 저장소 변경 감지 - 실시간 업데이트
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName !== 'sync') return;
+
+      let needRerender = false;
+      console.log('[storage.onChanged] 변경 감지됨:', changes);
+
+      if ('realtimeLyrics' in changes) {
+        showRealtimeLyrics = changes.realtimeLyrics.newValue;
+        console.log('[storage.onChanged] realtimeLyrics 변경:', showRealtimeLyrics);
+
+        needRerender = true;
+      }
+      if ('lyricsMode' in changes) {
+        lyricsMode = changes.lyricsMode.newValue;
+        console.log('[storage.onChanged] lyricsMode 변경:', lyricsMode);
+        needRerender = true;
+      }
+      if ('lyricsFontColorCurrent' in changes) {
+        const newColor = changes.lyricsFontColorCurrent.newValue;
+        console.log('[storage.onChanged] lyricsFontColorCurrent 변경:', newColor);
+
+        if (typeof newColor === 'string' && newColor !== lyricsFontColorCurrent) {
+          lyricsFontColorCurrent = newColor;
+          needRerender = true;
+        }
+      }
+      if ('lyricsFontColorPronunciation' in changes) {
+        const newColor = changes.lyricsFontColorPronunciation.newValue;
+        console.log('[storage.onChanged] lyricsFontColorPronunciation 변경:', newColor);
+
+        if (typeof newColor === 'string' && newColor !== lyricsFontColorPronunciation) {
+          lyricsFontColorPronunciation = newColor;
+          needRerender = true;
+        }
+      }
+
+      if (needRerender) {
+        console.log('[storage.onChanged] 상태 변경 반영 위해 rerenderLyricsOverlay 호출');
+        rerenderLyricsOverlay();
+      }
+    });
+  }
+  function onLyricsUpdated(newLyrics: Line[]) {
+    latestLyrics = newLyrics;
+    rerenderLyricsOverlay();
+  }
+
   function hideLyricsOverlay() {
     const overlay = document.getElementById('lyrics-cc-overlay');
     if (overlay && overlay.parentNode) {
       overlay.parentNode.removeChild(overlay); // 1. 오버레이 DOM 완전 제거
       console.log('[hideLyricsOverlay] lyrics-cc-overlay 제거');
+      lyricsOverlayRoot = null; // 2. React Root 인스턴스 해제
+      lyricsOverlayElement = null; // 3. 전역 DOM 참조 변수 초기화
     }
-    lyricsOverlayRoot = null; // 2. React Root 인스턴스 해제
-    lyricsOverlayElement = null; // 3. 전역 DOM 참조 변수 초기화
   }
 
+  // sync 가사만 랜더링 함.
   function showLyricsOverlay(lyrics: Line[], offset?: number) {
-    if (!lyricsOverlayElement) {
-      injectCSS();
-      console.log('[showLyricsOverlay] injectCSS 호출');
-      lyricsOverlayElement = injectLyricsOverlayRoot();
-      lyricsOverlayElement.style.display = '';
+    if (!lyricsOverlayElement || !lyricsOverlayRoot) {
+      createOverlayRoot();
     }
-    // React Root 인스턴스도 한 번만 생성
-    if (!lyricsOverlayRoot) {
+
+    if (!lyricsOverlayElement) {
+      console.warn('[showLyricsOverlay] lyricsOverlayElement가 없음, 함수 종료');
+      return;
+    }
+    lyricsOverlayElement.style.display = '';
+
+    if (lyricsMode !== 'sync') {
+      return;
+    }
+    if (!showRealtimeLyrics) {
+      console.log('[showLyricsOverlay] showRealtimeLyrics false, hideLyricsOverlay 호출');
+      hideLyricsOverlay();
+      return;
+    }
+    // React Root 인스턴스가 없으면 (예외 상황) 생성 (평상시 createOverlayRoot에서 처리되어야 함)
+    if (!lyricsOverlayRoot && lyricsOverlayElement) {
       lyricsOverlayRoot = createRoot(lyricsOverlayElement);
     }
 
-    lyricsOverlayRoot.render(<DualHighlightSubtitle lyrics={lyrics} offset={offset} />);
+    if (!lyricsOverlayRoot) {
+      console.warn('[showLyricsOverlay] lyricsOverlayRoot가 없음, 렌더링 불가');
+      return;
+    }
+
+    lyricsOverlayRoot.render(
+      <DualHighlightSubtitle lyrics={lyrics} offset={offset} fontColor={lyricsFontColorCurrent} />,
+    );
+  }
+  // 현재 가사/전체 가사의 분기 함수
+  // full 모드 전용
+  function rerenderLyricsOverlay() {
+    console.log('[rerenderLyricsOverlay] 호출됨, 상태:', {
+      lyricsOverlayElement,
+      lyricsOverlayRoot,
+      showRealtimeLyrics,
+      lyricsMode,
+      latestLyricsLength: latestLyrics.length,
+      lyricsFontColorCurrent,
+      lyricsFontColorPronunciation,
+    });
+
+    // [1] overlay, root 둘 중 하나라도 없으면 반드시 비동기 fetch-storage 후 render!
+    if (!lyricsOverlayElement || !lyricsOverlayRoot) {
+      if (isOverlayInitializing) {
+        console.log('[rerenderLyricsOverlay] 초기화 중 중복 호출 무시');
+        return;
+      }
+      isOverlayInitializing = true;
+
+      injectCSS();
+      createOverlayRoot();
+
+      chrome.storage.sync.get(['lyricsFontColorCurrent', 'lyricsFontColorPronunciation'], (items) => {
+        console.log('[rerenderLyricsOverlay] storage.get 결과:', items);
+
+        if (typeof items.lyricsFontColorCurrent === 'string') {
+          lyricsFontColorCurrent = items.lyricsFontColorCurrent;
+        } else {
+          console.log(
+            '[rerenderLyricsOverlay] lyricsFontColorCurrent가 저장소에 없음, 디폴트 사용:',
+            lyricsFontColorCurrent,
+          );
+        }
+
+        if (typeof items.lyricsFontColorPronunciation === 'string') {
+          lyricsFontColorPronunciation = items.lyricsFontColorPronunciation;
+        } else {
+          console.log(
+            '[rerenderLyricsOverlay] lyricsFontColorPronunciation가 저장소에 없음, 디폴트 사용:',
+            lyricsFontColorPronunciation,
+          );
+        }
+        realOverlayRender(); // storage fetch 완료 후 렌더 호출
+        isOverlayInitializing = false;
+      });
+      return;
+    }
+    realOverlayRender();
   }
 
-  function showLyricsIfNotAd(lyrics: Line[], offset?: number) {
-    if (isAdPlaying()) {
+  function realOverlayRender() {
+    if (!showRealtimeLyrics) {
       hideLyricsOverlay();
+      return;
+    }
+    if (!lyricsOverlayRoot) {
+      console.warn('[realOverlayRender] lyricsOverlayRoot가 없습니다.');
+      return;
+    }
+
+    if (lyricsMode === 'full') {
+      lyricsOverlayRoot.render(<FullLyricsView lyrics={latestLyrics} fontColor={lyricsFontColorCurrent} />);
+    } else if (lyricsMode === 'sync') {
+      lyricsOverlayRoot.render(<DualHighlightSubtitle lyrics={latestLyrics} fontColor={lyricsFontColorCurrent} />);
     } else {
-      showLyricsOverlay(lyrics, offset);
+      console.warn('[realOverlayRender] 알 수 없는 lyricsMode:', lyricsMode);
+      hideLyricsOverlay();
     }
   }
 
+  //rerenderLyricsOverlay() 호출해서 현재 모드에 맞게 "무엇을 보여줄지" 판단.
   function renderLyricsOverlay(lyrics: Line[]) {
     const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR);
     if (!player) return;
 
+    console.log('[renderLyricsOverlay] 호출됨, lyrics 길이:', lyrics.length);
+
     latestLyrics = lyrics;
+    rerenderLyricsOverlay();
 
     const lyricsStr = JSON.stringify(lyrics);
     if (lastRenderedLyrics === lyricsStr) return;
@@ -1949,14 +2719,36 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       detectionObserverManager.lyricsObserver.disconnect();
       detectionObserverManager.lyricsObserver = null;
     }
+    if (!showRealtimeLyrics) {
+      hideLyricsOverlay();
+      return;
+    }
     // 최신 lyrics를 클로저로 안전하게 캡처
     detectionObserverManager.lyricsObserver = new MutationObserver(() => {
-      showLyricsIfNotAd(latestLyrics);
+      console.log('[MutationObserver] 호출됨, 현재 lyricsMode:', lyricsMode, 'showRealtimeLyrics:', showRealtimeLyrics);
+      if (lyricsMode === 'sync' && showRealtimeLyrics) {
+        showLyricsIfNotAd(latestLyrics);
+      } else {
+        rerenderLyricsOverlay();
+      }
     });
 
     detectionObserverManager.lyricsObserver.observe(player, { attributes: true, attributeFilter: ['class'] });
     showLyricsIfNotAd(lyrics);
   }
+
+  function showLyricsIfNotAd(lyrics: Line[], offset?: number) {
+    if (isAdPlaying()) {
+      hideLyricsOverlay();
+    } else {
+      if (lyricsMode === 'sync') {
+        showLyricsOverlay(lyrics, offset);
+      } else if (lyricsMode === 'full') {
+        rerenderLyricsOverlay();
+      }
+    }
+  }
+
   function shiftFirstLyricEarlier(lyrics: Line[], advanceSec: number): Line[] {
     if (!lyrics || lyrics.length === 0) return lyrics;
     const [first, ...rest] = lyrics;
@@ -2044,6 +2836,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     const shiftedLyrics = shiftFirstLyricEarlier(parsedLyrics, 3);
 
     latestLyrics = shiftedLyrics;
+    onLyricsUpdated(shiftedLyrics);
 
     // shiftedLyrics: Line[] 배열 (각 원소에 'text'가 있다고 가정)
     //const lyricsText = shiftedLyrics.map((line) => line.text).join('\n');
@@ -2071,12 +2864,10 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
 
     const durationSec = videoDurationSec - effectiveLyricsDuration;
 
-    if (durationSec <= 0) {
-      console.warn(
-        `[analyzeAudioAndRenderLyrics] 분석 스킵: 영상 길이(${videoDurationSec}s) - 가사 길이(${effectiveLyricsDuration}s) <= 0`,
-      );
-      hideLyricsOverlay();
-      return;
+    if (durationSec <= 0 || durationSec >= 4) {
+      console.log(`영상 길이(${videoDurationSec}s) - 가사 길이(${effectiveLyricsDuration}s) 얼마 차이 안 남.`);
+    } else {
+      console.log('싱크 오류 가능성 높음.');
     }
 
     if (isAdPlaying()) {
@@ -2088,31 +2879,8 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     // 중복 audio source 연결 방지 및 안전한 초기화
     cleanupMediaElementSource(videoElem);
 
-    try {
-      // // detectMusicStart 호출 -> 음악 시작 offset 탐지
-      // const analysisResult = await detectMusicStart(videoElem, {
-      //   threshold: 0.07,
-      //   requiredContinuousFrames: 6,
-      // });
-
-      // const musicStartOffset = analysisResult?.timestamp ?? 0;
-      // console.log('[detectMusicStart] 음악 시작점 offset:', musicStartOffset, '초');
-
-      // // 가사 타임에 offset 적용
-      // const applyOffsetToLyrics = (lyrics: Line[], offset: number): Line[] =>
-      //   lyrics.map((line) => ({
-      //     ...line,
-      //     time: Math.max(0, line.time + offset),
-      //   }));
-
-      // const offsettedLyrics = applyOffsetToLyrics(shiftedLyrics, musicStartOffset);
-
-      latestLyrics = shiftedLyrics;
-      renderLyricsOverlay(shiftedLyrics);
-    } catch (error) {
-      console.warn('[analyzeAudioAndRenderLyrics] 분석 실패:', error);
-      // 실패 시 자막 감춤 또는 기본 렌더로 유지할 수 있음
-    }
+    latestLyrics = shiftedLyrics;
+    renderLyricsOverlay(shiftedLyrics);
   }
 
   async function tryCollectMetadataAndLyrics(videoId: string) {
@@ -2296,18 +3064,6 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     console.log('[Detection] 감지 시스템 완전 비활성화');
   };
 
-  // function setupKaraokeContainer() {
-  //   let karaokeRoot = document.getElementById('karaoke-root');
-  //   if (!karaokeRoot) {
-  //     karaokeRoot = document.createElement('div');
-  //     karaokeRoot.id = 'karaoke-root';
-  //     document.body.appendChild(karaokeRoot);
-  //     uiManager.register(karaokeRoot);
-  //   }
-  //   const karaokeRootInstance = createRoot(karaokeRoot);
-  //   //karaokeRootInstance.render(<KaraokePlayerContainer />);
-  // }
-
   // 에러 바운더리 리셋 핸들러
   const handleReset = () => {
     window.location.reload();
@@ -2330,8 +3086,8 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
         </ErrorBoundary>,
       );
 
-      // 가라오케/가사 컨테이너 준비 및 렌더링
-      // setupKaraokeContainer();
+      // 호출 전 반드시 한 번 실행 필요! (예: index.tsx 엔트리 포인트 초기에 호출)
+      initListenersAndState();
 
       // 초기 URL 감지 및 UI/감지 시스템 활성화
       handleUrlChangeGuarded(window.location.href);

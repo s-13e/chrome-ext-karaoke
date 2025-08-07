@@ -1,20 +1,13 @@
-#lyrics-cc-overlay {
-  position: absolute !important;
-  left: 0 !important;
-  right: 0 !important;
-  bottom: 10% !important;
-  width: 100% !important;
-  pointer-events: none !important;
-  z-index: 25 !important;
-  display: flex !important;
-  justify-content: center !important;
-}
 .dual-highlight-subtitle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 70px; /* 하단바 위에 적절한 거리만큼 (조정 가능: 60~96px 등) */
   display: flex;
+  height: 2em;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  height: 2em;
   font-size: 2vw;
   line-height: 1.4;
   color: #fff;
@@ -28,9 +21,8 @@
   white-space: nowrap;
   text-align: center;
   transition: all 0.3s ease;
-  font-weight: bold; /* 굵게 */
+  font-weight: bold;
 }
-
 .animated {
   /* 왼쪽에서 오른쪽으로 빨간색이 채워지는 효과 */
   background: linear-gradient(to right, red 50%, #fff 50%);
@@ -43,23 +35,15 @@
 }
 
 @keyframes revealText {
-  0% { background-position: right bottom; }
-  100% { background-position: left bottom; }
+  0% {
+    background-position: right bottom;
+  }
+  100% {
+    background-position: left bottom;
+  }
 }
 
 /* 이미 부른 줄 (전체 빨간색) */
 .past {
   color: red;
-}
-
-.overlayRoot {
-  position: absolute !important;
-  left: 0 !important;
-  right: 0 !important;
-  bottom: 10% !important;
-  width: 100% !important;
-  pointer-events: none !important;
-  z-index: 25 !important;
-  display: flex !important;
-  justify-content: center !important;
 }

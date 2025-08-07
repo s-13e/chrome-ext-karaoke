@@ -1,0 +1,49 @@
+// src/components/lyrics/FullLyricsView/FullLyricsView.tsx
+import React, { useRef, useEffect } from 'react';
+import styles from './styles.module.css';
+import { Line } from '@lib/types/lyrics';
+import { useCurrentTime } from '@hooks/useCurrentTime';
+
+interface FullLyricsViewProps {
+  lyrics: Line[];
+  offset?: number;
+  scrollToCurrent?: boolean;
+  fontColor?: string;
+}
+
+export const FullLyricsView: React.FC<FullLyricsViewProps> = ({
+  lyrics,
+  scrollToCurrent = true,
+  fontColor = '#FFFFFF',
+}) => {
+  const currentTime = useCurrentTime();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const activeLineIndex = lyrics.findIndex((line, i) => {
+    const next = lyrics[i + 1];
+    return currentTime >= line.time && (!next || currentTime < next.time);
+  });
+
+  // 현재 줄로 스크롤 (선택사항)
+  useEffect(() => {
+    if (!scrollToCurrent || activeLineIndex < 0) return;
+    const el = containerRef.current?.querySelector(`[data-lyric-idx="${activeLineIndex}"]`);
+    if (el && el instanceof HTMLElement) {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }, [activeLineIndex, scrollToCurrent]);
+
+  return (
+    <div className={styles.fullLyricsContainer} ref={containerRef}>
+      {lyrics.map((line, idx) => (
+        <div
+          key={idx}
+          className={idx === activeLineIndex ? `${styles.lyricLine} ${styles.active}` : styles.lyricLine}
+          data-lyric-idx={idx}
+          style={{ color: fontColor }}
+        >
+          {line.text}
+        </div>
+      ))}
+    </div>
+  );
+};
