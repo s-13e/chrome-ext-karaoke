@@ -17,8 +17,8 @@ export const LyricsOffsetMenu: React.FC<LyricsOffsetMenuProps> = ({ onBack }) =>
     <hr className={styles.divider} />
     <LyricsOffsetControl
       initialOffset={0}
-      min={-30}
-      max={30}
+      min={-15}
+      max={15}
       step={1}
       onChange={(val) => {
         console.log('싱크 조절 값:', val);

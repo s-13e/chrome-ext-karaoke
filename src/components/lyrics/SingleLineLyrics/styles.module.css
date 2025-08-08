@@ -1,0 +1,15 @@
+.singleLineSubtitle {
+  position: absolute;
+  bottom: 80px; /* 유튜브 플레이어 하단 바 위쪽 적절 위치, 필요시 조정 */
+  width: 100%;
+  text-align: center;
+  font-size: 2vw;
+  font-weight: 600;
+  text-shadow:
+    2px 2px 4px rgba(0, 0, 0, 0.75);
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+  color: #fff;
+  z-index: 100;
+}

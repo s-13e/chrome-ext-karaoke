@@ -19,8 +19,8 @@ import { cleanTopicName, extractArtistAndTitleCustom, preprocessArtistOrTitle } 
 import { listenerManager } from '@lib/utils/infra/listenerManager';
 import { withContentEnabled } from '@lib/utils/platform/contentGuard';
 import { injectLyricsOverlayRoot } from '@components/lyrics/LyricsOverlayRoot';
-import { DualHighlightSubtitle } from '@components/lyrics/SyncLyricsDisplay/DualHighlightSubtitle';
-import { FullLyricsView } from '@components/lyrics/FullLyricsView/FullLyricsView';
+import { DualHighlightLyrics } from '@components/lyrics/SyncLyrics/DualHighlightLyrics';
+import { FullLyrics } from '@components/lyrics/FullLyrics/FullLyrics';
 import { isAdPlaying } from '@lib/utils/dom/domUtils';
 import { parseLyrics } from '@lib/utils/lyrics/lyricsParser';
 import { Line } from '@lib/types/lyrics';
@@ -60,6 +60,8 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
 
   let showRealtimeLyrics = true; // 현재 가사 ui 보이게
   let lyricsMode: 'sync' | 'full' = 'sync';
+  let lastLyricsMode: 'sync' | 'full' | null = null;
+  let lastShowRealtimeLyrics: boolean | null = null;
 
   let stopAdWatcher: (() => void) | null = null;
 
@@ -258,7 +260,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     }
 
     lyricsOverlayRoot.render(
-      <DualHighlightSubtitle lyrics={lyrics} offset={offset} fontColor={lyricsFontColorCurrent} />,
+      <DualHighlightLyrics lyrics={lyrics} offset={offset} fontColor={lyricsFontColorCurrent} />,
     );
   }
   // 현재 가사/전체 가사의 분기 함수
@@ -324,9 +326,9 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     }
 
     if (lyricsMode === 'full') {
-      lyricsOverlayRoot.render(<FullLyricsView lyrics={latestLyrics} fontColor={lyricsFontColorCurrent} />);
+      lyricsOverlayRoot.render(<FullLyrics lyrics={latestLyrics} fontColor={lyricsFontColorCurrent} />);
     } else if (lyricsMode === 'sync') {
-      lyricsOverlayRoot.render(<DualHighlightSubtitle lyrics={latestLyrics} fontColor={lyricsFontColorCurrent} />);
+      lyricsOverlayRoot.render(<DualHighlightLyrics lyrics={latestLyrics} fontColor={lyricsFontColorCurrent} />);
     } else {
       console.warn('[realOverlayRender] 알 수 없는 lyricsMode:', lyricsMode);
       hideLyricsOverlay();
@@ -358,15 +360,25 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     }
     // 최신 lyrics를 클로저로 안전하게 캡처
     detectionObserverManager.lyricsObserver = new MutationObserver(() => {
-      console.log('[MutationObserver] 호출됨, 현재 lyricsMode:', lyricsMode, 'showRealtimeLyrics:', showRealtimeLyrics);
-      if (lyricsMode === 'sync' && showRealtimeLyrics) {
-        showLyricsIfNotAd(latestLyrics);
-      } else {
-        rerenderLyricsOverlay();
+      if (lyricsMode !== lastLyricsMode || showRealtimeLyrics !== lastShowRealtimeLyrics) {
+        lastLyricsMode = lyricsMode;
+        lastShowRealtimeLyrics = showRealtimeLyrics;
+
+        console.log('[MutationObserver] lyricsMode or showRealtimeLyrics changed, updating UI');
+
+        if (lyricsMode === 'sync' && showRealtimeLyrics) {
+          showLyricsIfNotAd(latestLyrics);
+        } else {
+          rerenderLyricsOverlay();
+        }
       }
     });
 
-    detectionObserverManager.lyricsObserver.observe(player, { attributes: true, attributeFilter: ['class'] });
+    detectionObserverManager.lyricsObserver.observe(player, {
+      attributes: true,
+      attributeFilter: ['class'],
+      attributeOldValue: true,
+    });
     showLyricsIfNotAd(lyrics);
   }
 
@@ -396,6 +408,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
 
   // ✅ URL 변경 핸들러 개선
   const handleUrlChange = (url: string) => {
+    console.log('handleUrlChange가 실행됨. 근데 곧 리턴됨.');
     if (url === lastUrl) return; // URL이 실제로 바뀌었을 때만 실행
     lastUrl = url;
 
@@ -542,10 +555,9 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       console.log('[SKIP] 감지 함수 실행 중 (동시 실행 방지)');
       return;
     }
+    isDetecting = true;
 
     try {
-      isDetecting = true;
-
       const videoData = detectYouTubeVideo();
       if (!videoData || !videoData.videoId) {
         console.log('[handleVideoDetection] 비디오 감지 실패');
@@ -625,6 +637,9 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       console.log(`[SPA Navigation] ${url}, isWatchPage: ${isWatchPage}`);
       if (url !== lastUrl) {
         handleUrlChangeGuarded(url);
+      } else {
+        // URL 변동 없으면 감지 호출 안 함
+        console.log('[SPA Navigation] URL 변경 없음, 감지 생략:', url);
       }
     }
   });

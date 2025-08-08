@@ -1,4 +1,5 @@
 // src/lib/utils/stringUtils.ts
+// 문자열 전처리
 import { EXTRA_KEYWORDS } from '@constants/keywords';
 
 const TRAILING_DELIMITERS_REGEX = /[\s\-/|]+$/;
@@ -12,13 +13,7 @@ export function isEnglishText(text: string): boolean {
   return /^[A-Za-z\s\-'/]+$/.test(text); // 슬래시(/)도 허용
 }
 // &를 and로 대체
-export function replaceAmpersand(str: string, replacement: string = 'and') {
-  // 양쪽 공백을 유지하며 &를 " and "로 치환 (또는 필요시 ',')
-  return str
-    .replace(/\s*&\s*/g, ` ${replacement} `)
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-}
+
 // 유튜브 DATA API를 통해 나온 음악 타이틀에서 Topic을 제거함
 export function cleanTopicName(name: string): string {
   let result = name;
@@ -116,10 +111,10 @@ export function extractArtistAndTitleCustom(rawTitle: string): { artist: string;
 // preprocessing for artist or title string: clean up + extract English only + trim trailing delimiters
 export function preprocessArtistOrTitle(str: string): string {
   let s = cleanUp(str);
-  console.log('cleanup:', s);
   s = removeEmptyBrackets(s);
   s = preprocessTitleOrArtist(s);
   s = trimTrailingDelimiters(s);
+  s = replaceAmpersand(s, 'and');
   return s;
 }
 
@@ -226,7 +221,13 @@ function trimTrailingDelimiters(str: string): string {
 function removeDiacritics(str: string): string {
   return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
-
+function replaceAmpersand(str: string, replacement: string = 'and') {
+  // 양쪽 공백을 유지하며 &를 " and "로 치환 (또는 필요시 ',')
+  return str
+    .replace(/\s*&\s*/g, ` ${replacement} `)
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
 // 최상위 전처리 파이프라인 함수
 function preprocessTitleOrArtist(str: string): string {
   // 1) 합성문자 NFC 통일

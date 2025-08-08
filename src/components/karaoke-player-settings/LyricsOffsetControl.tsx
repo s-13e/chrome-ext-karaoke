@@ -11,8 +11,8 @@ interface LyricsOffsetControlProps {
 
 export const LyricsOffsetControl: React.FC<LyricsOffsetControlProps> = ({
   initialOffset = 0,
-  min = -30,
-  max = 30,
+  min = -15,
+  max = 15,
   step = 1,
   onChange,
 }) => {
@@ -63,8 +63,8 @@ export const LyricsOffsetControl: React.FC<LyricsOffsetControlProps> = ({
 
       {/* 슬라이더 아래 눈금 및 값 표시 */}
       <div className={styles.sliderTicks} style={{ position: 'relative', width: '100%', height: 28 }}>
-        {/* 왼쪽: -30 */}
-        <span style={{ position: 'absolute', left: 0, top: 8, color: '#bbb', fontSize: 13 }}>-30</span>
+        {/* 왼쪽: -10 */}
+        <span style={{ position: 'absolute', left: 0, top: 8, color: '#bbb', fontSize: 13 }}>{min}</span>
         {/* 중앙: 0 */}
         <span
           style={{
@@ -74,12 +74,13 @@ export const LyricsOffsetControl: React.FC<LyricsOffsetControlProps> = ({
             transform: 'translateX(-50%)',
             color: '#bbb',
             fontSize: 13,
+            pointerEvents: 'none',
           }}
         >
           0
         </span>
-        {/* 오른쪽: 30 */}
-        <span style={{ position: 'absolute', right: 0, top: 8, color: '#bbb', fontSize: 13 }}>30</span>
+        {/* 오른쪽: 15 */}
+        <span style={{ position: 'absolute', right: 0, top: 8, color: '#bbb', fontSize: 13 }}>{max}</span>
         {/* 현재값 표시 (버튼, 썸 위치에 고정) */}
         <button
           type="button"

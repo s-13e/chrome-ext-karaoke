@@ -4,18 +4,14 @@ import styles from './styles.module.css';
 import { Line } from '@lib/types/lyrics';
 import { useCurrentTime } from '@hooks/useCurrentTime';
 
-interface FullLyricsViewProps {
+interface FullLyricsProps {
   lyrics: Line[];
   offset?: number;
   scrollToCurrent?: boolean;
   fontColor?: string;
 }
 
-export const FullLyricsView: React.FC<FullLyricsViewProps> = ({
-  lyrics,
-  scrollToCurrent = true,
-  fontColor = '#FFFFFF',
-}) => {
+export const FullLyrics: React.FC<FullLyricsProps> = ({ lyrics, scrollToCurrent = true, fontColor = '#FFFFFF' }) => {
   const currentTime = useCurrentTime();
   const containerRef = useRef<HTMLDivElement>(null);
   const activeLineIndex = lyrics.findIndex((line, i) => {

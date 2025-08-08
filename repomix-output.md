@@ -45,6 +45,9 @@ components/common/LoadingOverlay.tsx
 components/common/styles.module.css
 components/common/ToggleSwitch.tsx
 components/icons/ArrowIcon.tsx
+components/icons/DisplayIcon.tsx
+components/icons/FontIcon.tsx
+components/icons/IconLyricsSync.tsx
 components/karaoke-player-settings/AdvancedSettingsMenu.tsx
 components/karaoke-player-settings/FontStyleMenu.tsx
 components/karaoke-player-settings/LyricsDisplayMenu.tsx
@@ -147,17 +150,14 @@ export interface LrcLibLyricsResult {
 }
 
 // artist_name과 track_name으로 한정 검색: 오탐지를 줄이기 위한 별도 함수
-export async function fetchLyricsByArtistAndTrack(
-  artist: string,
-  title: string,
-): Promise<LrcLibLyricsResult | undefined> {
-  async function searchWithParams(artistParam: string, titleParam: string) {
+export async function fetchLyricsByArtistAndTrack(artist: string, title: string): Promise<LrcLibLyricsResult | null> {
+  async function searchWithParams(artistParam: string, titleParam: string): Promise<LrcLibLyricsResult | null> {
     const endpoint = `https://lrclib.net/api/search?artist_name=${encodeURIComponent(artistParam)}&track_name=${encodeURIComponent(titleParam)}`;
     const searchRes = await fetch(endpoint);
-    if (!searchRes.ok) return undefined;
+    if (!searchRes.ok) return null;
     const searchData = await searchRes.json();
 
-    let fallbackResult: LrcLibLyricsResult | undefined = undefined;
+    let fallbackResult: LrcLibLyricsResult | null = null;
     const normalizedReqTitle = titleParam.trim().toLowerCase();
 
     for (const candidate of searchData) {
@@ -170,6 +170,7 @@ export async function fetchLyricsByArtistAndTrack(
 
       const candidateTitle = detail.title?.trim().toLowerCase() ?? '';
 
+      // strict ver
       if (candidateTitle === normalizedReqTitle) {
         console.log('가사:', lyrics);
         return {
@@ -180,7 +181,7 @@ export async function fetchLyricsByArtistAndTrack(
           id: candidate.id,
         };
       }
-
+      // alternative ver
       if (!fallbackResult) {
         console.log('2nd 가사:', lyrics);
         fallbackResult = {
@@ -197,100 +198,81 @@ export async function fetchLyricsByArtistAndTrack(
 
   // 1차 시도: 정상 아티스트-곡명 순서
   const result1 = await searchWithParams(artist, title);
-  if (result1) return result1;
+  if (result1 !== null) return result1;
 
   // 2차 시도: 아티스트와 곡명을 뒤바꿔서 검색
   if (artist.toLowerCase() !== title.toLowerCase()) {
     const result2 = await searchWithParams(title, artist);
-    if (result2) return result2;
+    if (result2 !== null) return result2;
   }
 
-  return undefined;
+  return null;
 }
 ```
 
 ## File: background/api/lyrics.ts
 ```typescript
-import { isEnglishText, replaceAmpersand } from '@lib/utils/common/stringUtils';
+import { isEnglishText } from '@lib/utils/common/stringUtils';
 import { fetchLyricsByArtistAndTrack, LrcLibLyricsResult } from './lrclib';
 import { extractEnglishAliasFromArtists, fetchEnglishAliasForArtist, searchArtistByFreeText } from './musicBrainz';
-
 export async function fetchLyricsWithAliasFallback(artist: string, title: string): Promise<LrcLibLyricsResult> {
-  const artistForSearch = replaceAmpersand(artist, 'and');
-  const titleForSearch = replaceAmpersand(title, 'and');
+  const processedArtist = artist;
+  const processedTitle = title;
 
-  console.log('artist:', artistForSearch, 'title:', titleForSearch);
+  const areBothEnglish = isEnglishText(processedArtist) && isEnglishText(processedTitle);
 
-  const areBothEnglish = isEnglishText(artistForSearch) && isEnglishText(titleForSearch);
-
-  let result: LrcLibLyricsResult | null = null;
-
-  // Function to perform double lookup (artist/title and title/artist)
   async function doubleLookup(a: string, t: string) {
-    let res = await fetchLyricsByArtistAndTrack(a, t);
-    if (res) return res;
-
-    if (a.toLowerCase() !== t.toLowerCase()) {
-      res = await fetchLyricsByArtistAndTrack(t, a);
-      if (res) return res;
-    }
-    return null;
+    const res = await fetchLyricsByArtistAndTrack(a, t);
+    return res ?? null;
   }
 
-  // 둘 다 영어일 경우
   if (areBothEnglish) {
-    // 1차: 기존 아티스트명으로 먼저 시도
-    result = await doubleLookup(artistForSearch, titleForSearch);
-    if (result) return result;
+    // 1차 시도
+    const firstResult = await doubleLookup(processedArtist, processedTitle);
+    if (firstResult !== null) return firstResult;
 
-    // 2차: 영문 alias 조회 및 재시도
-    const englishArtist = await fetchEnglishAliasForArtist(artistForSearch);
-    if (englishArtist && englishArtist !== artistForSearch) {
-      result = await doubleLookup(englishArtist, titleForSearch);
-      if (result) {
-        console.log(`[Info] 영어 alias (${englishArtist})로 가사 검색 성공: ${englishArtist} - ${titleForSearch}`);
-        return result;
-      }
-    }
-
-    // 3차: alias 실패하면 freeText 검색 시도
-    const candidates = await searchArtistByFreeText(artist);
-    if (candidates && candidates.length > 0) {
-      const extractedAlias = extractEnglishAliasFromArtists(candidates);
-      console.log(`[Info] FreeText 검색에서 추출된 영어 별칭: ${extractedAlias}`);
-
-      if (extractedAlias && extractedAlias !== artist) {
-        result = await doubleLookup(extractedAlias, title);
-        if (result) {
-          console.log(
-            `[Info] FreeText 검색에서 영어 alias (${extractedAlias})로 가사 검색 성공: ${extractedAlias} - ${title}`,
-          );
-          return result;
+    // 2차 alias 시도 (실패해도 흐름 계속)
+    try {
+      const englishArtist = await fetchEnglishAliasForArtist(processedArtist);
+      if (englishArtist && englishArtist !== processedArtist) {
+        const aliasResult = await doubleLookup(englishArtist, processedTitle);
+        if (aliasResult !== null) {
+          console.log(`[Info] 영어 alias (${englishArtist})로 가사 검색 성공: ${englishArtist} - ${processedTitle}`);
+          return aliasResult;
         }
       }
+    } catch (e) {
+      console.warn('[fetchLyricsWithAliasFallback] 영어 alias 검색 실패:', e);
     }
 
-    // 모두 실패 시 에러
+    // 3차 freeText alias 시도 (실패해도 무시)
+    try {
+      const candidates = await searchArtistByFreeText(processedArtist);
+      if (candidates && candidates.length > 0) {
+        const extractedAlias = extractEnglishAliasFromArtists(candidates);
+        if (extractedAlias && extractedAlias !== processedArtist) {
+          const freeTextResult = await doubleLookup(extractedAlias, processedTitle);
+          if (freeTextResult !== null) {
+            console.log(
+              `[Info] FreeText 검색에서 영어 alias (${extractedAlias})로 가사 검색 성공: ${extractedAlias} - ${processedTitle}`,
+            );
+            return freeTextResult;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[fetchLyricsWithAliasFallback] FreeText alias 검색 실패:', e);
+    }
+
+    // 모든 시도 실패 시 예외 던짐
     throw new Error('LRCLIB에서 가사 정보를 찾을 수 없습니다! (영문 공식/별칭 모두 실패)');
   } else {
-    let englishArtist = await fetchEnglishAliasForArtist(artist);
-
-    // 1차 alias 실패 시 freeText 시도
-    if (!englishArtist) {
-      const candidates = await searchArtistByFreeText(artist);
-      if (candidates && candidates.length > 0) {
-        englishArtist = extractEnglishAliasFromArtists(candidates);
-      }
+    // 비영어권: 한 번만 시도
+    const result = await doubleLookup(processedArtist, processedTitle);
+    if (result === null) {
+      throw new Error('LRCLIB에서 가사 정보를 찾을 수 없습니다! (비영어권)');
     }
-
-    if (englishArtist && englishArtist !== artist) {
-      result = await doubleLookup(artistForSearch, titleForSearch);
-      if (result) {
-        console.log(`[Info] 영어 공식명 (${englishArtist})로 가사 검색 성공: ${englishArtist} - ${title}`);
-        return result;
-      }
-    }
-    throw new Error('LRCLIB에서 가사 정보를 찾을 수 없습니다! (공식 영어명 매핑 실패)');
+    return result;
   }
 }
 ```
@@ -762,7 +744,7 @@ interface ArrowIconProps {
 
 export const ArrowIcon: React.FC<ArrowIconProps> = ({
   direction = 'right',
-  size = 18,
+  size = 16,
   color = '#fff',
   className = '',
   style = {},
@@ -791,7 +773,7 @@ export const ArrowIcon: React.FC<ArrowIconProps> = ({
       viewBox="0 0 24 24"
       fill="none"
       stroke={color}
-      strokeWidth="4"
+      strokeWidth="3"
       strokeLinecap="round"
       strokeLinejoin="round"
       className={className}
@@ -802,6 +784,104 @@ export const ArrowIcon: React.FC<ArrowIconProps> = ({
     </svg>
   );
 };
+```
+
+## File: components/icons/DisplayIcon.tsx
+```typescript
+import React from 'react';
+
+interface IconDisplayProps {
+  width?: number;
+  height?: number;
+  color?: string;
+  className?: string;
+}
+
+const IconDisplay: React.FC<IconDisplayProps> = ({   width = 24,
+  height = 24, color = '#000', className = '' }) => (
+  <svg
+    width={width}
+    height={height}
+    viewBox="0 0 48 48"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-label="Display Icon"
+    className={className}
+  >
+    <rect x="8" y="12" width="32" height="24" stroke={color} strokeWidth="4" rx="2" ry="2" />
+    <rect x="16" y="20" width="16" height="8" fill={color} />
+    <line x1="24" y1="36" x2="24" y2="40" stroke={color} strokeWidth="4" strokeLinecap="round" />
+  </svg>
+);
+
+export default IconDisplay;
+```
+
+## File: components/icons/FontIcon.tsx
+```typescript
+import React from 'react';
+
+interface IconFontProps {
+  width?: number;
+  height?: number;
+  color?: string;
+  className?: string;
+}
+
+export const IconFont: React.FC<IconFontProps> = ({ width = 24, height = 24, color = '#000', className = '' }) => (
+  <svg
+    width={width}
+    height={height}
+    viewBox="0 0 48 48"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-label="Font Icon"
+    className={className}
+  >
+    <rect width="48" height="48" fill="none" />
+    <path d="M9 8h30M24 8v32M17 40h14" stroke={color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+```
+
+## File: components/icons/IconLyricsSync.tsx
+```typescript
+import React from 'react';
+
+interface IconLyricsSyncProps {
+  width?: number;
+  height?: number;
+  color?: string;
+  className?: string;
+}
+
+const IconLyricsSync: React.FC<IconLyricsSyncProps> = ({
+  width = 24,
+  height = 24,
+  color = '#222', // 기본 색상
+  className = '',
+}) => (
+  <svg
+    width={width}
+    height={height}
+    viewBox="0 0 48 48"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-label="Lyrics Sync Icon"
+    className={className}
+  >
+    {/* 바깥 원 테두리 */}
+    <circle cx="24" cy="24" r="20" stroke={color} strokeWidth="3" fill="none" />
+    {/* 상단 슬라이더 */}
+    <line x1="14" y1="18" x2="32" y2="18" stroke={color} strokeWidth="3" strokeLinecap="round" />
+    <circle cx="32" cy="18" r="4" stroke={color} strokeWidth="3" fill="none" />
+    {/* 하단 슬라이더 */}
+    <line x1="14" y1="30" x2="32" y2="30" stroke={color} strokeWidth="3" strokeLinecap="round" />
+    <circle cx="14" cy="30" r="4" stroke={color} strokeWidth="3" fill="none" />
+  </svg>
+);
+
+export default IconLyricsSync;
 ```
 
 ## File: components/karaoke-player-settings/AdvancedSettingsMenu.tsx
@@ -1045,11 +1125,11 @@ export const LyricsDisplayMenu: React.FC<LyricsDisplayMenuProps> = ({ onBack }) 
             <span>가사 방식</span>
             <select
               className={styles.settingSelect}
-              value={lyricsMode === 'full' ? '전체 가사를 보기' : '현재 가사만 보기'}
+              value={lyricsMode === 'full' ? '전체' : '기본'}
               onChange={handleLyricsModeChange}
             >
-              <option>현재 가사만 보기</option>
-              <option>전체 가사를 보기</option>
+              <option>기본</option>
+              <option>전체</option>
             </select>
           </div>
 
@@ -1079,8 +1159,8 @@ interface LyricsOffsetControlProps {
 
 export const LyricsOffsetControl: React.FC<LyricsOffsetControlProps> = ({
   initialOffset = 0,
-  min = -30,
-  max = 30,
+  min = -15,
+  max = 15,
   step = 1,
   onChange,
 }) => {
@@ -1131,8 +1211,8 @@ export const LyricsOffsetControl: React.FC<LyricsOffsetControlProps> = ({
 
       {/* 슬라이더 아래 눈금 및 값 표시 */}
       <div className={styles.sliderTicks} style={{ position: 'relative', width: '100%', height: 28 }}>
-        {/* 왼쪽: -30 */}
-        <span style={{ position: 'absolute', left: 0, top: 8, color: '#bbb', fontSize: 13 }}>-30</span>
+        {/* 왼쪽: -10 */}
+        <span style={{ position: 'absolute', left: 0, top: 8, color: '#bbb', fontSize: 13 }}>{min}</span>
         {/* 중앙: 0 */}
         <span
           style={{
@@ -1142,12 +1222,13 @@ export const LyricsOffsetControl: React.FC<LyricsOffsetControlProps> = ({
             transform: 'translateX(-50%)',
             color: '#bbb',
             fontSize: 13,
+            pointerEvents: 'none',
           }}
         >
           0
         </span>
-        {/* 오른쪽: 30 */}
-        <span style={{ position: 'absolute', right: 0, top: 8, color: '#bbb', fontSize: 13 }}>30</span>
+        {/* 오른쪽: 15 */}
+        <span style={{ position: 'absolute', right: 0, top: 8, color: '#bbb', fontSize: 13 }}>{max}</span>
         {/* 현재값 표시 (버튼, 썸 위치에 고정) */}
         <button
           type="button"
@@ -1200,8 +1281,8 @@ export const LyricsOffsetMenu: React.FC<LyricsOffsetMenuProps> = ({ onBack }) =>
     <hr className={styles.divider} />
     <LyricsOffsetControl
       initialOffset={0}
-      min={-30}
-      max={30}
+      min={-15}
+      max={15}
       step={1}
       onChange={(val) => {
         console.log('싱크 조절 값:', val);
@@ -1220,7 +1301,7 @@ export const LyricsOffsetMenu: React.FC<LyricsOffsetMenuProps> = ({ onBack }) =>
 ```css
 .container {
   min-width: 266px;
-  min-height: 220px;
+  min-height: 200px;
   max-width: 300px;
   max-height: 300px;
   background: rgba(28, 28, 28, 0.9);
@@ -1268,16 +1349,23 @@ export const LyricsOffsetMenu: React.FC<LyricsOffsetMenuProps> = ({ onBack }) =>
   padding: 0;
   font-size: 1;
 }
-
-
+/* 하위 메뉴 공통 스타일 */
+.menuItem {
+  display: flex;
+  max-width: 100%;
+  height: 48px;
+  justify-content: space-between; /* 좌우 분리 */
+  align-items: center; /* 수직 중앙정렬 */
+  padding: 0; /* 위아래 여백 */
+}
 .menuButton {
   all: unset;
   display: flex;
   align-items: center;
   width: 100%;
   height: 100%;
+  max-width: 100%;
   justify-content: space-between; /* 텍스트는 왼쪽, 아이콘은 오른쪽 끝 */
-  padding: 15px 5px;
   text-align: center;
   cursor: pointer;
   color: #fff;
@@ -1285,36 +1373,32 @@ export const LyricsOffsetMenu: React.FC<LyricsOffsetMenuProps> = ({ onBack }) =>
   background: transparent;
   transition: background-color 0.15s ease;
 }
-.menuButton svg {
-  width: 1em;
-  height: 1em;
-  margin-left: 8px; /* 텍스트와 화살표 간격 */
-}
 .menuButton:hover,
 .menuButton:focus-visible {
   background-color: rgba(255, 255, 255, 0.13);
 }
-
 .menuButton:active {
   background-color: rgba(255, 255, 255, 0.22);
 }
+.menuIcon {
+  width: 1em;
+  height: 1em;
+}
+.arrowIcon {
+  width: 1em;
+  height: 1em;
+  margin-left: 8px; /* 텍스트와 화살표 간격 */
+}
 .menuButtonText {
-  font-size: 118%;
-  margin-left: 4px;
+  font-size: 130%;
   font-weight: 500;
 }
-
-/* 하위 메뉴 공통 스타일 */
-.menuItem {
+.menuButtonLeft {
   display: flex;
-  justify-content: space-between; /* 좌우 분리 */
-  align-items: center; /* 수직 중앙정렬 */
-  padding: 0; /* 위아래 여백 */
-  font-size: 1.3rem; /* 본문 폰트 크기 */
+  align-items: center;
 }
-
-.menuItem span {
-  margin-left: 26px;
+.menuButtonLeft svg {
+  padding: 0 12px;
 }
 .menuToggle {
   margin-right: 26px; /* 원하는 만큼 여백 */
@@ -1484,14 +1568,14 @@ export const LyricsOffsetMenu: React.FC<LyricsOffsetMenuProps> = ({ onBack }) =>
   border-radius: 6px;
   border: none;
   background: transparent;
-}/* MainMenu.module.css */
+} /* MainMenu.module.css */
 
 .lyricsMenuItem {
   /* 기존 menuItem과 유사하되 padding만 달리 조정 */
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 3px 10px 15px;
+  padding: 10px 10px 10px 15px;
   font-size: 1.25rem;
   /* 필요한 스타일 추가 가능 */
 }
@@ -1508,6 +1592,9 @@ import { AdvancedSettingsMenu } from './AdvancedSettingsMenu';
 import { LyricsOffsetMenu } from './LyricsOffsetMenu';
 import { ArrowIcon } from '@components/icons/ArrowIcon';
 import styles from './MainMenu.module.css';
+import { IconFont } from '@components/icons/FontIcon';
+import IconDisplay from '@components/icons/DisplayIcon';
+import IconLyricsSync from '@components/icons/IconLyricsSync';
 
 interface Position {
   top: number;
@@ -1559,32 +1646,44 @@ export const MainMenu: React.FC<MainMenuProps> = ({ visible, position, onClose }
         position: 'absolute',
         top: position?.top,
         left: position?.left,
+        transform: 'translate(-50%, -100%)',
       }}
     >
       {currentSubMenu === null && (
         <ul className={styles.menuList}>
           <li className={styles.menuItem}>
             <button className={styles.menuButton} onClick={() => setCurrentSubMenu('lyricsOffset')}>
-              <span className={styles.menuButtonText}>가사 싱크 조절</span>
-              <ArrowIcon direction="right" style={{ marginRight: 12 }} />
+              <span className={styles.menuButtonLeft}>
+                <IconLyricsSync className="menuIcon" width={20} height={20} color="white" />
+                <span className={styles.menuButtonText}>가사 싱크</span>
+              </span>
+              <ArrowIcon size={14} className="arrowIcon" direction="right" style={{ marginRight: 12 }} />
             </button>
           </li>
           <li className={styles.menuItem}>
             <button className={styles.menuButton} onClick={() => setCurrentSubMenu('lyrics')}>
-              <span className={styles.menuButtonText}>가사 디스플레이</span>
-              <ArrowIcon direction="right" style={{ marginRight: 12 }} />
+              <span className={styles.menuButtonLeft}>
+                <IconDisplay className="menuIcon" width={20} height={20} color="white" />
+                <span className={styles.menuButtonText}>가사 표시</span>
+              </span>
+              <ArrowIcon size={14} className="arrowIcon" direction="right" style={{ marginRight: 12 }} />
             </button>
           </li>
           <li className={styles.menuItem}>
             <button className={styles.menuButton} onClick={() => setCurrentSubMenu('font')}>
-              <span className={styles.menuButtonText}>글꼴</span>
-              <ArrowIcon direction="right" style={{ marginRight: 12 }} />
+              <span className={styles.menuButtonLeft}>
+                <IconFont className="menuIcon" width={20} height={20} color="white" />
+                <span className={styles.menuButtonText}>글꼴</span>
+              </span>
+              <ArrowIcon size={14} className="arrowIcon" direction="right" style={{ marginRight: 12 }} />
             </button>
           </li>
           <li className={styles.menuItem}>
             <button className={styles.menuButton} onClick={() => setCurrentSubMenu('advanced')}>
-              <span className={styles.menuButtonText}>기타</span>
-              <ArrowIcon direction="right" style={{ marginRight: 12 }} />
+              <span className={styles.menuButtonLeft}>
+                <span className={styles.menuButtonText}>기타</span>
+              </span>
+              <ArrowIcon size={14} className="arrowIcon" direction="right" style={{ marginRight: 12 }} />
             </button>
           </li>
         </ul>
@@ -1777,7 +1876,11 @@ interface FullLyricsViewProps {
   fontColor?: string;
 }
 
-export const FullLyricsView: React.FC<FullLyricsViewProps> = ({ lyrics, scrollToCurrent = true,  fontColor = '#FFFFFF'}) => {
+export const FullLyricsView: React.FC<FullLyricsViewProps> = ({
+  lyrics,
+  scrollToCurrent = true,
+  fontColor = '#FFFFFF',
+}) => {
   const currentTime = useCurrentTime();
   const containerRef = useRef<HTMLDivElement>(null);
   const activeLineIndex = lyrics.findIndex((line, i) => {
@@ -2249,16 +2352,13 @@ export function App() {
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
-  const MENU_WIDTH = 266;
-  const MENU_HEIGHT = 257;
-
   const handleMusicNoteClick = () => {
     const btn = document.querySelector('.ytp-music-note-button');
     if (btn) {
       const rect = btn.getBoundingClientRect();
       setMenuPosition({
-        left: rect.left + rect.width / 2 + window.scrollX - MENU_WIDTH / 2,
-        top: rect.bottom + window.scrollY - MENU_HEIGHT - 30,
+        left: rect.left + rect.width / 2 + window.scrollX,
+        top: rect.bottom + window.scrollY - 60,
       });
 
       setMenuVisible((v) => !v);
@@ -2427,6 +2527,8 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
 
   let showRealtimeLyrics = true; // 현재 가사 ui 보이게
   let lyricsMode: 'sync' | 'full' = 'sync';
+  let lastLyricsMode: 'sync' | 'full' | null = null;
+  let lastShowRealtimeLyrics: boolean | null = null;
 
   let stopAdWatcher: (() => void) | null = null;
 
@@ -2725,15 +2827,25 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     }
     // 최신 lyrics를 클로저로 안전하게 캡처
     detectionObserverManager.lyricsObserver = new MutationObserver(() => {
-      console.log('[MutationObserver] 호출됨, 현재 lyricsMode:', lyricsMode, 'showRealtimeLyrics:', showRealtimeLyrics);
-      if (lyricsMode === 'sync' && showRealtimeLyrics) {
-        showLyricsIfNotAd(latestLyrics);
-      } else {
-        rerenderLyricsOverlay();
+      if (lyricsMode !== lastLyricsMode || showRealtimeLyrics !== lastShowRealtimeLyrics) {
+        lastLyricsMode = lyricsMode;
+        lastShowRealtimeLyrics = showRealtimeLyrics;
+
+        console.log('[MutationObserver] lyricsMode or showRealtimeLyrics changed, updating UI');
+
+        if (lyricsMode === 'sync' && showRealtimeLyrics) {
+          showLyricsIfNotAd(latestLyrics);
+        } else {
+          rerenderLyricsOverlay();
+        }
       }
     });
 
-    detectionObserverManager.lyricsObserver.observe(player, { attributes: true, attributeFilter: ['class'] });
+    detectionObserverManager.lyricsObserver.observe(player, {
+      attributes: true,
+      attributeFilter: ['class'],
+      attributeOldValue: true,
+    });
     showLyricsIfNotAd(lyrics);
   }
 
@@ -2763,6 +2875,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
 
   // ✅ URL 변경 핸들러 개선
   const handleUrlChange = (url: string) => {
+    console.log('handleUrlChange가 실행됨. 근데 곧 리턴됨.');
     if (url === lastUrl) return; // URL이 실제로 바뀌었을 때만 실행
     lastUrl = url;
 
@@ -2909,10 +3022,9 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       console.log('[SKIP] 감지 함수 실행 중 (동시 실행 방지)');
       return;
     }
+    isDetecting = true;
 
     try {
-      isDetecting = true;
-
       const videoData = detectYouTubeVideo();
       if (!videoData || !videoData.videoId) {
         console.log('[handleVideoDetection] 비디오 감지 실패');
@@ -2992,6 +3104,8 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       console.log(`[SPA Navigation] ${url}, isWatchPage: ${isWatchPage}`);
       if (url !== lastUrl) {
         handleUrlChangeGuarded(url);
+      } else {// URL 변동 없으면 감지 호출 안 함
+        console.log('[SPA Navigation] URL 변경 없음, 감지 생략:', url);
       }
     }
   });
@@ -3744,6 +3858,7 @@ export const throttle = <T extends (...args: unknown[]) => unknown>(
 ## File: lib/utils/common/stringUtils.ts
 ```typescript
 // src/lib/utils/stringUtils.ts
+// 문자열 전처리
 import { EXTRA_KEYWORDS } from '@constants/keywords';
 
 const TRAILING_DELIMITERS_REGEX = /[\s\-/|]+$/;
@@ -3757,13 +3872,7 @@ export function isEnglishText(text: string): boolean {
   return /^[A-Za-z\s\-'/]+$/.test(text); // 슬래시(/)도 허용
 }
 // &를 and로 대체
-export function replaceAmpersand(str: string, replacement: string = 'and') {
-  // 양쪽 공백을 유지하며 &를 " and "로 치환 (또는 필요시 ',')
-  return str
-    .replace(/\s*&\s*/g, ` ${replacement} `)
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-}
+
 // 유튜브 DATA API를 통해 나온 음악 타이틀에서 Topic을 제거함
 export function cleanTopicName(name: string): string {
   let result = name;
@@ -3861,10 +3970,10 @@ export function extractArtistAndTitleCustom(rawTitle: string): { artist: string;
 // preprocessing for artist or title string: clean up + extract English only + trim trailing delimiters
 export function preprocessArtistOrTitle(str: string): string {
   let s = cleanUp(str);
-  console.log('cleanup:', s);
   s = removeEmptyBrackets(s);
   s = preprocessTitleOrArtist(s);
   s = trimTrailingDelimiters(s);
+  s = replaceAmpersand(s, 'and');
   return s;
 }
 
@@ -3971,7 +4080,13 @@ function trimTrailingDelimiters(str: string): string {
 function removeDiacritics(str: string): string {
   return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
-
+function replaceAmpersand(str: string, replacement: string = 'and') {
+  // 양쪽 공백을 유지하며 &를 " and "로 치환 (또는 필요시 ',')
+  return str
+    .replace(/\s*&\s*/g, ` ${replacement} `)
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
 // 최상위 전처리 파이프라인 함수
 function preprocessTitleOrArtist(str: string): string {
   // 1) 합성문자 NFC 통일
@@ -4652,22 +4767,36 @@ export const isPlayerReady = (): boolean => {
 ## File: lib/utils/platform/videoDetection.ts
 ```typescript
 // lib/utils/videoDetection.ts
+let lastDetectTimes: Map<string, number> = new Map();
 let lastVideoId: string | null = null;
-let lastDetection = 0;
-export function shouldDetect(videoId: string, cooldown = 10000): boolean {
-  const now = Date.now();
-  if (videoId === lastVideoId && now - lastDetection < cooldown) return false;
-  lastVideoId = videoId;
-  lastDetection = now;
-  return true;
-}
+const DETECTION_COOLDOWN = 5000; // 5초
 
 // 새로운, 더 활용도 높은 형태
-export function tryDetectVideoChange(videoId: string | null, trigger: () => void, cooldown = 10000) {
+export function tryDetectVideoChange(videoId: string | null, trigger: () => void, cooldown = DETECTION_COOLDOWN): void {
   if (!videoId) return;
-  if (shouldDetect(videoId, cooldown)) {
-    trigger();
+   if (videoId === lastVideoId) {
+     return;
+   }
+
+  if (!shouldDetect(videoId, cooldown)) {
+    // 호출 제한 중, 로그 생략 혹은 필요시 아주 간단히 기록
+    return;
   }
+
+  lastVideoId = videoId;
+  console.log('[tryDetectVideoChange] videoId 변경 감지:', videoId);
+  trigger();
+}
+
+function shouldDetect(videoId: string, cooldown: number): boolean {
+  const now = Date.now();
+  const lastTime = lastDetectTimes.get(videoId) ?? 0;
+  if (now - lastTime < cooldown) {
+    // 너무 잦은 호출, 감지 차단
+    return false;
+  }
+  lastDetectTimes.set(videoId, now);
+  return true;
 }
 ```
 

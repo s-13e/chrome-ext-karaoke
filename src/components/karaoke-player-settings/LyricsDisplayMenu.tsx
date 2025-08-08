@@ -17,8 +17,8 @@ const LYRICS_MODE = {
   FULL: 'full',
 };
 const labelToMode = {
-  '현재 가사만 보기': LYRICS_MODE.SYNC,
-  '전체 가사를 보기': LYRICS_MODE.FULL,
+  기본: LYRICS_MODE.SYNC,
+  전체: LYRICS_MODE.FULL,
 } as const;
 
 type LyricsMode = (typeof LYRICS_MODE)[keyof typeof LYRICS_MODE];
@@ -97,11 +97,11 @@ export const LyricsDisplayMenu: React.FC<LyricsDisplayMenuProps> = ({ onBack }) 
             <span>가사 방식</span>
             <select
               className={styles.settingSelect}
-              value={lyricsMode === 'full' ? '전체 가사를 보기' : '현재 가사만 보기'}
+              value={lyricsMode === 'full' ? '전체' : '기본'}
               onChange={handleLyricsModeChange}
             >
-              <option>현재 가사만 보기</option>
-              <option>전체 가사를 보기</option>
+              <option>기본</option>
+              <option>전체</option>
             </select>
           </div>
 

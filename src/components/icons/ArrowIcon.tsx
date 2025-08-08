@@ -11,7 +11,7 @@ interface ArrowIconProps {
 
 export const ArrowIcon: React.FC<ArrowIconProps> = ({
   direction = 'right',
-  size = 18,
+  size = 16,
   color = '#fff',
   className = '',
   style = {},
@@ -40,7 +40,7 @@ export const ArrowIcon: React.FC<ArrowIconProps> = ({
       viewBox="0 0 24 24"
       fill="none"
       stroke={color}
-      strokeWidth="4"
+      strokeWidth="3"
       strokeLinecap="round"
       strokeLinejoin="round"
       className={className}

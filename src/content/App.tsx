@@ -67,16 +67,13 @@ export function App() {
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
-  const MENU_WIDTH = 266;
-  const MENU_HEIGHT = 257;
-
   const handleMusicNoteClick = () => {
     const btn = document.querySelector('.ytp-music-note-button');
     if (btn) {
       const rect = btn.getBoundingClientRect();
       setMenuPosition({
-        left: rect.left + rect.width / 2 + window.scrollX - MENU_WIDTH / 2,
-        top: rect.bottom + window.scrollY - MENU_HEIGHT - 30,
+        left: rect.left + rect.width / 2 + window.scrollX,
+        top: rect.bottom + window.scrollY - 60,
       });
 
       setMenuVisible((v) => !v);
