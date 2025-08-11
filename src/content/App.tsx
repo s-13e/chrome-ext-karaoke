@@ -62,6 +62,7 @@ export function App() {
     };
   }, []);
 
+  const [offset, setOffset] = useState(0);
   const [contentEnabled] = useChromeStorage('contentEnabled', true);
 
   const [menuVisible, setMenuVisible] = useState(false);
@@ -90,8 +91,15 @@ export function App() {
           onClick={handleMusicNoteClick}
         />
       )}
-
-      <MainMenu visible={menuVisible} position={menuPosition} onClose={() => setMenuVisible(false)} />
+      {menuVisible && (
+        <MainMenu
+          position={menuPosition}
+          visible={true}
+          onClose={() => setMenuVisible(false)}
+          offset={offset}
+          setOffset={setOffset}
+        />
+      )}
     </>
   );
 }

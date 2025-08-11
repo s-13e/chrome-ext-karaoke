@@ -46,6 +46,7 @@ export default [
         ...globals.browser,
         ...globals.node,
         chrome: 'readonly', // 크롬 확장용
+        YT: 'readonly', // 👈 추가
       },
     },
     settings: {

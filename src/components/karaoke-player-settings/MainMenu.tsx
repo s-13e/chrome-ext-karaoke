@@ -10,6 +10,7 @@ import styles from './MainMenu.module.css';
 import { IconFont } from '@components/icons/FontIcon';
 import { IconDisplay } from '@components/icons/DisplayIcon';
 import { IconLyricsSync } from '@components/icons/IconLyricsSync';
+import { Line } from '@lib/types/lyrics';
 
 interface Position {
   top: number;
@@ -20,12 +21,17 @@ interface MainMenuProps {
   visible: boolean;
   position?: Position;
   onClose: () => void;
+  offset: number;
+  setOffset: React.Dispatch<React.SetStateAction<number>>;
 }
 
 // MainMenu.tsx (메뉴 컨테이너 및 1차 메뉴 관리)
-export const MainMenu: React.FC<MainMenuProps> = ({ visible, position, onClose }) => {
+export const MainMenu: React.FC<MainMenuProps> = ({ visible, position, onClose, offset, setOffset }) => {
+  const [baseLyrics, setBaseLyrics] = useState<Line[]>([]); // 원본 가사
+  const [, setOriginalLyrics] = useState<Line[]>([]); // 현재 반영 중인 가사
   const [currentSubMenu, setCurrentSubMenu] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const lastOffset = useRef<number | null>(null);
 
   // 메뉴 외부 클릭 감지해서 닫기
   useEffect(() => {
@@ -36,9 +42,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ visible, position, onClose }
         onClose();
       }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
-
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
@@ -51,12 +55,43 @@ export const MainMenu: React.FC<MainMenuProps> = ({ visible, position, onClose }
     }
   }, [visible]);
 
-  if (!visible) return null;
+  // 메시지 방식: visible 상태가 true 될 때 가사 최신 데이터 요청
+  useEffect(() => {
+    function handleLyricsReady(msg: { type?: string }) {
+      if (msg.type === 'LYRICS_READY') {
+        if (visible) {
+          requestLatestLyrics();
+        }
+      }
+    }
+    chrome.runtime.onMessage.addListener(handleLyricsReady);
+    return () => chrome.runtime.onMessage.removeListener(handleLyricsReady);
+  }, [visible]);
+
+  // 최신 가사 요청 함수
+  const requestLatestLyrics = () => {
+    chrome.runtime.sendMessage({ type: 'GET_LATEST_LYRICS' }, (res) => {
+      if (chrome.runtime.lastError) {
+        console.warn('[MainMenu] GET_LATEST_LYRICS 실패:', chrome.runtime.lastError.message);
+        return;
+      }
+      const lyrics = res?.lyrics || [];
+      setBaseLyrics(lyrics);
+      setOriginalLyrics(lyrics);
+    });
+  };
+
+  // 메뉴가 열릴 때 항상 최신 상태 확보
+  useEffect(() => {
+    if (visible) {
+      requestLatestLyrics();
+    }
+  }, [visible]);
 
   return (
     <div
       ref={menuRef}
-      className={styles.container} // MainMenu.module.css 내 container 클래스 적용
+      className={styles.container}
       style={{
         position: 'absolute',
         top: position?.top,
@@ -103,7 +138,20 @@ export const MainMenu: React.FC<MainMenuProps> = ({ visible, position, onClose }
           </li>
         </ul>
       )}
-      {currentSubMenu === 'lyricsOffset' && <LyricsOffsetMenu onBack={() => setCurrentSubMenu(null)} />}
+      {currentSubMenu === 'lyricsOffset' && (
+        <LyricsOffsetMenu
+          originalLyrics={baseLyrics} // 항상 원본을 전달
+          offset={offset} // 저장된 값 내려줌
+          onBack={() => setCurrentSubMenu(null)}
+          onOffsetChange={(newOffset, offsetLyrics) => {
+            if (lastOffset.current === newOffset) return; // 같은 값이면 무시
+            lastOffset.current = newOffset;
+
+            setOffset(newOffset); // ✅ offset state 반영
+            setOriginalLyrics(offsetLyrics); // dual/full 가사도 즉시 반영
+          }}
+        />
+      )}
       {currentSubMenu === 'lyrics' && <LyricsDisplayMenu onBack={() => setCurrentSubMenu(null)} />}
       {currentSubMenu === 'font' && <FontStyleMenu onBack={() => setCurrentSubMenu(null)} />}
       {currentSubMenu === 'advanced' && <AdvancedSettingsMenu onBack={() => setCurrentSubMenu(null)} />}

@@ -6,7 +6,8 @@ interface LyricsOffsetControlProps {
   min?: number;
   max?: number;
   step?: number;
-  onChange?: (value: number) => void;
+  onCommit?: (value: number) => void;
+  onChange?: (value: number) => void; // ✅ 추가: 드래그 중 값 변경 전달
 }
 
 export const LyricsOffsetControl: React.FC<LyricsOffsetControlProps> = ({
@@ -14,11 +15,19 @@ export const LyricsOffsetControl: React.FC<LyricsOffsetControlProps> = ({
   min = -15,
   max = 15,
   step = 1,
+  onCommit,
   onChange,
 }) => {
   const [offset, setOffset] = useState(initialOffset);
   const sliderRef = useRef<HTMLInputElement | null>(null);
   const [thumbPos, setThumbPos] = useState(0);
+
+  useEffect(() => {
+    // initialOffset이 내부 상태와 다를 때만 업데이트
+    if (initialOffset !== offset) {
+      setOffset(initialOffset);
+    }
+  }, [offset, initialOffset]);
 
   const updateOffset = (newOffset: number) => {
     const bounded = Math.max(min, Math.min(max, newOffset));
@@ -32,6 +41,16 @@ export const LyricsOffsetControl: React.FC<LyricsOffsetControlProps> = ({
     updateOffset(Number(e.target.value));
   };
 
+  // 마우스 업 및 터치 종료 시점에 onCommit 호출
+  const handleMouseUp = (e: React.MouseEvent<HTMLInputElement>) => {
+    console.log('[LyricsOffsetControl] 마우스 업 발생 - onCommit 호출, 값:', e.currentTarget.value);
+    if (onCommit) onCommit(Number(e.currentTarget.value));
+  };
+  const handleTouchEnd = (e: React.TouchEvent<HTMLInputElement>) => {
+    console.log('[LyricsOffsetControl] 터치 종료 발생 - onCommit 호출, 값:', e.currentTarget.value);
+    if (onCommit) onCommit(Number(e.currentTarget.value));
+  };
+
   // 썸 위치 계산
   useEffect(() => {
     if (sliderRef.current) {
@@ -42,7 +61,7 @@ export const LyricsOffsetControl: React.FC<LyricsOffsetControlProps> = ({
       const width = slider.offsetWidth;
       setThumbPos(ratio * width);
     }
-  }, [offset]);
+  }, [offset, min, max]);
 
   return (
     <div className={styles.lyricsOffsetContainer} style={{ padding: '12px 16px', position: 'relative' }}>
@@ -55,6 +74,8 @@ export const LyricsOffsetControl: React.FC<LyricsOffsetControlProps> = ({
         step={step}
         value={offset}
         onChange={handleSliderChange}
+        onMouseUp={handleMouseUp}
+        onTouchEnd={handleTouchEnd}
         ref={sliderRef}
         className={styles.slider}
         style={{ width: '100%', marginTop: 35, marginBottom: 5 }}

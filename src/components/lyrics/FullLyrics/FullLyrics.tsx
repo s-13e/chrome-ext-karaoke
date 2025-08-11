@@ -1,8 +1,9 @@
 // src/components/lyrics/FullLyricsView/FullLyricsView.tsx
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import styles from './styles.module.css';
 import { Line } from '@lib/types/lyrics';
 import { useCurrentTime } from '@hooks/useCurrentTime';
+import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/lyricsOffset';
 
 interface FullLyricsProps {
   lyrics: Line[];
@@ -12,10 +13,12 @@ interface FullLyricsProps {
 }
 
 export const FullLyrics: React.FC<FullLyricsProps> = ({ lyrics, scrollToCurrent = true, fontColor = '#FFFFFF' }) => {
+  const shiftedLyrics = useMemo(() => shiftFirstLyricEarlier(lyrics, 3), [lyrics]);
+
   const currentTime = useCurrentTime();
   const containerRef = useRef<HTMLDivElement>(null);
-  const activeLineIndex = lyrics.findIndex((line, i) => {
-    const next = lyrics[i + 1];
+  const activeLineIndex = shiftedLyrics.findIndex((line, i) => {
+    const next = shiftedLyrics[i + 1];
     return currentTime >= line.time && (!next || currentTime < next.time);
   });
 
@@ -30,7 +33,7 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({ lyrics, scrollToCurrent 
 
   return (
     <div className={styles.fullLyricsContainer} ref={containerRef}>
-      {lyrics.map((line, idx) => (
+      {shiftedLyrics.map((line, idx) => (
         <div
           key={idx}
           className={idx === activeLineIndex ? `${styles.lyricLine} ${styles.active}` : styles.lyricLine}

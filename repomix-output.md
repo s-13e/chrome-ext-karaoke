@@ -38,6 +38,7 @@ background/api/lrclib.ts
 background/api/lyrics.ts
 background/api/musicBrainz.ts
 background/api/youtube.ts
+background/api/youtubePlayerController.ts
 background/background.ts
 components/common/BackButton.tsx
 components/common/ErrorFallback.tsx
@@ -57,12 +58,14 @@ components/karaoke-player-settings/MainMenu.module.css
 components/karaoke-player-settings/MainMenu.tsx
 components/karaoke-player-settings/MusicNoteButton.tsx
 components/karaoke-player-settings/styles.module.css
-components/lyrics/FullLyricsView/FullLyricsView.tsx
-components/lyrics/FullLyricsView/styles.module.css
+components/lyrics/FullLyrics/FullLyrics.tsx
+components/lyrics/FullLyrics/styles.module.css
 components/lyrics/LyricsOverlayRoot.module.css
 components/lyrics/LyricsOverlayRoot.tsx
-components/lyrics/SyncLyricsDisplay/DualHighlightSubtitle.tsx
-components/lyrics/SyncLyricsDisplay/styles.module.css
+components/lyrics/SingleLineLyrics/SingleLineLyrics.tsx
+components/lyrics/SingleLineLyrics/styles.module.css
+components/lyrics/SyncLyrics/DualHighlightLyrics.tsx
+components/lyrics/SyncLyrics/styles.module.css
 constants/doomIds.ts
 constants/errorCodes.ts
 constants/errorMessages.ts
@@ -92,6 +95,7 @@ lib/types/message.ts
 lib/types/svg.d.ts
 lib/types/translationKeys.ts
 lib/types/video.ts
+lib/types/youtube.d.ts
 lib/utils/audio/audio.ts
 lib/utils/audio/audioAnalysis.ts
 lib/utils/audio/audioProcessor.ts
@@ -99,7 +103,6 @@ lib/utils/audio/musicDetection.ts
 lib/utils/audio/vad.ts
 lib/utils/cache/lyricsCache.ts
 lib/utils/common/common.ts
-lib/utils/common/stringUtils.ts
 lib/utils/common/time.ts
 lib/utils/common/typeGuards.ts
 lib/utils/dom/domUtils.ts
@@ -113,9 +116,12 @@ lib/utils/lyrics/artistTitle.ts
 lib/utils/lyrics/getLyricsFromCacheOrFetch.ts
 lib/utils/lyrics/lyrics.ts
 lib/utils/lyrics/lyricsDisplay.ts
+lib/utils/lyrics/lyricsOffset.ts
 lib/utils/lyrics/lyricsParser.ts
 lib/utils/lyrics/queryNormalizer.ts
+lib/utils/lyrics/stringUtils.ts
 lib/utils/platform/contentGuard.ts
+lib/utils/platform/playbackUtils.ts
 lib/utils/platform/playerUtils.ts
 lib/utils/platform/videoDetection.ts
 lib/youtube.ts
@@ -212,7 +218,7 @@ export async function fetchLyricsByArtistAndTrack(artist: string, title: string)
 
 ## File: background/api/lyrics.ts
 ```typescript
-import { isEnglishText } from '@lib/utils/common/stringUtils';
+import { isEnglishText } from '@lib/utils/lyrics/stringUtils';
 import { fetchLyricsByArtistAndTrack, LrcLibLyricsResult } from './lrclib';
 import { extractEnglishAliasFromArtists, fetchEnglishAliasForArtist, searchArtistByFreeText } from './musicBrainz';
 export async function fetchLyricsWithAliasFallback(artist: string, title: string): Promise<LrcLibLyricsResult> {
@@ -279,7 +285,7 @@ export async function fetchLyricsWithAliasFallback(artist: string, title: string
 
 ## File: background/api/musicBrainz.ts
 ```typescript
-import { isEnglishText } from '@lib/utils/common/stringUtils';
+import { isEnglishText } from '@lib/utils/lyrics/stringUtils';
 
 // background/api/musicBrainz.ts
 const BASE_URL = 'https://musicbrainz.org/ws/2';
@@ -462,6 +468,62 @@ export async function fetchYouTubeVideoMeta(videoId: string, apiKey: string) {
 }
 ```
 
+## File: background/api/youtubePlayerController.ts
+```typescript
+// background/api/youtubePlayerController.ts
+// YouTube IFrame API 사용한 플레이어 제어 모듈
+
+// 자동 재생 실행 함수
+export async function skipPreviewSegment(
+  player: YT.Player, // YouTubePlayer 대신 YT.Player 사용
+  segmentStart: number,
+  segmentEnd: number,
+  maxDuration = 5,
+): Promise<void> {
+  if (!player) throw new Error('YouTube Player 객체가 필요합니다.');
+
+  const originalTime = player.getCurrentTime();
+  const playStart = Math.max(0, segmentStart);
+  const playEnd = Math.min(segmentEnd, playStart + maxDuration);
+
+  return new Promise((resolve, _reject) => {
+    let timeoutId: NodeJS.Timeout | null = null;
+
+    const cleanup = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      player.pauseVideo();
+      player.seekTo(originalTime, true);
+
+      if (!player.removeEventListener) throw new Error('removeEventListener 함수가 없습니다');
+      player.removeEventListener('onStateChange', onStateChange);
+    };
+
+    const onStateChange = () => {
+      const currentTime = player.getCurrentTime();
+      if (currentTime >= playEnd) {
+        cleanup();
+        resolve();
+      }
+    };
+
+    player.seekTo(playStart, true);
+    player.playVideo();
+
+    if (!player.addEventListener) throw new Error('addEventListener 함수가 없습니다');
+    player.addEventListener('onStateChange', onStateChange);
+
+    // 만약 재생이 maxDuration 초가 넘도록 끝나지 않는 경우 강제 종료
+    timeoutId = setTimeout(
+      () => {
+        cleanup();
+        resolve();
+      },
+      (playEnd - playStart) * 1000 + 1000,
+    );
+  });
+}
+```
+
 ## File: background/background.ts
 ```typescript
 import { MESSAGE_TYPES } from '@constants/messageTypes';
@@ -469,17 +531,39 @@ import { YOUTUBE_HOST } from '@constants/youtubeSelectors';
 import { PATHS } from '@constants/paths';
 import { YOUTUBE_CONFIG } from '@constants/platforms';
 import { DetectionConfig } from '@lib/types/config';
+import { Line } from '@lib/types/lyrics';
 
 const activeTabs = new Set<number>();
 let lastInjectedUrl = '';
 
-// 초기 로드 감지
+interface GetLatestLyricsResponse {
+  lyrics: Line[];
+}
+
+interface LyricsReadyMessage {
+  type: 'LYRICS_READY';
+  lyrics: Line[];
+}
+
+interface GetLatestLyricsMessage {
+  type: 'GET_LATEST_LYRICS';
+}
+
+interface SetOffsetMessage {
+  type: 'SET_OFFSET';
+  offset: number;
+}
+
+// 확장에서 쓰는 모든 메시지 타입 유니온
+type ExtensionMessage = LyricsReadyMessage | GetLatestLyricsMessage | SetOffsetMessage;
+
+// ===== 1. 초기 로드 감지 =====
 chrome.webNavigation.onCompleted.addListener(
   (details) => injectContentScript(details.tabId, details.url, YOUTUBE_CONFIG),
   { url: [{ hostSuffix: YOUTUBE_HOST }] },
 );
 
-// ✅ SPA 네비게이션 감지 추가
+// ===== 2. SPA 네비게이션 감지 =====
 chrome.webNavigation.onHistoryStateUpdated.addListener(
   (details) => {
     console.log('[SPA Navigation]', details.url);
@@ -505,25 +589,124 @@ chrome.webNavigation.onHistoryStateUpdated.addListener(
   { url: [{ hostSuffix: YOUTUBE_HOST }] },
 );
 
-// 스크립트 주입 함수
+// ===== 3. 스크립트 주입 =====
 const injectContentScript = (tabId: number, url: string, config: DetectionConfig) => {
   // ✅ 이미 주입된 탭 체크
-  if (activeTabs.has(tabId) || !config.urlRegex.test(url) || url === lastInjectedUrl) return;
+  console.log(`[injectContentScript] 호출됨 - tabId: ${tabId}, url: ${url}`);
+  if (activeTabs.has(tabId)) {
+    console.log(`[injectContentScript] 이미 주입됨 - tabId: ${tabId}`);
+    return;
+  }
+  if (!config.urlRegex.test(url)) {
+    console.log(`[injectContentScript] URL 패턴 불일치 - 주입 안 함`);
+    return;
+  }
+  if (url === lastInjectedUrl) {
+    console.log(`[injectContentScript] 마지막 주입 URL과 동일 - 주입 생략`);
+    return;
+  }
 
   activeTabs.add(tabId);
   lastInjectedUrl = url;
 
+  console.log(`[injectContentScript] Content Script 주입 시작 - ${PATHS.CONTENT_SCRIPT}`);
   chrome.scripting
     .executeScript({
       target: { tabId },
       files: [PATHS.CONTENT_SCRIPT],
     })
-    .catch(console.error);
+    .then(() => console.log(`[injectContentScript] 주입 성공 - tabId: ${tabId}`))
+    .catch((err) => console.error(`[injectContentScript] 주입 실패:`, err));
 };
 
 // 탭 닫힘 시 상태 제거
 chrome.tabs.onRemoved.addListener((tabId) => {
   activeTabs.delete(tabId);
+});
+
+function sendMessageToActiveTab(msg: ExtensionMessage, maxRetries = 3): Promise<GetLatestLyricsResponse> {
+  let tries = 0;
+  console.log(`[sendMessageToActiveTab] 요청 시작`, msg);
+
+  function trySend(resolve: (value: GetLatestLyricsResponse) => void, reject: (reason?: unknown) => void) {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const tabId = tabs[0]?.id;
+      console.log(`[sendMessageToActiveTab] 활성 탭 조회:`, tabId);
+
+      if (!tabId) {
+        console.error('[background] 활성 탭 ID 없음');
+        reject(new Error('No active tab'));
+        return;
+      }
+
+      console.log(`[sendMessageToActiveTab] content로 메시지 전송 시도 (${tries + 1}/${maxRetries}) - tabId: ${tabId}`);
+      chrome.tabs.sendMessage(tabId, msg, (res: GetLatestLyricsResponse) => {
+        if (chrome.runtime.lastError) {
+          console.warn(`[background] 메시지 전송 실패(${tries + 1}):`, chrome.runtime.lastError.message);
+          if (++tries < maxRetries) {
+            console.log(`[sendMessageToActiveTab] 재시도 예정...`);
+            setTimeout(() => trySend(resolve, reject), 500);
+          } else {
+            reject(new Error('Could not establish connection'));
+          }
+          return;
+        }
+        console.log(`[sendMessageToActiveTab] 전송 성공. 응답:`, res);
+        resolve(res);
+      });
+    });
+  }
+
+  return new Promise<GetLatestLyricsResponse>(trySend);
+}
+
+// ===== 4. 메시지 중계 로직 =====
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  console.log(`[background] onMessage 수신`, msg);
+
+  // --- LYRICS_READY: content → background → 모든 context 방송 ---
+  if (msg.type === 'LYRICS_READY') {
+    console.log('[background] LYRICS_READY 수신 - 길이:', msg.length);
+    // MainMenu, popup, 같은 탭의 다른 content 등 모든 컨텍스트로 전달
+    chrome.runtime.sendMessage(msg);
+  }
+
+  // --- GET_LATEST_LYRICS: MainMenu(또는 popup) → background → content ---
+  if (msg.type === 'GET_LATEST_LYRICS') {
+    console.log('[background] GET_LATEST_LYRICS 요청 수신 - content로 중계');
+
+    sendMessageToActiveTab(msg)
+      .then((response) => {
+        console.log(`[background] GET_LATEST_LYRICS 응답 성공`, response);
+        sendResponse(response); // 성공 응답
+      })
+      .catch((err) => {
+        console.error(`[background] GET_LATEST_LYRICS 응답 실패`, err);
+        sendResponse({ lyrics: [] }); // 실패 시 빈 배열 응답
+      });
+    return true; // 비동기 응답 유지!
+  }
+
+  // --- APPLY_OFFSET_LYRICS: popup/메뉴 → background → content ---
+  if (msg.type === 'APPLY_OFFSET_LYRICS') {
+    console.log('[background] APPLY_OFFSET_LYRICS 수신, active tab에 전달');
+
+    // 현재 활성 탭에 보내기
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const tabId = tabs[0]?.id;
+      if (!tabId) return;
+
+      chrome.tabs.sendMessage(tabId, msg, () => {
+        if (chrome.runtime.lastError) {
+          console.warn('[background] APPLY_OFFSET_LYRICS 전송 오류:', chrome.runtime.lastError.message);
+        } else {
+          console.log('[background] APPLY_OFFSET_LYRICS content로 전송 성공');
+        }
+      });
+    });
+
+    // 필요시 다른 context에도 전달 가능
+  }
 });
 ```
 
@@ -797,8 +980,12 @@ interface IconDisplayProps {
   className?: string;
 }
 
-const IconDisplay: React.FC<IconDisplayProps> = ({   width = 24,
-  height = 24, color = '#000', className = '' }) => (
+export const IconDisplay: React.FC<IconDisplayProps> = ({
+  width = 24,
+  height = 24,
+  color = '#000',
+  className = '',
+}) => (
   <svg
     width={width}
     height={height}
@@ -813,8 +1000,6 @@ const IconDisplay: React.FC<IconDisplayProps> = ({   width = 24,
     <line x1="24" y1="36" x2="24" y2="40" stroke={color} strokeWidth="4" strokeLinecap="round" />
   </svg>
 );
-
-export default IconDisplay;
 ```
 
 ## File: components/icons/FontIcon.tsx
@@ -855,7 +1040,7 @@ interface IconLyricsSyncProps {
   className?: string;
 }
 
-const IconLyricsSync: React.FC<IconLyricsSyncProps> = ({
+export const IconLyricsSync: React.FC<IconLyricsSyncProps> = ({
   width = 24,
   height = 24,
   color = '#222', // 기본 색상
@@ -880,8 +1065,6 @@ const IconLyricsSync: React.FC<IconLyricsSyncProps> = ({
     <circle cx="14" cy="30" r="4" stroke={color} strokeWidth="3" fill="none" />
   </svg>
 );
-
-export default IconLyricsSync;
 ```
 
 ## File: components/karaoke-player-settings/AdvancedSettingsMenu.tsx
@@ -1045,8 +1228,8 @@ const LYRICS_MODE = {
   FULL: 'full',
 };
 const labelToMode = {
-  '현재 가사만 보기': LYRICS_MODE.SYNC,
-  '전체 가사를 보기': LYRICS_MODE.FULL,
+  기본: LYRICS_MODE.SYNC,
+  전체: LYRICS_MODE.FULL,
 } as const;
 
 type LyricsMode = (typeof LYRICS_MODE)[keyof typeof LYRICS_MODE];
@@ -1154,7 +1337,8 @@ interface LyricsOffsetControlProps {
   min?: number;
   max?: number;
   step?: number;
-  onChange?: (value: number) => void;
+  onCommit?: (value: number) => void;
+  onChange?: (value: number) => void; // ✅ 추가: 드래그 중 값 변경 전달
 }
 
 export const LyricsOffsetControl: React.FC<LyricsOffsetControlProps> = ({
@@ -1162,22 +1346,40 @@ export const LyricsOffsetControl: React.FC<LyricsOffsetControlProps> = ({
   min = -15,
   max = 15,
   step = 1,
+  onCommit,
   onChange,
 }) => {
   const [offset, setOffset] = useState(initialOffset);
   const sliderRef = useRef<HTMLInputElement | null>(null);
   const [thumbPos, setThumbPos] = useState(0);
 
+  useEffect(() => {
+    // initialOffset이 내부 상태와 다를 때만 업데이트
+    if (initialOffset !== offset) {
+      setOffset(initialOffset);
+    }
+  }, [initialOffset]);
+
   const updateOffset = (newOffset: number) => {
     const bounded = Math.max(min, Math.min(max, newOffset));
     setOffset(bounded);
-    onChange?.(bounded);
+    onChange && onChange(bounded);
   };
 
   const reset = () => updateOffset(0);
 
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     updateOffset(Number(e.target.value));
+  };
+
+  // 마우스 업 및 터치 종료 시점에 onCommit 호출
+  const handleMouseUp = (e: React.MouseEvent<HTMLInputElement>) => {
+    console.log('[LyricsOffsetControl] 마우스 업 발생 - onCommit 호출, 값:', e.currentTarget.value);
+    if (onCommit) onCommit(Number(e.currentTarget.value));
+  };
+  const handleTouchEnd = (e: React.TouchEvent<HTMLInputElement>) => {
+    console.log('[LyricsOffsetControl] 터치 종료 발생 - onCommit 호출, 값:', e.currentTarget.value);
+    if (onCommit) onCommit(Number(e.currentTarget.value));
   };
 
   // 썸 위치 계산
@@ -1203,6 +1405,8 @@ export const LyricsOffsetControl: React.FC<LyricsOffsetControlProps> = ({
         step={step}
         value={offset}
         onChange={handleSliderChange}
+        onMouseUp={handleMouseUp}
+        onTouchEnd={handleTouchEnd}
         ref={sliderRef}
         className={styles.slider}
         style={{ width: '100%', marginTop: 35, marginBottom: 5 }}
@@ -1265,36 +1469,208 @@ export const LyricsOffsetControl: React.FC<LyricsOffsetControlProps> = ({
 // 가사 싱크
 // src/components/karaoke-player-settings/LyricsOffsetMenuMenu.tsx
 import { BackButton } from '@components/common/BackButton';
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import styles from './MainMenu.module.css';
 import { LyricsOffsetControl } from './LyricsOffsetControl';
+import { Line } from '@lib/types/lyrics';
+import { applyOffsetToLyrics } from '@lib/utils/lyrics/lyricsOffset';
+import { SingleLineLyrics } from '@components/lyrics/SingleLineLyrics/SingleLineLyrics';
 
 interface LyricsOffsetMenuProps {
+  originalLyrics: Line[];
+  offset: number;
   onBack: () => void;
+  onOffsetChange?: (offset: number, offsetLyrics: Line[]) => void;
+  currentTime?: number;
 }
-export const LyricsOffsetMenu: React.FC<LyricsOffsetMenuProps> = ({ onBack }) => (
-  <div className="submenuContainer">
-    <div className={styles.horizontalHeader}>
-      <BackButton onClick={onBack} />
-      <h2 className={styles.menuTitle}>가사 오프셋 설정</h2>
+
+export const LyricsOffsetMenu: React.FC<LyricsOffsetMenuProps> = ({
+  originalLyrics, // baseLyrics가 전달됨
+  offset: initialOffset,
+  onBack,
+  onOffsetChange,
+  currentTime = 0,
+}) => {
+  const [offset, setOffset] = useState(initialOffset ?? 0);
+  const [isAutoPlaying, setIsAutoPlaying] = useState(false);
+  const [offsetLyrics, setOffsetLyrics] = useState<Line[]>(originalLyrics);
+  const videoRef = useRef<HTMLVideoElement>(null); // 부모에서 비디오 엘리먼트 ref를 props로 전달받거나 별도 관리 필요
+  // const lastCommittedOffset = useRef<number | null>(null);
+
+  useEffect(() => {
+    setOffset(initialOffset ?? 0);
+    setOffsetLyrics(applyOffsetToLyrics(originalLyrics, initialOffset ?? 0, 0));
+  }, [initialOffset, originalLyrics]);
+
+  // 현재 video 요소 가져오기
+  useEffect(() => {
+    const vid = document.querySelector('video');
+    if (vid instanceof HTMLVideoElement) {
+      videoRef.current = vid;
+      console.log('[LyricsOffsetMenu] video element 참조 성공:', vid);
+    } else {
+      console.warn('[LyricsOffsetMenu] video element를 찾지 못했습니다.');
+    }
+  }, []);
+  /*
+  // 슬라이더 드래그 끝났을 때 — 자동 재생 테스트
+  const handleOffsetCommit = async (finalOffset: number) => {
+    if (!videoRef.current || isAutoPlaying) return;
+
+    const appliedLyrics = applyOffsetToLyrics(originalLyrics, finalOffset, 0);
+    setOffset(finalOffset);
+    setOffsetLyrics(appliedLyrics);
+
+    // 부모 콜백 호출
+    onOffsetChange?.(finalOffset, appliedLyrics);
+    setIsAutoPlaying(true);
+
+    // YouTube IFrame API player 객체 얻기 (content script에서 전역 YT 플레이어 참조)
+    const rawPlayerElement = document.querySelector('#movie_player');
+    const getPlayerMethod =
+      rawPlayerElement &&
+      typeof (rawPlayerElement as unknown as { getPlayer?: () => YT.Player }).getPlayer === 'function'
+        ? (rawPlayerElement as unknown as { getPlayer: () => YT.Player }).getPlayer
+        : undefined;
+
+    const player: YT.Player | undefined =
+      window.ytPlayer ?? (getPlayerMethod ? getPlayerMethod.call(rawPlayerElement) : undefined);
+
+    try {
+      if (player) {
+        console.log('[LyricsOffsetMenu] IFrame API player 사용');
+        // 현재 시간에서 가장 가까운 가사 찾기
+        const adjCurrentTime = player.getCurrentTime() - finalOffset;
+
+        let currentIndex = appliedLyrics.findIndex((line, idx) => {
+          const next = appliedLyrics[idx + 1];
+          return adjCurrentTime >= line.time && (!next || adjCurrentTime < next.time);
+        });
+        if (currentIndex === -1) currentIndex = 0;
+
+        const currentLine = appliedLyrics[currentIndex];
+        const nextLine = appliedLyrics[currentIndex + 1];
+        if (!currentLine) return;
+
+        const segmentStart = currentLine.time + finalOffset;
+        const segmentEnd = nextLine ? Math.min(nextLine.time + finalOffset, segmentStart + 5) : segmentStart + 2;
+
+        await skipPreviewSegment(player, segmentStart, segmentEnd, 5);
+      } else {
+        console.warn('[LyricsOffsetMenu] IFrame API player 없음 → video element 사용');
+        await playOffsetTestSegment(
+          videoRef,
+          appliedLyrics,
+          finalOffset,
+          () => setIsAutoPlaying(false), // 재생 종료 시점
+          5,
+        );
+      }
+    } catch (e) {
+      console.warn('[handleOffsetCommit] 자동재생 실패:', e);
+    } finally {
+      setIsAutoPlaying(false);
+    }
+  };
+*/
+
+  /** 적용 버튼 — 영상 위치는 그대로 두고 가사만 offset 반영 */
+  const handleApplyOffset = () => {
+    // 항상 원본(originalLyrics) 기준으로 적용
+    const appliedLyrics = applyOffsetToLyrics(originalLyrics, offset, 0);
+    setOffsetLyrics(appliedLyrics);
+
+    // 부모에게 적용된 값 알림
+    onOffsetChange?.(offset, appliedLyrics);
+
+    // content script에 메시지 전송하여 즉시 반영
+    chrome.runtime.sendMessage(
+      {
+        type: 'APPLY_OFFSET_LYRICS',
+        payload: { offset, lyrics: appliedLyrics },
+      },
+      () => {
+        if (chrome.runtime.lastError) {
+          console.warn('[LyricsOffsetMenu] APPLY_OFFSET_LYRICS 전송 오류:', chrome.runtime.lastError.message);
+        } else {
+          console.log('[LyricsOffsetMenu] APPLY_OFFSET_LYRICS 전송 완료');
+        }
+      },
+    );
+
+    setIsAutoPlaying(false);
+  };
+  // 미세 조정 버튼
+  /*
+  const adjustOffset = (delta: number) => {
+    const newOffset = parseFloat((offset + delta).toFixed(2));
+    handleOffsetCommit(newOffset);
+  };
+  */
+
+  return (
+    <div className="submenuContainer">
+      <div className={styles.horizontalHeader}>
+        <BackButton onClick={onBack} />
+        <h2 className={styles.menuTitle}>가사 오프셋 설정</h2>
+      </div>
+      <hr className={styles.divider} />
+
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px', // 버튼과 슬라이더 간 간격
+          margin: '20px 0',
+        }}
+      >
+        <LyricsOffsetControl
+          initialOffset={offset}
+          min={-15}
+          max={15}
+          step={1}
+          onChange={(val) => setOffset(val)}
+          onCommit={(val) => setOffset(val)}
+        />
+        <button
+          onClick={handleApplyOffset}
+          style={{
+            height: '36px',
+            marginLeft: 'auto', // 오른쪽에 붙이기 원할 때 사용
+          }}
+        >
+          적용
+        </button>
+      </div>
+
+      {isAutoPlaying && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '15%',
+            width: '100%',
+            display: 'flex',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+            zIndex: 9999,
+          }}
+        >
+          <SingleLineLyrics
+            lyrics={offsetLyrics} // 최신 offset 적용된 가사
+            offset={0} // ✅ offsetLyrics에 이미 offset 적용됨
+            currentTime={videoRef.current?.currentTime ?? currentTime}
+            fontColor="#fff"
+          />
+        </div>
+      )}
+
+      <hr className={styles.divider} />
+      <p style={{ padding: '12px 16px', color: '#ccc', fontSize: 14 }}>
+        가사 자막의 타이밍이 맞지 않을 때, 여기서 미세 조절하세요.
+      </p>
     </div>
-    <hr className={styles.divider} />
-    <LyricsOffsetControl
-      initialOffset={0}
-      min={-15}
-      max={15}
-      step={1}
-      onChange={(val) => {
-        console.log('싱크 조절 값:', val);
-        // 여기에 실제 싱크 조절 로직 연결
-      }}
-    />
-    <hr className={styles.divider} />
-    <p style={{ padding: '12px 16px', color: '#ccc', fontSize: 14 }}>
-      가사 자막의 타이밍이 맞지 않을 때, 여기서 미세 조절하세요.
-    </p>
-  </div>
-);
+  );
+};
 ```
 
 ## File: components/karaoke-player-settings/MainMenu.module.css
@@ -1593,8 +1969,9 @@ import { LyricsOffsetMenu } from './LyricsOffsetMenu';
 import { ArrowIcon } from '@components/icons/ArrowIcon';
 import styles from './MainMenu.module.css';
 import { IconFont } from '@components/icons/FontIcon';
-import IconDisplay from '@components/icons/DisplayIcon';
-import IconLyricsSync from '@components/icons/IconLyricsSync';
+import { IconDisplay } from '@components/icons/DisplayIcon';
+import { IconLyricsSync } from '@components/icons/IconLyricsSync';
+import { Line } from '@lib/types/lyrics';
 
 interface Position {
   top: number;
@@ -1605,12 +1982,17 @@ interface MainMenuProps {
   visible: boolean;
   position?: Position;
   onClose: () => void;
+  offset: number;
+  setOffset: React.Dispatch<React.SetStateAction<number>>;
 }
 
 // MainMenu.tsx (메뉴 컨테이너 및 1차 메뉴 관리)
-export const MainMenu: React.FC<MainMenuProps> = ({ visible, position, onClose }) => {
+export const MainMenu: React.FC<MainMenuProps> = ({ visible, position, onClose, offset, setOffset }) => {
+  const [baseLyrics, setBaseLyrics] = useState<Line[]>([]); // 원본 가사
+  const [_originalLyrics, setOriginalLyrics] = useState<Line[]>([]); // 현재 반영 중인 가사
   const [currentSubMenu, setCurrentSubMenu] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const lastOffset = useRef<number | null>(null);
 
   // 메뉴 외부 클릭 감지해서 닫기
   useEffect(() => {
@@ -1621,9 +2003,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ visible, position, onClose }
         onClose();
       }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
-
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
@@ -1636,12 +2016,43 @@ export const MainMenu: React.FC<MainMenuProps> = ({ visible, position, onClose }
     }
   }, [visible]);
 
-  if (!visible) return null;
+  // 메시지 방식: visible 상태가 true 될 때 가사 최신 데이터 요청
+  useEffect(() => {
+    function handleLyricsReady(msg: { type?: string }) {
+      if (msg.type === 'LYRICS_READY') {
+        if (visible) {
+          requestLatestLyrics();
+        }
+      }
+    }
+    chrome.runtime.onMessage.addListener(handleLyricsReady);
+    return () => chrome.runtime.onMessage.removeListener(handleLyricsReady);
+  }, [visible]);
+
+  // 최신 가사 요청 함수
+  const requestLatestLyrics = () => {
+    chrome.runtime.sendMessage({ type: 'GET_LATEST_LYRICS' }, (res) => {
+      if (chrome.runtime.lastError) {
+        console.warn('[MainMenu] GET_LATEST_LYRICS 실패:', chrome.runtime.lastError.message);
+        return;
+      }
+      const lyrics = res?.lyrics || [];
+      setBaseLyrics(lyrics);
+      setOriginalLyrics(lyrics);
+    });
+  };
+
+  // 메뉴가 열릴 때 항상 최신 상태 확보
+  useEffect(() => {
+    if (visible) {
+      requestLatestLyrics();
+    }
+  }, [visible]);
 
   return (
     <div
       ref={menuRef}
-      className={styles.container} // MainMenu.module.css 내 container 클래스 적용
+      className={styles.container}
       style={{
         position: 'absolute',
         top: position?.top,
@@ -1688,7 +2099,20 @@ export const MainMenu: React.FC<MainMenuProps> = ({ visible, position, onClose }
           </li>
         </ul>
       )}
-      {currentSubMenu === 'lyricsOffset' && <LyricsOffsetMenu onBack={() => setCurrentSubMenu(null)} />}
+      {currentSubMenu === 'lyricsOffset' && (
+        <LyricsOffsetMenu
+          originalLyrics={baseLyrics} // 항상 원본을 전달
+          offset={offset} // 저장된 값 내려줌
+          onBack={() => setCurrentSubMenu(null)}
+          onOffsetChange={(newOffset, offsetLyrics) => {
+            if (lastOffset.current === newOffset) return; // 같은 값이면 무시
+            lastOffset.current = newOffset;
+
+            setOffset(newOffset); // ✅ offset state 반영
+            setOriginalLyrics(offsetLyrics); // dual/full 가사도 즉시 반영
+          }}
+        />
+      )}
       {currentSubMenu === 'lyrics' && <LyricsDisplayMenu onBack={() => setCurrentSubMenu(null)} />}
       {currentSubMenu === 'font' && <FontStyleMenu onBack={() => setCurrentSubMenu(null)} />}
       {currentSubMenu === 'advanced' && <AdvancedSettingsMenu onBack={() => setCurrentSubMenu(null)} />}
@@ -1861,30 +2285,29 @@ export const MusicNoteButton: React.FC<Props> = ({ iconPath, contentEnabled, men
 }
 ```
 
-## File: components/lyrics/FullLyricsView/FullLyricsView.tsx
+## File: components/lyrics/FullLyrics/FullLyrics.tsx
 ```typescript
 // src/components/lyrics/FullLyricsView/FullLyricsView.tsx
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import styles from './styles.module.css';
 import { Line } from '@lib/types/lyrics';
 import { useCurrentTime } from '@hooks/useCurrentTime';
+import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/lyricsOffset';
 
-interface FullLyricsViewProps {
+interface FullLyricsProps {
   lyrics: Line[];
   offset?: number;
   scrollToCurrent?: boolean;
   fontColor?: string;
 }
 
-export const FullLyricsView: React.FC<FullLyricsViewProps> = ({
-  lyrics,
-  scrollToCurrent = true,
-  fontColor = '#FFFFFF',
-}) => {
+export const FullLyrics: React.FC<FullLyricsProps> = ({ lyrics, scrollToCurrent = true, fontColor = '#FFFFFF' }) => {
+  const shiftedLyrics = useMemo(() => shiftFirstLyricEarlier(lyrics, 3), [lyrics]);
+
   const currentTime = useCurrentTime();
   const containerRef = useRef<HTMLDivElement>(null);
-  const activeLineIndex = lyrics.findIndex((line, i) => {
-    const next = lyrics[i + 1];
+  const activeLineIndex = shiftedLyrics.findIndex((line, i) => {
+    const next = shiftedLyrics[i + 1];
     return currentTime >= line.time && (!next || currentTime < next.time);
   });
 
@@ -1899,7 +2322,7 @@ export const FullLyricsView: React.FC<FullLyricsViewProps> = ({
 
   return (
     <div className={styles.fullLyricsContainer} ref={containerRef}>
-      {lyrics.map((line, idx) => (
+      {shiftedLyrics.map((line, idx) => (
         <div
           key={idx}
           className={idx === activeLineIndex ? `${styles.lyricLine} ${styles.active}` : styles.lyricLine}
@@ -1914,7 +2337,7 @@ export const FullLyricsView: React.FC<FullLyricsViewProps> = ({
 };
 ```
 
-## File: components/lyrics/FullLyricsView/styles.module.css
+## File: components/lyrics/FullLyrics/styles.module.css
 ```css
 .fullLyricsContainer {
   position: absolute;
@@ -2008,33 +2431,107 @@ export function injectLyricsOverlayRoot() {
 }
 ```
 
-## File: components/lyrics/SyncLyricsDisplay/DualHighlightSubtitle.tsx
+## File: components/lyrics/SingleLineLyrics/SingleLineLyrics.tsx
 ```typescript
-import React, { useEffect } from 'react';
+import React, { useMemo } from 'react';
+import { Line } from '@lib/types/lyrics';
+import styles from './styles.module.css';
+
+interface SingleLineLyricsProps {
+  lyrics: Line[];
+  offset?: number; // 가사 전체 시간 보정(offset), default 0
+  fontColor?: string;
+  className?: string;
+}
+
+/**
+ * 현재 재생 시간(currentTime)은 내부에서 useCurrentTime 훅처럼 별도로 다룰 수도 있지만,
+ * 이 컴포넌트는 오로지 props 기반으로 현재 보여줄 가사를 계산해 렌더링합니다.
+ *
+ * (외부에서 currentTime을 변수로 넘기거나, 필요시 useCurrentTime 훅으로 별도 캡슐화 가능)
+ */
+export const SingleLineLyrics: React.FC<SingleLineLyricsProps & { currentTime: number }> = ({
+  lyrics,
+  currentTime,
+  offset = 0,
+  fontColor = '#fff',
+  className = '',
+}) => {
+  // 현재 오프셋 적용된 시간
+  const adjustedTime = currentTime - offset;
+
+  // 현재 가사 한 줄 계산: adjustedTime에 맞춰 현재 표시할 줄 찾기
+  // lyrics 배열은 time 오름차순 정렬되어 있다고 가정
+  const currentLine = useMemo(() => {
+    if (!lyrics.length) return null;
+    for (let i = lyrics.length - 1; i >= 0; i--) {
+      const line = lyrics[i];
+      if (line && line.time !== undefined && adjustedTime >= line.time) {
+        return lyrics[i];
+      }
+    }
+    return null;
+  }, [lyrics, adjustedTime]);
+
+  if (!currentLine) return null;
+
+  return (
+    <div
+      className={`${styles.singleLineSubtitle} ${className}`}
+      style={{ color: fontColor }}
+      aria-live="assertive"
+      role="textbox"
+    >
+      {currentLine.text}
+    </div>
+  );
+};
+```
+
+## File: components/lyrics/SingleLineLyrics/styles.module.css
+```css
+.singleLineSubtitle {
+  position: absolute;
+  bottom: 80px; /* 유튜브 플레이어 하단 바 위쪽 적절 위치, 필요시 조정 */
+  width: 100%;
+  text-align: center;
+  font-size: 2vw;
+  font-weight: 600;
+  text-shadow:
+    2px 2px 4px rgba(0, 0, 0, 0.75);
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+  color: #fff;
+  z-index: 100;
+}
+```
+
+## File: components/lyrics/SyncLyrics/DualHighlightLyrics.tsx
+```typescript
+import React, { useEffect, useMemo } from 'react';
 import { useCurrentTime } from '@hooks/useCurrentTime';
 import { getDisplayLines } from '@lib/utils/lyrics/lyricsDisplay';
 import { Line } from '@lib/types/lyrics';
 import styles from './styles.module.css';
+import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/lyricsOffset';
 
-interface DualHighlightSubtitleProps {
+interface DualHighlightLyricsProps {
   lyrics: Line[];
   offset?: number;
   fontColor?: string;
 }
 
-export const DualHighlightSubtitle: React.FC<DualHighlightSubtitleProps> = ({
-  lyrics,
-  offset,
-  fontColor = '#FFFFFF',
-}) => {
+export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({ lyrics, offset, fontColor = '#FFFFFF' }) => {
+  const shiftedLyrics = useMemo(() => shiftFirstLyricEarlier(lyrics, 3), [lyrics]);
+
   const currentTime = useCurrentTime();
   const adjustedTime = currentTime - (offset ?? 0); // offset 사용!
-  const { top, bottom, highlightTop, highlightBottom } = getDisplayLines(lyrics, adjustedTime);
+  const { top, bottom, highlightTop, highlightBottom } = getDisplayLines(shiftedLyrics, adjustedTime);
   useEffect(() => {
-    console.log('[DualHighlightSubtitle] fontColor prop 변경:', fontColor);
-    // DOM에 실제 적용되는 style 로그
+    console.log('[DualHighlightLyrics] fontColor prop 변경:', fontColor);
     const el = document.getElementById('some-lyrics-elem-id');
-    if (el) console.log('[DualHighlightSubtitle] 실제 DOM color:', getComputedStyle(el).color);
+    if (el) console.log('[DualHighlightLyrics] 실제 DOM color:', getComputedStyle(el).color);
   }, [fontColor]);
 
   return (
@@ -2046,7 +2543,7 @@ export const DualHighlightSubtitle: React.FC<DualHighlightSubtitleProps> = ({
 };
 ```
 
-## File: components/lyrics/SyncLyricsDisplay/styles.module.css
+## File: components/lyrics/SyncLyrics/styles.module.css
 ```css
 .dual-highlight-subtitle {
   position: absolute;
@@ -2347,6 +2844,7 @@ export function App() {
     };
   }, []);
 
+  const [offset, setOffset] = useState(0);
   const [contentEnabled] = useChromeStorage('contentEnabled', true);
 
   const [menuVisible, setMenuVisible] = useState(false);
@@ -2375,8 +2873,15 @@ export function App() {
           onClick={handleMusicNoteClick}
         />
       )}
-
-      <MainMenu visible={menuVisible} position={menuPosition} onClose={() => setMenuVisible(false)} />
+      {menuVisible && (
+        <MainMenu
+          position={menuPosition}
+          visible={true}
+          onClose={() => setMenuVisible(false)}
+          offset={offset}
+          setOffset={setOffset}
+        />
+      )}
     </>
   );
 }
@@ -2482,12 +2987,12 @@ import { isMusicVideo } from '@lib/utils/audio/musicDetection';
 import { UIResourceManager } from '@lib/utils/infra/uiResourceManager';
 import { YOUTUBE_PLAYER_SELECTOR, YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
 import { extractArtistAndTitle, fallbackArtistAndTitle } from '@lib/utils/lyrics/artistTitle';
-import { cleanTopicName, extractArtistAndTitleCustom, preprocessArtistOrTitle } from '@lib/utils/common/stringUtils';
+import { cleanTopicName, extractArtistAndTitleCustom, preprocessArtistOrTitle } from '@lib/utils/lyrics/stringUtils';
 import { listenerManager } from '@lib/utils/infra/listenerManager';
 import { withContentEnabled } from '@lib/utils/platform/contentGuard';
 import { injectLyricsOverlayRoot } from '@components/lyrics/LyricsOverlayRoot';
-import { DualHighlightSubtitle } from '@components/lyrics/SyncLyricsDisplay/DualHighlightSubtitle';
-import { FullLyricsView } from '@components/lyrics/FullLyricsView/FullLyricsView';
+import { DualHighlightLyrics } from '@components/lyrics/SyncLyrics/DualHighlightLyrics';
+import { FullLyrics } from '@components/lyrics/FullLyrics/FullLyrics';
 import { isAdPlaying } from '@lib/utils/dom/domUtils';
 import { parseLyrics } from '@lib/utils/lyrics/lyricsParser';
 import { Line } from '@lib/types/lyrics';
@@ -2727,7 +3232,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     }
 
     lyricsOverlayRoot.render(
-      <DualHighlightSubtitle lyrics={lyrics} offset={offset} fontColor={lyricsFontColorCurrent} />,
+      <DualHighlightLyrics lyrics={lyrics} offset={offset} fontColor={lyricsFontColorCurrent} />,
     );
   }
   // 현재 가사/전체 가사의 분기 함수
@@ -2793,9 +3298,9 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     }
 
     if (lyricsMode === 'full') {
-      lyricsOverlayRoot.render(<FullLyricsView lyrics={latestLyrics} fontColor={lyricsFontColorCurrent} />);
+      lyricsOverlayRoot.render(<FullLyrics lyrics={latestLyrics} fontColor={lyricsFontColorCurrent} />);
     } else if (lyricsMode === 'sync') {
-      lyricsOverlayRoot.render(<DualHighlightSubtitle lyrics={latestLyrics} fontColor={lyricsFontColorCurrent} />);
+      lyricsOverlayRoot.render(<DualHighlightLyrics lyrics={latestLyrics} fontColor={lyricsFontColorCurrent} />);
     } else {
       console.warn('[realOverlayRender] 알 수 없는 lyricsMode:', lyricsMode);
       hideLyricsOverlay();
@@ -2861,18 +3366,6 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     }
   }
 
-  function shiftFirstLyricEarlier(lyrics: Line[], advanceSec: number): Line[] {
-    if (!lyrics || lyrics.length === 0) return lyrics;
-    const [first, ...rest] = lyrics;
-    if (!first) return lyrics;
-    const newFirstLine: Line = {
-      ...first,
-      time: Math.max(0, first.time - advanceSec),
-      text: first.text ?? '',
-    };
-    return [newFirstLine, ...rest];
-  }
-
   // ✅ URL 변경 핸들러 개선
   const handleUrlChange = (url: string) => {
     console.log('handleUrlChange가 실행됨. 근데 곧 리턴됨.');
@@ -2889,6 +3382,14 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     }
   };
   const handleUrlChangeGuarded = withContentEnabled(getContentEnabled, handleUrlChange);
+
+  function finishParsingLyrics(lyricsArray: Line[]) {
+    latestLyrics = lyricsArray; // 원본만 저장
+    console.log('[content] finishParsingLyrics 실행 - 길이:', lyricsArray.length);
+    // background로 가사 준비 완료 신호 전송
+    chrome.runtime.sendMessage({ type: 'LYRICS_READY', length: lyricsArray.length });
+    console.log('finishParsingLyrics 실행 끝!');
+  }
 
   // 1. 영상과 크게 무관한 메타데이터, 가사 정보를 확보하는 함수
   async function collectMetadataAndLyrics(videoId: string) {
@@ -2946,17 +3447,16 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
 
     // 가사 파싱, 기본 전처리 + 앞당기기(3초 예시)
     const parsedLyrics: Line[] = typeof lyrics === 'string' ? parseLyrics(lyrics) : lyrics;
-    const shiftedLyrics = shiftFirstLyricEarlier(parsedLyrics, 3);
 
-    latestLyrics = shiftedLyrics;
-    onLyricsUpdated(shiftedLyrics);
+    finishParsingLyrics(parsedLyrics);
+    onLyricsUpdated(parsedLyrics);
 
     // shiftedLyrics: Line[] 배열 (각 원소에 'text'가 있다고 가정)
     //const lyricsText = shiftedLyrics.map((line) => line.text).join('\n');
     //const lyricsLang = await detectLyricsLanguage(lyricsText, 2);
 
     // 이 함수는 성공시 meta 및 shiftedLyrics 반환 (후속 분석용)
-    return { meta, lyricsDuration, shiftedLyrics };
+    return { meta, lyricsDuration, parsedLyrics };
   }
 
   // 2. 영상 엘리먼트가 준비된 후, 실제 분석 및 렌더링 수행하는 함수
@@ -3048,7 +3548,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
         console.warn('가사 수집 데이터 없음');
         return;
       }
-      const { meta, lyricsDuration, shiftedLyrics } = collected;
+      const { meta, lyricsDuration, parsedLyrics } = collected;
 
       // 2. 비디오 엘리먼트가 준비되었으면 본 분석 및 렌더링 실행
       const videoElem = document.querySelector('video');
@@ -3057,7 +3557,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
         console.log('[handleVideoDetection] video element 미존재, 렌더링 생략');
         return;
       }
-      await analyzeAudioAndRenderLyrics(meta, lyricsDuration, videoElem, shiftedLyrics);
+      await analyzeAudioAndRenderLyrics(meta, lyricsDuration, videoElem, parsedLyrics);
     } catch (error) {
       console.error('[handleVideoDetection] 에러 발생:', error);
     } finally {
@@ -3104,11 +3604,31 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       console.log(`[SPA Navigation] ${url}, isWatchPage: ${isWatchPage}`);
       if (url !== lastUrl) {
         handleUrlChangeGuarded(url);
-      } else {// URL 변동 없으면 감지 호출 안 함
+      } else {
+        // URL 변동 없으면 감지 호출 안 함
         console.log('[SPA Navigation] URL 변경 없음, 감지 생략:', url);
       }
     }
   });
+
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    console.log('[content] onMessage 수신:', message);
+
+    if (message.type === 'GET_LATEST_LYRICS') {
+      console.log('[content] GET_LATEST_LYRICS 요청 수신 - latestLyrics 길이:', latestLyrics.length);
+      sendResponse({ lyrics: latestLyrics });
+    }
+
+    // ✅ 오프셋 적용 반영 처리
+    if (message.type === 'APPLY_OFFSET_LYRICS') {
+      const { offset, lyrics } = message.payload;
+      console.log(`[content] APPLY_OFFSET_LYRICS 수신 → offset: ${offset}, 가사 길이: ${lyrics.length}`);
+
+      latestLyrics = lyrics; // 전역 최신 가사 교체
+      rerenderLyricsOverlay(); // full / sync 모드에 즉시 적용
+    }
+  });
+
   // ✅ 페이지 언로드 시 정리
   window.addEventListener('beforeunload', () => {
     cleanupAllUIElements();
@@ -3403,6 +3923,7 @@ export function isI18nError(error: unknown): error is I18nError {
 // src/types/global.d.ts
 interface Window {
   [key: string]: unknown;
+  ytPlayer?: YT.Player;
   __LYRICS_OVERLAY_INITED?: boolean;
 }
 ```
@@ -3477,6 +3998,26 @@ export type TranslationKey = (typeof TRANSLATION_KEYS)[number];
 //   channelTitle?: string;
 //   durationSec?: number;
 // }
+```
+
+## File: lib/types/youtube.d.ts
+```typescript
+// src/types/youtube.d.ts (또는 global.d.ts에 추가)
+declare namespace YT {
+  interface Player {
+    getCurrentTime(): number;
+    seekTo(seconds: number, allowSeekAhead?: boolean): void;
+    playVideo(): void;
+    pauseVideo(): void;
+
+    // YouTubePlayer 타입의 메서드 추가
+    getPlayerState(): PlayerState;
+    addEventListener?(event: string, listener: () => void): void;
+    removeEventListener?(event: string, listener: () => void): void;
+  }
+}
+
+type PlayerState = 'unstarted' | 'ended' | 'playing' | 'paused' | 'buffering' | 'cued';
 ```
 
 ## File: lib/utils/audio/audio.ts
@@ -3853,275 +4394,6 @@ export const throttle = <T extends (...args: unknown[]) => unknown>(
     }
   };
 };
-```
-
-## File: lib/utils/common/stringUtils.ts
-```typescript
-// src/lib/utils/stringUtils.ts
-// 문자열 전처리
-import { EXTRA_KEYWORDS } from '@constants/keywords';
-
-const TRAILING_DELIMITERS_REGEX = /[\s\-/|]+$/;
-
-// -----------------------------
-// Exported utility functions
-// -----------------------------
-
-// 영어 여부 판단 함수 (공백, 하이픈, 작은따옴표 포함)
-export function isEnglishText(text: string): boolean {
-  return /^[A-Za-z\s\-'/]+$/.test(text); // 슬래시(/)도 허용
-}
-// &를 and로 대체
-
-// 유튜브 DATA API를 통해 나온 음악 타이틀에서 Topic을 제거함
-export function cleanTopicName(name: string): string {
-  let result = name;
-
-  // 앞쪽 접두사 "Topic - "
-  result = result.replace(/^topic\s*-\s*/i, '');
-
-  // 뒤쪽 접미사 " - Topic"
-  result = result.replace(/\s*-\s*topic$/i, '');
-
-  return result.trim();
-}
-/**
- * 문자열에서 부가정보(괄호, 대괄호, 파이프 등)를 제거합니다.
- */
-export function cleanUp(str: string): string {
-  return str
-    .replace(/\[.*?\]/g, '') // 대괄호 제거
-    .replace(/\\s{2,}/g, ' ') // 이중 공백 정리
-    .trim();
-}
-
-// 실질적 실행
-export function extractArtistAndTitleCustom(rawTitle: string): { artist: string; title: string } | null {
-  if (!rawTitle || typeof rawTitle !== 'string') return null;
-
-  // 1. 기본 정돈 (괄호/대괄호 제거, 중복 공백 정리 등)
-  const cleaned = cleanUp(rawTitle);
-
-  // 2. 쌍따옴표 등으로 감싼 부분 우선 파싱 예: Artist "Title"
-  const quotePattern = /^(.+?)\s+(?:'|“|”|‘|’|")([^'“”‘’"]+)(?:'|“|”|‘|’)?(?:\s|$)/;
-  const quoteMatch = cleaned.match(quotePattern);
-
-  let artist = '';
-  let title = '';
-
-  if (
-    quoteMatch &&
-    quoteMatch[1] !== undefined &&
-    quoteMatch[2] !== undefined &&
-    !/\w'$/.test(quoteMatch[1].trim()) && // 아티스트 단어 끝 ' 소유격 제외
-    quoteMatch[2].trim().length > 0
-  ) {
-    artist = quoteMatch[1]?.trim() ?? '';
-    title = quoteMatch[2]?.trim() ?? '';
-  } else {
-    // 3. 구분자 기준 추출 (하이픈, 슬래시, 파이프)
-    const delimiters = [' - ', ' / ', ' | '];
-    for (const delim of delimiters) {
-      if (cleaned.includes(delim)) {
-        const parts = cleaned.split(delim);
-        if (parts.length >= 2) {
-          artist = parts[0]?.trim() ?? '';
-          title = parts.slice(1).join(delim).trim();
-          break;
-        }
-      }
-    }
-  }
-
-  // 2. remove extra info
-  title = removeExtraInfo(title);
-  artist = cleanMusicKeyword(artist);
-  title = cleanMusicKeyword(title);
-
-  // 4. 추가 패턴: 괄호
-  if (!artist || !title) {
-    const match = cleaned.match(/^(.+?)\s*\((.+?)\)/);
-    if (match) {
-      artist = match[1]?.trim() ?? '';
-      title = match[2]?.trim() ?? '';
-    }
-  }
-
-  // 5. 추가 패턴: 아티스트와 곡명이 모두 영문/숫자/공백으로만 구성된 경우
-  if (!artist || !title) {
-    // 대문자로 시작하는 두 단어 이상이면 첫 단어를 아티스트, 나머지를 곡명으로 추정
-    const match = cleaned.match(/^([A-Za-z0-9]+|[^A-Za-z0-9\s]+)\s+(.+)$/);
-    if (match) {
-      artist = match[1]?.trim() ?? '';
-      title = match[2]?.trim() ?? '';
-    }
-  }
-
-  // 6. 곡명에서 부가정보 추가 제거
-  title = removeExtraInfo(title);
-  title = removeTrailingHashtags(title);
-  title = removeDatePattern(title);
-
-  if (!artist || !title) return null;
-  artist = removeEmptyBrackets(removeExtraInfo(artist));
-  return { artist, title };
-}
-
-// preprocessing for artist or title string: clean up + extract English only + trim trailing delimiters
-export function preprocessArtistOrTitle(str: string): string {
-  let s = cleanUp(str);
-  s = removeEmptyBrackets(s);
-  s = preprocessTitleOrArtist(s);
-  s = trimTrailingDelimiters(s);
-  s = replaceAmpersand(s, 'and');
-  return s;
-}
-
-// -----------------------------
-// Internal helper functions (non-exported)
-// -----------------------------
-
-// 괄호 안 내용 중에 피처링 키워드 포함시 괄호 포함 제거
-// 예: (ft. Madison Beer), (feat Artist), (featuring Someone)
-function removeFeaturingParentheses(str: string): string {
-  const stack: number[] = [];
-  for (let i = 0; i < str.length; i++) {
-    if (str[i] === '(') {
-      stack.push(i);
-    } else if (str[i] === ')') {
-      if (stack.length > 0) {
-        const start = stack.pop()!;
-        const content = str.slice(start + 1, i);
-        // 피처링 키워드 여부 검사
-        if (/(ft\.|feat\.?|featuring)/i.test(content)) {
-          // 삭제: start부터 i까지를 빈 문자열로 replace 할 수 있게 큐에 기록
-          // 삭제 처리는 후순위에서 수행하도록 함
-          str = str.slice(0, start) + str.slice(i + 1);
-          i = start - 1; // 인덱스 조정
-        }
-      }
-    }
-  }
-  return str.trim();
-}
-// 키워드 정제, 부가정보 제거
-function removeExtraInfo(str: string): string {
-  const extraKeywords = EXTRA_KEYWORDS.slice().sort((a, b) => b.length - a.length); // 긴 키워드 우선
-  let result = str;
-
-  // 1. 괄호 안 피처링 정보(ft., feat, featuring)만 제거
-  result = removeFeaturingParentheses(result);
-
-  // 1. 복합 키워드(공백/특수문자 포함) 전체 제거
-  for (const kw of extraKeywords) {
-    const escapedKw = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // 키워드가 특수문자 포함 가능하므로 escape 처리
-    const regex = new RegExp(`(\\s*${escapedKw})`, 'gi');
-    result = result.replace(regex, '').trim();
-  }
-
-  // 2. 구분자(-, /, |) 기준 분할 후, 끝부분 부가 키워드 포함 파트 제거
-  const parts = result.split(/\s[-/|]\s/);
-  while (
-    parts.length > 1 &&
-    extraKeywords.some((kw) => parts[parts.length - 1]?.toLowerCase().includes(kw.toLowerCase()))
-  ) {
-    parts.pop();
-  }
-
-  // 3. 조합한 결과 문자열로 재설정
-  result = parts.join(' - ');
-
-  // 4. 반복적으로 문자열 끝에 부가 키워드 남아있는지 검사해서 제거
-  let found = true;
-  while (found) {
-    found = false;
-    for (const kw of extraKeywords) {
-      const escapedKw = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const regex = new RegExp(`(\\s*${escapedKw})$`, 'i'); // 끝에 위치한 키워드 제거
-      if (regex.test(result)) {
-        result = result.replace(regex, '').trim();
-        found = true;
-      }
-    }
-  }
-  return result;
-}
-
-// op, ed, ost, mv는 해당 단어만 삭제해 예를 들어 open the door -> en the door이 되지 않게끔
-function cleanMusicKeyword(str: string): string {
-  return str
-    .replace(/([^A-Za-z]|^)(OP|ED|OST|MV)([^A-Za-z]|$)/gi, (_match, p1, _p2, p3) => {
-      return `${p1}${p3}`.replace(/\s{2,}/g, ' ');
-    })
-    .trim();
-}
-// 곡명 끝에 연속된 해시태그만 제거
-function removeTrailingHashtags(title: string): string {
-  return title.replace(/(\s*#[\p{L}\p{N}._-]+)+\s*$/gu, '').trim();
-}
-// 방송 날짜 기재된 경우 제거 (YYMMDD 형식)
-function removeDatePattern(str: string): string {
-  return str.replace(/\b\d{2}[01]\d(?:3[0-2]|[0-2][0-9])\b/g, '').trim();
-}
-// 빈 괄호 제거
-function removeEmptyBrackets(str: string): string {
-  return str
-    .replace(/\(\s*\)/g, '')
-    .replace(/\[\s*\]/g, '')
-    .replace(/\{\s*\}/g, '')
-    .trim();
-}
-// 문자열 끝의 불필요한 구분자(공백, -, /, |) 제거
-function trimTrailingDelimiters(str: string): string {
-  return str.replace(TRAILING_DELIMITERS_REGEX, '').trim();
-}
-
-function removeDiacritics(str: string): string {
-  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-function replaceAmpersand(str: string, replacement: string = 'and') {
-  // 양쪽 공백을 유지하며 &를 " and "로 치환 (또는 필요시 ',')
-  return str
-    .replace(/\s*&\s*/g, ` ${replacement} `)
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-}
-// 최상위 전처리 파이프라인 함수
-function preprocessTitleOrArtist(str: string): string {
-  // 1) 합성문자 NFC 통일
-  const normalized = str.normalize('NFC');
-
-  // 2) 악센트 제거
-  const noDiacritics = removeDiacritics(normalized);
-
-  // 3) 악센트 제거된 문자열 넘겨서 영어 추출 및 특수문자 정리
-  return extractEnglishOnly(noDiacritics);
-}
-
-function extractEnglishOnly(str: string): string {
-  const LETTERS = 'A-Za-z'; // 악센트 제거 후라 기본 알파벳만 사용
-  const hasEnglish = new RegExp(`[${LETTERS}]`).test(str);
-  // 악센트 제거 후 비교를 위해 미리 처리
-  const strNoDiacritics = removeDiacritics(str);
-
-  // 비영문자 검사 - 악센트 제거 전 원본에서 처리
-  const hasNonEnglish = new RegExp(`[^\\s${LETTERS}0-9'’&.,-]`).test(strNoDiacritics);
-
-  if (hasEnglish && hasNonEnglish) {
-    // 원본에서 악센트 제거한 문자를 토큰화 (공백, 특수문자 포함)
-    const processedStr = removeDiacritics(str);
-    const match = processedStr.match(new RegExp(`([${LETTERS}][${LETTERS}\\s'’./-]*|&|,)`, 'g'));
-    let result = match ? match.join(' ').trim() : '';
-
-    // 쉼표 앞뒤 공백 정리
-    result = result.replace(/\s+,/g, ',');
-    result = result.replace(/,\s+/g, ', ');
-
-    return result;
-  }
-  return str;
-}
 ```
 
 ## File: lib/utils/common/time.ts
@@ -4629,6 +4901,47 @@ export function getDisplayLines(lines: Line[], currentTime: number): DisplayIndi
 }
 ```
 
+## File: lib/utils/lyrics/lyricsOffset.ts
+```typescript
+import { Line } from '@lib/types/lyrics';
+
+/**
+ * 가사 배열에 offset 보정 적용
+ * @param lyrics 원본 가사 배열 (time기준 정렬되어 있다고 가정)
+ * @param offset 초 단위 오프셋 (음수 가능)
+ * @param minOffsetLimit 첫 가사의 시간이 minOffsetLimit보다 작아지지 않도록 제한 (예: 0)
+ * @returns offset이 적용된 새로운 가사 배열
+ */
+export function applyOffsetToLyrics(lyrics: Line[], offset: number, minOffsetLimit = 0): Line[] {
+  if (!lyrics || lyrics.length === 0) return lyrics;
+
+  const firstLine = lyrics[0];
+  if (!firstLine || firstLine.time === undefined) {
+    return lyrics; // 그냥 원본 배열 반환 또는 다른 처리
+  }
+  // 첫 가사의 시간, offset 적용 후 최소값 제한 (minOffsetLimit 이상)
+  const firstTimeAfterOffset = firstLine.time + offset;
+  const offsetLimited = firstTimeAfterOffset < minOffsetLimit ? minOffsetLimit - firstLine.time : offset;
+
+  return lyrics.map((line) => ({
+    ...line,
+    time: Math.max(line.time + offsetLimited, 0), // 음수 시간 방지
+  }));
+}
+
+export function shiftFirstLyricEarlier(lyrics: Line[], advanceSec: number): Line[] {
+  if (!lyrics || lyrics.length === 0) return lyrics;
+  const [first, ...rest] = lyrics;
+  if (!first) return lyrics;
+  const newFirstLine: Line = {
+    ...first,
+    time: Math.max(0, first.time - advanceSec),
+    text: first.text ?? '',
+  };
+  return [newFirstLine, ...rest];
+}
+```
+
 ## File: lib/utils/lyrics/lyricsParser.ts
 ```typescript
 // LRC 등 싱크 가사 포맷을 파싱해, [time, text] 배열로 변환합니다.
@@ -4695,6 +5008,275 @@ export function normalizeLyricsQuery(artist: string, title: string, options?: No
 }
 ```
 
+## File: lib/utils/lyrics/stringUtils.ts
+```typescript
+// src/lib/utils/stringUtils.ts
+// 문자열 전처리
+import { EXTRA_KEYWORDS } from '@constants/keywords';
+
+const TRAILING_DELIMITERS_REGEX = /[\s\-/|]+$/;
+
+// -----------------------------
+// Exported utility functions
+// -----------------------------
+
+// 영어 여부 판단 함수 (공백, 하이픈, 작은따옴표 포함)
+export function isEnglishText(text: string): boolean {
+  return /^[A-Za-z\s\-'/]+$/.test(text); // 슬래시(/)도 허용
+}
+// &를 and로 대체
+
+// 유튜브 DATA API를 통해 나온 음악 타이틀에서 Topic을 제거함
+export function cleanTopicName(name: string): string {
+  let result = name;
+
+  // 앞쪽 접두사 "Topic - "
+  result = result.replace(/^topic\s*-\s*/i, '');
+
+  // 뒤쪽 접미사 " - Topic"
+  result = result.replace(/\s*-\s*topic$/i, '');
+
+  return result.trim();
+}
+/**
+ * 문자열에서 부가정보(괄호, 대괄호, 파이프 등)를 제거합니다.
+ */
+export function cleanUp(str: string): string {
+  return str
+    .replace(/\[.*?\]/g, '') // 대괄호 제거
+    .replace(/\\s{2,}/g, ' ') // 이중 공백 정리
+    .trim();
+}
+
+// 실질적 실행
+export function extractArtistAndTitleCustom(rawTitle: string): { artist: string; title: string } | null {
+  if (!rawTitle || typeof rawTitle !== 'string') return null;
+
+  // 1. 기본 정돈 (괄호/대괄호 제거, 중복 공백 정리 등)
+  const cleaned = cleanUp(rawTitle);
+
+  // 2. 쌍따옴표 등으로 감싼 부분 우선 파싱 예: Artist "Title"
+  const quotePattern = /^(.+?)\s+(?:'|“|”|‘|’|")([^'“”‘’"]+)(?:'|“|”|‘|’)?(?:\s|$)/;
+  const quoteMatch = cleaned.match(quotePattern);
+
+  let artist = '';
+  let title = '';
+
+  if (
+    quoteMatch &&
+    quoteMatch[1] !== undefined &&
+    quoteMatch[2] !== undefined &&
+    !/\w'$/.test(quoteMatch[1].trim()) && // 아티스트 단어 끝 ' 소유격 제외
+    quoteMatch[2].trim().length > 0
+  ) {
+    artist = quoteMatch[1]?.trim() ?? '';
+    title = quoteMatch[2]?.trim() ?? '';
+  } else {
+    // 3. 구분자 기준 추출 (하이픈, 슬래시, 파이프)
+    const delimiters = [' - ', ' / ', ' | '];
+    for (const delim of delimiters) {
+      if (cleaned.includes(delim)) {
+        const parts = cleaned.split(delim);
+        if (parts.length >= 2) {
+          artist = parts[0]?.trim() ?? '';
+          title = parts.slice(1).join(delim).trim();
+          break;
+        }
+      }
+    }
+  }
+
+  // 2. remove extra info
+  title = removeExtraInfo(title);
+  artist = cleanMusicKeyword(artist);
+  title = cleanMusicKeyword(title);
+
+  // 4. 추가 패턴: 괄호
+  if (!artist || !title) {
+    const match = cleaned.match(/^(.+?)\s*\((.+?)\)/);
+    if (match) {
+      artist = match[1]?.trim() ?? '';
+      title = match[2]?.trim() ?? '';
+    }
+  }
+
+  // 5. 추가 패턴: 아티스트와 곡명이 모두 영문/숫자/공백으로만 구성된 경우
+  if (!artist || !title) {
+    // 대문자로 시작하는 두 단어 이상이면 첫 단어를 아티스트, 나머지를 곡명으로 추정
+    const match = cleaned.match(/^([A-Za-z0-9]+|[^A-Za-z0-9\s]+)\s+(.+)$/);
+    if (match) {
+      artist = match[1]?.trim() ?? '';
+      title = match[2]?.trim() ?? '';
+    }
+  }
+
+  // 6. 곡명에서 부가정보 추가 제거
+  title = removeExtraInfo(title);
+  title = removeTrailingHashtags(title);
+  title = removeDatePattern(title);
+
+  if (!artist || !title) return null;
+  artist = removeEmptyBrackets(removeExtraInfo(artist));
+  return { artist, title };
+}
+
+// preprocessing for artist or title string: clean up + extract English only + trim trailing delimiters
+export function preprocessArtistOrTitle(str: string): string {
+  let s = cleanUp(str);
+  s = removeEmptyBrackets(s);
+  s = preprocessTitleOrArtist(s);
+  s = trimTrailingDelimiters(s);
+  s = replaceAmpersand(s, 'and');
+  return s;
+}
+
+// -----------------------------
+// Internal helper functions (non-exported)
+// -----------------------------
+
+// 괄호 안 내용 중에 피처링 키워드 포함시 괄호 포함 제거
+// 예: (ft. Madison Beer), (feat Artist), (featuring Someone)
+function removeFeaturingParentheses(str: string): string {
+  const stack: number[] = [];
+  for (let i = 0; i < str.length; i++) {
+    if (str[i] === '(') {
+      stack.push(i);
+    } else if (str[i] === ')') {
+      if (stack.length > 0) {
+        const start = stack.pop()!;
+        const content = str.slice(start + 1, i);
+        // 피처링 키워드 여부 검사
+        if (/(ft\.|feat\.?|featuring)/i.test(content)) {
+          // 삭제: start부터 i까지를 빈 문자열로 replace 할 수 있게 큐에 기록
+          // 삭제 처리는 후순위에서 수행하도록 함
+          str = str.slice(0, start) + str.slice(i + 1);
+          i = start - 1; // 인덱스 조정
+        }
+      }
+    }
+  }
+  return str.trim();
+}
+// 키워드 정제, 부가정보 제거
+function removeExtraInfo(str: string): string {
+  const extraKeywords = EXTRA_KEYWORDS.slice().sort((a, b) => b.length - a.length); // 긴 키워드 우선
+  let result = str;
+
+  // 1. 괄호 안 피처링 정보(ft., feat, featuring)만 제거
+  result = removeFeaturingParentheses(result);
+
+  // 1. 복합 키워드(공백/특수문자 포함) 전체 제거
+  for (const kw of extraKeywords) {
+    const escapedKw = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // 키워드가 특수문자 포함 가능하므로 escape 처리
+    const regex = new RegExp(`(\\s*${escapedKw})`, 'gi');
+    result = result.replace(regex, '').trim();
+  }
+
+  // 2. 구분자(-, /, |) 기준 분할 후, 끝부분 부가 키워드 포함 파트 제거
+  const parts = result.split(/\s[-/|]\s/);
+  while (
+    parts.length > 1 &&
+    extraKeywords.some((kw) => parts[parts.length - 1]?.toLowerCase().includes(kw.toLowerCase()))
+  ) {
+    parts.pop();
+  }
+
+  // 3. 조합한 결과 문자열로 재설정
+  result = parts.join(' - ');
+
+  // 4. 반복적으로 문자열 끝에 부가 키워드 남아있는지 검사해서 제거
+  let found = true;
+  while (found) {
+    found = false;
+    for (const kw of extraKeywords) {
+      const escapedKw = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`(\\s*${escapedKw})$`, 'i'); // 끝에 위치한 키워드 제거
+      if (regex.test(result)) {
+        result = result.replace(regex, '').trim();
+        found = true;
+      }
+    }
+  }
+  return result;
+}
+
+// op, ed, ost, mv는 해당 단어만 삭제해 예를 들어 open the door -> en the door이 되지 않게끔
+function cleanMusicKeyword(str: string): string {
+  return str
+    .replace(/([^A-Za-z]|^)(OP|ED|OST|MV)([^A-Za-z]|$)/gi, (_match, p1, _p2, p3) => {
+      return `${p1}${p3}`.replace(/\s{2,}/g, ' ');
+    })
+    .trim();
+}
+// 곡명 끝에 연속된 해시태그만 제거
+function removeTrailingHashtags(title: string): string {
+  return title.replace(/(\s*#[\p{L}\p{N}._-]+)+\s*$/gu, '').trim();
+}
+// 방송 날짜 기재된 경우 제거 (YYMMDD 형식)
+function removeDatePattern(str: string): string {
+  return str.replace(/\b\d{2}[01]\d(?:3[0-2]|[0-2][0-9])\b/g, '').trim();
+}
+// 빈 괄호 제거
+function removeEmptyBrackets(str: string): string {
+  return str
+    .replace(/\(\s*\)/g, '')
+    .replace(/\[\s*\]/g, '')
+    .replace(/\{\s*\}/g, '')
+    .trim();
+}
+// 문자열 끝의 불필요한 구분자(공백, -, /, |) 제거
+function trimTrailingDelimiters(str: string): string {
+  return str.replace(TRAILING_DELIMITERS_REGEX, '').trim();
+}
+
+function removeDiacritics(str: string): string {
+  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+function replaceAmpersand(str: string, replacement: string = 'and') {
+  // 양쪽 공백을 유지하며 &를 " and "로 치환 (또는 필요시 ',')
+  return str
+    .replace(/\s*&\s*/g, ` ${replacement} `)
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+// 최상위 전처리 파이프라인 함수
+function preprocessTitleOrArtist(str: string): string {
+  // 1) 합성문자 NFC 통일
+  const normalized = str.normalize('NFC');
+
+  // 2) 악센트 제거
+  const noDiacritics = removeDiacritics(normalized);
+
+  // 3) 악센트 제거된 문자열 넘겨서 영어 추출 및 특수문자 정리
+  return extractEnglishOnly(noDiacritics);
+}
+
+function extractEnglishOnly(str: string): string {
+  const LETTERS = 'A-Za-z'; // 악센트 제거 후라 기본 알파벳만 사용
+  const hasEnglish = new RegExp(`[${LETTERS}]`).test(str);
+  // 악센트 제거 후 비교를 위해 미리 처리
+  const strNoDiacritics = removeDiacritics(str);
+
+  // 비영문자 검사 - 악센트 제거 전 원본에서 처리
+  const hasNonEnglish = new RegExp(`[^\\s${LETTERS}0-9'’&.,-]`).test(strNoDiacritics);
+
+  if (hasEnglish && hasNonEnglish) {
+    // 원본에서 악센트 제거한 문자를 토큰화 (공백, 특수문자 포함)
+    const processedStr = removeDiacritics(str);
+    const match = processedStr.match(new RegExp(`([${LETTERS}][${LETTERS}\\s'’./-]*|&|,)`, 'g'));
+    let result = match ? match.join(' ').trim() : '';
+
+    // 쉼표 앞뒤 공백 정리
+    result = result.replace(/\s+,/g, ',');
+    result = result.replace(/,\s+/g, ', ');
+
+    return result;
+  }
+  return str;
+}
+```
+
 ## File: lib/utils/platform/contentGuard.ts
 ```typescript
 // lib/utils/contentGuard.ts
@@ -4708,6 +5290,122 @@ export function withContentEnabled<Args extends unknown[], R>(
     if (!getContentEnabled()) return;
     return fn(...args);
   };
+}
+```
+
+## File: lib/utils/platform/playbackUtils.ts
+```typescript
+// videoRef는 비디오 엘리먼트, currentTime은 현재 재생시간 상태,
+// offsetLyrics: offset된 가사 리스트, offset: 보정값, onAutoPlayEnd: 종료 콜백
+
+import { Line } from '@lib/types/lyrics';
+import { RefObject } from 'react';
+
+export async function playOffsetTestSegment(
+  videoRef: RefObject<HTMLVideoElement | null>,
+  offsetLyrics: Line[],
+  offset: number,
+  onAutoPlayEnd?: () => void,
+  maxDurationSec = 5,
+) {
+  const video = videoRef.current;
+  console.log('[playOffsetTestSegment] 시작');
+  if (!video) {
+    console.warn('[playOffsetTestSegment] videoRef.current가 없습니다.');
+    return;
+  }
+
+  if (offsetLyrics.length === 0) {
+    console.warn('[playOffsetTestSegment] offsetLyrics가 비어 있습니다.');
+    return;
+  }
+  console.log('[playOffsetTestSegment] 현재 video.currentTime:', video.currentTime, 'offset:', offset);
+
+  // 현재 영상 상태 저장
+  const wasPlaying = !video.paused;
+  const originalTime = video.currentTime;
+  let isInternalSeek = false; // 내부 자동 재생 시크 여부 플래그
+
+  // 현재 가사 찾기 (offset 적용된 시간 기준)
+  const adjustedTime = video.currentTime - offset;
+
+  let currentIndex = offsetLyrics.findIndex((line, idx) => {
+    const next = offsetLyrics[idx + 1];
+    return adjustedTime >= line.time && (!next || adjustedTime < next.time);
+  });
+
+  if (currentIndex === -1) currentIndex = 0;
+
+  const currentLine = offsetLyrics[currentIndex];
+  if (!currentLine) return; // ✅ 안전 처리
+
+  // 구간 재생 시작 시간 (offset 적용된 가사 기준)
+  const segmentStart = currentLine.time + offset;
+  const nextLine = offsetLyrics[currentIndex + 1];
+
+  // 구간 종료 시간 (다음 가사 등장 전)
+  const segmentEnd = nextLine
+    ? Math.min(nextLine.time + offset, segmentStart + maxDurationSec)
+    : segmentStart + Math.min(2, maxDurationSec);
+
+  // 자동 재생 구간이 음수이거나 기존 시간보다 뒤에 있으면 보정
+  const playStartTime = Math.max(segmentStart, 0);
+
+  // 영상 일시정지 + 재생 위치 이동
+  if (wasPlaying) {
+    video.pause();
+  }
+  video.currentTime = playStartTime;
+
+  // 자동 재생 완료를 Promise로 대기
+  return new Promise<void>((resolve, reject) => {
+    const cleanup = () => {
+      video.pause();
+      isInternalSeek = true; // 내부 seek로 표시
+      video.currentTime = originalTime; // 원래 위치로 돌아가기
+      if (wasPlaying) {
+        video.play().catch((err) => console.warn('[playOffsetTestSegment] 재생 복원 실패:', err));
+      }
+      video.removeEventListener('timeupdate', onTimeUpdate);
+      video.removeEventListener('seeking', onSeeking);
+      onAutoPlayEnd?.();
+    };
+
+    const onTimeUpdate = () => {
+      if (video.currentTime >= segmentEnd) {
+        cleanup();
+        resolve();
+      }
+    };
+
+    const onSeeking = () => {
+      if (isInternalSeek) {
+        // 내부 이동은 무시, 플래그 되돌림
+        // isInternalSeek = false;
+        return;
+      }
+      console.warn('[playOffsetTestSegment] 사용자 시크 감지 → 조기 종료');
+      cleanup();
+      reject(new Error('사용자가 영상 위치를 변경함'));
+    };
+
+    isInternalSeek = true;
+    video.addEventListener('timeupdate', onTimeUpdate);
+    video.addEventListener('seeking', onSeeking);
+
+    video.pause();
+    video.currentTime = segmentStart;
+
+    // 위치 이동 후 일정 시간 후에 플래그 해제 (예: 1초 후)
+    setTimeout(() => {
+      isInternalSeek = false;
+    }, 1000);
+
+    video.play().catch((err) => {
+      cleanup();
+      reject(err);
+    });
+  });
 }
 ```
 
@@ -4767,16 +5465,16 @@ export const isPlayerReady = (): boolean => {
 ## File: lib/utils/platform/videoDetection.ts
 ```typescript
 // lib/utils/videoDetection.ts
-let lastDetectTimes: Map<string, number> = new Map();
+const lastDetectTimes: Map<string, number> = new Map();
 let lastVideoId: string | null = null;
-const DETECTION_COOLDOWN = 5000; // 5초
+const DETECTION_COOLDOWN = 3000; // 3초
 
 // 새로운, 더 활용도 높은 형태
 export function tryDetectVideoChange(videoId: string | null, trigger: () => void, cooldown = DETECTION_COOLDOWN): void {
   if (!videoId) return;
-   if (videoId === lastVideoId) {
-     return;
-   }
+  if (videoId === lastVideoId) {
+    return;
+  }
 
   if (!shouldDetect(videoId, cooldown)) {
     // 호출 제한 중, 로그 생략 혹은 필요시 아주 간단히 기록

@@ -1,7 +1,7 @@
 // lib/utils/videoDetection.ts
 const lastDetectTimes: Map<string, number> = new Map();
 let lastVideoId: string | null = null;
-const DETECTION_COOLDOWN = 5000; // 5초
+const DETECTION_COOLDOWN = 3000; // 3초
 
 // 새로운, 더 활용도 높은 형태
 export function tryDetectVideoChange(videoId: string | null, trigger: () => void, cooldown = DETECTION_COOLDOWN): void {

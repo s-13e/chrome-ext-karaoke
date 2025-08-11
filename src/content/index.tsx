@@ -15,7 +15,7 @@ import { isMusicVideo } from '@lib/utils/audio/musicDetection';
 import { UIResourceManager } from '@lib/utils/infra/uiResourceManager';
 import { YOUTUBE_PLAYER_SELECTOR, YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
 import { extractArtistAndTitle, fallbackArtistAndTitle } from '@lib/utils/lyrics/artistTitle';
-import { cleanTopicName, extractArtistAndTitleCustom, preprocessArtistOrTitle } from '@lib/utils/common/stringUtils';
+import { cleanTopicName, extractArtistAndTitleCustom, preprocessArtistOrTitle } from '@lib/utils/lyrics/stringUtils';
 import { listenerManager } from '@lib/utils/infra/listenerManager';
 import { withContentEnabled } from '@lib/utils/platform/contentGuard';
 import { injectLyricsOverlayRoot } from '@components/lyrics/LyricsOverlayRoot';
@@ -394,18 +394,6 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     }
   }
 
-  function shiftFirstLyricEarlier(lyrics: Line[], advanceSec: number): Line[] {
-    if (!lyrics || lyrics.length === 0) return lyrics;
-    const [first, ...rest] = lyrics;
-    if (!first) return lyrics;
-    const newFirstLine: Line = {
-      ...first,
-      time: Math.max(0, first.time - advanceSec),
-      text: first.text ?? '',
-    };
-    return [newFirstLine, ...rest];
-  }
-
   // ✅ URL 변경 핸들러 개선
   const handleUrlChange = (url: string) => {
     console.log('handleUrlChange가 실행됨. 근데 곧 리턴됨.');
@@ -422,6 +410,14 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     }
   };
   const handleUrlChangeGuarded = withContentEnabled(getContentEnabled, handleUrlChange);
+
+  function finishParsingLyrics(lyricsArray: Line[]) {
+    latestLyrics = lyricsArray; // 원본만 저장
+    console.log('[content] finishParsingLyrics 실행 - 길이:', lyricsArray.length);
+    // background로 가사 준비 완료 신호 전송
+    chrome.runtime.sendMessage({ type: 'LYRICS_READY', length: lyricsArray.length });
+    console.log('finishParsingLyrics 실행 끝!');
+  }
 
   // 1. 영상과 크게 무관한 메타데이터, 가사 정보를 확보하는 함수
   async function collectMetadataAndLyrics(videoId: string) {
@@ -479,17 +475,16 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
 
     // 가사 파싱, 기본 전처리 + 앞당기기(3초 예시)
     const parsedLyrics: Line[] = typeof lyrics === 'string' ? parseLyrics(lyrics) : lyrics;
-    const shiftedLyrics = shiftFirstLyricEarlier(parsedLyrics, 3);
 
-    latestLyrics = shiftedLyrics;
-    onLyricsUpdated(shiftedLyrics);
+    finishParsingLyrics(parsedLyrics);
+    onLyricsUpdated(parsedLyrics);
 
     // shiftedLyrics: Line[] 배열 (각 원소에 'text'가 있다고 가정)
     //const lyricsText = shiftedLyrics.map((line) => line.text).join('\n');
     //const lyricsLang = await detectLyricsLanguage(lyricsText, 2);
 
     // 이 함수는 성공시 meta 및 shiftedLyrics 반환 (후속 분석용)
-    return { meta, lyricsDuration, shiftedLyrics };
+    return { meta, lyricsDuration, parsedLyrics };
   }
 
   // 2. 영상 엘리먼트가 준비된 후, 실제 분석 및 렌더링 수행하는 함수
@@ -581,7 +576,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
         console.warn('가사 수집 데이터 없음');
         return;
       }
-      const { meta, lyricsDuration, shiftedLyrics } = collected;
+      const { meta, lyricsDuration, parsedLyrics } = collected;
 
       // 2. 비디오 엘리먼트가 준비되었으면 본 분석 및 렌더링 실행
       const videoElem = document.querySelector('video');
@@ -590,7 +585,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
         console.log('[handleVideoDetection] video element 미존재, 렌더링 생략');
         return;
       }
-      await analyzeAudioAndRenderLyrics(meta, lyricsDuration, videoElem, shiftedLyrics);
+      await analyzeAudioAndRenderLyrics(meta, lyricsDuration, videoElem, parsedLyrics);
     } catch (error) {
       console.error('[handleVideoDetection] 에러 발생:', error);
     } finally {
@@ -643,6 +638,25 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       }
     }
   });
+
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    console.log('[content] onMessage 수신:', message);
+
+    if (message.type === 'GET_LATEST_LYRICS') {
+      console.log('[content] GET_LATEST_LYRICS 요청 수신 - latestLyrics 길이:', latestLyrics.length);
+      sendResponse({ lyrics: latestLyrics });
+    }
+
+    // ✅ 오프셋 적용 반영 처리
+    if (message.type === 'APPLY_OFFSET_LYRICS') {
+      const { offset, lyrics } = message.payload;
+      console.log(`[content] APPLY_OFFSET_LYRICS 수신 → offset: ${offset}, 가사 길이: ${lyrics.length}`);
+
+      latestLyrics = lyrics; // 전역 최신 가사 교체
+      rerenderLyricsOverlay(); // full / sync 모드에 즉시 적용
+    }
+  });
+
   // ✅ 페이지 언로드 시 정리
   window.addEventListener('beforeunload', () => {
     cleanupAllUIElements();
