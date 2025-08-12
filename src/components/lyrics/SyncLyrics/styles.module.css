@@ -8,7 +8,11 @@
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  font-size: 2vw;
+  font-size: calc(1.2rem + 1vw);
+
+  /* 너무 크게/작게 변하지 않게 clamp로 제한 */
+  font-size: clamp(1rem, calc(1.2rem + 1vw), 2.2rem);
+
   line-height: 1.4;
   color: #fff;
   text-shadow:
@@ -16,6 +20,12 @@
     0 0 2px #000,
     0 0 1px #000;
 }
+:fullscreen .dual-highlight-subtitle,
+:-webkit-full-screen .dual-highlight-subtitle {
+  /* 전체화면에서는 더 크게! */
+  font-size: clamp(2rem, calc(2.5rem + 2vw), 4rem);
+}
+
 .dual-highlight-subtitle > div {
   min-height: 2em;
   white-space: nowrap;

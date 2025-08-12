@@ -487,7 +487,7 @@ export async function skipPreviewSegment(
   const playEnd = Math.min(segmentEnd, playStart + maxDuration);
 
   return new Promise((resolve, _reject) => {
-    let timeoutId: NodeJS.Timeout | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const cleanup = () => {
       if (timeoutId) clearTimeout(timeoutId);
@@ -1358,12 +1358,12 @@ export const LyricsOffsetControl: React.FC<LyricsOffsetControlProps> = ({
     if (initialOffset !== offset) {
       setOffset(initialOffset);
     }
-  }, [initialOffset]);
+  }, [offset, initialOffset]);
 
   const updateOffset = (newOffset: number) => {
     const bounded = Math.max(min, Math.min(max, newOffset));
     setOffset(bounded);
-    onChange && onChange(bounded);
+    onChange?.(bounded);
   };
 
   const reset = () => updateOffset(0);
@@ -1392,7 +1392,7 @@ export const LyricsOffsetControl: React.FC<LyricsOffsetControlProps> = ({
       const width = slider.offsetWidth;
       setThumbPos(ratio * width);
     }
-  }, [offset]);
+  }, [offset, min, max]);
 
   return (
     <div className={styles.lyricsOffsetContainer} style={{ padding: '12px 16px', position: 'relative' }}>
@@ -1989,7 +1989,7 @@ interface MainMenuProps {
 // MainMenu.tsx (메뉴 컨테이너 및 1차 메뉴 관리)
 export const MainMenu: React.FC<MainMenuProps> = ({ visible, position, onClose, offset, setOffset }) => {
   const [baseLyrics, setBaseLyrics] = useState<Line[]>([]); // 원본 가사
-  const [_originalLyrics, setOriginalLyrics] = useState<Line[]>([]); // 현재 반영 중인 가사
+  const [, setOriginalLyrics] = useState<Line[]>([]); // 현재 반영 중인 가사
   const [currentSubMenu, setCurrentSubMenu] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const lastOffset = useRef<number | null>(null);

@@ -413,7 +413,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
 
   function finishParsingLyrics(lyricsArray: Line[]) {
     latestLyrics = lyricsArray; // 원본만 저장
-    console.log('[content] finishParsingLyrics 실행 - 길이:', lyricsArray.length);
+
     // background로 가사 준비 완료 신호 전송
     chrome.runtime.sendMessage({ type: 'LYRICS_READY', length: lyricsArray.length });
     console.log('finishParsingLyrics 실행 끝!');
