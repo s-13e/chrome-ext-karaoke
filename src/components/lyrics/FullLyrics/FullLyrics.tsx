@@ -33,7 +33,8 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({
     return currentTime >= line.time && (!next || currentTime < next.time);
   });
 
-  const pronList = usePronunciations(shiftedLyrics.map((line) => line.text));
+  const lyricTexts = useMemo(() => shiftedLyrics.map((line) => line.text), [shiftedLyrics]);
+  const pronList = usePronunciations(lyricTexts);
 
   // 현재 줄로 스크롤 (선택사항)
   useEffect(() => {
@@ -54,16 +55,15 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({
         if (!showRealtimeLyrics && !showPronunciationLyrics) return null;
 
         return (
-          <div key={idx} className={`${styles.lyricLine} ${isActive ? styles.active : ''}`} data-lyric-idx={idx}>
-            {showRealtimeLyrics && <div style={{ color: fontColor }}>{line.text}</div>}
+          <div key={idx} data-lyric-idx={idx} className={`${styles.lyricItem} ${isActive ? styles.active : ''}`}>
+            {showRealtimeLyrics && (
+              <div className={`${styles.lyricLine} ${isActive ? styles.active : ''}`} style={{ color: fontColor }}>
+                {line.text}
+              </div>
+            )}
+
             {showPronunciationLyrics && (
-              <div
-                className={styles.pronunciation}
-                style={{
-                  color: pronunciationColor,
-                  minHeight: '1em', // 레이아웃 유지
-                }}
-              >
+              <div className={styles.pronunciation} style={{ color: pronunciationColor }}>
                 {pron && pron.trim() !== '' ? pron : ' '}
               </div>
             )}

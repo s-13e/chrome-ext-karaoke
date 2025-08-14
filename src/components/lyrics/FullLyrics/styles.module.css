@@ -20,6 +20,12 @@
   /* Chrome/Safari */
   display: none;
 }
+.lyricItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20px; /* 세트(한 줄) 간격 */
+}
 .lyricLine {
   font-size: clamp(14px, calc(0.8vw + 0.8vh), 28px);
   line-height: 1.5;
@@ -32,7 +38,7 @@
   margin-bottom: 0; /* 줄 간 여백 없애기 */
   padding: 0;
 }
-.active {
+.active .lyricLine {
   color: #fff;
   font-size: clamp(18px, calc(1vw + 1vh), 32px);
   font-weight: 700;
@@ -41,14 +47,16 @@
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
+.pronunciation {
+  font-size: clamp(10px, calc(0.6vw + 0.6vh), 20px);
+  opacity: 0.6;
+}
 /* 부모 .active의 투명 텍스트 처리 무시 */
 .active .pronunciation {
   -webkit-text-fill-color: initial; /* 투명 처리 해제 */
   background: none; /* 그라데이션 배경 제거 */
   color: inherit; /* props로 넘어온 색상 적용 */
-}
-.pronunciation {
-  font-size: clamp(10px, calc(0.6vw + 0.6vh), 20px);
-  opacity: 0.6;
-  margin-bottom: 20px;
+  opacity: 0.85;
+  font-weight: 600; /* 약간 굵게 */
+  font-size: clamp(11px, calc(0.65vw + 0.65vh), 22px); /* 5~10% 크기 업 */
 }

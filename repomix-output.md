@@ -2354,7 +2354,6 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({
     }
   }, [activeLineIndex, scrollToCurrent]);
 
-
   return (
     <div className={styles.fullLyricsContainer} ref={containerRef}>
       {shiftedLyrics.map((line, idx) => {
@@ -4132,7 +4131,7 @@ declare module 'i18next' {
 // src/lib/types/kuroshiro-modules.d.ts
 
 declare module 'kuroshiro' {
-  import { KuromojiAnalyzer } from 'kuroshiro-analyzer-kuromoji';
+  import KuromojiAnalyzer from 'kuroshiro-analyzer-kuromoji';
 
   export interface KuroshiroOptions {
     to?: 'hiragana' | 'katakana' | 'romaji';
@@ -4158,13 +4157,11 @@ declare module 'kuroshiro-analyzer-kuromoji' {
     dictPath?: string;
   }
 
-  export class KuromojiAnalyzer {
+  export default class KuromojiAnalyzer {
     constructor(options?: KuromojiAnalyzerOptions);
     init(): Promise<void>; // 일부 버전에서는 init 함수 있음
     // 기타 필요한 메서드가 있다면 추가 가능
   }
-
-  export default KuromojiAnalyzer;
 }
 ```
 
@@ -5038,7 +5035,6 @@ export async function transliterateSpans(spans: ScriptSpan[]): Promise<ScriptSpa
     }),
   );
 }
-
 
 export function mergeSpans(spans: ScriptSpan[]) {
   return spans.map((s) => s.text).join('');

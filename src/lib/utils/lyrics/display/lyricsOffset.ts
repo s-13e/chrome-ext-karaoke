@@ -18,9 +18,16 @@ export function applyOffsetToLyrics(lyrics: Line[], offset: number, minOffsetLim
   const firstTimeAfterOffset = firstLine.time + offset;
   const offsetLimited = firstTimeAfterOffset < minOffsetLimit ? minOffsetLimit - firstLine.time : offset;
 
-  return lyrics.map((line) => ({
+  // 1차 적용
+  const adjusted = lyrics.map((line) => ({
     ...line,
-    time: Math.max(line.time + offsetLimited, 0), // 음수 시간 방지
+    time: line.time + offsetLimited,
+  }));
+
+  // 2차 전역 보정: 모든 time >= 0
+  return adjusted.map((line) => ({
+    ...line,
+    time: line.time < 0 ? 0 : line.time,
   }));
 }
 

@@ -9,26 +9,54 @@ export function usePronunciations(lines: string[]) {
   useEffect(() => {
     let cancelled = false;
 
-    (async () => {
-      const results: string[] = [];
-      for (const text of lines) {
-        if (!text) {
-          results.push('');
-          continue;
+    async function processInBatches(batchSize = 10) {
+      const results: string[] = Array(lines.length).fill('');
+
+      for (let start = 0; start < lines.length; start += batchSize) {
+        const end = Math.min(start + batchSize, lines.length);
+        const batch = lines.slice(start, end);
+
+        // batch 변환 병렬 처리
+        const batchResults = await Promise.all(
+          batch.map(async (text) => {
+            if (!text) return '';
+            try {
+              const spans = splitByScript(text);
+              return await transliterateAndMerge(spans);
+            } catch (err) {
+              console.error('[usePronunciations] 변환 오류:', err);
+              return '';
+            }
+          }),
+        );
+
+        // 결과 갱신
+        for (let i = 0; i < batchResults.length; i++) {
+          results[start + i] = batchResults[i] ?? '';
         }
-        try {
-          const spans = splitByScript(text);
-          const converted = await transliterateAndMerge(spans);
-          results.push(converted);
-        } catch (err) {
-          console.error('[usePronunciations] 변환 오류:', err);
-          results.push('');
+
+        // 이미 변환된 일부 리스트를 UI에 반영해서 "점진적"으로 표시
+        if (!cancelled) {
+          setList((prev) => {
+            // 🔹 변환된 부분이 달라진 경우에만 반영
+            const updated = [...prev];
+            let changed = false;
+            for (let i = start; i < end; i++) {
+              if (updated[i] !== results[i]) {
+                updated[i] = results[i] ?? '';
+                changed = true;
+              }
+            }
+            return changed ? updated : prev;
+          });
         }
+
+        // 브라우저 쉬게 하기 — 다음 batch로 넘어가기 전에 이벤트 루프를 비움
+        await new Promise((resolve) => setTimeout(resolve, 0));
       }
-      if (!cancelled) {
-        setList(results);
-      }
-    })();
+    }
+
+    processInBatches();
 
     return () => {
       cancelled = true;
