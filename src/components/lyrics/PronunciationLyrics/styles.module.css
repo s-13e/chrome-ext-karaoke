@@ -1,0 +1,38 @@
+.dualPronunciationSubtitle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 70px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: clamp(1rem, calc(1.2rem + 1vw), 2.2rem);
+  line-height: 1.2;
+  text-align: center;
+}
+
+.lineBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.highlight {
+  font-weight: bold;
+}
+
+.pronunciation {
+  font-size: 0.8em;
+  opacity: 0.85;
+  margin-top: 2px;
+}
+
+.fullPronunciationContainer {
+  padding: 32px 0;
+  text-align: center;
+}
+
+.fullPronunciationContainer .lineBlock {
+  margin-bottom: 12px;
+}

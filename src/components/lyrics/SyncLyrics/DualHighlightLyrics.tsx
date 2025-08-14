@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo } from 'react';
 import { useCurrentTime } from '@hooks/useCurrentTime';
-import { getDisplayLines } from '@lib/utils/lyrics/lyricsDisplay';
+import { getDisplayLines } from '@lib/utils/lyrics/display/lyricsDisplay';
 import { Line } from '@lib/types/lyrics';
 import styles from './styles.module.css';
-import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/lyricsOffset';
+import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/display/lyricsOffset';
 
 interface DualHighlightLyricsProps {
   lyrics: Line[];

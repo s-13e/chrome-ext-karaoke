@@ -56,20 +56,32 @@ export const LyricsDisplayMenu: React.FC<LyricsDisplayMenuProps> = ({ onBack }) 
     chrome.storage.sync.set({ realtimeLyrics: checked });
   };
 
+  // 발음 On/Off
   const handleToggleAnnounceLyrics = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setIsAnnounceLyricsOn(e.target.checked);
-    chrome.storage.sync.set({ [STORAGE_KEYS.announceLyrics]: e.target.checked });
+    const checked = e.target.checked;
+    setIsAnnounceLyricsOn(checked);
+    chrome.storage.sync.set({ [STORAGE_KEYS.announceLyrics]: checked });
   };
+
+  // 전주 건너뛰기
   const skipFirstLyricsToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSkipFirstLyrics(e.target.checked);
-    chrome.storage.sync.set({ [STORAGE_KEYS.skipFirstLyrics]: e.target.checked });
+    const checked = e.target.checked;
+    setSkipFirstLyrics(checked);
+    chrome.storage.sync.set({ [STORAGE_KEYS.skipFirstLyrics]: checked });
   };
 
   // select value 변경 핸들러
+  // 가사 모드 변경 + 두 자막 기본 ON 세팅
   const handleLyricsModeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const value = labelToMode[e.target.value as keyof typeof labelToMode];
     setLyricsMode(value);
-    chrome.storage.sync.set({ [LYRICS_MODE_KEY]: value });
+
+    // 현재 상태 유지: 기존 토글값을 그대로 저장
+    chrome.storage.sync.set({
+      [LYRICS_MODE_KEY]: value,
+      [STORAGE_KEYS.realtimeLyrics]: isRealtimeLyricsOn,
+      [STORAGE_KEYS.announceLyrics]: isAnnounceLyricsOn,
+    });
   };
 
   return (

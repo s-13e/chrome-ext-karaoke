@@ -88,6 +88,9 @@ module.exports = {
       '@lib': path.resolve(__dirname, '../src/lib'),
     },
     extensions: ['.ts', '.tsx', '.js'],
+    fallback: {
+      path: require.resolve('path-browserify'),
+    },
   },
   plugins: [
     new HtmlWebpackPlugin({

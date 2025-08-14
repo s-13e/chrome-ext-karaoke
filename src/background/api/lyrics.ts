@@ -1,4 +1,4 @@
-import { isEnglishText } from '@lib/utils/lyrics/stringUtils';
+import { isEnglishText } from '@lib/utils/lyrics/parsers/stringUtils';
 import { fetchLyricsByArtistAndTrack, LrcLibLyricsResult } from './lrclib';
 import { extractEnglishAliasFromArtists, fetchEnglishAliasForArtist, searchArtistByFreeText } from './musicBrainz';
 export async function fetchLyricsWithAliasFallback(artist: string, title: string): Promise<LrcLibLyricsResult> {

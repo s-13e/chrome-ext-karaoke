@@ -14,20 +14,24 @@ import { fetchYouTubeVideoMeta } from '@background/api/youtube';
 import { isMusicVideo } from '@lib/utils/audio/musicDetection';
 import { UIResourceManager } from '@lib/utils/infra/uiResourceManager';
 import { YOUTUBE_PLAYER_SELECTOR, YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
-import { extractArtistAndTitle, fallbackArtistAndTitle } from '@lib/utils/lyrics/artistTitle';
-import { cleanTopicName, extractArtistAndTitleCustom, preprocessArtistOrTitle } from '@lib/utils/lyrics/stringUtils';
+import { extractArtistAndTitle, fallbackArtistAndTitle } from '@lib/utils/lyrics/meta/artistTitle';
+import {
+  cleanTopicName,
+  extractArtistAndTitleCustom,
+  preprocessArtistOrTitle,
+} from '@lib/utils/lyrics/parsers/stringUtils';
 import { listenerManager } from '@lib/utils/infra/listenerManager';
 import { withContentEnabled } from '@lib/utils/platform/contentGuard';
 import { injectLyricsOverlayRoot } from '@components/lyrics/LyricsOverlayRoot';
 import { DualHighlightLyrics } from '@components/lyrics/SyncLyrics/DualHighlightLyrics';
 import { FullLyrics } from '@components/lyrics/FullLyrics/FullLyrics';
 import { isAdPlaying } from '@lib/utils/dom/domUtils';
-import { parseLyrics } from '@lib/utils/lyrics/lyricsParser';
+import { parseLyrics } from '@lib/utils/lyrics/parsers/lyricsParser';
 import { Line } from '@lib/types/lyrics';
 import { tryDetectVideoChange } from '@lib/utils/platform/videoDetection';
 import { clearLyricsCache, setToLyricsCache } from '@lib/utils/cache/lyricsCache';
-import { normalizeLyricsQuery } from '@lib/utils/lyrics/queryNormalizer';
-import { getLyricsFromCacheOrFetch } from '@lib/utils/lyrics/getLyricsFromCacheOrFetch';
+import { normalizeLyricsQuery } from '@lib/utils/lyrics/meta/queryNormalizer';
+import { getLyricsFromCacheOrFetch } from '@lib/utils/lyrics/meta/getLyricsFromCacheOrFetch';
 import { fetchLyricsWithAliasFallback } from '@background/api/lyrics';
 import 'normalize.css';
 import { cleanupMediaElementSource } from '@lib/utils/audio/audio';
@@ -59,9 +63,12 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
   let isOverlayInitializing = false;
 
   let showRealtimeLyrics = true; // 현재 가사 ui 보이게
+  let showPronunciationLyrics = true;
+
   let lyricsMode: 'sync' | 'full' = 'sync';
   let lastLyricsMode: 'sync' | 'full' | null = null;
   let lastShowRealtimeLyrics: boolean | null = null;
+  let lastShowPronunciationLyrics: boolean | null = null;
 
   let stopAdWatcher: (() => void) | null = null;
 
@@ -70,7 +77,6 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
   let isCollecting = false;
 
   // 가사 모드
-
   const getContentEnabled = () => contentEnabled;
   const uiManager = new UIResourceManager();
   const RETRY_DELAY = 300;
@@ -152,7 +158,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
   function initListenersAndState() {
     // 초기값 읽기
     chrome.storage.sync.get(
-      ['lyricsFontColorCurrent', 'realtimeLyrics', 'lyricsMode', 'lyricsFontColorPronunciation'],
+      ['lyricsFontColorCurrent', 'lyricsFontColorPronunciation', 'realtimeLyrics', 'announceLyrics', 'lyricsMode'],
       (items) => {
         if (typeof items.lyricsFontColorCurrent === 'string') {
           lyricsFontColorCurrent = items.lyricsFontColorCurrent;
@@ -160,11 +166,15 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
         if (typeof items.lyricsFontColorPronunciation === 'string') {
           lyricsFontColorPronunciation = items.lyricsFontColorPronunciation;
         }
-
-        // 기타 상태 초기화
-        showRealtimeLyrics = typeof items.realtimeLyrics === 'boolean' ? items.realtimeLyrics : showRealtimeLyrics;
-        lyricsMode = ['sync', 'full'].includes(items.lyricsMode) ? items.lyricsMode : lyricsMode;
-
+        if (typeof items.realtimeLyrics === 'boolean') {
+          showRealtimeLyrics = items.realtimeLyrics;
+        }
+        if (typeof items.announceLyrics === 'boolean') {
+          showPronunciationLyrics = items.announceLyrics;
+        }
+        if (['sync', 'full'].includes(items.lyricsMode)) {
+          lyricsMode = items.lyricsMode;
+        }
         // 최초 렌더 호출
         if (latestLyrics.length > 0) {
           rerenderLyricsOverlay();
@@ -174,21 +184,9 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     // 2. 저장소 변경 감지 - 실시간 업데이트
     chrome.storage.onChanged.addListener((changes, areaName) => {
       if (areaName !== 'sync') return;
-
       let needRerender = false;
       console.log('[storage.onChanged] 변경 감지됨:', changes);
 
-      if ('realtimeLyrics' in changes) {
-        showRealtimeLyrics = changes.realtimeLyrics.newValue;
-        console.log('[storage.onChanged] realtimeLyrics 변경:', showRealtimeLyrics);
-
-        needRerender = true;
-      }
-      if ('lyricsMode' in changes) {
-        lyricsMode = changes.lyricsMode.newValue;
-        console.log('[storage.onChanged] lyricsMode 변경:', lyricsMode);
-        needRerender = true;
-      }
       if ('lyricsFontColorCurrent' in changes) {
         const newColor = changes.lyricsFontColorCurrent.newValue;
         console.log('[storage.onChanged] lyricsFontColorCurrent 변경:', newColor);
@@ -207,9 +205,23 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
           needRerender = true;
         }
       }
+      if ('realtimeLyrics' in changes) {
+        showRealtimeLyrics = changes.realtimeLyrics.newValue;
+        console.log('[storage.onChanged] realtimeLyrics 변경:', showRealtimeLyrics);
+        needRerender = true;
+      }
+      if ('announceLyrics' in changes) {
+        showPronunciationLyrics = changes.announceLyrics.newValue;
+        console.log('[storage.onChanged] announceLyrics 변경:', showPronunciationLyrics);
+        needRerender = true;
+      }
+      if ('lyricsMode' in changes) {
+        lyricsMode = changes.lyricsMode.newValue;
+        console.log('[storage.onChanged] lyricsMode 변경:', lyricsMode);
+        needRerender = true;
+      }
 
       if (needRerender) {
-        console.log('[storage.onChanged] 상태 변경 반영 위해 rerenderLyricsOverlay 호출');
         rerenderLyricsOverlay();
       }
     });
@@ -244,8 +256,8 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     if (lyricsMode !== 'sync') {
       return;
     }
-    if (!showRealtimeLyrics) {
-      console.log('[showLyricsOverlay] showRealtimeLyrics false, hideLyricsOverlay 호출');
+    if (!showRealtimeLyrics && !showPronunciationLyrics) {
+      console.log('[showLyricsOverlay] 현재가사/발음가사 모두 꺼짐 → hide');
       hideLyricsOverlay();
       return;
     }
@@ -316,17 +328,22 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
   }
 
   function realOverlayRender() {
-    if (!showRealtimeLyrics) {
+    if (!showRealtimeLyrics && !showPronunciationLyrics) {
       hideLyricsOverlay();
       return;
     }
-    if (!lyricsOverlayRoot) {
-      console.warn('[realOverlayRender] lyricsOverlayRoot가 없습니다.');
-      return;
-    }
+    if (!lyricsOverlayRoot) return;
 
     if (lyricsMode === 'full') {
-      lyricsOverlayRoot.render(<FullLyrics lyrics={latestLyrics} fontColor={lyricsFontColorCurrent} />);
+      lyricsOverlayRoot.render(
+        <FullLyrics
+          lyrics={latestLyrics}
+          fontColor={lyricsFontColorCurrent}
+          pronunciationColor={lyricsFontColorPronunciation}
+          showRealtimeLyrics={showRealtimeLyrics}
+          showPronunciationLyrics={showPronunciationLyrics}
+        />,
+      );
     } else if (lyricsMode === 'sync') {
       lyricsOverlayRoot.render(<DualHighlightLyrics lyrics={latestLyrics} fontColor={lyricsFontColorCurrent} />);
     } else {
@@ -354,19 +371,25 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       detectionObserverManager.lyricsObserver.disconnect();
       detectionObserverManager.lyricsObserver = null;
     }
-    if (!showRealtimeLyrics) {
+
+    if (!showRealtimeLyrics && !showPronunciationLyrics) {
       hideLyricsOverlay();
       return;
     }
     // 최신 lyrics를 클로저로 안전하게 캡처
     detectionObserverManager.lyricsObserver = new MutationObserver(() => {
-      if (lyricsMode !== lastLyricsMode || showRealtimeLyrics !== lastShowRealtimeLyrics) {
+      if (
+        lyricsMode !== lastLyricsMode ||
+        showRealtimeLyrics !== lastShowRealtimeLyrics ||
+        showPronunciationLyrics !== lastShowPronunciationLyrics
+      ) {
         lastLyricsMode = lyricsMode;
         lastShowRealtimeLyrics = showRealtimeLyrics;
+        lastShowPronunciationLyrics = showPronunciationLyrics; // 추가 상태 저장
 
         console.log('[MutationObserver] lyricsMode or showRealtimeLyrics changed, updating UI');
 
-        if (lyricsMode === 'sync' && showRealtimeLyrics) {
+        if (lyricsMode === 'sync' && (showRealtimeLyrics || showPronunciationLyrics)) {
           showLyricsIfNotAd(latestLyrics);
         } else {
           rerenderLyricsOverlay();
@@ -386,7 +409,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     if (isAdPlaying()) {
       hideLyricsOverlay();
     } else {
-      if (lyricsMode === 'sync') {
+      if (lyricsMode === 'sync' && (showRealtimeLyrics || showPronunciationLyrics)) {
         showLyricsOverlay(lyrics, offset);
       } else if (lyricsMode === 'full') {
         rerenderLyricsOverlay();

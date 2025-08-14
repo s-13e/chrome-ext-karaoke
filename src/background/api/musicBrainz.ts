@@ -1,4 +1,4 @@
-import { isEnglishText } from '@lib/utils/lyrics/stringUtils';
+import { isEnglishText } from '@lib/utils/lyrics/parsers/stringUtils';
 
 // background/api/musicBrainz.ts
 const BASE_URL = 'https://musicbrainz.org/ws/2';

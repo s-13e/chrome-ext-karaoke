@@ -62,6 +62,8 @@ components/lyrics/FullLyrics/FullLyrics.tsx
 components/lyrics/FullLyrics/styles.module.css
 components/lyrics/LyricsOverlayRoot.module.css
 components/lyrics/LyricsOverlayRoot.tsx
+components/lyrics/PronunciationLyrics/styles.module.css
+components/lyrics/PronunciationLyrics/usePronunciation.ts
 components/lyrics/SingleLineLyrics/SingleLineLyrics.tsx
 components/lyrics/SingleLineLyrics/styles.module.css
 components/lyrics/SyncLyrics/DualHighlightLyrics.tsx
@@ -90,6 +92,7 @@ lib/types/cssmodules.d.ts
 lib/types/errors.ts
 lib/types/global.d.ts
 lib/types/i18next.d.ts
+lib/types/kuroshiro-modules.d.ts
 lib/types/lyrics.ts
 lib/types/message.ts
 lib/types/svg.d.ts
@@ -112,14 +115,20 @@ lib/utils/infra/listenerManager.ts
 lib/utils/infra/registerAllListeners.ts
 lib/utils/infra/singletonListener.ts
 lib/utils/infra/uiResourceManager.ts
-lib/utils/lyrics/artistTitle.ts
-lib/utils/lyrics/getLyricsFromCacheOrFetch.ts
+lib/utils/lyrics/detection/languageDetectorSimple.ts
+lib/utils/lyrics/detection/languageSpanSplitter.ts
+lib/utils/lyrics/detection/languageTransliterator.ts
+lib/utils/lyrics/display/fontUtils.ts
+lib/utils/lyrics/display/lyricsDisplay.ts
+lib/utils/lyrics/display/lyricsOffset.ts
 lib/utils/lyrics/lyrics.ts
-lib/utils/lyrics/lyricsDisplay.ts
-lib/utils/lyrics/lyricsOffset.ts
-lib/utils/lyrics/lyricsParser.ts
-lib/utils/lyrics/queryNormalizer.ts
-lib/utils/lyrics/stringUtils.ts
+lib/utils/lyrics/meta/artistTitle.ts
+lib/utils/lyrics/meta/getLyricsFromCacheOrFetch.ts
+lib/utils/lyrics/meta/queryNormalizer.ts
+lib/utils/lyrics/parsers/lyricsParser.ts
+lib/utils/lyrics/parsers/stringUtils.ts
+lib/utils/lyrics/romanizers/japaneseRomanizer.ts
+lib/utils/lyrics/romanizers/koreanRomanizer.ts
 lib/utils/platform/contentGuard.ts
 lib/utils/platform/playbackUtils.ts
 lib/utils/platform/playerUtils.ts
@@ -218,7 +227,7 @@ export async function fetchLyricsByArtistAndTrack(artist: string, title: string)
 
 ## File: background/api/lyrics.ts
 ```typescript
-import { isEnglishText } from '@lib/utils/lyrics/stringUtils';
+import { isEnglishText } from '@lib/utils/lyrics/parsers/stringUtils';
 import { fetchLyricsByArtistAndTrack, LrcLibLyricsResult } from './lrclib';
 import { extractEnglishAliasFromArtists, fetchEnglishAliasForArtist, searchArtistByFreeText } from './musicBrainz';
 export async function fetchLyricsWithAliasFallback(artist: string, title: string): Promise<LrcLibLyricsResult> {
@@ -285,7 +294,7 @@ export async function fetchLyricsWithAliasFallback(artist: string, title: string
 
 ## File: background/api/musicBrainz.ts
 ```typescript
-import { isEnglishText } from '@lib/utils/lyrics/stringUtils';
+import { isEnglishText } from '@lib/utils/lyrics/parsers/stringUtils';
 
 // background/api/musicBrainz.ts
 const BASE_URL = 'https://musicbrainz.org/ws/2';
@@ -1267,20 +1276,32 @@ export const LyricsDisplayMenu: React.FC<LyricsDisplayMenuProps> = ({ onBack }) 
     chrome.storage.sync.set({ realtimeLyrics: checked });
   };
 
+  // 발음 On/Off
   const handleToggleAnnounceLyrics = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setIsAnnounceLyricsOn(e.target.checked);
-    chrome.storage.sync.set({ [STORAGE_KEYS.announceLyrics]: e.target.checked });
+    const checked = e.target.checked;
+    setIsAnnounceLyricsOn(checked);
+    chrome.storage.sync.set({ [STORAGE_KEYS.announceLyrics]: checked });
   };
+
+  // 전주 건너뛰기
   const skipFirstLyricsToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSkipFirstLyrics(e.target.checked);
-    chrome.storage.sync.set({ [STORAGE_KEYS.skipFirstLyrics]: e.target.checked });
+    const checked = e.target.checked;
+    setSkipFirstLyrics(checked);
+    chrome.storage.sync.set({ [STORAGE_KEYS.skipFirstLyrics]: checked });
   };
 
   // select value 변경 핸들러
+  // 가사 모드 변경 + 두 자막 기본 ON 세팅
   const handleLyricsModeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const value = labelToMode[e.target.value as keyof typeof labelToMode];
     setLyricsMode(value);
-    chrome.storage.sync.set({ [LYRICS_MODE_KEY]: value });
+
+    // 현재 상태 유지: 기존 토글값을 그대로 저장
+    chrome.storage.sync.set({
+      [LYRICS_MODE_KEY]: value,
+      [STORAGE_KEYS.realtimeLyrics]: isRealtimeLyricsOn,
+      [STORAGE_KEYS.announceLyrics]: isAnnounceLyricsOn,
+    });
   };
 
   return (
@@ -1473,7 +1494,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import styles from './MainMenu.module.css';
 import { LyricsOffsetControl } from './LyricsOffsetControl';
 import { Line } from '@lib/types/lyrics';
-import { applyOffsetToLyrics } from '@lib/utils/lyrics/lyricsOffset';
+import { applyOffsetToLyrics } from '@lib/utils/lyrics/display/lyricsOffset';
 import { SingleLineLyrics } from '@components/lyrics/SingleLineLyrics/SingleLineLyrics';
 
 interface LyricsOffsetMenuProps {
@@ -2292,24 +2313,37 @@ import React, { useRef, useEffect, useMemo } from 'react';
 import styles from './styles.module.css';
 import { Line } from '@lib/types/lyrics';
 import { useCurrentTime } from '@hooks/useCurrentTime';
-import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/lyricsOffset';
+import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/display/lyricsOffset';
+import { usePronunciations } from '../PronunciationLyrics/usePronunciation';
 
 interface FullLyricsProps {
   lyrics: Line[];
   offset?: number;
   scrollToCurrent?: boolean;
   fontColor?: string;
+  pronunciationColor?: string;
+  showRealtimeLyrics?: boolean;
+  showPronunciationLyrics?: boolean;
 }
 
-export const FullLyrics: React.FC<FullLyricsProps> = ({ lyrics, scrollToCurrent = true, fontColor = '#FFFFFF' }) => {
+export const FullLyrics: React.FC<FullLyricsProps> = ({
+  lyrics,
+  scrollToCurrent = true,
+  fontColor = '#FFFFFF',
+  pronunciationColor = '#AAAAAA',
+  showRealtimeLyrics = true,
+  showPronunciationLyrics = true,
+}) => {
   const shiftedLyrics = useMemo(() => shiftFirstLyricEarlier(lyrics, 3), [lyrics]);
-
   const currentTime = useCurrentTime();
   const containerRef = useRef<HTMLDivElement>(null);
+
   const activeLineIndex = shiftedLyrics.findIndex((line, i) => {
     const next = shiftedLyrics[i + 1];
     return currentTime >= line.time && (!next || currentTime < next.time);
   });
+
+  const pronList = usePronunciations(shiftedLyrics.map((line) => line.text));
 
   // 현재 줄로 스크롤 (선택사항)
   useEffect(() => {
@@ -2320,18 +2354,33 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({ lyrics, scrollToCurrent 
     }
   }, [activeLineIndex, scrollToCurrent]);
 
+
   return (
     <div className={styles.fullLyricsContainer} ref={containerRef}>
-      {shiftedLyrics.map((line, idx) => (
-        <div
-          key={idx}
-          className={idx === activeLineIndex ? `${styles.lyricLine} ${styles.active}` : styles.lyricLine}
-          data-lyric-idx={idx}
-          style={{ color: fontColor }}
-        >
-          {line.text}
-        </div>
-      ))}
+      {shiftedLyrics.map((line, idx) => {
+        const pron = pronList[idx];
+        const isActive = idx === activeLineIndex;
+
+        // 현재/발음이 둘 다 OFF면 렌더 안 함
+        if (!showRealtimeLyrics && !showPronunciationLyrics) return null;
+
+        return (
+          <div key={idx} className={`${styles.lyricLine} ${isActive ? styles.active : ''}`} data-lyric-idx={idx}>
+            {showRealtimeLyrics && <div style={{ color: fontColor }}>{line.text}</div>}
+            {showPronunciationLyrics && (
+              <div
+                className={styles.pronunciation}
+                style={{
+                  color: pronunciationColor,
+                  minHeight: '1em', // 레이아웃 유지
+                }}
+              >
+                {pron && pron.trim() !== '' ? pron : ' '}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 };
@@ -2341,7 +2390,9 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({ lyrics, scrollToCurrent 
 ```css
 .fullLyricsContainer {
   position: absolute;
-  top: 0; left: 0; width: 100%;
+  top: 0;
+  left: 0;
+  width: 100%;
   height: -webkit-fill-available;
   pointer-events: none; /* 클릭은 통과 */
   overflow-y: auto;
@@ -2360,23 +2411,36 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({ lyrics, scrollToCurrent 
   display: none;
 }
 .lyricLine {
-  font-size: 1.3vw;
-  line-height: 2.2;
+  font-size: clamp(14px, calc(0.8vw + 0.8vh), 28px);
+  line-height: 1.5;
   color: #f3f3f3;
   font-weight: 500;
   transition:
     color 0.15s,
     font-size 0.15s;
   /* 기타 spacing, margin, etc */
+  margin-bottom: 0; /* 줄 간 여백 없애기 */
+  padding: 0;
 }
 .active {
   color: #fff;
-  font-size: 1.65vw;
+  font-size: clamp(18px, calc(1vw + 1vh), 32px);
   font-weight: 700;
   background: linear-gradient(90deg, #357aff, #e91e63 80%);
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+/* 부모 .active의 투명 텍스트 처리 무시 */
+.active .pronunciation {
+  -webkit-text-fill-color: initial; /* 투명 처리 해제 */
+  background: none; /* 그라데이션 배경 제거 */
+  color: inherit; /* props로 넘어온 색상 적용 */
+}
+.pronunciation {
+  font-size: clamp(10px, calc(0.6vw + 0.6vh), 20px);
+  opacity: 0.6;
+  margin-bottom: 20px;
 }
 ```
 
@@ -2428,6 +2492,91 @@ export function injectLyricsOverlayRoot() {
     console.log('[LyricsOverlayRoot] 기존 오버레이 루트 DOM 재사용');
   }
   return overlay;
+}
+```
+
+## File: components/lyrics/PronunciationLyrics/styles.module.css
+```css
+.dualPronunciationSubtitle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 70px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: clamp(1rem, calc(1.2rem + 1vw), 2.2rem);
+  line-height: 1.2;
+  text-align: center;
+}
+
+.lineBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.highlight {
+  font-weight: bold;
+}
+
+.pronunciation {
+  font-size: 0.8em;
+  opacity: 0.85;
+  margin-top: 2px;
+}
+
+.fullPronunciationContainer {
+  padding: 32px 0;
+  text-align: center;
+}
+
+.fullPronunciationContainer .lineBlock {
+  margin-bottom: 12px;
+}
+```
+
+## File: components/lyrics/PronunciationLyrics/usePronunciation.ts
+```typescript
+import { useEffect, useState } from 'react';
+import { splitByScript } from '@lib/utils/lyrics/detection/languageSpanSplitter';
+import { transliterateAndMerge } from '@lib/utils/lyrics/detection/languageTransliterator';
+
+// 여러 줄의 가사를 한 번에 변환
+export function usePronunciations(lines: string[]) {
+  const [list, setList] = useState<string[]>(() => Array(lines.length).fill(''));
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const results: string[] = [];
+      for (const text of lines) {
+        if (!text) {
+          results.push('');
+          continue;
+        }
+        try {
+          const spans = splitByScript(text);
+          const converted = await transliterateAndMerge(spans);
+          results.push(converted);
+        } catch (err) {
+          console.error('[usePronunciations] 변환 오류:', err);
+          results.push('');
+        }
+      }
+      if (!cancelled) {
+        setList(results);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [lines]);
+
+  return list;
 }
 ```
 
@@ -2511,10 +2660,10 @@ export const SingleLineLyrics: React.FC<SingleLineLyricsProps & { currentTime: n
 ```typescript
 import React, { useEffect, useMemo } from 'react';
 import { useCurrentTime } from '@hooks/useCurrentTime';
-import { getDisplayLines } from '@lib/utils/lyrics/lyricsDisplay';
+import { getDisplayLines } from '@lib/utils/lyrics/display/lyricsDisplay';
 import { Line } from '@lib/types/lyrics';
 import styles from './styles.module.css';
-import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/lyricsOffset';
+import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/display/lyricsOffset';
 
 interface DualHighlightLyricsProps {
   lyrics: Line[];
@@ -2555,7 +2704,11 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({ lyrics
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  font-size: 2vw;
+  font-size: calc(1.2rem + 1vw);
+
+  /* 너무 크게/작게 변하지 않게 clamp로 제한 */
+  font-size: clamp(1rem, calc(1.2rem + 1vw), 2.2rem);
+
   line-height: 1.4;
   color: #fff;
   text-shadow:
@@ -2563,6 +2716,12 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({ lyrics
     0 0 2px #000,
     0 0 1px #000;
 }
+:fullscreen .dual-highlight-subtitle,
+:-webkit-full-screen .dual-highlight-subtitle {
+  /* 전체화면에서는 더 크게! */
+  font-size: clamp(2rem, calc(2.5rem + 2vw), 4rem);
+}
+
 .dual-highlight-subtitle > div {
   min-height: 2em;
   white-space: nowrap;
@@ -2986,20 +3145,24 @@ import { fetchYouTubeVideoMeta } from '@background/api/youtube';
 import { isMusicVideo } from '@lib/utils/audio/musicDetection';
 import { UIResourceManager } from '@lib/utils/infra/uiResourceManager';
 import { YOUTUBE_PLAYER_SELECTOR, YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
-import { extractArtistAndTitle, fallbackArtistAndTitle } from '@lib/utils/lyrics/artistTitle';
-import { cleanTopicName, extractArtistAndTitleCustom, preprocessArtistOrTitle } from '@lib/utils/lyrics/stringUtils';
+import { extractArtistAndTitle, fallbackArtistAndTitle } from '@lib/utils/lyrics/meta/artistTitle';
+import {
+  cleanTopicName,
+  extractArtistAndTitleCustom,
+  preprocessArtistOrTitle,
+} from '@lib/utils/lyrics/parsers/stringUtils';
 import { listenerManager } from '@lib/utils/infra/listenerManager';
 import { withContentEnabled } from '@lib/utils/platform/contentGuard';
 import { injectLyricsOverlayRoot } from '@components/lyrics/LyricsOverlayRoot';
 import { DualHighlightLyrics } from '@components/lyrics/SyncLyrics/DualHighlightLyrics';
 import { FullLyrics } from '@components/lyrics/FullLyrics/FullLyrics';
 import { isAdPlaying } from '@lib/utils/dom/domUtils';
-import { parseLyrics } from '@lib/utils/lyrics/lyricsParser';
+import { parseLyrics } from '@lib/utils/lyrics/parsers/lyricsParser';
 import { Line } from '@lib/types/lyrics';
 import { tryDetectVideoChange } from '@lib/utils/platform/videoDetection';
 import { clearLyricsCache, setToLyricsCache } from '@lib/utils/cache/lyricsCache';
-import { normalizeLyricsQuery } from '@lib/utils/lyrics/queryNormalizer';
-import { getLyricsFromCacheOrFetch } from '@lib/utils/lyrics/getLyricsFromCacheOrFetch';
+import { normalizeLyricsQuery } from '@lib/utils/lyrics/meta/queryNormalizer';
+import { getLyricsFromCacheOrFetch } from '@lib/utils/lyrics/meta/getLyricsFromCacheOrFetch';
 import { fetchLyricsWithAliasFallback } from '@background/api/lyrics';
 import 'normalize.css';
 import { cleanupMediaElementSource } from '@lib/utils/audio/audio';
@@ -3031,9 +3194,12 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
   let isOverlayInitializing = false;
 
   let showRealtimeLyrics = true; // 현재 가사 ui 보이게
+  let showPronunciationLyrics = true;
+
   let lyricsMode: 'sync' | 'full' = 'sync';
   let lastLyricsMode: 'sync' | 'full' | null = null;
   let lastShowRealtimeLyrics: boolean | null = null;
+  let lastShowPronunciationLyrics: boolean | null = null;
 
   let stopAdWatcher: (() => void) | null = null;
 
@@ -3042,7 +3208,6 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
   let isCollecting = false;
 
   // 가사 모드
-
   const getContentEnabled = () => contentEnabled;
   const uiManager = new UIResourceManager();
   const RETRY_DELAY = 300;
@@ -3124,7 +3289,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
   function initListenersAndState() {
     // 초기값 읽기
     chrome.storage.sync.get(
-      ['lyricsFontColorCurrent', 'realtimeLyrics', 'lyricsMode', 'lyricsFontColorPronunciation'],
+      ['lyricsFontColorCurrent', 'lyricsFontColorPronunciation', 'realtimeLyrics', 'announceLyrics', 'lyricsMode'],
       (items) => {
         if (typeof items.lyricsFontColorCurrent === 'string') {
           lyricsFontColorCurrent = items.lyricsFontColorCurrent;
@@ -3132,11 +3297,15 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
         if (typeof items.lyricsFontColorPronunciation === 'string') {
           lyricsFontColorPronunciation = items.lyricsFontColorPronunciation;
         }
-
-        // 기타 상태 초기화
-        showRealtimeLyrics = typeof items.realtimeLyrics === 'boolean' ? items.realtimeLyrics : showRealtimeLyrics;
-        lyricsMode = ['sync', 'full'].includes(items.lyricsMode) ? items.lyricsMode : lyricsMode;
-
+        if (typeof items.realtimeLyrics === 'boolean') {
+          showRealtimeLyrics = items.realtimeLyrics;
+        }
+        if (typeof items.announceLyrics === 'boolean') {
+          showPronunciationLyrics = items.announceLyrics;
+        }
+        if (['sync', 'full'].includes(items.lyricsMode)) {
+          lyricsMode = items.lyricsMode;
+        }
         // 최초 렌더 호출
         if (latestLyrics.length > 0) {
           rerenderLyricsOverlay();
@@ -3146,21 +3315,9 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     // 2. 저장소 변경 감지 - 실시간 업데이트
     chrome.storage.onChanged.addListener((changes, areaName) => {
       if (areaName !== 'sync') return;
-
       let needRerender = false;
       console.log('[storage.onChanged] 변경 감지됨:', changes);
 
-      if ('realtimeLyrics' in changes) {
-        showRealtimeLyrics = changes.realtimeLyrics.newValue;
-        console.log('[storage.onChanged] realtimeLyrics 변경:', showRealtimeLyrics);
-
-        needRerender = true;
-      }
-      if ('lyricsMode' in changes) {
-        lyricsMode = changes.lyricsMode.newValue;
-        console.log('[storage.onChanged] lyricsMode 변경:', lyricsMode);
-        needRerender = true;
-      }
       if ('lyricsFontColorCurrent' in changes) {
         const newColor = changes.lyricsFontColorCurrent.newValue;
         console.log('[storage.onChanged] lyricsFontColorCurrent 변경:', newColor);
@@ -3179,9 +3336,23 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
           needRerender = true;
         }
       }
+      if ('realtimeLyrics' in changes) {
+        showRealtimeLyrics = changes.realtimeLyrics.newValue;
+        console.log('[storage.onChanged] realtimeLyrics 변경:', showRealtimeLyrics);
+        needRerender = true;
+      }
+      if ('announceLyrics' in changes) {
+        showPronunciationLyrics = changes.announceLyrics.newValue;
+        console.log('[storage.onChanged] announceLyrics 변경:', showPronunciationLyrics);
+        needRerender = true;
+      }
+      if ('lyricsMode' in changes) {
+        lyricsMode = changes.lyricsMode.newValue;
+        console.log('[storage.onChanged] lyricsMode 변경:', lyricsMode);
+        needRerender = true;
+      }
 
       if (needRerender) {
-        console.log('[storage.onChanged] 상태 변경 반영 위해 rerenderLyricsOverlay 호출');
         rerenderLyricsOverlay();
       }
     });
@@ -3216,8 +3387,8 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     if (lyricsMode !== 'sync') {
       return;
     }
-    if (!showRealtimeLyrics) {
-      console.log('[showLyricsOverlay] showRealtimeLyrics false, hideLyricsOverlay 호출');
+    if (!showRealtimeLyrics && !showPronunciationLyrics) {
+      console.log('[showLyricsOverlay] 현재가사/발음가사 모두 꺼짐 → hide');
       hideLyricsOverlay();
       return;
     }
@@ -3288,17 +3459,22 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
   }
 
   function realOverlayRender() {
-    if (!showRealtimeLyrics) {
+    if (!showRealtimeLyrics && !showPronunciationLyrics) {
       hideLyricsOverlay();
       return;
     }
-    if (!lyricsOverlayRoot) {
-      console.warn('[realOverlayRender] lyricsOverlayRoot가 없습니다.');
-      return;
-    }
+    if (!lyricsOverlayRoot) return;
 
     if (lyricsMode === 'full') {
-      lyricsOverlayRoot.render(<FullLyrics lyrics={latestLyrics} fontColor={lyricsFontColorCurrent} />);
+      lyricsOverlayRoot.render(
+        <FullLyrics
+          lyrics={latestLyrics}
+          fontColor={lyricsFontColorCurrent}
+          pronunciationColor={lyricsFontColorPronunciation}
+          showRealtimeLyrics={showRealtimeLyrics}
+          showPronunciationLyrics={showPronunciationLyrics}
+        />,
+      );
     } else if (lyricsMode === 'sync') {
       lyricsOverlayRoot.render(<DualHighlightLyrics lyrics={latestLyrics} fontColor={lyricsFontColorCurrent} />);
     } else {
@@ -3326,19 +3502,25 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       detectionObserverManager.lyricsObserver.disconnect();
       detectionObserverManager.lyricsObserver = null;
     }
-    if (!showRealtimeLyrics) {
+
+    if (!showRealtimeLyrics && !showPronunciationLyrics) {
       hideLyricsOverlay();
       return;
     }
     // 최신 lyrics를 클로저로 안전하게 캡처
     detectionObserverManager.lyricsObserver = new MutationObserver(() => {
-      if (lyricsMode !== lastLyricsMode || showRealtimeLyrics !== lastShowRealtimeLyrics) {
+      if (
+        lyricsMode !== lastLyricsMode ||
+        showRealtimeLyrics !== lastShowRealtimeLyrics ||
+        showPronunciationLyrics !== lastShowPronunciationLyrics
+      ) {
         lastLyricsMode = lyricsMode;
         lastShowRealtimeLyrics = showRealtimeLyrics;
+        lastShowPronunciationLyrics = showPronunciationLyrics; // 추가 상태 저장
 
         console.log('[MutationObserver] lyricsMode or showRealtimeLyrics changed, updating UI');
 
-        if (lyricsMode === 'sync' && showRealtimeLyrics) {
+        if (lyricsMode === 'sync' && (showRealtimeLyrics || showPronunciationLyrics)) {
           showLyricsIfNotAd(latestLyrics);
         } else {
           rerenderLyricsOverlay();
@@ -3358,7 +3540,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     if (isAdPlaying()) {
       hideLyricsOverlay();
     } else {
-      if (lyricsMode === 'sync') {
+      if (lyricsMode === 'sync' && (showRealtimeLyrics || showPronunciationLyrics)) {
         showLyricsOverlay(lyrics, offset);
       } else if (lyricsMode === 'full') {
         rerenderLyricsOverlay();
@@ -3385,7 +3567,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
 
   function finishParsingLyrics(lyricsArray: Line[]) {
     latestLyrics = lyricsArray; // 원본만 저장
-    console.log('[content] finishParsingLyrics 실행 - 길이:', lyricsArray.length);
+
     // background로 가사 준비 완료 신호 전송
     chrome.runtime.sendMessage({ type: 'LYRICS_READY', length: lyricsArray.length });
     console.log('finishParsingLyrics 실행 끝!');
@@ -3942,6 +4124,47 @@ declare module 'i18next' {
   interface i18n {
     initializePromise?: Promise<boolean>;
   }
+}
+```
+
+## File: lib/types/kuroshiro-modules.d.ts
+```typescript
+// src/lib/types/kuroshiro-modules.d.ts
+
+declare module 'kuroshiro' {
+  import { KuromojiAnalyzer } from 'kuroshiro-analyzer-kuromoji';
+
+  export interface KuroshiroOptions {
+    to?: 'hiragana' | 'katakana' | 'romaji';
+    romajiSystem?: 'hepburn' | 'kunrei' | 'nippon';
+    delimiter?: string;
+  }
+
+  export interface KuroshiroInstance {
+    init(analyzer: KuromojiAnalyzer): Promise<void>;
+    convert(input: string, options?: KuroshiroOptions): Promise<string>;
+    // 기타 필요한 메서드/옵션이 있으면 추가 가능
+  }
+
+  const Kuroshiro: {
+    new (): KuroshiroInstance;
+  };
+
+  export default Kuroshiro;
+}
+
+declare module 'kuroshiro-analyzer-kuromoji' {
+  export interface KuromojiAnalyzerOptions {
+    dictPath?: string;
+  }
+
+  export class KuromojiAnalyzer {
+    constructor(options?: KuromojiAnalyzerOptions);
+    init(): Promise<void>; // 일부 버전에서는 init 함수 있음
+    // 기타 필요한 메서드가 있다면 추가 가능
+  }
+
+  export default KuromojiAnalyzer;
 }
 ```
 
@@ -4719,7 +4942,278 @@ export class UIResourceManager {
 }
 ```
 
-## File: lib/utils/lyrics/artistTitle.ts
+## File: lib/utils/lyrics/detection/languageDetectorSimple.ts
+```typescript
+// src/lib/utils/lyrics/languageDetectorSimple.ts
+export type DetectedLanguageCode = 'ko' | 'ja' | 'th' | 'ar' | 'he' | 'deva' | 'cyrl' | 'other';
+
+type LanguageScriptDetector = {
+  lang: DetectedLanguageCode;
+  test: (char: string) => boolean;
+};
+
+const detectors: LanguageScriptDetector[] = [
+  {
+    lang: 'ko', // 한국어
+    test: (c) => /[\u1100-\u11FF\u3130-\u318F\uAC00-\uD7A3]/.test(c),
+  },
+  {
+    lang: 'ja', // 일본어
+    test: (c) => /[\u3040-\u309F\u30A0-\u30FF]/.test(c),
+  },
+  { lang: 'th', test: (c) => /[\u0E00-\u0E7F]/.test(c) }, // 태국어
+  { lang: 'ar', test: (c) => /[\u0600-\u06FF]/.test(c) }, // 아랍어
+  { lang: 'he', test: (c) => /[\u0590-\u05FF]/.test(c) }, // 히브리어
+  { lang: 'deva', test: (c) => /[\u0900-\u097F]/.test(c) }, // 데바나가리
+  { lang: 'cyrl', test: (c) => /[\u0400-\u04FF]/.test(c) }, // 키릴문자,
+];
+
+export function detectScript(char: string): DetectedLanguageCode {
+  const found = detectors.find((d) => d.test(char));
+  return found ? found.lang : 'other';
+}
+```
+
+## File: lib/utils/lyrics/detection/languageSpanSplitter.ts
+```typescript
+import { detectScript } from './languageDetectorSimple';
+
+export type ScriptSpan = {
+  lang: string | null;
+  text: string;
+};
+
+export function splitByScript(text: string): ScriptSpan[] {
+  const spans: ScriptSpan[] = [];
+  let buffer = '';
+  let currentLang: string | null = null;
+
+  for (const char of text) {
+    const lang = detectScript(char);
+    if (lang !== currentLang) {
+      if (buffer) spans.push({ lang: currentLang, text: buffer });
+      buffer = char;
+      currentLang = lang;
+    } else {
+      buffer += char;
+    }
+  }
+  if (buffer) spans.push({ lang: currentLang, text: buffer });
+  return spans;
+}
+```
+
+## File: lib/utils/lyrics/detection/languageTransliterator.ts
+```typescript
+// src/lib/utils/lyrics/languageTransliterator.ts
+
+import { japaneseRomanizer } from '../romanizers/japaneseRomanizer';
+import { koreanRomanizer } from '../romanizers/koreanRomanizer';
+import type { ScriptSpan } from './languageSpanSplitter';
+
+// 변환 불필요 언어나 미지원 스크립트는 그대로 반환
+const transliterators: Record<string, (text: string) => Promise<string>> = {
+  ko: async (text) => Promise.resolve(koreanRomanizer(text)),
+  ja: (text) => japaneseRomanizer(text),
+  th: async (text) => Promise.resolve(text),
+  ar: async (text) => Promise.resolve(text),
+  he: async (text) => Promise.resolve(text),
+  deva: async (text) => Promise.resolve(text),
+  cyrl: async (text) => Promise.resolve(text),
+  other: async (text) => Promise.resolve(text),
+};
+
+export async function transliterateSpans(spans: ScriptSpan[]): Promise<ScriptSpan[]> {
+  return Promise.all(
+    spans.map(async (span) => {
+      const langKey = span.lang ?? 'other';
+
+      // 변환 함수가 없으면 기본 async 함수로 원래 텍스트 반환
+      const converter = transliterators[langKey] ?? (async (txt: string) => txt);
+
+      return {
+        lang: span.lang,
+        text: await converter(span.text),
+      };
+    }),
+  );
+}
+
+
+export function mergeSpans(spans: ScriptSpan[]) {
+  return spans.map((s) => s.text).join('');
+}
+
+export async function transliterateAndMerge(spans: ScriptSpan[]) {
+  const converted = await transliterateSpans(spans);
+  return mergeSpans(converted);
+}
+```
+
+## File: lib/utils/lyrics/display/fontUtils.ts
+```typescript
+// lib/utils/lyrics/fontUtils.ts
+/**
+ * 가사 전체 중 가장 긴 줄을 기준으로 폰트 크기를 자동 계산
+ * @param lyricsLines 문자열 배열 (싱크/비싱크 상관 없이 한 줄씩)
+ * @param containerWidth px 단위 컨테이너 가로폭
+ * @param baseFontSize 기준 폰트(px)
+ * @returns 계산된 폰트 px 값 (정수)
+ */
+export function calculateAutoFontSize(lyricsLines: string[], containerWidth: number, baseFontSize = 32): number {
+  if (!lyricsLines.length || containerWidth <= 0) return baseFontSize;
+
+  let maxLength = 0;
+  const tempSpan = document.createElement('span');
+  tempSpan.style.visibility = 'hidden';
+  tempSpan.style.whiteSpace = 'nowrap';
+  document.body.appendChild(tempSpan);
+
+  for (const line of lyricsLines) {
+    tempSpan.innerText = line;
+    const lineWidth = tempSpan.offsetWidth;
+    if (lineWidth > maxLength) {
+      maxLength = lineWidth;
+    }
+  }
+
+  tempSpan.remove();
+
+  if (maxLength === 0) return baseFontSize;
+
+  const scale = containerWidth / maxLength;
+  return Math.floor(baseFontSize * scale);
+}
+```
+
+## File: lib/utils/lyrics/display/lyricsDisplay.ts
+```typescript
+// utils/lyricsDisplay.ts
+import { Line } from '@lib/types/lyrics';
+
+export interface DisplayIndices {
+  top: string;
+  bottom: string;
+  highlightTop: boolean;
+  highlightBottom: boolean;
+}
+
+export function getDisplayLines(lines: Line[], currentTime: number): DisplayIndices {
+  if (lines.length === 0) {
+    return { top: '', bottom: '', highlightTop: false, highlightBottom: false };
+  }
+
+  let activeIndex = -1;
+
+  for (let i = 0; i < lines.length; i++) {
+    const cur = lines[i];
+    const next = lines[i + 1];
+    if (!cur) continue;
+
+    const endTime = next?.time ?? Infinity;
+    const previewTime = cur.time + (endTime - cur.time) * 0.5;
+
+    if (currentTime >= cur.time && currentTime < previewTime) {
+      activeIndex = i;
+      break;
+    } else if (currentTime >= previewTime && currentTime < endTime) {
+      activeIndex = i + 1;
+      break;
+    }
+  }
+
+  if (activeIndex === -1) {
+    const firstLine = lines[0];
+    if (firstLine && currentTime < firstLine.time) {
+      // 첫 타임스탬프 전: 아무 자막도 출력하지 않음
+      return { top: '', bottom: '', highlightTop: false, highlightBottom: false };
+    }
+    activeIndex = lines.length - 1; // 곡이 끝난 뒤, 마지막 가사 유지
+  }
+
+  // 위치는 교대로: 0번째는 bottom, 1번째는 top, 2번째는 bottom, 3번째는 top ...
+  const isEven = activeIndex % 2 === 0;
+
+  const topIdx = isEven ? activeIndex - 1 : activeIndex;
+  const bottomIdx = isEven ? activeIndex : activeIndex - 1;
+
+  return {
+    top: topIdx >= 0 ? (lines[topIdx]?.text ?? '') : '',
+    bottom: bottomIdx >= 0 ? (lines[bottomIdx]?.text ?? '') : '',
+    highlightTop: !isEven, // 홀수 번째 줄이면 top 강조
+    highlightBottom: isEven, // 짝수 번째 줄이면 bottom 강조
+  };
+}
+```
+
+## File: lib/utils/lyrics/display/lyricsOffset.ts
+```typescript
+import { Line } from '@lib/types/lyrics';
+
+/**
+ * 가사 배열에 offset 보정 적용
+ * @param lyrics 원본 가사 배열 (time기준 정렬되어 있다고 가정)
+ * @param offset 초 단위 오프셋 (음수 가능)
+ * @param minOffsetLimit 첫 가사의 시간이 minOffsetLimit보다 작아지지 않도록 제한 (예: 0)
+ * @returns offset이 적용된 새로운 가사 배열
+ */
+export function applyOffsetToLyrics(lyrics: Line[], offset: number, minOffsetLimit = 0): Line[] {
+  if (!lyrics || lyrics.length === 0) return lyrics;
+
+  const firstLine = lyrics[0];
+  if (!firstLine || firstLine.time === undefined) {
+    return lyrics; // 그냥 원본 배열 반환 또는 다른 처리
+  }
+  // 첫 가사의 시간, offset 적용 후 최소값 제한 (minOffsetLimit 이상)
+  const firstTimeAfterOffset = firstLine.time + offset;
+  const offsetLimited = firstTimeAfterOffset < minOffsetLimit ? minOffsetLimit - firstLine.time : offset;
+
+  return lyrics.map((line) => ({
+    ...line,
+    time: Math.max(line.time + offsetLimited, 0), // 음수 시간 방지
+  }));
+}
+
+export function shiftFirstLyricEarlier(lyrics: Line[], advanceSec: number): Line[] {
+  if (!lyrics || lyrics.length === 0) return lyrics;
+  const [first, ...rest] = lyrics;
+  if (!first) return lyrics;
+  const newFirstLine: Line = {
+    ...first,
+    time: Math.max(0, first.time - advanceSec),
+    text: first.text ?? '',
+  };
+  return [newFirstLine, ...rest];
+}
+```
+
+## File: lib/utils/lyrics/lyrics.ts
+```typescript
+import { Line } from '@lib/types/lyrics';
+
+// src/lib/utils/lyrics.ts
+export function extractFirstLrcTimestamp(lyrics: string | Line[]): number {
+  // 1. 배열(파싱된 LRC)인 경우:
+  if (Array.isArray(lyrics)) {
+    if (!lyrics.length) return 0;
+    const firstLine = lyrics[0];
+    if (!firstLine || typeof firstLine.time !== 'number') return 0;
+    return firstLine.time;
+  }
+
+  // 2. string(LRC 원문)인 경우, 정규식으로 파싱
+  const match = lyrics.match(/\[(\d+):(\d+[.\d+]*)\]/);
+  if (!match || typeof match[1] !== 'string' || typeof match[2] !== 'string') return 0;
+
+  const min = parseInt(match[1], 10);
+  const sec = parseFloat(match[2]);
+
+  if (isNaN(min) || isNaN(sec)) return 0;
+  return min * 60 + sec;
+}
+```
+
+## File: lib/utils/lyrics/meta/artistTitle.ts
 ```typescript
 import getArtistTitle from 'get-artist-title';
 
@@ -4781,7 +5275,7 @@ export function fallbackArtistAndTitle(meta: {
 }
 ```
 
-## File: lib/utils/lyrics/getLyricsFromCacheOrFetch.ts
+## File: lib/utils/lyrics/meta/getLyricsFromCacheOrFetch.ts
 ```typescript
 // lib/utils/lyrics/getLyricsFromCacheOrFetch.ts
 
@@ -4815,165 +5309,7 @@ export async function getLyricsFromCacheOrFetch(
 }
 ```
 
-## File: lib/utils/lyrics/lyrics.ts
-```typescript
-import { Line } from '@lib/types/lyrics';
-
-// src/lib/utils/lyrics.ts
-export function extractFirstLrcTimestamp(lyrics: string | Line[]): number {
-  // 1. 배열(파싱된 LRC)인 경우:
-  if (Array.isArray(lyrics)) {
-    if (!lyrics.length) return 0;
-    const firstLine = lyrics[0];
-    if (!firstLine || typeof firstLine.time !== 'number') return 0;
-    return firstLine.time;
-  }
-
-  // 2. string(LRC 원문)인 경우, 정규식으로 파싱
-  const match = lyrics.match(/\[(\d+):(\d+[.\d+]*)\]/);
-  if (!match || typeof match[1] !== 'string' || typeof match[2] !== 'string') return 0;
-
-  const min = parseInt(match[1], 10);
-  const sec = parseFloat(match[2]);
-
-  if (isNaN(min) || isNaN(sec)) return 0;
-  return min * 60 + sec;
-}
-```
-
-## File: lib/utils/lyrics/lyricsDisplay.ts
-```typescript
-// utils/lyricsDisplay.ts
-import { Line } from '@lib/types/lyrics';
-
-export interface DisplayIndices {
-  top: string;
-  bottom: string;
-  highlightTop: boolean;
-  highlightBottom: boolean;
-}
-
-export function getDisplayLines(lines: Line[], currentTime: number): DisplayIndices {
-  if (lines.length === 0) {
-    return { top: '', bottom: '', highlightTop: false, highlightBottom: false };
-  }
-
-  let activeIndex = -1;
-
-  for (let i = 0; i < lines.length; i++) {
-    const cur = lines[i];
-    const next = lines[i + 1];
-    if (!cur) continue;
-
-    const endTime = next?.time ?? Infinity;
-    const previewTime = cur.time + (endTime - cur.time) * 0.5;
-
-    if (currentTime >= cur.time && currentTime < previewTime) {
-      activeIndex = i;
-      break;
-    } else if (currentTime >= previewTime && currentTime < endTime) {
-      activeIndex = i + 1;
-      break;
-    }
-  }
-
-  if (activeIndex === -1) {
-    const firstLine = lines[0];
-    if (firstLine && currentTime < firstLine.time) {
-      // 첫 타임스탬프 전: 아무 자막도 출력하지 않음
-      return { top: '', bottom: '', highlightTop: false, highlightBottom: false };
-    }
-    activeIndex = lines.length - 1; // 곡이 끝난 뒤, 마지막 가사 유지
-  }
-
-  // 위치는 교대로: 0번째는 bottom, 1번째는 top, 2번째는 bottom, 3번째는 top ...
-  const isEven = activeIndex % 2 === 0;
-
-  const topIdx = isEven ? activeIndex - 1 : activeIndex;
-  const bottomIdx = isEven ? activeIndex : activeIndex - 1;
-
-  return {
-    top: topIdx >= 0 ? (lines[topIdx]?.text ?? '') : '',
-    bottom: bottomIdx >= 0 ? (lines[bottomIdx]?.text ?? '') : '',
-    highlightTop: !isEven, // 홀수 번째 줄이면 top 강조
-    highlightBottom: isEven, // 짝수 번째 줄이면 bottom 강조
-  };
-}
-```
-
-## File: lib/utils/lyrics/lyricsOffset.ts
-```typescript
-import { Line } from '@lib/types/lyrics';
-
-/**
- * 가사 배열에 offset 보정 적용
- * @param lyrics 원본 가사 배열 (time기준 정렬되어 있다고 가정)
- * @param offset 초 단위 오프셋 (음수 가능)
- * @param minOffsetLimit 첫 가사의 시간이 minOffsetLimit보다 작아지지 않도록 제한 (예: 0)
- * @returns offset이 적용된 새로운 가사 배열
- */
-export function applyOffsetToLyrics(lyrics: Line[], offset: number, minOffsetLimit = 0): Line[] {
-  if (!lyrics || lyrics.length === 0) return lyrics;
-
-  const firstLine = lyrics[0];
-  if (!firstLine || firstLine.time === undefined) {
-    return lyrics; // 그냥 원본 배열 반환 또는 다른 처리
-  }
-  // 첫 가사의 시간, offset 적용 후 최소값 제한 (minOffsetLimit 이상)
-  const firstTimeAfterOffset = firstLine.time + offset;
-  const offsetLimited = firstTimeAfterOffset < minOffsetLimit ? minOffsetLimit - firstLine.time : offset;
-
-  return lyrics.map((line) => ({
-    ...line,
-    time: Math.max(line.time + offsetLimited, 0), // 음수 시간 방지
-  }));
-}
-
-export function shiftFirstLyricEarlier(lyrics: Line[], advanceSec: number): Line[] {
-  if (!lyrics || lyrics.length === 0) return lyrics;
-  const [first, ...rest] = lyrics;
-  if (!first) return lyrics;
-  const newFirstLine: Line = {
-    ...first,
-    time: Math.max(0, first.time - advanceSec),
-    text: first.text ?? '',
-  };
-  return [newFirstLine, ...rest];
-}
-```
-
-## File: lib/utils/lyrics/lyricsParser.ts
-```typescript
-// LRC 등 싱크 가사 포맷을 파싱해, [time, text] 배열로 변환합니다.
-// 싱크 자막, 전체 가사, 하이라이트 등 다양한 곳에서 재사용할 수 있습니다.
-
-import { Line } from '@lib/types/lyrics';
-import { parseTimeToSeconds } from '@lib/utils/common/time';
-
-/**
- * LRC 형식의 가사 문자열을 파싱하여 [{ time, text }] 배열로 반환
- */ export function parseLyrics(lyrics: string): Line[] {
-  if (!lyrics || lyrics.trim() === '') {
-    console.warn('[lyricsParser] 입력된 lyrics가 비어 있음');
-    return [];
-  }
-  const result = lyrics.split('\n').reduce<Line[]>((acc, line) => {
-    const match = line.match(/\[(\d+):(\d+\.\d+)\](.*)/);
-    if (!match) return acc;
-    const [, min, sec, text] = match;
-    const safeText = (text ?? '').trim();
-    if (safeText === '') return acc;
-    acc.push({ time: parseTimeToSeconds(`${min}:${sec}`), text: safeText });
-    return acc;
-  }, []);
-  if (!result.length) {
-    console.warn('[lyricsParser] LRC 파싱 결과가 없음');
-  }
-  return result;
-}
-```
-
-## File: lib/utils/lyrics/queryNormalizer.ts
+## File: lib/utils/lyrics/meta/queryNormalizer.ts
 ```typescript
 // lib/utils/lyrics/queryNormalizer.ts
 export interface NormalizeLyricsQueryOptions {
@@ -5008,7 +5344,38 @@ export function normalizeLyricsQuery(artist: string, title: string, options?: No
 }
 ```
 
-## File: lib/utils/lyrics/stringUtils.ts
+## File: lib/utils/lyrics/parsers/lyricsParser.ts
+```typescript
+// LRC 등 싱크 가사 포맷을 파싱해, [time, text] 배열로 변환합니다.
+// 싱크 자막, 전체 가사, 하이라이트 등 다양한 곳에서 재사용할 수 있습니다.
+
+import { Line } from '@lib/types/lyrics';
+import { parseTimeToSeconds } from '@lib/utils/common/time';
+
+/**
+ * LRC 형식의 가사 문자열을 파싱하여 [{ time, text }] 배열로 반환
+ */ export function parseLyrics(lyrics: string): Line[] {
+  if (!lyrics || lyrics.trim() === '') {
+    console.warn('[lyricsParser] 입력된 lyrics가 비어 있음');
+    return [];
+  }
+  const result = lyrics.split('\n').reduce<Line[]>((acc, line) => {
+    const match = line.match(/\[(\d+):(\d+\.\d+)\](.*)/);
+    if (!match) return acc;
+    const [, min, sec, text] = match;
+    const safeText = (text ?? '').trim();
+    if (safeText === '') return acc;
+    acc.push({ time: parseTimeToSeconds(`${min}:${sec}`), text: safeText });
+    return acc;
+  }, []);
+  if (!result.length) {
+    console.warn('[lyricsParser] LRC 파싱 결과가 없음');
+  }
+  return result;
+}
+```
+
+## File: lib/utils/lyrics/parsers/stringUtils.ts
 ```typescript
 // src/lib/utils/stringUtils.ts
 // 문자열 전처리
@@ -5277,6 +5644,31 @@ function extractEnglishOnly(str: string): string {
 }
 ```
 
+## File: lib/utils/lyrics/romanizers/japaneseRomanizer.ts
+```typescript
+import Kuroshiro from 'kuroshiro';
+import KuromojiAnalyzer from 'kuroshiro-analyzer-kuromoji';
+
+let kuroshiro: InstanceType<typeof Kuroshiro> | null = null;
+
+export async function japaneseRomanizer(text: string): Promise<string> {
+  if (!kuroshiro) {
+    kuroshiro = new Kuroshiro();
+    await kuroshiro.init(new KuromojiAnalyzer());
+  }
+  return kuroshiro.convert(text, { to: 'romaji', romajiSystem: 'hepburn' });
+}
+```
+
+## File: lib/utils/lyrics/romanizers/koreanRomanizer.ts
+```typescript
+import { romanize } from '@daun_jung/korean-romanizer';
+
+export function koreanRomanizer(text: string): string {
+  return romanize(text);
+}
+```
+
 ## File: lib/utils/platform/contentGuard.ts
 ```typescript
 // lib/utils/contentGuard.ts
@@ -5465,36 +5857,24 @@ export const isPlayerReady = (): boolean => {
 ## File: lib/utils/platform/videoDetection.ts
 ```typescript
 // lib/utils/videoDetection.ts
-const lastDetectTimes: Map<string, number> = new Map();
 let lastVideoId: string | null = null;
-const DETECTION_COOLDOWN = 3000; // 3초
+const DETECTION_COOLDOWN = 10000; // 3초
+let lastDetection = 0;
 
-// 새로운, 더 활용도 높은 형태
-export function tryDetectVideoChange(videoId: string | null, trigger: () => void, cooldown = DETECTION_COOLDOWN): void {
-  if (!videoId) return;
-  if (videoId === lastVideoId) {
-    return;
-  }
-
-  if (!shouldDetect(videoId, cooldown)) {
-    // 호출 제한 중, 로그 생략 혹은 필요시 아주 간단히 기록
-    return;
-  }
-
+export function shouldDetect(videoId: string, cooldown = DETECTION_COOLDOWN): boolean {
+  const now = Date.now();
+  if (videoId === lastVideoId && now - lastDetection < cooldown) return false;
   lastVideoId = videoId;
-  console.log('[tryDetectVideoChange] videoId 변경 감지:', videoId);
-  trigger();
+  lastDetection = now;
+  return true;
 }
 
-function shouldDetect(videoId: string, cooldown: number): boolean {
-  const now = Date.now();
-  const lastTime = lastDetectTimes.get(videoId) ?? 0;
-  if (now - lastTime < cooldown) {
-    // 너무 잦은 호출, 감지 차단
-    return false;
+// 새로운, 더 활용도 높은 형태
+export function tryDetectVideoChange(videoId: string | null, trigger: () => void, cooldown = 10000) {
+  if (!videoId) return;
+  if (shouldDetect(videoId, cooldown)) {
+    trigger();
   }
-  lastDetectTimes.set(videoId, now);
-  return true;
 }
 ```
 

@@ -1,6 +1,8 @@
 .fullLyricsContainer {
   position: absolute;
-  top: 0; left: 0; width: 100%;
+  top: 0;
+  left: 0;
+  width: 100%;
   height: -webkit-fill-available;
   pointer-events: none; /* 클릭은 통과 */
   overflow-y: auto;
@@ -19,21 +21,34 @@
   display: none;
 }
 .lyricLine {
-  font-size: 1.3vw;
-  line-height: 2.2;
+  font-size: clamp(14px, calc(0.8vw + 0.8vh), 28px);
+  line-height: 1.5;
   color: #f3f3f3;
   font-weight: 500;
   transition:
     color 0.15s,
     font-size 0.15s;
   /* 기타 spacing, margin, etc */
+  margin-bottom: 0; /* 줄 간 여백 없애기 */
+  padding: 0;
 }
 .active {
   color: #fff;
-  font-size: 1.65vw;
+  font-size: clamp(18px, calc(1vw + 1vh), 32px);
   font-weight: 700;
   background: linear-gradient(90deg, #357aff, #e91e63 80%);
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+/* 부모 .active의 투명 텍스트 처리 무시 */
+.active .pronunciation {
+  -webkit-text-fill-color: initial; /* 투명 처리 해제 */
+  background: none; /* 그라데이션 배경 제거 */
+  color: inherit; /* props로 넘어온 색상 적용 */
+}
+.pronunciation {
+  font-size: clamp(10px, calc(0.6vw + 0.6vh), 20px);
+  opacity: 0.6;
+  margin-bottom: 20px;
 }

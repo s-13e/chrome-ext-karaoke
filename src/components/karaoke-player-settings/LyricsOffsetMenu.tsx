@@ -5,7 +5,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import styles from './MainMenu.module.css';
 import { LyricsOffsetControl } from './LyricsOffsetControl';
 import { Line } from '@lib/types/lyrics';
-import { applyOffsetToLyrics } from '@lib/utils/lyrics/lyricsOffset';
+import { applyOffsetToLyrics } from '@lib/utils/lyrics/display/lyricsOffset';
 import { SingleLineLyrics } from '@components/lyrics/SingleLineLyrics/SingleLineLyrics';
 
 interface LyricsOffsetMenuProps {
