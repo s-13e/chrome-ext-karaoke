@@ -117,6 +117,14 @@ export default [
             match: false,
           },
         },
+        {
+          selector: 'variable',
+          format: ['PascalCase'],
+          filter: {
+            regex: '^[A-Z]', // 대문자 시작
+            match: true,
+          },
+        },
         // 3. 변수 (camelCase)
         {
           selector: 'variable',

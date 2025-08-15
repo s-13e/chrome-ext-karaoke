@@ -272,7 +272,14 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     }
 
     lyricsOverlayRoot.render(
-      <DualHighlightLyrics lyrics={lyrics} offset={offset} fontColor={lyricsFontColorCurrent} />,
+      <DualHighlightLyrics
+        lyrics={lyrics}
+        offset={offset}
+        fontColor={lyricsFontColorCurrent}
+        pronunciationColor={lyricsFontColorPronunciation}
+        showRealtimeLyrics={showRealtimeLyrics}
+        showPronunciationLyrics={showPronunciationLyrics}
+      />,
     );
   }
   // 현재 가사/전체 가사의 분기 함수
@@ -282,6 +289,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       lyricsOverlayElement,
       lyricsOverlayRoot,
       showRealtimeLyrics,
+      showPronunciationLyrics,
       lyricsMode,
       latestLyricsLength: latestLyrics.length,
       lyricsFontColorCurrent,
@@ -345,7 +353,16 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
         />,
       );
     } else if (lyricsMode === 'sync') {
-      lyricsOverlayRoot.render(<DualHighlightLyrics lyrics={latestLyrics} fontColor={lyricsFontColorCurrent} />);
+      lyricsOverlayRoot.render(
+        <DualHighlightLyrics
+          lyrics={latestLyrics}
+          offset={0} // 필요 시 offset 변수
+          fontColor={lyricsFontColorCurrent}
+          pronunciationColor={lyricsFontColorPronunciation}
+          showRealtimeLyrics={showRealtimeLyrics}
+          showPronunciationLyrics={showPronunciationLyrics}
+        />,
+      );
     } else {
       console.warn('[realOverlayRender] 알 수 없는 lyricsMode:', lyricsMode);
       hideLyricsOverlay();

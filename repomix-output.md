@@ -62,7 +62,6 @@ components/lyrics/FullLyrics/FullLyrics.tsx
 components/lyrics/FullLyrics/styles.module.css
 components/lyrics/LyricsOverlayRoot.module.css
 components/lyrics/LyricsOverlayRoot.tsx
-components/lyrics/PronunciationLyrics/styles.module.css
 components/lyrics/PronunciationLyrics/usePronunciation.ts
 components/lyrics/SingleLineLyrics/SingleLineLyrics.tsx
 components/lyrics/SingleLineLyrics/styles.module.css
@@ -2343,7 +2342,8 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({
     return currentTime >= line.time && (!next || currentTime < next.time);
   });
 
-  const pronList = usePronunciations(shiftedLyrics.map((line) => line.text));
+  const lyricTexts = useMemo(() => shiftedLyrics.map((line) => line.text), [shiftedLyrics]);
+  const pronList = usePronunciations(lyricTexts);
 
   // 현재 줄로 스크롤 (선택사항)
   useEffect(() => {
@@ -2364,16 +2364,15 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({
         if (!showRealtimeLyrics && !showPronunciationLyrics) return null;
 
         return (
-          <div key={idx} className={`${styles.lyricLine} ${isActive ? styles.active : ''}`} data-lyric-idx={idx}>
-            {showRealtimeLyrics && <div style={{ color: fontColor }}>{line.text}</div>}
+          <div key={idx} data-lyric-idx={idx} className={`${styles.lyricItem} ${isActive ? styles.active : ''}`}>
+            {showRealtimeLyrics && (
+              <div className={`${styles.lyricLine} ${isActive ? styles.active : ''}`} style={{ color: fontColor }}>
+                {line.text}
+              </div>
+            )}
+
             {showPronunciationLyrics && (
-              <div
-                className={styles.pronunciation}
-                style={{
-                  color: pronunciationColor,
-                  minHeight: '1em', // 레이아웃 유지
-                }}
-              >
+              <div className={styles.pronunciation} style={{ color: pronunciationColor }}>
                 {pron && pron.trim() !== '' ? pron : ' '}
               </div>
             )}
@@ -2409,6 +2408,12 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({
   /* Chrome/Safari */
   display: none;
 }
+.lyricItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20px; /* 세트(한 줄) 간격 */
+}
 .lyricLine {
   font-size: clamp(14px, calc(0.8vw + 0.8vh), 28px);
   line-height: 1.5;
@@ -2421,7 +2426,7 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({
   margin-bottom: 0; /* 줄 간 여백 없애기 */
   padding: 0;
 }
-.active {
+.active .lyricLine {
   color: #fff;
   font-size: clamp(18px, calc(1vw + 1vh), 32px);
   font-weight: 700;
@@ -2430,16 +2435,18 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
+.pronunciation {
+  font-size: clamp(10px, calc(0.6vw + 0.6vh), 20px);
+  opacity: 0.6;
+}
 /* 부모 .active의 투명 텍스트 처리 무시 */
 .active .pronunciation {
   -webkit-text-fill-color: initial; /* 투명 처리 해제 */
   background: none; /* 그라데이션 배경 제거 */
   color: inherit; /* props로 넘어온 색상 적용 */
-}
-.pronunciation {
-  font-size: clamp(10px, calc(0.6vw + 0.6vh), 20px);
-  opacity: 0.6;
-  margin-bottom: 20px;
+  opacity: 0.85;
+  font-weight: 600; /* 약간 굵게 */
+  font-size: clamp(11px, calc(0.65vw + 0.65vh), 22px); /* 5~10% 크기 업 */
 }
 ```
 
@@ -2494,48 +2501,6 @@ export function injectLyricsOverlayRoot() {
 }
 ```
 
-## File: components/lyrics/PronunciationLyrics/styles.module.css
-```css
-.dualPronunciationSubtitle {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 70px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  font-size: clamp(1rem, calc(1.2rem + 1vw), 2.2rem);
-  line-height: 1.2;
-  text-align: center;
-}
-
-.lineBlock {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.highlight {
-  font-weight: bold;
-}
-
-.pronunciation {
-  font-size: 0.8em;
-  opacity: 0.85;
-  margin-top: 2px;
-}
-
-.fullPronunciationContainer {
-  padding: 32px 0;
-  text-align: center;
-}
-
-.fullPronunciationContainer .lineBlock {
-  margin-bottom: 12px;
-}
-```
-
 ## File: components/lyrics/PronunciationLyrics/usePronunciation.ts
 ```typescript
 import { useEffect, useState } from 'react';
@@ -2549,26 +2514,54 @@ export function usePronunciations(lines: string[]) {
   useEffect(() => {
     let cancelled = false;
 
-    (async () => {
-      const results: string[] = [];
-      for (const text of lines) {
-        if (!text) {
-          results.push('');
-          continue;
+    async function processInBatches(batchSize = 10) {
+      const results: string[] = Array(lines.length).fill('');
+
+      for (let start = 0; start < lines.length; start += batchSize) {
+        const end = Math.min(start + batchSize, lines.length);
+        const batch = lines.slice(start, end);
+
+        // batch 변환 병렬 처리
+        const batchResults = await Promise.all(
+          batch.map(async (text) => {
+            if (!text) return '';
+            try {
+              const spans = splitByScript(text);
+              return await transliterateAndMerge(spans);
+            } catch (err) {
+              console.error('[usePronunciations] 변환 오류:', err);
+              return '';
+            }
+          }),
+        );
+
+        // 결과 갱신
+        for (let i = 0; i < batchResults.length; i++) {
+          results[start + i] = batchResults[i] ?? '';
         }
-        try {
-          const spans = splitByScript(text);
-          const converted = await transliterateAndMerge(spans);
-          results.push(converted);
-        } catch (err) {
-          console.error('[usePronunciations] 변환 오류:', err);
-          results.push('');
+
+        // 이미 변환된 일부 리스트를 UI에 반영해서 "점진적"으로 표시
+        if (!cancelled) {
+          setList((prev) => {
+            // 🔹 변환된 부분이 달라진 경우에만 반영
+            const updated = [...prev];
+            let changed = false;
+            for (let i = start; i < end; i++) {
+              if (updated[i] !== results[i]) {
+                updated[i] = results[i] ?? '';
+                changed = true;
+              }
+            }
+            return changed ? updated : prev;
+          });
         }
+
+        // 브라우저 쉬게 하기 — 다음 batch로 넘어가기 전에 이벤트 루프를 비움
+        await new Promise((resolve) => setTimeout(resolve, 0));
       }
-      if (!cancelled) {
-        setList(results);
-      }
-    })();
+    }
+
+    processInBatches();
 
     return () => {
       cancelled = true;
@@ -2657,35 +2650,78 @@ export const SingleLineLyrics: React.FC<SingleLineLyricsProps & { currentTime: n
 
 ## File: components/lyrics/SyncLyrics/DualHighlightLyrics.tsx
 ```typescript
-import React, { useEffect, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { useCurrentTime } from '@hooks/useCurrentTime';
 import { getDisplayLines } from '@lib/utils/lyrics/display/lyricsDisplay';
 import { Line } from '@lib/types/lyrics';
 import styles from './styles.module.css';
 import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/display/lyricsOffset';
+import { usePronunciations } from '../PronunciationLyrics/usePronunciation';
 
 interface DualHighlightLyricsProps {
   lyrics: Line[];
   offset?: number;
   fontColor?: string;
+  pronunciationColor?: string;
+  showRealtimeLyrics: boolean; // 부모에서 직접 주입
+  showPronunciationLyrics: boolean; // 부모에서 직접 주입
 }
 
-export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({ lyrics, offset, fontColor = '#FFFFFF' }) => {
+export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
+  lyrics,
+  offset,
+  fontColor,
+  pronunciationColor,
+  showRealtimeLyrics,
+  showPronunciationLyrics,
+}) => {
+  // 가사 오프셋 보정
   const shiftedLyrics = useMemo(() => shiftFirstLyricEarlier(lyrics, 3), [lyrics]);
+  const currentTime = useCurrentTime(); // 계속 타임 구독
+  const adjustedTime = currentTime - (offset ?? 0);
 
-  const currentTime = useCurrentTime();
-  const adjustedTime = currentTime - (offset ?? 0); // offset 사용!
   const { top, bottom, highlightTop, highlightBottom } = getDisplayLines(shiftedLyrics, adjustedTime);
-  useEffect(() => {
-    console.log('[DualHighlightLyrics] fontColor prop 변경:', fontColor);
-    const el = document.getElementById('some-lyrics-elem-id');
-    if (el) console.log('[DualHighlightLyrics] 실제 DOM color:', getComputedStyle(el).color);
-  }, [fontColor]);
+
+  // 발음 변환
+  const lyricTexts = useMemo(() => shiftedLyrics.map((line) => line.text), [shiftedLyrics]);
+  const pronList = usePronunciations(lyricTexts);
+
+  const topPron = top ? pronList[shiftedLyrics.findIndex((l) => l.text === top)] : '';
+  const bottomPron = bottom ? pronList[shiftedLyrics.findIndex((l) => l.text === bottom)] : '';
 
   return (
-    <div className={styles.dualHighlightSubtitle} style={{ color: fontColor }}>
-      <div className={highlightTop ? styles.highlight : ''}>{top}</div>
-      <div className={highlightBottom ? styles.highlight : ''}>{bottom}</div>
+    <div className={styles.dualHighlightSubtitle}>
+      {/* 윗줄 */}
+      {(showRealtimeLyrics && top) || (showPronunciationLyrics && topPron) ? (
+        <div className={`${styles.lyricItem} ${highlightTop ? styles.active : ''}`}>
+          {showRealtimeLyrics && top && (
+            <div className={styles.lyricLine} style={{ color: fontColor }}>
+              {top}
+            </div>
+          )}
+          {showPronunciationLyrics && topPron && (
+            <div className={styles.pronunciation} style={{ color: pronunciationColor }}>
+              {topPron}
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {/* 아랫줄 */}
+      {(showRealtimeLyrics && bottom) || (showPronunciationLyrics && bottomPron) ? (
+        <div className={`${styles.lyricItem} ${highlightBottom ? styles.active : ''}`}>
+          {showRealtimeLyrics && bottom && (
+            <div className={styles.lyricLine} style={{ color: fontColor }}>
+              {bottom}
+            </div>
+          )}
+          {showPronunciationLyrics && bottomPron && (
+            <div className={styles.pronunciation} style={{ color: pronunciationColor }}>
+              {bottomPron}
+            </div>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 };
@@ -2721,12 +2757,40 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({ lyrics
   font-size: clamp(2rem, calc(2.5rem + 2vw), 4rem);
 }
 
-.dual-highlight-subtitle > div {
-  min-height: 2em;
-  white-space: nowrap;
-  text-align: center;
-  transition: all 0.3s ease;
-  font-weight: bold;
+
+/* 한 세트(현재+발음) 묶음 */
+.lyricItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 12px; /* 세트 간 간격 */
+}
+
+/* 현재 가사 라인 */
+.lyricLine {
+  margin-bottom: 0; /* 발음이 있으면 붙이고 */
+}
+
+/* 발음 가사 라인 */
+.pronunciation {
+  font-size: clamp(10px, calc(0.6vw + 0.6vh), 20px);
+  opacity: 0.6;
+  font-weight: 400;
+  margin-top: 4px; /* 현재 가사와의 간격 */
+  transition:
+    font-size 0.15s ease,
+    font-weight 0.15s ease,
+    opacity 0.15s ease;
+}
+
+/* 현재 줄 전체 강조
+.active .lyricLine {
+}
+*/
+.active .pronunciation {
+  opacity: 0.85;
+  font-weight: 600;
+  font-size: clamp(11px, calc(0.65vw + 0.65vh), 22px);
 }
 .animated {
   /* 왼쪽에서 오른쪽으로 빨간색이 채워지는 효과 */
@@ -3402,7 +3466,14 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     }
 
     lyricsOverlayRoot.render(
-      <DualHighlightLyrics lyrics={lyrics} offset={offset} fontColor={lyricsFontColorCurrent} />,
+      <DualHighlightLyrics
+        lyrics={lyrics}
+        offset={offset}
+        fontColor={lyricsFontColorCurrent}
+        pronunciationColor={lyricsFontColorPronunciation}
+        showRealtimeLyrics={showRealtimeLyrics}
+        showPronunciationLyrics={showPronunciationLyrics}
+      />,
     );
   }
   // 현재 가사/전체 가사의 분기 함수
@@ -3412,6 +3483,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       lyricsOverlayElement,
       lyricsOverlayRoot,
       showRealtimeLyrics,
+      showPronunciationLyrics,
       lyricsMode,
       latestLyricsLength: latestLyrics.length,
       lyricsFontColorCurrent,
@@ -3475,7 +3547,14 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
         />,
       );
     } else if (lyricsMode === 'sync') {
-      lyricsOverlayRoot.render(<DualHighlightLyrics lyrics={latestLyrics} fontColor={lyricsFontColorCurrent} />);
+      <DualHighlightLyrics
+        lyrics={latestLyrics}
+        offset={0} // 필요 시 offset 변수
+        fontColor={lyricsFontColorCurrent}
+        pronunciationColor={lyricsFontColorPronunciation}
+        showRealtimeLyrics={showRealtimeLyrics}
+        showPronunciationLyrics={showPronunciationLyrics}
+      />;
     } else {
       console.warn('[realOverlayRender] 알 수 없는 lyricsMode:', lyricsMode);
       hideLyricsOverlay();
@@ -5164,9 +5243,16 @@ export function applyOffsetToLyrics(lyrics: Line[], offset: number, minOffsetLim
   const firstTimeAfterOffset = firstLine.time + offset;
   const offsetLimited = firstTimeAfterOffset < minOffsetLimit ? minOffsetLimit - firstLine.time : offset;
 
-  return lyrics.map((line) => ({
+  // 1차 적용
+  const adjusted = lyrics.map((line) => ({
     ...line,
-    time: Math.max(line.time + offsetLimited, 0), // 음수 시간 방지
+    time: line.time + offsetLimited,
+  }));
+
+  // 2차 전역 보정: 모든 time >= 0
+  return adjusted.map((line) => ({
+    ...line,
+    time: line.time < 0 ? 0 : line.time,
   }));
 }
 
