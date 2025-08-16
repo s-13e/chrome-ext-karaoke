@@ -8,6 +8,7 @@ import type { ScriptSpan } from './languageSpanSplitter';
 const transliterators: Record<string, (text: string) => Promise<string>> = {
   ko: async (text) => Promise.resolve(koreanRomanizer(text)),
   ja: (text) => japaneseRomanizer(text),
+  zh: async (text) => Promise.resolve(text), // 중국어는 변환 없이 그대로
   th: async (text) => Promise.resolve(text),
   ar: async (text) => Promise.resolve(text),
   he: async (text) => Promise.resolve(text),

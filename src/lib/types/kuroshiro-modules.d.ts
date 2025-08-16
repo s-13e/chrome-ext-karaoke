@@ -7,6 +7,7 @@ declare module 'kuroshiro' {
     to?: 'hiragana' | 'katakana' | 'romaji';
     romajiSystem?: 'hepburn' | 'kunrei' | 'nippon';
     delimiter?: string;
+    mode?: 'normal' | 'spaced' | 'okurigana' | 'furigana';
   }
 
   export interface KuroshiroInstance {

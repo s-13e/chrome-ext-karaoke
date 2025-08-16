@@ -21,7 +21,7 @@
     "type": "module"
   },
   "permissions": ["storage", "activeTab", "webNavigation", "scripting", "tabs"],
-  "host_permissions": ["*://*.youtube.com/*"],
+  "host_permissions": ["*://*.youtube.com/*", "https://lrclib.net/*"],
   "action": {
     "default_popup": "popup/popup.html",
     "default_title": "Popup name",
@@ -41,8 +41,15 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["_locales/**/*.json","content/style.css", "assets/icons/move.svg", "assets/icons/music_note.png", "content/audioProcessor.js"],
-      "matches": ["*://*.youtube.com/*"]
+      "resources": [
+        "_locales/**/*.json",
+        "content/style.css",
+        "assets/icons/move.svg",
+        "assets/icons/music_note.png",
+        "content/audioProcessor.js",
+        "kuroshiro_dict/*"
+      ],
+      "matches": ["<all_urls>"]
     }
   ]
 }

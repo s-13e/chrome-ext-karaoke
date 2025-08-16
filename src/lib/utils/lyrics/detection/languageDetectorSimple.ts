@@ -13,7 +13,7 @@ const detectors: LanguageScriptDetector[] = [
   },
   {
     lang: 'ja', // 일본어
-    test: (c) => /[\u3040-\u309F\u30A0-\u30FF]/.test(c),
+    test: (c) => /[\u3040-\u309F\u30A0-\u30FF]/.test(c), // 히라가나, 가타카나
   },
   { lang: 'th', test: (c) => /[\u0E00-\u0E7F]/.test(c) }, // 태국어
   { lang: 'ar', test: (c) => /[\u0600-\u06FF]/.test(c) }, // 아랍어

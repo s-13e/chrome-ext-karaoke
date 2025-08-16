@@ -141,6 +141,8 @@ options/Options.css
 options/options.html
 payment/pay.txt
 popup/App.tsx
+popup/components/PopupSettingsPanel.tsx
+popup/components/styles.module.css
 popup/index.tsx
 popup/popup.css
 popup/popup.html
@@ -2504,7 +2506,7 @@ export function injectLyricsOverlayRoot() {
 ## File: components/lyrics/PronunciationLyrics/usePronunciation.ts
 ```typescript
 import { useEffect, useState } from 'react';
-import { splitByScript } from '@lib/utils/lyrics/detection/languageSpanSplitter';
+import { splitIntoLangGroups } from '@lib/utils/lyrics/detection/languageSpanSplitter';
 import { transliterateAndMerge } from '@lib/utils/lyrics/detection/languageTransliterator';
 
 // 여러 줄의 가사를 한 번에 변환
@@ -2526,7 +2528,7 @@ export function usePronunciations(lines: string[]) {
           batch.map(async (text) => {
             if (!text) return '';
             try {
-              const spans = splitByScript(text);
+              const spans = splitIntoLangGroups(text);
               return await transliterateAndMerge(spans);
             } catch (err) {
               console.error('[usePronunciations] 변환 오류:', err);
@@ -2653,19 +2655,46 @@ export const SingleLineLyrics: React.FC<SingleLineLyricsProps & { currentTime: n
 import React, { useMemo } from 'react';
 import { useCurrentTime } from '@hooks/useCurrentTime';
 import { getDisplayLines } from '@lib/utils/lyrics/display/lyricsDisplay';
-import { Line } from '@lib/types/lyrics';
-import styles from './styles.module.css';
 import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/display/lyricsOffset';
 import { usePronunciations } from '../PronunciationLyrics/usePronunciation';
+import { Line } from '@lib/types/lyrics';
+
+import styles from './styles.module.css';
 
 interface DualHighlightLyricsProps {
   lyrics: Line[];
   offset?: number;
   fontColor?: string;
   pronunciationColor?: string;
-  showRealtimeLyrics: boolean; // 부모에서 직접 주입
-  showPronunciationLyrics: boolean; // 부모에서 직접 주입
+  showRealtimeLyrics: boolean;
+  showPronunciationLyrics: boolean;
 }
+
+const LyricLine: React.FC<{
+  text?: string;
+  pron?: string;
+  showText: boolean;
+  showPron: boolean;
+  fontColor?: string;
+  pronunciationColor?: string;
+}> = ({ text, pron, showText, showPron, fontColor, pronunciationColor }) => {
+  if (!showText && !showPron) return null;
+
+  return (
+    <div className={styles.lyricItem}>
+      {showText && text && (
+        <div className={styles.lyricLine} style={{ color: fontColor }}>
+          {text}
+        </div>
+      )}
+      {showPron && pron && (
+        <div className={styles.pronunciation} style={{ color: pronunciationColor }}>
+          {pron}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
   lyrics,
@@ -2675,12 +2704,12 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
   showRealtimeLyrics,
   showPronunciationLyrics,
 }) => {
-  // 가사 오프셋 보정
+  // 오프셋 보정 적용
   const shiftedLyrics = useMemo(() => shiftFirstLyricEarlier(lyrics, 3), [lyrics]);
-  const currentTime = useCurrentTime(); // 계속 타임 구독
+  const currentTime = useCurrentTime();
   const adjustedTime = currentTime - (offset ?? 0);
 
-  const { top, bottom, highlightTop, highlightBottom } = getDisplayLines(shiftedLyrics, adjustedTime);
+  const { top, bottom } = getDisplayLines(shiftedLyrics, adjustedTime);
 
   // 발음 변환
   const lyricTexts = useMemo(() => shiftedLyrics.map((line) => line.text), [shiftedLyrics]);
@@ -2690,38 +2719,23 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
   const bottomPron = bottom ? pronList[shiftedLyrics.findIndex((l) => l.text === bottom)] : '';
 
   return (
-    <div className={styles.dualHighlightSubtitle}>
-      {/* 윗줄 */}
-      {(showRealtimeLyrics && top) || (showPronunciationLyrics && topPron) ? (
-        <div className={`${styles.lyricItem} ${highlightTop ? styles.active : ''}`}>
-          {showRealtimeLyrics && top && (
-            <div className={styles.lyricLine} style={{ color: fontColor }}>
-              {top}
-            </div>
-          )}
-          {showPronunciationLyrics && topPron && (
-            <div className={styles.pronunciation} style={{ color: pronunciationColor }}>
-              {topPron}
-            </div>
-          )}
-        </div>
-      ) : null}
-
-      {/* 아랫줄 */}
-      {(showRealtimeLyrics && bottom) || (showPronunciationLyrics && bottomPron) ? (
-        <div className={`${styles.lyricItem} ${highlightBottom ? styles.active : ''}`}>
-          {showRealtimeLyrics && bottom && (
-            <div className={styles.lyricLine} style={{ color: fontColor }}>
-              {bottom}
-            </div>
-          )}
-          {showPronunciationLyrics && bottomPron && (
-            <div className={styles.pronunciation} style={{ color: pronunciationColor }}>
-              {bottomPron}
-            </div>
-          )}
-        </div>
-      ) : null}
+    <div className={styles.dualHighlightSubtitle} style={{ color: fontColor }}>
+      <LyricLine
+        text={top}
+        pron={topPron}
+        showText={showRealtimeLyrics}
+        showPron={showPronunciationLyrics}
+        fontColor={fontColor}
+        pronunciationColor={pronunciationColor}
+      />
+      <LyricLine
+        text={bottom}
+        pron={bottomPron}
+        showText={showRealtimeLyrics}
+        showPron={showPronunciationLyrics}
+        fontColor={fontColor}
+        pronunciationColor={pronunciationColor}
+      />
     </div>
   );
 };
@@ -2757,7 +2771,6 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
   font-size: clamp(2rem, calc(2.5rem + 2vw), 4rem);
 }
 
-
 /* 한 세트(현재+발음) 묶음 */
 .lyricItem {
   display: flex;
@@ -2773,10 +2786,9 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
 
 /* 발음 가사 라인 */
 .pronunciation {
-  font-size: clamp(10px, calc(0.6vw + 0.6vh), 20px);
-  opacity: 0.6;
+  font-size: clamp(17px, calc(0.6vw + 0.6vh), 28px);
+  opacity: 0.85;
   font-weight: 400;
-  margin-top: 4px; /* 현재 가사와의 간격 */
   transition:
     font-size 0.15s ease,
     font-weight 0.15s ease,
@@ -2787,10 +2799,22 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
 .active .lyricLine {
 }
 */
-.active .pronunciation {
-  opacity: 0.85;
-  font-weight: 600;
-  font-size: clamp(11px, calc(0.65vw + 0.65vh), 22px);
+/* 발음만 있는 경우 */
+.lyricItem:not(:has(.lyricLine)) .pronunciation {
+  font-size: clamp(20px, calc(1vw + 1vh), 36px);
+  font-weight: 600; /* 단독일 때 굵게 */
+}
+
+/* 전체화면 - 발음 가사 */
+:fullscreen .pronunciation,
+:-webkit-full-screen .pronunciation {
+  font-size: clamp(22px, calc(1.6vw + 1.6vh), 36px);
+}
+
+/* 전체화면 - 발음만 있는 경우 */
+:fullscreen .lyricItem:not(:has(.lyricLine)) .pronunciation,
+:-webkit-full-screen .lyricItem:not(:has(.lyricLine)) .pronunciation {
+  font-size: clamp(28px, calc(2vw + 2vh), 52px);
 }
 .animated {
   /* 왼쪽에서 오른쪽으로 빨간색이 채워지는 효과 */
@@ -2802,7 +2826,6 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
   -webkit-text-fill-color: transparent;
   animation: revealText 1.5s linear forwards;
 }
-
 @keyframes revealText {
   0% {
     background-position: right bottom;
@@ -3547,14 +3570,16 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
         />,
       );
     } else if (lyricsMode === 'sync') {
-      <DualHighlightLyrics
-        lyrics={latestLyrics}
-        offset={0} // 필요 시 offset 변수
-        fontColor={lyricsFontColorCurrent}
-        pronunciationColor={lyricsFontColorPronunciation}
-        showRealtimeLyrics={showRealtimeLyrics}
-        showPronunciationLyrics={showPronunciationLyrics}
-      />;
+      lyricsOverlayRoot.render(
+        <DualHighlightLyrics
+          lyrics={latestLyrics}
+          offset={0} // 필요 시 offset 변수
+          fontColor={lyricsFontColorCurrent}
+          pronunciationColor={lyricsFontColorPronunciation}
+          showRealtimeLyrics={showRealtimeLyrics}
+          showPronunciationLyrics={showPronunciationLyrics}
+        />,
+      );
     } else {
       console.warn('[realOverlayRender] 알 수 없는 lyricsMode:', lyricsMode);
       hideLyricsOverlay();
@@ -4216,6 +4241,7 @@ declare module 'kuroshiro' {
     to?: 'hiragana' | 'katakana' | 'romaji';
     romajiSystem?: 'hepburn' | 'kunrei' | 'nippon';
     delimiter?: string;
+    mode?: 'normal' | 'spaced' | 'okurigana' | 'furigana';
   }
 
   export interface KuroshiroInstance {
@@ -5035,7 +5061,7 @@ const detectors: LanguageScriptDetector[] = [
   },
   {
     lang: 'ja', // 일본어
-    test: (c) => /[\u3040-\u309F\u30A0-\u30FF]/.test(c),
+    test: (c) => /[\u3040-\u309F\u30A0-\u30FF]/.test(c),  // 히라가나, 가타카나
   },
   { lang: 'th', test: (c) => /[\u0E00-\u0E7F]/.test(c) }, // 태국어
   { lang: 'ar', test: (c) => /[\u0600-\u06FF]/.test(c) }, // 아랍어
@@ -5059,22 +5085,43 @@ export type ScriptSpan = {
   text: string;
 };
 
-export function splitByScript(text: string): ScriptSpan[] {
+// 한자를 포함하여 “일본어 문자 집합” 판단 함수
+const isJapaneseKana = (c: string) => /[\u3040-\u309F\u30A0-\u30FF]/.test(c); // 히라가나, 가타카나
+const isKanji = (c: string) => /[\u4E00-\u9FFF]/.test(c);
+
+// 문자열을 일본어/비일본어 구간으로 분리
+export function splitIntoLangGroups(text: string): ScriptSpan[] {
   const spans: ScriptSpan[] = [];
   let buffer = '';
-  let currentLang: string | null = null;
+  let currentIsJaCandidate: boolean | null = null; // ‘일본어(히라가나/가타카나/한자)’ 후보
+  const hasKanaInSpan = (span: string) => [...span].some(isJapaneseKana);
 
   for (const char of text) {
-    const lang = detectScript(char);
-    if (lang !== currentLang) {
-      if (buffer) spans.push({ lang: currentLang, text: buffer });
+    const isJaChar = isJapaneseKana(char) || isKanji(char);
+
+    if (currentIsJaCandidate === null) {
       buffer = char;
-      currentLang = lang;
-    } else {
+      currentIsJaCandidate = isJaChar;
+    } else if (isJaChar === currentIsJaCandidate) {
       buffer += char;
+    } else {
+      // 스팬 종료: lang 결정
+      const lang = currentIsJaCandidate
+        ? hasKanaInSpan(buffer)
+          ? 'ja' // 히라가나/가타카나가 있으면 일본어
+          : 'zh' // 한자만 있으면 중국어
+        : 'other';
+
+      spans.push({ lang, text: buffer });
+      buffer = char;
+      currentIsJaCandidate = isJaChar;
     }
   }
-  if (buffer) spans.push({ lang: currentLang, text: buffer });
+
+  if (buffer) {
+    const lang = currentIsJaCandidate ? (hasKanaInSpan(buffer) ? 'ja' : 'zh') : 'other';
+    spans.push({ lang, text: buffer });
+  }
   return spans;
 }
 ```
@@ -5091,6 +5138,7 @@ import type { ScriptSpan } from './languageSpanSplitter';
 const transliterators: Record<string, (text: string) => Promise<string>> = {
   ko: async (text) => Promise.resolve(koreanRomanizer(text)),
   ja: (text) => japaneseRomanizer(text),
+  zh: async (text) => Promise.resolve(text), // 중국어는 변환 없이 그대로
   th: async (text) => Promise.resolve(text),
   ar: async (text) => Promise.resolve(text),
   he: async (text) => Promise.resolve(text),
@@ -5731,14 +5779,60 @@ function extractEnglishOnly(str: string): string {
 import Kuroshiro from 'kuroshiro';
 import KuromojiAnalyzer from 'kuroshiro-analyzer-kuromoji';
 
-let kuroshiro: InstanceType<typeof Kuroshiro> | null = null;
+// 싱글톤 인스턴스를 모듈 전역에 선언
+let kuroshiroInstance: InstanceType<typeof Kuroshiro> | null = null;
+let initializationPromise: Promise<void> | null = null;
 
-export async function japaneseRomanizer(text: string): Promise<string> {
-  if (!kuroshiro) {
-    kuroshiro = new Kuroshiro();
-    await kuroshiro.init(new KuromojiAnalyzer());
+// 단 하나의 초기화 함수만 제공 (동시에 여러 번 호출되어도 안전)
+async function ensureKuroshiroInitialized(): Promise<InstanceType<typeof Kuroshiro>> {
+  if (kuroshiroInstance) return kuroshiroInstance;
+  if (initializationPromise) {
+    await initializationPromise;
+    return kuroshiroInstance!;
   }
-  return kuroshiro.convert(text, { to: 'romaji', romajiSystem: 'hepburn' });
+  initializationPromise = (async () => {
+    const dictPath = chrome.runtime.getURL('kuroshiro_dict/');
+    console.log('dictPath for analyzer:', dictPath);
+
+    try {
+      const analyzer = new KuromojiAnalyzer({ dictPath });
+      const instance = new Kuroshiro();
+      await instance.init(analyzer);
+      kuroshiroInstance = instance;
+      console.log('Kuroshiro + KuromojiAnalyzer initialized!');
+
+      // 여기서 진단용 예시 실행
+      const testText = '感じ取れたら手を繋ごう、重なるのは人生のライン and レミリア最高！';
+      const testResult = await instance.convert(testText, {
+        to: 'romaji',
+        romajiSystem: 'hepburn',
+        mode: 'normal',
+      });
+      console.log('[진단용] Kuroshiro 예시 변환:', testText, '→', testResult);
+    } catch (e) {
+      console.error('KuromojiAnalyzer/Kuroshiro init error:', e);
+    }
+  })();
+  await initializationPromise;
+  initializationPromise = null;
+  return kuroshiroInstance!;
+}
+
+// 변환 함수는 항상 싱글톤을 await 받아서 사용
+export async function japaneseRomanizer(text: string): Promise<string> {
+  const kuroshiro = await ensureKuroshiroInitialized();
+  try {
+    const result = await kuroshiro.convert(text, {
+      to: 'romaji',
+      romajiSystem: 'hepburn',
+      mode: 'normal',
+    });
+    console.log('Kuroshiro convert result:', result);
+    return result;
+  } catch (err) {
+    console.error('Kuroshiro convert error:', err);
+    throw err; // 변환 실패 시 caller가 알 수 있게 예외를 던짐
+  }
 }
 ```
 
@@ -6001,7 +6095,8 @@ export const setupSPAObserver = (callback: () => void): MutationObserver => {
 {
   "extName": "Youtube Karaoke",
   "extDescription": "jot that down description",
-  "extLanguage": "Language"
+  "extLanguage": "Language",
+  "extSetting": "setting"
 }
 ```
 
@@ -6010,7 +6105,8 @@ export const setupSPAObserver = (callback: () => void): MutationObserver => {
 {
   "extName": "유튜브 노래방",
   "extDescription": "앱 설명",
-  "extLanguage": "언어"
+  "extLanguage": "언어",
+  "extSetting": "설정"
 }
 ```
 
@@ -6167,15 +6263,16 @@ ExtensionPay 로 구현할 예정
 ## File: popup/App.tsx
 ```typescript
 // poup/App.tsx
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLangLoader } from '@hooks/useLangLoader';
 import { useTranslation } from 'react-i18next';
 import { useChromeStorage } from '@hooks/useChromeStorage';
 import { MESSAGE_TYPES } from '@constants/messageTypes';
 import { ErrorFallback } from '@components/common/ErrorFallback';
 import { LoadingOverlay } from '@components/common/LoadingOverlay';
-import './popup.css';
 import { STORAGE_KEYS } from '@constants/storageKeys';
+import { PopupSettingsPanel } from './components/PopupSettingsPanel';
+import './popup.css';
 
 interface LanguageChangeMessage {
   type: typeof MESSAGE_TYPES.LANGUAGE_CHANGED;
@@ -6184,7 +6281,20 @@ interface LanguageChangeMessage {
 export function App() {
   const { t, i18n } = useTranslation();
   const { phase } = useLangLoader();
+
   const [enabled, setEnabled] = useChromeStorage(STORAGE_KEYS.CONTENT_ENABLED, false);
+  const [showSettings, setShowSettings] = useState(false);
+
+  if (phase === 'error')
+    return (
+      <ErrorFallback
+        error={undefined}
+        resetErrorBoundary={function (): void {
+          throw new Error('Function not implemented.');
+        }}
+      />
+    );
+  if (phase !== 'ready') return <LoadingOverlay />;
 
   useEffect(() => {
     console.log('[Popup] Setting up language listeners');
@@ -6221,16 +6331,6 @@ export function App() {
     };
   }, [i18n]);
 
-  if (phase === 'error')
-    return (
-      <ErrorFallback
-        error={undefined}
-        resetErrorBoundary={function (): void {
-          throw new Error('Function not implemented.');
-        }}
-      />
-    );
-  if (phase !== 'ready') return <LoadingOverlay />;
 
   // 설정 버튼 클릭 시 옵션 페이지 열기
   const handleOpenOptions = () => {
@@ -6256,11 +6356,15 @@ export function App() {
     });
   };
 
+  if (showSettings) {
+    return <PopupSettingsPanel onBack={() => setShowSettings(false)} />;
+  }
+
   return (
     <div>
       <div className="popup-header">
         <h2>{t('extName')}</h2>
-        <button id="go-to-options" className="icon-button" onClick={handleOpenOptions}>
+        <button id="go-to-options" className="icon-button" onClick={() => setShowSettings(true)}>
           <img src="../assets/icons/setting.png" alt="설정" width={24} height={24} />
         </button>
       </div>
@@ -6272,6 +6376,120 @@ export function App() {
       </div>
     </div>
   );
+}
+```
+
+## File: popup/components/PopupSettingsPanel.tsx
+```typescript
+import React from 'react';
+import { BackButton } from '@components/common/BackButton';
+import styles from './styles.module.css';
+
+interface PopupSettingsPanelProps {
+  onBack: () => void;
+}
+
+export const PopupSettingsPanel: React.FC<PopupSettingsPanelProps> = ({ onBack }) => {
+  return (
+    <div className={styles.settingsPanel}>
+      <div className={styles.settingsHeader}>
+        <BackButton onClick={onBack} />
+        <h2>설정</h2>
+      </div>
+      <hr className={styles.divider} />
+
+      <div className={styles.sectionGroup}>
+        <div className={styles.sectionLabel}>개인 설정</div>
+        <button className={styles.settingsButton}>가사 표시</button>
+        <button className={styles.settingsButton}>발음 표시</button>
+        <button className={styles.settingsButton}>싱크 조절</button>
+        <button className={styles.settingsButton}>스타일 변경</button>
+      </div>
+
+      <div className={styles.sectionGroup}>
+        <div className={styles.sectionLabel}>일반</div>
+        <button className={styles.settingsButton}>캐시 초기화</button>
+        <button className={styles.settingsButton}>FAQ / 문의 / 라이선스</button>
+        <button className={styles.settingsButton}>설정 페이지 전체 열기</button>
+      </div>
+    </div>
+  );
+};
+```
+
+## File: popup/components/styles.module.css
+```css
+.divider {
+  border: none;
+  border-top: 1px solid rgba(0, 0, 0, 0.279); /* 또는 원하는 색상 */
+  margin: 8px 0; /* 상하 여백 */
+  width: 100%;
+}
+
+/* PopupSettingsPanel.css (또는 popup.css에 추가) */
+
+.settingsPanel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #fff;
+  box-shadow: -3px 0 16px rgba(0, 0, 0, 0.12);
+  border-radius: 12px 0 0 12px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+}
+
+.settingsHeader {
+  display: flex;
+  align-items: center;
+}
+
+.settingsHeader h2 {
+  font-size: 15px;
+  font-weight: 700;
+  margin-left: 12px;
+  user-select: none;
+}
+
+/* 개인 설정, 일반 섹션 묶음 */
+.sectionGroup {
+  margin-bottom: 24px;
+}
+
+.sectionLabel {
+  color: #888;
+  font-weight: 600;
+  margin-bottom: 8px;
+  margin-left: 15px;
+  font-size: 12px;
+  user-select: none;
+}
+
+/* 메뉴 버튼 스타일 */
+.settingsButton {
+  width: 100%;
+  padding: 15px 0;
+  background: transparent;
+  border: none;
+  font-weight: 600;
+  color: #333;
+  cursor: pointer;
+  transition:
+    background-color 0.2s,
+    box-shadow 0.2s;
+  user-select: none;
+}
+
+/* hover 시 버튼 배경 및 그림자 표시 */
+.settingsButton:hover,
+.settingsButton:focus {
+  background-color: #f0f0f0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  outline: none;
 }
 ```
 
@@ -6316,7 +6534,7 @@ if (root) {
 ```css
 body {
   width: 300px;
-  height: 500px;
+  height: 450px;
   padding: 10px;
 }
 .popup-header {

@@ -1,5 +1,6 @@
 {
   "extName": "Youtube Karaoke",
   "extDescription": "jot that down description",
-  "extLanguage": "Language"
+  "extLanguage": "Language",
+  "extSetting": "setting"
 }

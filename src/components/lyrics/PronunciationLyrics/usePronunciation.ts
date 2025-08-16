@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { splitByScript } from '@lib/utils/lyrics/detection/languageSpanSplitter';
+import { splitIntoLangGroups } from '@lib/utils/lyrics/detection/languageSpanSplitter';
 import { transliterateAndMerge } from '@lib/utils/lyrics/detection/languageTransliterator';
 
 // 여러 줄의 가사를 한 번에 변환
@@ -21,7 +21,7 @@ export function usePronunciations(lines: string[]) {
           batch.map(async (text) => {
             if (!text) return '';
             try {
-              const spans = splitByScript(text);
+              const spans = splitIntoLangGroups(text);
               return await transliterateAndMerge(spans);
             } catch (err) {
               console.error('[usePronunciations] 변환 오류:', err);

@@ -130,6 +130,7 @@ module.exports = {
             return JSON.stringify(chromeFormat, null, 2);
           },
         },
+        { from: 'public/kuroshiro_dict', to: 'kuroshiro_dict' },
       ],
     }),
     new webpack.DefinePlugin({

@@ -1,13 +1,14 @@
 // poup/App.tsx
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLangLoader } from '@hooks/useLangLoader';
 import { useTranslation } from 'react-i18next';
 import { useChromeStorage } from '@hooks/useChromeStorage';
 import { MESSAGE_TYPES } from '@constants/messageTypes';
 import { ErrorFallback } from '@components/common/ErrorFallback';
 import { LoadingOverlay } from '@components/common/LoadingOverlay';
-import './popup.css';
 import { STORAGE_KEYS } from '@constants/storageKeys';
+import { PopupSettingsPanel } from './components/PopupSettingsPanel';
+import './popup.css';
 
 interface LanguageChangeMessage {
   type: typeof MESSAGE_TYPES.LANGUAGE_CHANGED;
@@ -16,7 +17,9 @@ interface LanguageChangeMessage {
 export function App() {
   const { t, i18n } = useTranslation();
   const { phase } = useLangLoader();
+
   const [enabled, setEnabled] = useChromeStorage(STORAGE_KEYS.CONTENT_ENABLED, false);
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     console.log('[Popup] Setting up language listeners');
@@ -52,7 +55,6 @@ export function App() {
       chrome.runtime.onMessage.removeListener(handleMessage);
     };
   }, [i18n]);
-
   if (phase === 'error')
     return (
       <ErrorFallback
@@ -62,17 +64,9 @@ export function App() {
         }}
       />
     );
+
   if (phase !== 'ready') return <LoadingOverlay />;
 
-  // 설정 버튼 클릭 시 옵션 페이지 열기
-  const handleOpenOptions = () => {
-    if (chrome.runtime.openOptionsPage) {
-      chrome.runtime.openOptionsPage();
-    } else {
-      // 구버전 브라우저 호환
-      window.open(chrome.runtime.getURL('options.html'));
-    }
-  };
   // 스위치 상태 변경 핸들러
   const handleToggle = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.checked;
@@ -88,11 +82,15 @@ export function App() {
     });
   };
 
+  if (showSettings) {
+    return <PopupSettingsPanel onBack={() => setShowSettings(false)} />;
+  }
+
   return (
     <div>
       <div className="popup-header">
         <h2>{t('extName')}</h2>
-        <button id="go-to-options" className="icon-button" onClick={handleOpenOptions}>
+        <button id="go-to-options" className="icon-button" onClick={() => setShowSettings(true)}>
           <img src="../assets/icons/setting.png" alt="설정" width={24} height={24} />
         </button>
       </div>

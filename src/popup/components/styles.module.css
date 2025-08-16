@@ -1,0 +1,72 @@
+.divider {
+  border: none;
+  border-top: 1px solid rgba(0, 0, 0, 0.279); /* 또는 원하는 색상 */
+  margin: 8px 0; /* 상하 여백 */
+  width: 100%;
+}
+
+/* PopupSettingsPanel.css (또는 popup.css에 추가) */
+
+.settingsPanel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #fff;
+  box-shadow: -3px 0 16px rgba(0, 0, 0, 0.12);
+  border-radius: 12px 0 0 12px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+}
+
+.settingsHeader {
+  display: flex;
+  align-items: center;
+}
+
+.settingsHeader h2 {
+  font-size: 15px;
+  font-weight: 700;
+  margin-left: 12px;
+  user-select: none;
+}
+
+/* 개인 설정, 일반 섹션 묶음 */
+.sectionGroup {
+  margin-bottom: 24px;
+}
+
+.sectionLabel {
+  color: #888;
+  font-weight: 600;
+  margin-bottom: 8px;
+  margin-left: 15px;
+  font-size: 12px;
+  user-select: none;
+}
+
+/* 메뉴 버튼 스타일 */
+.settingsButton {
+  width: 100%;
+  padding: 15px 0;
+  background: transparent;
+  border: none;
+  font-weight: 600;
+  color: #333;
+  cursor: pointer;
+  transition:
+    background-color 0.2s,
+    box-shadow 0.2s;
+  user-select: none;
+}
+
+/* hover 시 버튼 배경 및 그림자 표시 */
+.settingsButton:hover,
+.settingsButton:focus {
+  background-color: #f0f0f0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  outline: none;
+}
