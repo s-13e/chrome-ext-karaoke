@@ -1,5 +1,6 @@
 // src/lib/utils/lyrics/languageTransliterator.ts
 
+import { chineseRomanizer } from '../romanizers/chineseRomanizer';
 import { japaneseRomanizer } from '../romanizers/japaneseRomanizer';
 import { koreanRomanizer } from '../romanizers/koreanRomanizer';
 import type { ScriptSpan } from './languageSpanSplitter';
@@ -8,7 +9,7 @@ import type { ScriptSpan } from './languageSpanSplitter';
 const transliterators: Record<string, (text: string) => Promise<string>> = {
   ko: async (text) => Promise.resolve(koreanRomanizer(text)),
   ja: (text) => japaneseRomanizer(text),
-  zh: async (text) => Promise.resolve(text), // 중국어는 변환 없이 그대로
+  zh: (text) => chineseRomanizer(text), // 여기에 병음 변환 연결
   th: async (text) => Promise.resolve(text),
   ar: async (text) => Promise.resolve(text),
   he: async (text) => Promise.resolve(text),
