@@ -2,5 +2,12 @@
   "extName": "유튜브 노래방",
   "extDescription": "앱 설명",
   "extLanguage": "언어",
-  "extSetting": "설정"
+  "extSetting": "설정",
+  "extLyrics": "가사",
+  "extPronunciation": "발음",
+  "extFAQ": "많이 묻는 질문",
+  "extLicense": "라이센스",
+  "extContact": "문의",
+  "extPersonalSettings": "개인 설정",
+  "extGeneralSettings": "일반 설정"
 }

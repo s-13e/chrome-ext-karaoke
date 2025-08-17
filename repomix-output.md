@@ -126,6 +126,7 @@ lib/utils/lyrics/meta/getLyricsFromCacheOrFetch.ts
 lib/utils/lyrics/meta/queryNormalizer.ts
 lib/utils/lyrics/parsers/lyricsParser.ts
 lib/utils/lyrics/parsers/stringUtils.ts
+lib/utils/lyrics/romanizers/chineseRomanizer.ts
 lib/utils/lyrics/romanizers/japaneseRomanizer.ts
 lib/utils/lyrics/romanizers/koreanRomanizer.ts
 lib/utils/platform/contentGuard.ts
@@ -5061,7 +5062,7 @@ const detectors: LanguageScriptDetector[] = [
   },
   {
     lang: 'ja', // 일본어
-    test: (c) => /[\u3040-\u309F\u30A0-\u30FF]/.test(c),  // 히라가나, 가타카나
+    test: (c) => /[\u3040-\u309F\u30A0-\u30FF]/.test(c), // 히라가나, 가타카나
   },
   { lang: 'th', test: (c) => /[\u0E00-\u0E7F]/.test(c) }, // 태국어
   { lang: 'ar', test: (c) => /[\u0600-\u06FF]/.test(c) }, // 아랍어
@@ -5078,8 +5079,6 @@ export function detectScript(char: string): DetectedLanguageCode {
 
 ## File: lib/utils/lyrics/detection/languageSpanSplitter.ts
 ```typescript
-import { detectScript } from './languageDetectorSimple';
-
 export type ScriptSpan = {
   lang: string | null;
   text: string;
@@ -5130,6 +5129,7 @@ export function splitIntoLangGroups(text: string): ScriptSpan[] {
 ```typescript
 // src/lib/utils/lyrics/languageTransliterator.ts
 
+import { chineseRomanizer } from '../romanizers/chineseRomanizer';
 import { japaneseRomanizer } from '../romanizers/japaneseRomanizer';
 import { koreanRomanizer } from '../romanizers/koreanRomanizer';
 import type { ScriptSpan } from './languageSpanSplitter';
@@ -5138,7 +5138,7 @@ import type { ScriptSpan } from './languageSpanSplitter';
 const transliterators: Record<string, (text: string) => Promise<string>> = {
   ko: async (text) => Promise.resolve(koreanRomanizer(text)),
   ja: (text) => japaneseRomanizer(text),
-  zh: async (text) => Promise.resolve(text), // 중국어는 변환 없이 그대로
+  zh: (text) => chineseRomanizer(text), // 여기에 병음 변환 연결
   th: async (text) => Promise.resolve(text),
   ar: async (text) => Promise.resolve(text),
   he: async (text) => Promise.resolve(text),
@@ -5774,6 +5774,36 @@ function extractEnglishOnly(str: string): string {
 }
 ```
 
+## File: lib/utils/lyrics/romanizers/chineseRomanizer.ts
+```typescript
+// src/lib/utils/lyrics/romanizers/chineseRomanizer.ts
+import pinyin from 'pinyin';
+
+/**
+ * 중국어 텍스트를 병음(로마자)으로 변환하는 함수
+ * @param text 변환할 중국어 텍스트 (주로 한자 포함)
+ * @returns 변환된 병음 문자열
+ */
+export async function chineseRomanizer(text: string): Promise<string> {
+  try {
+    // pinyin 옵션:
+    // - STYLE_NORMAL : 성조 없는 순수 로마자
+    // - segment true : 문맥 단어 분리하여 정확도 향상
+    const result = pinyin(text, {
+      style: pinyin.STYLE_NORMAL,
+      segment: true,
+    });
+
+    // 이중 배열 형태를 평탄화하여 문자열로 결합 (공백 구분)
+    return result.flat().join(' ');
+  } catch (error) {
+    console.error('Chinese romanizer error:', error);
+    // 변환 실패 시 원본 텍스트 그대로 반환
+    return text;
+  }
+}
+```
+
 ## File: lib/utils/lyrics/romanizers/japaneseRomanizer.ts
 ```typescript
 import Kuroshiro from 'kuroshiro';
@@ -5799,16 +5829,6 @@ async function ensureKuroshiroInitialized(): Promise<InstanceType<typeof Kuroshi
       const instance = new Kuroshiro();
       await instance.init(analyzer);
       kuroshiroInstance = instance;
-      console.log('Kuroshiro + KuromojiAnalyzer initialized!');
-
-      // 여기서 진단용 예시 실행
-      const testText = '感じ取れたら手を繋ごう、重なるのは人生のライン and レミリア最高！';
-      const testResult = await instance.convert(testText, {
-        to: 'romaji',
-        romajiSystem: 'hepburn',
-        mode: 'normal',
-      });
-      console.log('[진단용] Kuroshiro 예시 변환:', testText, '→', testResult);
     } catch (e) {
       console.error('KuromojiAnalyzer/Kuroshiro init error:', e);
     }
@@ -5827,7 +5847,6 @@ export async function japaneseRomanizer(text: string): Promise<string> {
       romajiSystem: 'hepburn',
       mode: 'normal',
     });
-    console.log('Kuroshiro convert result:', result);
     return result;
   } catch (err) {
     console.error('Kuroshiro convert error:', err);
@@ -6285,17 +6304,6 @@ export function App() {
   const [enabled, setEnabled] = useChromeStorage(STORAGE_KEYS.CONTENT_ENABLED, false);
   const [showSettings, setShowSettings] = useState(false);
 
-  if (phase === 'error')
-    return (
-      <ErrorFallback
-        error={undefined}
-        resetErrorBoundary={function (): void {
-          throw new Error('Function not implemented.');
-        }}
-      />
-    );
-  if (phase !== 'ready') return <LoadingOverlay />;
-
   useEffect(() => {
     console.log('[Popup] Setting up language listeners');
 
@@ -6330,17 +6338,18 @@ export function App() {
       chrome.runtime.onMessage.removeListener(handleMessage);
     };
   }, [i18n]);
+  if (phase === 'error')
+    return (
+      <ErrorFallback
+        error={undefined}
+        resetErrorBoundary={function (): void {
+          throw new Error('Function not implemented.');
+        }}
+      />
+    );
 
+  if (phase !== 'ready') return <LoadingOverlay />;
 
-  // 설정 버튼 클릭 시 옵션 페이지 열기
-  const handleOpenOptions = () => {
-    if (chrome.runtime.openOptionsPage) {
-      chrome.runtime.openOptionsPage();
-    } else {
-      // 구버전 브라우저 호환
-      window.open(chrome.runtime.getURL('options.html'));
-    }
-  };
   // 스위치 상태 변경 핸들러
   const handleToggle = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.checked;

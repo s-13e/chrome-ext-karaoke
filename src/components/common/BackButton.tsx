@@ -6,6 +6,9 @@ interface BackButtonProps {
   ariaLabel?: string;
   className?: string;
   flip?: boolean;
+  arrowColor?: string;
+  transparentBackground?: boolean;
+  style?: React.CSSProperties;
 }
 
 export const BackButton: React.FC<BackButtonProps> = ({
@@ -13,6 +16,9 @@ export const BackButton: React.FC<BackButtonProps> = ({
   ariaLabel = '뒤로',
   className = '',
   flip = false,
+  arrowColor = '#fff',
+  transparentBackground = false,
+  style,
 }) => {
   return (
     <button
@@ -26,16 +32,17 @@ export const BackButton: React.FC<BackButtonProps> = ({
         marginLeft: 10,
         marginRight: 10,
         border: 'none',
-        background: 'transparent',
+        background: transparentBackground ? 'transparent' : undefined,
         cursor: 'pointer',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         transform: flip ? 'scaleX(-1)' : undefined,
+        ...style,
       }}
       className={`backButton ${className}`.trim()}
     >
-      <ArrowIcon direction="left" />
+      <ArrowIcon color={arrowColor} direction="left" />
     </button>
   );
 };
