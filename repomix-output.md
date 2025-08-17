@@ -142,8 +142,14 @@ options/Options.css
 options/options.html
 payment/pay.txt
 popup/App.tsx
+popup/components/Contact.tsx
+popup/components/FAQ.module.css
+popup/components/FAQ.tsx
+popup/components/LanguageSettings.tsx
+popup/components/LicenseInfo.tsx
+popup/components/LyricsSettings.tsx
+popup/components/popupSettingsPanel.module.css
 popup/components/PopupSettingsPanel.tsx
-popup/components/styles.module.css
 popup/index.tsx
 popup/popup.css
 popup/popup.html
@@ -731,6 +737,9 @@ interface BackButtonProps {
   ariaLabel?: string;
   className?: string;
   flip?: boolean;
+  arrowColor?: string;
+  transparentBackground?: boolean;
+  style?: React.CSSProperties;
 }
 
 export const BackButton: React.FC<BackButtonProps> = ({
@@ -738,6 +747,9 @@ export const BackButton: React.FC<BackButtonProps> = ({
   ariaLabel = '뒤로',
   className = '',
   flip = false,
+  arrowColor = '#fff',
+  transparentBackground = false,
+  style,
 }) => {
   return (
     <button
@@ -751,16 +763,17 @@ export const BackButton: React.FC<BackButtonProps> = ({
         marginLeft: 10,
         marginRight: 10,
         border: 'none',
-        background: 'transparent',
+        background: transparentBackground ? 'transparent' : undefined,
         cursor: 'pointer',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         transform: flip ? 'scaleX(-1)' : undefined,
+        ...style,
       }}
       className={`backButton ${className}`.trim()}
     >
-      <ArrowIcon direction="left" />
+      <ArrowIcon color={arrowColor} direction="left" />
     </button>
   );
 };
@@ -6115,7 +6128,14 @@ export const setupSPAObserver = (callback: () => void): MutationObserver => {
   "extName": "Youtube Karaoke",
   "extDescription": "jot that down description",
   "extLanguage": "Language",
-  "extSetting": "setting"
+  "extSetting": "setting",
+  "extLyrics": "lyrics",
+  "extPronunciation": "Pronunciation",
+  "extFAQ": "FAQ",
+  "extLicense": "License",
+  "extContact": "Contact",
+  "extPersonalSettings": "Personal Settings",
+  "extGeneralSettings": "General Settings"
 }
 ```
 
@@ -6125,7 +6145,14 @@ export const setupSPAObserver = (callback: () => void): MutationObserver => {
   "extName": "유튜브 노래방",
   "extDescription": "앱 설명",
   "extLanguage": "언어",
-  "extSetting": "설정"
+  "extSetting": "설정",
+  "extLyrics": "가사",
+  "extPronunciation": "발음",
+  "extFAQ": "많이 묻는 질문",
+  "extLicense": "라이센스",
+  "extContact": "문의",
+  "extPersonalSettings": "개인 설정",
+  "extGeneralSettings": "일반 설정"
 }
 ```
 
@@ -6388,89 +6415,329 @@ export function App() {
 }
 ```
 
-## File: popup/components/PopupSettingsPanel.tsx
+## File: popup/components/Contact.tsx
 ```typescript
-import React from 'react';
-import { BackButton } from '@components/common/BackButton';
-import styles from './styles.module.css';
+import styles from './popupSettingsPanel.module.css';
 
-interface PopupSettingsPanelProps {
-  onBack: () => void;
+const GOOGLE_FORM_URL =
+  'https://docs.google.com/forms/d/e/1FAIpQLSfVhvBVQBG5kfS3npBTMBlTfR1t5uYTg73iRJJG612MmdNhKw/viewform?usp=header';
+
+export function Contact() {
+  const handleClick = () => {
+    window.open(GOOGLE_FORM_URL, '_blank', 'noopener,noreferrer');
+  };
+
+  return (
+    <div className={styles.settingsContent} style={{ textAlign: 'center', padding: '40px 20px' }}>
+      <button
+        className={styles.settingsButton}
+        type="button"
+        onClick={handleClick}
+        style={{ fontSize: '1.1rem', padding: '12px 24px' }}
+      >
+        문의하기
+      </button>
+    </div>
+  );
+}
+```
+
+## File: popup/components/FAQ.module.css
+```css
+.faqContent {
+  padding: 22px 22px; /* 상하좌우 여백 조절 */
 }
 
-export const PopupSettingsPanel: React.FC<PopupSettingsPanelProps> = ({ onBack }) => {
+.faqTitle {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 18px;
+  margin-left: 2px;
+}
+
+.faqItem {
+  margin-bottom: 20px;
+}
+
+.faqQuestion {
+  color: #888;
+  font-weight: 600;
+  font-size: 15px;
+  margin-bottom: 7px;
+}
+
+.faqAnswer {
+  color: #222;
+  font-size: 15px;
+  line-height: 1.6;
+  margin-bottom: 2px;
+}
+```
+
+## File: popup/components/FAQ.tsx
+```typescript
+// FAQ.tsx
+import styles from './FAQ.module.css';
+
+const faqList = [
+  {
+    question: '외국어 가사를 번역하는 기능은 없나요?',
+    answer: '네. 현재 번역 기능은 없으며, 앞으로도 구현할 예정은 없습니다.',
+  },
+  {
+    question: '싱크가 안 맞아요.',
+    answer:
+      '불편을 드려서 죄송합니다. 현재 영상에서 가사 싱크 최적화 작업을 진행하고 있으며, 현재로서는 커스텀 싱크 조절 기능을 이용하여 조절해주세요. 다시 한번 불편을 드려서 죄송합니다!',
+  },
+  // ... 더 많은 FAQ 항목을 추가할 수 있습니다
+];
+
+export function FAQ() {
   return (
-    <div className={styles.settingsPanel}>
-      <div className={styles.settingsHeader}>
-        <BackButton onClick={onBack} />
-        <h2>설정</h2>
-      </div>
-      <hr className={styles.divider} />
+    <div className={styles.faqContent}>
+      {faqList.map((item, idx) => (
+        <div key={idx} className={styles.faqItem}>
+          <div className={styles.faqQuestion}>{item.question}</div>
+          <div className={styles.faqAnswer}>{item.answer}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
 
-      <div className={styles.sectionGroup}>
-        <div className={styles.sectionLabel}>개인 설정</div>
-        <button className={styles.settingsButton}>가사 표시</button>
-        <button className={styles.settingsButton}>발음 표시</button>
-        <button className={styles.settingsButton}>싱크 조절</button>
-        <button className={styles.settingsButton}>스타일 변경</button>
+## File: popup/components/LanguageSettings.tsx
+```typescript
+import React from 'react';
+import { useTranslation } from 'react-i18next';
+import { useLangLoader } from '@hooks/useLangLoader';
+import { ErrorFallback } from '@components/common/ErrorFallback';
+import { LoadingOverlay } from '@components/common/LoadingOverlay';
+import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, SupportedLanguage, NATIVE_LANGUAGE_NAMES } from '@constants/languages';
+import { syncLanguage } from '@services/i18n';
+import { MESSAGE_TYPES } from '@constants/messageTypes';
+import { STORAGE_KEYS } from '@constants/storageKeys';
+
+export function LanguageSettings() {
+  const { t, i18n } = useTranslation();
+  const { phase, error } = useLangLoader();
+  const [isChanging, setIsChanging] = React.useState(false);
+  const [currentLang, setCurrentLang] = React.useState<SupportedLanguage>(DEFAULT_LANGUAGE);
+
+  // ✅ i18n이 준비된 후 현재 언어 상태 동기화
+  React.useEffect(() => {
+    console.log(`[Options] i18n phase: ${phase}, current language: ${i18n.language}`);
+    if (phase === 'ready' && i18n.language) {
+      console.log(`[Options] Setting currentLang to: ${i18n.language}`);
+      setCurrentLang(i18n.language as SupportedLanguage);
+    }
+  }, [phase, i18n.language]);
+
+  // 상태별 UI 처리
+  if (phase === 'error') return <ErrorFallback error={error!} resetErrorBoundary={() => window.location.reload()} />;
+  if (phase !== 'ready') return null;
+
+  // 언어 변경 핸들러 (실시간 반영 강화)
+  const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newLang = e.target.value as SupportedLanguage;
+
+    try {
+      console.log('handleChange 핸들러 실행');
+      setIsChanging(true);
+      setCurrentLang(newLang); // 즉시 UI 업데이트
+
+      await chrome.storage.sync.set({ [STORAGE_KEYS.LANGUAGE]: newLang });
+      await syncLanguage(newLang);
+
+      // 3. 다른 컨텍스트에 메시지 전송
+      chrome.runtime.sendMessage({
+        type: MESSAGE_TYPES.LANGUAGE_CHANGED,
+        language: newLang,
+      });
+    } catch (error) {
+      console.error('Language change failed:', error);
+      setCurrentLang(i18n.language as SupportedLanguage); // 롤백
+    } finally {
+      setIsChanging(false);
+    }
+  };
+
+  return (
+    <div className="language-selector">
+      <h2>{t('extLanguage')}</h2>
+      <select value={currentLang} onChange={handleChange} disabled={isChanging} aria-busy={isChanging}>
+        {SUPPORTED_LANGUAGES.map((lang) => (
+          <option key={lang} value={lang}>
+            {NATIVE_LANGUAGE_NAMES[lang]}
+          </option>
+        ))}
+      </select>
+      {isChanging && <LoadingOverlay />}
+    </div>
+  );
+}
+```
+
+## File: popup/components/LicenseInfo.tsx
+```typescript
+import React from 'react';
+import styles from './popupSettingsPanel.module.css';
+
+export const LicenseInfo: React.FC = () => {
+  return (
+    <div className={styles.sectionGroup}>
+      <div className={styles.sectionLabel}>라이선스 정보</div>
+      <p>본 확장 프로그램은 MIT 라이선스에 따라 배포됩니다. 소스 코드는 자유롭게 사용, 수정, 배포가 가능합니다.</p>
+      <p>본 확장 프로그램은 다음 오픈소스 라이브러리를 사용하며, 각각의 라이선스 조건을 준수합니다.</p>
+      <ul>
+        <li>라이브러리 A - Apache 2.0 License</li>
+        <li>라이브러리 B - MIT License</li>
+        {/* 필요한 경우 추가 명시 */}
+      </ul>
+      <p>프로그램은 “있는 그대로” 제공되며, 사용 중 발생하는 문제에 대해서 개발자는 법적 책임을 지지 않습니다.</p>
+      <p>개인정보 처리에 관한 자세한 내용은 개인정보처리방침 페이지를 참고하시기 바랍니다.</p>
+      <p>저작권 © 2025 [개발자명 또는 회사명]. All rights reserved.</p>
+    </div>
+  );
+};
+```
+
+## File: popup/components/LyricsSettings.tsx
+```typescript
+import React from 'react';
+import { useChromeStorage } from '@hooks/useChromeStorage';
+import styles from './popupSettingsPanel.module.css';
+
+export const LyricsSettings: React.FC = () => {
+  // 스토리지에 저장된 설정 불러오기, 기본값 지정
+  const [showRealtimeLyrics, setShowRealtimeLyrics] = useChromeStorage('realtimeLyrics', true);
+  const [showPronunciationLyrics, setShowPronunciationLyrics] = useChromeStorage('announceLyrics', true);
+  const [lyricsFontColorCurrent, setLyricsFontColorCurrent] = useChromeStorage('lyricsFontColorCurrent', '#FFFFFF');
+  const [lyricsFontColorPronunciation, setLyricsFontColorPronunciation] = useChromeStorage(
+    'lyricsFontColorPronunciation',
+    '#AAAAAA',
+  );
+  const [lyricsMode, setLyricsMode] = useChromeStorage('lyricsMode', 'sync'); // 'sync' | 'full'
+
+  // 폰트 모드 옵션
+  const modeOptions = [
+    { label: '기본(싱크)', value: 'sync' },
+    { label: '전체가사', value: 'full' },
+  ];
+
+  return (
+    <div className={styles.sectionGroup}>
+      <div className={styles.sectionLabel}>가사 설정</div>
+
+      <label className={styles.settingItem}>
+        <input type="checkbox" checked={showRealtimeLyrics} onChange={(e) => setShowRealtimeLyrics(e.target.checked)} />
+        현재 가사 표시
+      </label>
+
+      <label className={styles.settingItem}>
+        <input
+          type="checkbox"
+          checked={showPronunciationLyrics}
+          onChange={(e) => setShowPronunciationLyrics(e.target.checked)}
+        />
+        발음 가사 표시
+      </label>
+
+      <div className={styles.settingItem}>
+        <label htmlFor="lyricsModeSelect" className={styles.settingLabel}>
+          가사 모드
+        </label>
+        <select
+          id="lyricsModeSelect"
+          value={lyricsMode}
+          onChange={(e) => setLyricsMode(e.target.value)}
+          className={styles.settingSelect}
+        >
+          {modeOptions.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
       </div>
 
-      <div className={styles.sectionGroup}>
-        <div className={styles.sectionLabel}>일반</div>
-        <button className={styles.settingsButton}>캐시 초기화</button>
-        <button className={styles.settingsButton}>FAQ / 문의 / 라이선스</button>
-        <button className={styles.settingsButton}>설정 페이지 전체 열기</button>
+      <div className={styles.settingItem}>
+        <label htmlFor="fontColorCurrent" className={styles.settingLabel}>
+          가사 글꼴 색상
+        </label>
+        <input
+          id="fontColorCurrent"
+          type="color"
+          value={lyricsFontColorCurrent}
+          onChange={(e) => setLyricsFontColorCurrent(e.target.value)}
+          className={styles.colorPicker}
+        />
+        <label htmlFor="fontColorCurrent" className={styles.settingLabel}>
+          가사 하이라이트 색상
+        </label>
+      </div>
+
+      <div className={styles.settingItem}>
+        <label htmlFor="fontColorPronunciation" className={styles.settingLabel}>
+          발음 가사 색상
+        </label>
+        <input
+          id="fontColorPronunciation"
+          type="color"
+          value={lyricsFontColorPronunciation}
+          onChange={(e) => setLyricsFontColorPronunciation(e.target.value)}
+          className={styles.colorPicker}
+        />
       </div>
     </div>
   );
 };
 ```
 
-## File: popup/components/styles.module.css
+## File: popup/components/popupSettingsPanel.module.css
 ```css
-.divider {
-  border: none;
-  border-top: 1px solid rgba(0, 0, 0, 0.279); /* 또는 원하는 색상 */
-  margin: 8px 0; /* 상하 여백 */
-  width: 100%;
-}
-
-/* PopupSettingsPanel.css (또는 popup.css에 추가) */
-
 .settingsPanel {
   position: absolute;
   top: 0;
   right: 0;
   width: 100%;
   height: 100%;
-  background-color: #fff;
+  background-color: #f9f9fb;
   box-shadow: -3px 0 16px rgba(0, 0, 0, 0.12);
   border-radius: 12px 0 0 12px;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   z-index: 1000;
 }
-
 .settingsHeader {
   display: flex;
   align-items: center;
+  background: #fff;
+  border-bottom: 1px solid #ececec;
+  padding: 10px 12px 10px 12px;
 }
 
 .settingsHeader h2 {
   font-size: 15px;
+  margin: 5px;
   font-weight: 700;
-  margin-left: 12px;
+  margin-left: 7px;
   user-select: none;
+  color: #222;
 }
 
+.settingsContent {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding: 18px 0;
+}
 /* 개인 설정, 일반 섹션 묶음 */
 .sectionGroup {
   margin-bottom: 24px;
 }
 
 .sectionLabel {
-  color: #888;
+  color: #9c9c9c;
   font-weight: 600;
   margin-bottom: 8px;
   margin-left: 15px;
@@ -6481,24 +6748,137 @@ export const PopupSettingsPanel: React.FC<PopupSettingsPanelProps> = ({ onBack }
 /* 메뉴 버튼 스타일 */
 .settingsButton {
   width: 100%;
-  padding: 15px 0;
-  background: transparent;
+  background: #fff;
+  padding: 15px 15px;
   border: none;
+  border-bottom: 1px solid #ececec;
   font-weight: 600;
+  font-size: 13px;
   color: #333;
   cursor: pointer;
   transition:
     background-color 0.2s,
     box-shadow 0.2s;
-  user-select: none;
+  text-align: left;
+}
+.settingsButton:last-child {
+  border-bottom: none;
 }
 
 /* hover 시 버튼 배경 및 그림자 표시 */
-.settingsButton:hover,
-.settingsButton:focus {
+.settingsButton:hover {
   background-color: #f0f0f0;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
   outline: none;
+}
+/* 구분선 */
+.divider {
+  border: none;
+  border-top: 1px solid #ececec;
+  margin: 16px 0;
+  width: 100%;
+  background: transparent;
+}
+```
+
+## File: popup/components/PopupSettingsPanel.tsx
+```typescript
+import React, { useState } from 'react';
+import { BackButton } from '@components/common/BackButton';
+import styles from './popupSettingsPanel.module.css';
+import { FAQ } from './FAQ';
+import { useTranslation } from 'react-i18next';
+import { Contact } from './Contact';
+import { LanguageSettings } from './LanguageSettings';
+import { LyricsSettings } from './LyricsSettings';
+import { LicenseInfo } from './LicenseInfo';
+
+type ComponentKey = 'main' | 'faq' | 'contact' | 'license' | 'language' | 'lyricsSettings';
+interface PopupSettingsPanelProps {
+  onBack: () => void;
+}
+interface MainMenuProps {
+  onNavigate: (key: ComponentKey) => void;
+}
+
+export const PopupSettingsPanel: React.FC<PopupSettingsPanelProps> = ({ onBack }) => {
+  const { t } = useTranslation();
+
+  const titles: Record<ComponentKey, string> = {
+    main: t('extSetting'),
+    faq: t('extFAQ'),
+    contact: t('extContact'),
+    license: t('extLicense'),
+    language: t('extLanguage'),
+    lyricsSettings: t('extLyrics'),
+  };
+  const [activeComponent, setActiveComponent] = useState<ComponentKey>('main');
+
+  let ContentComponent;
+  if (activeComponent === 'faq') ContentComponent = FAQ;
+  else if (activeComponent === 'contact') ContentComponent = Contact;
+  else if (activeComponent === 'language') ContentComponent = LanguageSettings;
+  else if (activeComponent === 'lyricsSettings') ContentComponent = LyricsSettings;
+  else if (activeComponent === 'license') ContentComponent = LicenseInfo;
+  else ContentComponent = MainMenu; // 초기 메뉴
+
+  // BackButton 클릭 핸들러 분리
+  const handleBackButtonClick = () => {
+    if (activeComponent === 'main') {
+      // 현재 초기 메뉴면 부모(onBack) 콜백 호출 -> App.tsx 등 상위로 이동
+      onBack();
+    } else {
+      // FAQ 등 상세화면이면 초기 메뉴로 변경
+      setActiveComponent('main');
+    }
+  };
+
+  return (
+    <div className={styles.settingsPanel}>
+      <div className={styles.settingsHeader}>
+        <BackButton
+          onClick={handleBackButtonClick}
+          className={styles.popupBackButton}
+          arrowColor="#000"
+          transparentBackground
+          style={{ marginLeft: 0 }}
+        />
+        <h2>{titles[activeComponent] || t('extSetting')}</h2>
+      </div>
+      <ContentComponent onNavigate={setActiveComponent} />
+    </div>
+  );
+};
+function MainMenu({ onNavigate }: MainMenuProps) {
+  const { t } = useTranslation();
+
+  return (
+    <div className={styles.settingsContent}>
+      <div className={styles.sectionGroup}>
+        <div className={styles.sectionLabel}>{t('extPersonalSettings')}</div>
+        <button className={styles.settingsButton} onClick={() => onNavigate('lyricsSettings')}>
+          {t('extLyrics')}
+        </button>
+        <button className={styles.settingsButton}>싱크 조절</button>
+        <button className={styles.settingsButton}>스타일 변경</button>
+        <button className={styles.settingsButton} onClick={() => onNavigate('language')}>
+          {t('extLanguage')}
+        </button>
+      </div>
+
+      <div className={styles.sectionGroup}>
+        <div className={styles.sectionLabel}>{t('extGeneralSettings')}</div>
+        <button className={styles.settingsButton}>캐시 초기화</button>
+        <button className={styles.settingsButton} onClick={() => onNavigate('faq')}>
+          {t('extFAQ')}
+        </button>
+        <button className={styles.settingsButton} onClick={() => onNavigate('contact')}>
+          {t('extContact')}
+        </button>
+        <button className={styles.settingsButton}>{t('extLicense')}</button>
+      </div>
+    </div>
+  );
 }
 ```
 

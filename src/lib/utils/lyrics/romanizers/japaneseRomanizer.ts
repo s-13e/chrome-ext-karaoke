@@ -37,7 +37,7 @@ export async function japaneseRomanizer(text: string): Promise<string> {
     const result = await kuroshiro.convert(text, {
       to: 'romaji',
       romajiSystem: 'hepburn',
-      mode: 'normal',
+      mode: 'spaced',
     });
     return result;
   } catch (err) {
