@@ -56,6 +56,8 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
   let lyricsOverlayRoot: Root | null = null; // 렌더링된 root 인스턴스 보관
   let lyricsOverlayElement: HTMLElement | null = null;
   let lastUrl = window.location.href;
+  let spaObserverShouldTriggerDetection = true;
+  let isRetryingDetection = false; // 재시도 중복 제어 플래그
 
   // font
   let lyricsFontColorCurrent = '#FFFFFF';
@@ -668,7 +670,14 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       const { url, isWatchPage } = message.payload;
       console.log(`[SPA Navigation] ${url}, isWatchPage: ${isWatchPage}`);
       if (url !== lastUrl) {
+        spaObserverShouldTriggerDetection = false; // 메시지 리스너가 감지 호출 담당
         handleUrlChangeGuarded(url);
+
+        // 감지 호출 후 일정 시간 뒤 다시 SPA 옵저버 활성화 허용
+        setTimeout(() => {
+          spaObserverShouldTriggerDetection = true;
+          console.log('[SPA Navigation] SPA 옵저버 감지 호출 재활성화');
+        }, 5000); // 5초 후 다시 활성화 (조절 가능)
       } else {
         // URL 변동 없으면 감지 호출 안 함
         console.log('[SPA Navigation] URL 변경 없음, 감지 생략:', url);
@@ -709,18 +718,29 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
 
   // --- 비디오 감지 재시도 함수 (최대 시도 횟수 maxTries, 간격 interval(ms)) ---
   async function handleVideoDetectionWithRetry(maxTries = 15, interval = 2000) {
-    for (let i = 0; i < maxTries; i++) {
-      const videoData = detectYouTubeVideo();
-      if (videoData && videoData.videoId) {
-        await handleVideoDetectionGuarded(); // 내부 감지 및 렌더 호출 (Guarded 버전 사용)
-        return;
-      }
-      console.log(
-        `[handleVideoDetectionWithRetry] videoId 없음, ${interval / 1000}s 후 재시도... (${i + 1} / ${maxTries})`,
-      );
-      await new Promise((res) => setTimeout(res, interval));
+    if (isRetryingDetection) {
+      console.log('[handleVideoDetectionWithRetry] 재시도 중복 실행 방지로 종료');
+      return;
     }
-    console.warn(`[handleVideoDetectionWithRetry] ${(maxTries * interval) / 1000}s 동안 videoId를 못 찾음`);
+
+    isRetryingDetection = true;
+
+    try {
+      for (let i = 0; i < maxTries; i++) {
+        const videoData = detectYouTubeVideo();
+        if (videoData && videoData.videoId) {
+          await handleVideoDetectionGuarded(); // 내부 감지 및 렌더 호출
+          return;
+        }
+        console.log(
+          `[handleVideoDetectionWithRetry] videoId 없음, ${interval / 1000}s 후 재시도... (${i + 1} / ${maxTries})`,
+        );
+        await new Promise((res) => setTimeout(res, interval));
+      }
+      console.warn(`[handleVideoDetectionWithRetry] ${(maxTries * interval) / 1000}s 동안 videoId를 못 찾음`);
+    } finally {
+      isRetryingDetection = false; // 재시도 종료 시 플래그 해제
+    }
   }
 
   // 반드시 한 번 실행 (initializeApp 등 진입 시)
@@ -760,11 +780,17 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     }
     cleanupAllResources();
 
+    // 유튜브 SPA 내비게이션 같은 URL 변화 감지
     detectionObserverManager.spaObserver = setupSPAObserver(() => {
       const currentUrl = window.location.href;
       if (currentUrl !== lastUrl) {
         lastUrl = currentUrl;
-        handleVideoDetectionGuarded();
+        // 플래그가 true일 때만 감지 호출
+        if (spaObserverShouldTriggerDetection) {
+          handleVideoDetectionGuarded();
+        } else {
+          console.log('[SPA Observer] 감지 호출 스킵 (메시지 리스너 우선)');
+        }
       }
     });
 
