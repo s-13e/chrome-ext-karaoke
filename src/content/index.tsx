@@ -586,10 +586,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
   // 영상 감지 핸들러 (순수 로직)
   const handleVideoDetection = async () => {
     console.log('handleVideoDetection 실행');
-    if (isDetecting) {
-      console.log('[SKIP] 감지 함수 실행 중 (동시 실행 방지)');
-      return;
-    }
+    if (isDetecting) return;
     isDetecting = true;
 
     try {
@@ -606,9 +603,8 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
 
       // 새 영상이 들어왔으므로 이전 자막 제거
       hideLyricsOverlay();
-      latestLyrics = [];
-
       lastVideoId = videoData.videoId;
+      latestLyrics = [];
 
       // 1. 메타데이터 및 가사 수집 (영상 로드 여부 무관)
       const collected = await tryCollectMetadataAndLyrics(videoData.videoId);
@@ -632,6 +628,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       isDetecting = false;
     }
   };
+  // --- wrapper ---
   const handleVideoDetectionGuarded = withContentEnabled(getContentEnabled, handleVideoDetection);
   const debouncedDetection = debounce(handleVideoDetectionGuarded, RETRY_DELAY);
 
@@ -653,13 +650,13 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
 
   // 2) 광고 감시 초기화 함수, 광고 종료 시 prefetch 후 handleVideoDetection 호출
   function initAdWatcher() {
-    if (stopAdWatcher) return; // 중복 실행 방지
+    if (stopAdWatcher) return;
     stopAdWatcher = startAdWatcher(async () => {
       console.log('[AdWatcher] 광고 종료 감지, 선수집 -> 본 감지 순서 시작');
       lastVideoId = null;
 
       await prefetchMetadataAndLyricsOnAdEnd();
-      await handleVideoDetectionGuarded();
+      handleVideoDetectionGuarded();
     });
   }
 
@@ -706,24 +703,54 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
   // ✅ Visibility API를 통한 추가 감지
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
-      // 페이지가 다시 보이면 현재 URL 확인
-      const videoData = detectYouTubeVideo();
-      tryDetectVideoChange(videoData?.videoId || null, debouncedDetection);
+      handleVideoDetectionGuarded();
     }
   });
 
-  // --- 감지 시스템 상태에 따라 enable/disable 제어 ---
-  // 저장소 상태에 따른 감지 시스템 제어
-  const setDetectionState = (enabled: boolean) => {
-    if (enabled) {
-      enableDetection();
-      console.log('[STATUS] 감지 시스템 활성화');
-    } else {
-      disableDetection();
-      cleanupAllUIElements();
-      console.log('[STATUS] 감지 시스템 비활성화');
+  // --- 비디오 감지 재시도 함수 (최대 시도 횟수 maxTries, 간격 interval(ms)) ---
+  async function handleVideoDetectionWithRetry(maxTries = 15, interval = 2000) {
+    for (let i = 0; i < maxTries; i++) {
+      const videoData = detectYouTubeVideo();
+      if (videoData && videoData.videoId) {
+        await handleVideoDetectionGuarded(); // 내부 감지 및 렌더 호출 (Guarded 버전 사용)
+        return;
+      }
+      console.log(
+        `[handleVideoDetectionWithRetry] videoId 없음, ${interval / 1000}s 후 재시도... (${i + 1} / ${maxTries})`,
+      );
+      await new Promise((res) => setTimeout(res, interval));
     }
-  };
+    console.warn(`[handleVideoDetectionWithRetry] ${(maxTries * interval) / 1000}s 동안 videoId를 못 찾음`);
+  }
+
+  // 반드시 한 번 실행 (initializeApp 등 진입 시)
+  function runInitialDetection() {
+    // 무조건 한 번 감지!
+    handleVideoDetectionWithRetry().catch((error) => {
+      console.error('[runInitialDetection] 감지 재시도 중 error:', error);
+    });
+    lastUrl = window.location.href;
+  }
+  // --- video DOM 등장 관찰용 MutationObserver 등록 함수 ---
+  function setupVideoElementObserver() {
+    const observer = new MutationObserver(() => {
+      const videoElem = document.querySelector('video');
+      if (videoElem) {
+        console.log('[VideoObserver] video element 찾음, 감지 실행');
+        handleVideoDetectionGuarded();
+
+        // 첫 감지 완료 후 observer 해제하여 중복 호출 방지
+        observer.disconnect();
+        videoElementObserver = null;
+      }
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+    return observer;
+  }
+
+  // 옵저버 전역 변수
+  let videoElementObserver: MutationObserver | null = null;
 
   // 감지 시스템 활성화
   const enableDetection = async () => {
@@ -731,28 +758,33 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       console.log('[SKIP] 감지 시스템 이미 활성화됨');
       return;
     }
-
-    // 기존 자원 모두 정리
     cleanupAllResources();
 
-    // spa observer 설정
     detectionObserverManager.spaObserver = setupSPAObserver(() => {
-      const videoData = detectYouTubeVideo();
-      tryDetectVideoChange(videoData?.videoId || null, debouncedDetection);
+      const currentUrl = window.location.href;
+      if (currentUrl !== lastUrl) {
+        lastUrl = currentUrl;
+        handleVideoDetectionGuarded();
+      }
     });
 
     // 광고 감지 시작
     initAdWatcher();
 
-    isDetectionActive = true;
+    if (!videoElementObserver) {
+      videoElementObserver = setupVideoElementObserver();
+    }
 
-    // 초기 감지 실행
-    debouncedDetection();
-    console.log('[Detection] 감지 시스템 활성화 및 observer/이벤트 등록 완료');
+    isDetectionActive = true;
   };
   // 감지 시스템 완전 비활성화
   const disableDetection = () => {
     cleanupAllResources();
+
+    if (videoElementObserver) {
+      videoElementObserver.disconnect();
+      videoElementObserver = null;
+    }
 
     if (!isDetectionActive) {
       console.log('[SKIP] 감지 시스템 이미 비활성화됨');
@@ -788,16 +820,14 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
         </ErrorBoundary>,
       );
 
-      // 호출 전 반드시 한 번 실행 필요! (예: index.tsx 엔트리 포인트 초기에 호출)
       initListenersAndState();
-
-      // 초기 URL 감지 및 UI/감지 시스템 활성화
-      handleUrlChangeGuarded(window.location.href);
+      runInitialDetection();
 
       // 감지 시스템 활성/비활성 상태 동기화
       chrome.storage.sync.get(STORAGE_KEYS.CONTENT_ENABLED, (result) => {
         const enabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? true;
-        setDetectionState(enabled);
+        if (enabled) enableDetection();
+        else disableDetection();
       });
     } catch (error) {
       // fallback UI 렌더링
