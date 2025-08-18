@@ -9,6 +9,8 @@ export function injectLyricsOverlayRoot() {
     overlay = document.createElement('div');
     overlay.id = 'lyrics-cc-overlay';
     overlay.className = styles.overlayRoot!;
+    // CSS 로드 전 깜빡임 방지용 숨김 처리 추가
+    overlay.style.visibility = 'hidden';
 
     const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR) as HTMLElement | null;
 

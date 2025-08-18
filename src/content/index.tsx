@@ -58,6 +58,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
   let lastUrl = window.location.href;
   let spaObserverShouldTriggerDetection = true;
   let isRetryingDetection = false; // 재시도 중복 제어 플래그
+  let wasMiniPlayer = false; // 파일 상단에 추가
 
   // font
   let lyricsFontColorCurrent = '#FFFFFF';
@@ -146,11 +147,13 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
   const injectCSS = () => {
     const cssId = 'karaoke-styles';
     if (document.getElementById(cssId)) return Promise.resolve();
+
     return new Promise((resolve) => {
       const link = document.createElement('link');
       link.id = cssId;
       link.rel = 'stylesheet';
       link.href = chrome.runtime.getURL('content/style.css');
+
       link.onload = () => {
         resolve(null);
       };
@@ -165,10 +168,15 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
   async function createOverlayRoot() {
     console.log('createOverlayRoot 실행');
     await injectCSS(); // CSS 먼저 완전히 로드 대기
-
+    // 이제야 DOM 생성 후 body에 append
     lyricsOverlayElement = injectLyricsOverlayRoot();
 
-    if (!lyricsOverlayRoot) {
+    if (lyricsOverlayElement) {
+      // visibility hidden 상태에서 보여주도록 변경
+      lyricsOverlayElement.style.visibility = 'visible';
+    }
+
+    if (!lyricsOverlayRoot && lyricsOverlayElement) {
       lyricsOverlayRoot = createRoot(lyricsOverlayElement);
       console.log('[createOverlayRoot] React Root 생성 완료');
     }
@@ -249,6 +257,10 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     latestLyrics = newLyrics;
     rerenderLyricsOverlay();
   }
+  function isLyricsOverlayMounted(): boolean {
+    return !!lyricsOverlayRoot && !!lyricsOverlayElement && document.body.contains(lyricsOverlayElement);
+  }
+
   // 예시 코드
   // function setupMiniPlayerObserver() {
   //   const player = document.querySelector('.html5-video-player');
@@ -353,7 +365,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
   }
   // 현재 가사/전체 가사의 분기 함수
   // full 모드 전용
-  function rerenderLyricsOverlay() {
+  async function rerenderLyricsOverlay() {
     console.log('[rerenderLyricsOverlay] 호출됨, 상태:', {
       lyricsOverlayElement,
       lyricsOverlayRoot,
@@ -373,7 +385,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       }
       isOverlayInitializing = true;
 
-      injectCSS();
+      await injectCSS();
       createOverlayRoot();
 
       chrome.storage.sync.get(['lyricsFontColorCurrent', 'lyricsFontColorPronunciation'], (items) => {
@@ -506,19 +518,37 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
   // ✅ URL 변경 핸들러 개선
   const handleUrlChange = (url: string) => {
     console.log('handleUrlChange가 실행됨.');
-    if (url === lastUrl) return; // URL이 실제로 바뀌었을 때만 실행
-
     const isMiniPlayer = checkIfMiniPlayerActive(); // 직접 구현 필요
 
     if (isMiniPlayer) {
-      // 미니플레이어일 때는 클린업 하지 않고 유지
+      wasMiniPlayer = true;
       console.log('[handleUrlChange] 미니플레이어 활성 상태 - 클린업 건너뜀');
       lastUrl = url; // URL만 업데이트
       return;
     }
+    if (wasMiniPlayer) {
+      wasMiniPlayer = false;
+      console.log('[handleUrlChange] 미니플레이어 해제/복귀 시점 - 감지 강제 실행');
+      lastVideoId = null;
+      cleanupAllUIElements();
+      handleVideoDetectionGuarded();
+      lastUrl = url;
+      return;
+    }
+
+    if (url === lastUrl) {
+      // URL이 같아도 페이지 새로고침인지 판단하여 감지 호출
+      console.log('[handleUrlChange] URL 동일, 새로고침 또는 동작 보장용 감지 실행');
+
+      lastVideoId = null;
+      cleanupAllUIElements();
+      handleVideoDetectionGuarded();
+      return;
+    }
+
     // 페이지/영상 바뀌기 직전에 강제 cleanup
     cleanupAllUIElements();
-
+    lastVideoId = null;
     lastUrl = url;
 
     const isWatchPage = url.includes(YOUTUBE_WATCH_PATH);
@@ -650,7 +680,8 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       console.log('[Lyrics] 수집 중복 방지 중...');
       return; // 필요시 캐시된 데이터 반환하도록 개선 가능
     }
-    if (videoId === lastCollectedVideoId) {
+
+    if (videoId === lastCollectedVideoId && isLyricsOverlayMounted()) {
       console.log('[Lyrics] 이미 처리한 videoId, 수집 스킵:', videoId);
       return;
     }
@@ -676,11 +707,13 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
         console.log('[handleVideoDetection] 비디오 감지 실패');
         return;
       }
-      if (videoData.videoId === lastVideoId) {
-        console.log('[handleVideoDetection] 이미 처리한 videoId');
+
+      if (videoData.videoId === lastVideoId && isLyricsOverlayMounted()) {
+        console.log('[handleVideoDetection] 이미 처리한 videoId, 오버레이도 실제로 화면에 있음 -> skip');
         return;
       }
-
+      // UI 클린업 시 lastVideoId도 같이 초기화(없다면 여기서 null 처리도 가능)
+      lastVideoId = null;
       // 새 영상이 들어왔으므로 이전 자막 제거
       hideLyricsOverlay();
       lastVideoId = videoData.videoId;
@@ -882,7 +915,24 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     observer.observe(document.body, { childList: true, subtree: true });
     return observer;
   }
+  function setupMiniPlayerTransitionObserver() {
+    const player = document.querySelector('.html5-video-player');
+    if (!player) return;
 
+    let lastIsMini = player.classList.contains('ytp-miniplayer') || player.classList.contains('ytp-small-mode');
+    const observer = new MutationObserver(() => {
+      const isMini = player.classList.contains('ytp-miniplayer') || player.classList.contains('ytp-small-mode');
+      if (lastIsMini && !isMini) {
+        // 미니→일반 전환 시 강제 감지
+        lastVideoId = null;
+        cleanupAllUIElements();
+        handleVideoDetectionGuarded();
+      }
+      lastIsMini = isMini;
+    });
+    observer.observe(player, { attributes: true, attributeFilter: ['class'] });
+    return observer;
+  }
   // 옵저버 전역 변수
   let videoElementObserver: MutationObserver | null = null;
 
@@ -961,7 +1011,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       );
 
       initListenersAndState();
-      // setupMiniPlayerObserver()
+      setupMiniPlayerTransitionObserver();
       runInitialDetection();
 
       // 감지 시스템 활성/비활성 상태 동기화
