@@ -3029,6 +3029,13 @@ export const YOUTUBE_PLAYER_CONTAINER = 'ytd-player';
 export const YOUTUBE_VIDEO_SELECTOR = 'video.html5-main-video';
 export const YOUTUBE_AD_SELECTOR = '.ad-showing, .ad-interrupting';
 
+// 유튜브 미니플레이어 관련 클래스명 및 셀렉터
+export const YOUTUBE_MINI_PLAYER_CONTAINER_SELECTOR = '.html5-video-player';
+export const YOUTUBE_MINI_PLAYER_CLASSES = ['ytp-miniplayer', 'ytp-small-mode'];
+
+// (선택적) 미니플레이어 UI 표시 여부 확인용 셀렉터
+export const YOUTUBE_MINI_PLAYER_UI_SELECTOR = '.ytp-miniplayer-ui';
+
 // 유튜브 URL 관련 상수
 export const YOUTUBE_WATCH_PATH = '/watch';
 export const YOUTUBE_VIDEO_ID_PARAM = 'v';
@@ -3246,7 +3253,12 @@ import { DOM_IDS } from '@constants/doomIds';
 import { fetchYouTubeVideoMeta } from '@background/api/youtube';
 import { isMusicVideo } from '@lib/utils/audio/musicDetection';
 import { UIResourceManager } from '@lib/utils/infra/uiResourceManager';
-import { YOUTUBE_PLAYER_SELECTOR, YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
+import {
+  YOUTUBE_MINI_PLAYER_CLASSES,
+  YOUTUBE_MINI_PLAYER_CONTAINER_SELECTOR,
+  YOUTUBE_PLAYER_SELECTOR,
+  YOUTUBE_WATCH_PATH,
+} from '@constants/youtubeSelectors';
 import { extractArtistAndTitle, fallbackArtistAndTitle } from '@lib/utils/lyrics/meta/artistTitle';
 import {
   cleanTopicName,
@@ -3269,7 +3281,7 @@ import { fetchLyricsWithAliasFallback } from '@background/api/lyrics';
 import 'normalize.css';
 import { cleanupMediaElementSource } from '@lib/utils/audio/audio';
 import { startAdWatcher } from '@lib/utils/infra/adWatcher';
-//import { detectLyricsLanguage } from '@lib/utils/lyrics/languageDetector';
+import { checkIfMiniPlayerActive } from '@lib/utils/platform/playerUtils';
 
 (() => {
   // 새로고침 시 contentscript 내 중복 실행 방지
@@ -3291,6 +3303,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
   let lastUrl = window.location.href;
   let spaObserverShouldTriggerDetection = true;
   let isRetryingDetection = false; // 재시도 중복 제어 플래그
+  let isMiniToFullTransitioning = false;
 
   // font
   let lyricsFontColorCurrent = '#FFFFFF';
@@ -3315,6 +3328,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
   const getContentEnabled = () => contentEnabled;
   const uiManager = new UIResourceManager();
   const RETRY_DELAY = 300;
+  const miniPlayerExpandBtnSelector = '.ytp-miniplayer-expand-watch-page-button.ytp-miniplayer-button-top-left';
 
   interface DetectionObserverManager {
     spaObserver: MutationObserver | null;
@@ -3333,6 +3347,8 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     detectionObserverManager.lyricsObserver = null;
   };
   const cleanupAllResources = (): void => {
+    console.log('cleanupAllResources 실행');
+
     listenerManager.removeAll();
     removeAllObservers();
     cleanupAllUIElements();
@@ -3343,8 +3359,66 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     contentEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
   });
 
+  function resetLyricsState() {
+    lastRenderedLyrics = '';
+    latestLyrics = [];
+    console.log('[resetLyricsState] 가사 상태 초기화 완료');
+  }
+
+  // 미니플레이어 확장 버튼 클릭 핸들러
+  function onMiniPlayerExpandClick() {
+    isMiniToFullTransitioning = true;
+    console.log('[PlayerTransition] 미니 -> 일반 플레이어 전환 감지 시작');
+
+    // 2초 후 플래그 해제
+    setTimeout(() => {
+      isMiniToFullTransitioning = false;
+      console.log('[PlayerTransition] 전환 플래그 해제');
+    }, 2000);
+  }
+
+  // 미니플레이어 확장 버튼 리스너 설정, SPA 환경 대응하여 MutationObserver 활용
+  function setupMiniPlayerExpandListener() {
+    const btn = document.querySelector(miniPlayerExpandBtnSelector);
+    if (btn) {
+      // 중복 등록 방지용 간단 조치
+      btn.removeEventListener('click', onMiniPlayerExpandClick);
+      btn.addEventListener('click', onMiniPlayerExpandClick);
+      console.log('[PlayerTransition] 미니플레이어 확장 버튼 리스너 등록');
+    } else {
+      console.warn('[PlayerTransition] 미니플레이어 확장 버튼 미발견');
+    }
+  }
+  const miniPlayerExpandObserver = new MutationObserver(() => {
+    if (document.querySelector(miniPlayerExpandBtnSelector)) {
+      setupMiniPlayerExpandListener();
+      miniPlayerExpandObserver.disconnect();
+    }
+  });
+  miniPlayerExpandObserver.observe(document.body, { childList: true, subtree: true });
+
+  // 기존 cleanupAllUIElements 등에서 가사 초기화 직전 플래그 체크 함수 추가
+  function shouldResetLyrics() {
+    if (isMiniToFullTransitioning) {
+      console.log('[PlayerTransition] 전환 중 - 가사 초기화 방지');
+      return false;
+    }
+    return true;
+  }
   // ✅ UI 요소들을 완전히 정리하는 함수
-  const cleanupAllUIElements = () => {
+  function cleanupAllUIElements() {
+    console.log('cleanupAllUIElements 실행');
+
+    if (checkIfMiniPlayerActive()) {
+      // 미니플레이어 상태면 오버레이 제거하지 않고 숨기기만 함
+      if (lyricsOverlayElement) {
+        lyricsOverlayElement.style.display = 'none';
+        console.log('[Cleanup] 미니플레이어 상태 - 오버레이 숨김 처리 (제거하지 않음)');
+      }
+      // UI 매니저 클린업은 유지해도 좋음
+      uiManager.cleanup();
+      return;
+    }
     uiManager.cleanup();
 
     // 오버레이 DOM 및 react root도 완전 제거
@@ -3355,15 +3429,17 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     if (lyricsOverlayElement && lyricsOverlayElement.parentNode) {
       lyricsOverlayElement.parentNode.removeChild(lyricsOverlayElement);
       lyricsOverlayElement = null;
+      console.log('[cleanupAllUIElements] lyricsOverlayElement가 null');
     }
 
-    // 전역 상태 초기화
-    lastRenderedLyrics = '';
-    latestLyrics = [];
-    // ... 기타 cleanup
-
-    console.log('[Cleanup] UI and global lyrics state reset completed');
-  };
+    // 플래그에 따라 가사 초기화 여부 결정
+    if (shouldResetLyrics()) {
+      resetLyricsState();
+      console.log('[Cleanup] UI and global lyrics state reset completed');
+    } else {
+      console.log('[Cleanup] 가사 초기화 생략, 전환 중 상태 유지');
+    }
+  }
 
   // 루트 엘리먼트 생성
   const createRootElement = () => {
@@ -3375,7 +3451,6 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     return root;
   };
 
-  // injectCSS 반드시 Promise + onload 보장!
   const injectCSS = () => {
     const cssId = 'karaoke-styles';
     if (document.getElementById(cssId)) return Promise.resolve();
@@ -3387,11 +3462,9 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       link.href = chrome.runtime.getURL('content/style.css');
 
       link.onload = () => {
-        console.log('[injectCSS] CSS 로드 완료');
         resolve(null);
       };
       link.onerror = () => {
-        console.warn('[injectCSS] CSS 로드 실패');
         resolve(null); // 실패해도 바로 resolve
       };
       document.head.appendChild(link);
@@ -3491,47 +3564,8 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     latestLyrics = newLyrics;
     rerenderLyricsOverlay();
   }
-  // 예시 코드
-  // function setupMiniPlayerObserver() {
-  //   const player = document.querySelector('.html5-video-player');
-  //   if (!player) return;
-  //   const observer = new MutationObserver((mutationList) => {
-  //     const isMini = player.classList.contains('ytp-miniplayer');
-  //     if (isMini) {
-  //       // 미니플레이어로 진입했다면 오버레이를 되살리거나 유지
-  //       // 필요시 오버레이의 위치/스타일을 미니플레이어 맞게 조정
-  //       showLyricsOverlay(latestLyrics); // 안전하게 호출(조건 분기 필요)
-  //     } else {
-  //       // 미니플레이어가 완전히 해제된 경우에만 클린업
-  //       cleanupAllUIElements();
-  //     }
-  //   });
-  //   observer.observe(player, { attributes: true, attributeFilter: ['class'] });
-  // }
-
-  function checkIfMiniPlayerActive(): boolean {
-    // 유튜브 미니 플레이어가 활성화되면 보통 body 또는 특정 플레이어 컨테이너에
-    // 'ytp-small-mode' 또는 'ytp-mini-player' 같은 클래스가 붙는 경우가 많음.
-    // DOM 구조나 className은 유튜브 버전에 따라 변할 수 있으니
-    // 실제 유튜브 미니플레이어 상태의 DOM을 개발자도구에서 확인해야 합니다.
-
-    // 예시 1: 플레이어 루트 엘리먼트 확인
-    const player = document.querySelector('.html5-video-player');
-    if (!player) return false;
-
-    // 예시 2: 미니 플레이어 관련 클래스 체크
-    // 'ytp-miniplayer' 또는 'ytp-small-mode' 클래스명은 대표적
-    if (player.classList.contains('ytp-miniplayer') || player.classList.contains('ytp-small-mode')) {
-      return true;
-    }
-
-    // 추가로, minimode일 때 특정 영역이 표시되는지 체크 가능
-    // const miniPlayerElem = document.querySelector('.ytp-miniplayer-ui');
-    // if (miniPlayerElem && miniPlayerElem.offsetParent !== null) {
-    //   return true;
-    // }
-
-    return false;
+  function isLyricsOverlayMounted(): boolean {
+    return !!lyricsOverlayRoot && !!lyricsOverlayElement && document.body.contains(lyricsOverlayElement);
   }
 
   function hideLyricsOverlay() {
@@ -3540,7 +3574,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       console.log('[hideLyricsOverlay] 미니플레이어 상태 - 클린업 취소');
       return;
     }
-
+    console.log('[hideLyricsOverlay] 미니 플레이어 아니고, hideLyricsOverlay 실행');
     const overlay = document.getElementById('lyrics-cc-overlay');
     if (overlay && overlay.parentNode) {
       overlay.parentNode.removeChild(overlay); // 1. 오버레이 DOM 완전 제거
@@ -3748,19 +3782,28 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
   // ✅ URL 변경 핸들러 개선
   const handleUrlChange = (url: string) => {
     console.log('handleUrlChange가 실행됨.');
-    if (url === lastUrl) return; // URL이 실제로 바뀌었을 때만 실행
+    let isMiniPlayer = checkIfMiniPlayerActive();
 
-    const isMiniPlayer = checkIfMiniPlayerActive(); // 직접 구현 필요
-
-    if (isMiniPlayer) {
-      // 미니플레이어일 때는 클린업 하지 않고 유지
+    if (isMiniPlayer) { // 이게 문제인거 같은데
       console.log('[handleUrlChange] 미니플레이어 활성 상태 - 클린업 건너뜀');
       lastUrl = url; // URL만 업데이트
       return;
     }
+
+    if (url === lastUrl) {
+      // URL이 같아도 페이지 새로고침인지 판단하여 감지 호출
+      console.log('[handleUrlChange] URL 동일, 새로고침 또는 동작 보장용 감지 실행');
+
+      lastVideoId = null;
+      cleanupAllUIElements();
+      handleVideoDetectionGuarded();
+      return;
+    }
+
     // 페이지/영상 바뀌기 직전에 강제 cleanup
     cleanupAllUIElements();
-
+    console.log('handleUrlChange 내부의 cleanupAllUIElements가 실행!');
+    lastVideoId = null;
     lastUrl = url;
 
     const isWatchPage = url.includes(YOUTUBE_WATCH_PATH);
@@ -3779,7 +3822,6 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
 
     // background로 가사 준비 완료 신호 전송
     chrome.runtime.sendMessage({ type: 'LYRICS_READY', length: lyricsArray.length });
-    console.log('finishParsingLyrics 실행 끝!');
   }
 
   // 1. 영상과 크게 무관한 메타데이터, 가사 정보를 확보하는 함수
@@ -3892,7 +3934,8 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       console.log('[Lyrics] 수집 중복 방지 중...');
       return; // 필요시 캐시된 데이터 반환하도록 개선 가능
     }
-    if (videoId === lastCollectedVideoId) {
+
+    if (videoId === lastCollectedVideoId && isLyricsOverlayMounted()) {
       console.log('[Lyrics] 이미 처리한 videoId, 수집 스킵:', videoId);
       return;
     }
@@ -3918,11 +3961,13 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
         console.log('[handleVideoDetection] 비디오 감지 실패');
         return;
       }
-      if (videoData.videoId === lastVideoId) {
-        console.log('[handleVideoDetection] 이미 처리한 videoId');
+
+      if (videoData.videoId === lastVideoId && isLyricsOverlayMounted()) {
+        console.log('[handleVideoDetection] 이미 처리한 videoId, 오버레이도 실제로 화면에 있음 -> skip');
         return;
       }
-
+      // UI 클린업 시 lastVideoId도 같이 초기화(없다면 여기서 null 처리도 가능)
+      lastVideoId = null;
       // 새 영상이 들어왔으므로 이전 자막 제거
       hideLyricsOverlay();
       lastVideoId = videoData.videoId;
@@ -3989,6 +4034,12 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       if (!contentEnabled) return; // 비활성화 시 아무 동작도 하지 않음
       const { url, isWatchPage } = message.payload;
       console.log(`[SPA Navigation] ${url}, isWatchPage: ${isWatchPage}`);
+      // 미니플레이어 전환 플래그가 true일 때는 감지 호출 스킵
+      if (isMiniToFullTransitioning) {
+        console.log('[SPA Navigation] 미니 -> 일반 전환 중 감지 호출 스킵');
+        return;
+      }
+
       if (url !== lastUrl) {
         spaObserverShouldTriggerDetection = false; // 메시지 리스너가 감지 호출 담당
         handleUrlChangeGuarded(url);
@@ -3997,7 +4048,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
         setTimeout(() => {
           spaObserverShouldTriggerDetection = true;
           console.log('[SPA Navigation] SPA 옵저버 감지 호출 재활성화');
-        }, 5000); // 5초 후 다시 활성화 (조절 가능)
+        }, 5000);
       } else {
         // URL 변동 없으면 감지 호출 안 함
         console.log('[SPA Navigation] URL 변경 없음, 감지 생략:', url);
@@ -4021,18 +4072,6 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       latestLyrics = lyrics; // 전역 최신 가사 교체
       rerenderLyricsOverlay(); // full / sync 모드에 즉시 적용
     }
-  });
-
-  // ✅ 페이지 언로드 시 정리
-  window.addEventListener('beforeunload', () => {
-    cleanupAllUIElements();
-    disableDetection();
-    // ... 전역 변수 명시적 초기화(중복은 무해, 안전 위해 추가)
-    lyricsOverlayRoot = null;
-    lyricsOverlayElement = null;
-    lastRenderedLyrics = '';
-    latestLyrics = [];
-    lastVideoId = null;
   });
 
   // ✅ Visibility API를 통한 탭 전환 추가 감지
@@ -4124,7 +4163,38 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     observer.observe(document.body, { childList: true, subtree: true });
     return observer;
   }
+  function setupMiniPlayerTransitionObserver() {
+    const player = document.querySelector(YOUTUBE_MINI_PLAYER_CONTAINER_SELECTOR);
+    if (!player) return;
 
+    let lastIsMini = YOUTUBE_MINI_PLAYER_CLASSES.some((cls) => player.classList.contains(cls));
+    const observer = new MutationObserver(() => {
+      const isMini = YOUTUBE_MINI_PLAYER_CLASSES.some((cls) => player.classList.contains(cls));
+      if (lastIsMini && !isMini) {
+        const currentVideoId = detectYouTubeVideo()?.videoId;
+        // 현재 보고 있는 영상 ID가 이전 영상 ID와 다를 경우
+        console.log(
+          '[setupMiniPlayerTransitionObserver] currentVideoId: ',
+          currentVideoId,
+          'lastVideoId:',
+          lastVideoId,
+        );
+        if (currentVideoId && currentVideoId !== lastVideoId) {
+          lastVideoId = null;
+          console.log('[setupMiniPlayerTransitionObserver] 이전 영상과 id가 다름.');
+          cleanupAllUIElements();
+          resetLyricsState();
+
+          handleVideoDetectionGuarded();
+        } else {
+          console.log('[PlayerTransition] 미니→일반 전환, 영상 동일 - UI 유지');
+        }
+      }
+      lastIsMini = isMini;
+    });
+    observer.observe(player, { attributes: true, attributeFilter: ['class'] });
+    return observer;
+  }
   // 옵저버 전역 변수
   let videoElementObserver: MutationObserver | null = null;
 
@@ -4175,8 +4245,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
 
     isDetectionActive = false;
     lastVideoId = null;
-    lastRenderedLyrics = '';
-    latestLyrics = [];
+
     console.log('[Detection] 감지 시스템 완전 비활성화');
   };
 
@@ -4203,7 +4272,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
       );
 
       initListenersAndState();
-      // setupMiniPlayerObserver()
+      setupMiniPlayerTransitionObserver();
       runInitialDetection();
 
       // 감지 시스템 활성/비활성 상태 동기화
@@ -4220,7 +4289,9 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
     }
   };
 
-  initializeApp();
+  initializeApp().then(() => {
+    setupMiniPlayerExpandListener();
+  });
 })();
 ```
 
@@ -6224,6 +6295,7 @@ export async function playOffsetTestSegment(
 ## File: lib/utils/platform/playerUtils.ts
 ```typescript
 // src/utils/playerUtils.ts
+import { YOUTUBE_MINI_PLAYER_CLASSES, YOUTUBE_MINI_PLAYER_CONTAINER_SELECTOR } from '@constants/youtubeSelectors';
 
 // YouTube 플레이어 이동 유틸리티
 export const moveYouTubePlayer = (targetContainer: HTMLElement, playerSelector = '#movie_player'): boolean => {
@@ -6272,6 +6344,31 @@ export const moveYouTubePlayer = (targetContainer: HTMLElement, playerSelector =
 export const isPlayerReady = (): boolean => {
   return !!document.querySelector('video');
 };
+
+export function checkIfMiniPlayerActive(): boolean {
+  // 예시 1: 플레이어 루트 엘리먼트 확인
+  const player = document.querySelector(YOUTUBE_MINI_PLAYER_CONTAINER_SELECTOR) as HTMLElement | null;
+  if (!player) return false;
+
+  // 예시 2: 미니 플레이어 관련 클래스 체크
+  // YOUTUBE_MINI_PLAYER_CLASSES에 포함된 클래스를 하나라도 가지고 있으면 true 반환
+  if (YOUTUBE_MINI_PLAYER_CLASSES.some((cls) => player.classList.contains(cls))) {
+    if (
+      player.offsetParent !== null &&
+      player.getBoundingClientRect().width > 0 &&
+      player.getBoundingClientRect().height > 0
+    ) {
+      return true;
+    }
+  }
+  // 미니플레이어 UI 엘리먼트 기반 추가 탐지 (필요 시 활성화)
+  const miniUI = document.querySelector('.ytp-miniplayer-ui') as HTMLElement | null;
+  if (miniUI && miniUI.offsetParent !== null) {
+    return true;
+  }
+
+  return false;
+}
 ```
 
 ## File: lib/utils/platform/videoDetection.ts
@@ -7320,7 +7417,6 @@ export const initializeI18n = (): Promise<boolean> => {
   if (!initializationPromise) {
     initializationPromise = retryWithBackoff(async () => {
       try {
-        console.log('[i18n] Initialization started');
         setupPlugins();
 
         // ✅ 스토리지 언어 확인 (null 허용)
@@ -7329,7 +7425,6 @@ export const initializeI18n = (): Promise<boolean> => {
         // ✅ 브라우저 언어 감지 (스토리지 없을 때만)
         const browserLang = savedLang ? null : await detectBrowserLanguage();
         const finalLang = savedLang || browserLang || DEFAULT_LANGUAGE;
-        console.log(`[i18n] Using language: ${finalLang}`);
 
         // ✅ null 처리된 configureInstance 호출
         await configureInstance(finalLang);
@@ -7346,7 +7441,7 @@ export const initializeI18n = (): Promise<boolean> => {
           window.__i18n_initialized = true;
         }
 
-        console.log('[i18n] Initialization completed successfully');
+        console.log(`[i18n] Using language: ${finalLang}`, 'Initialization completed successfully');
         return true;
       } catch (error) {
         if (error instanceof ResourceLoadError) {

@@ -118,7 +118,6 @@ export const initializeI18n = (): Promise<boolean> => {
   if (!initializationPromise) {
     initializationPromise = retryWithBackoff(async () => {
       try {
-        console.log('[i18n] Initialization started');
         setupPlugins();
 
         // ✅ 스토리지 언어 확인 (null 허용)
@@ -127,7 +126,6 @@ export const initializeI18n = (): Promise<boolean> => {
         // ✅ 브라우저 언어 감지 (스토리지 없을 때만)
         const browserLang = savedLang ? null : await detectBrowserLanguage();
         const finalLang = savedLang || browserLang || DEFAULT_LANGUAGE;
-        console.log(`[i18n] Using language: ${finalLang}`);
 
         // ✅ null 처리된 configureInstance 호출
         await configureInstance(finalLang);
@@ -144,7 +142,7 @@ export const initializeI18n = (): Promise<boolean> => {
           window.__i18n_initialized = true;
         }
 
-        console.log('[i18n] Initialization completed successfully');
+        console.log(`[i18n] Using language: ${finalLang}`);
         return true;
       } catch (error) {
         if (error instanceof ResourceLoadError) {

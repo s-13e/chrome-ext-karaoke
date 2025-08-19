@@ -1,49 +1,27 @@
 // src/utils/playerUtils.ts
+import { YOUTUBE_MINI_PLAYER_CLASSES, YOUTUBE_MINI_PLAYER_CONTAINER_SELECTOR } from '@constants/youtubeSelectors';
 
-// YouTube 플레이어 이동 유틸리티
-export const moveYouTubePlayer = (targetContainer: HTMLElement, playerSelector = '#movie_player'): boolean => {
-  const player = document.querySelector(playerSelector) as HTMLElement;
-  if (!player || !targetContainer) {
-    console.error('[moveYouTubePlayer] 플레이어 또는 컨테이너를 찾을 수 없음');
-    return false;
+export function checkIfMiniPlayerActive(): boolean {
+  // 예시 1: 플레이어 루트 엘리먼트 확인
+  const player = document.querySelector(YOUTUBE_MINI_PLAYER_CONTAINER_SELECTOR) as HTMLElement | null;
+  if (!player) return false;
+
+  // 예시 2: 미니 플레이어 관련 클래스 체크
+  // YOUTUBE_MINI_PLAYER_CLASSES에 포함된 클래스를 하나라도 가지고 있으면 true 반환
+  if (YOUTUBE_MINI_PLAYER_CLASSES.some((cls) => player.classList.contains(cls))) {
+    if (
+      player.offsetParent !== null &&
+      player.getBoundingClientRect().width > 0 &&
+      player.getBoundingClientRect().height > 0
+    ) {
+      return true;
+    }
   }
-
-  try {
-    console.log('[moveYouTubePlayer] 플레이어 이동 시작');
-
-    // // 플레이어 스타일 백업
-    // const originalStyles = {
-    //   position: player.style.position,
-    //   zIndex: player.style.zIndex,
-    //   opacity: player.style.opacity,
-    //   visibility: player.style.visibility
-    // };
-
-    // 플레이어 강제 표시
-    player.style.opacity = '1';
-    player.style.visibility = 'visible';
-    player.style.display = 'block';
-    player.style.position = 'relative';
-    player.style.zIndex = '1000';
-
-    // 플레이어 이동
-    targetContainer.appendChild(player);
-
-    console.log('[moveYouTubePlayer] 플레이어 이동 완료');
-
-    // 리사이즈 트리거
-    setTimeout(() => {
-      window.dispatchEvent(new Event('resize'));
-    }, 100);
-
+  // 미니플레이어 UI 엘리먼트 기반 추가 탐지 (필요 시 활성화)
+  const miniUI = document.querySelector('.ytp-miniplayer-ui') as HTMLElement | null;
+  if (miniUI && miniUI.offsetParent !== null) {
     return true;
-  } catch (error) {
-    console.error('[moveYouTubePlayer] 플레이어 이동 실패:', error);
-    return false;
   }
-};
 
-// 플레이어 상태 체크
-export const isPlayerReady = (): boolean => {
-  return !!document.querySelector('video');
-};
+  return false;
+}
