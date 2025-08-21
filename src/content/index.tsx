@@ -568,12 +568,8 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
 
   // 1. 영상과 크게 무관한 메타데이터, 가사 정보를 확보하는 함수
   async function collectMetadataAndLyrics(videoId: string) {
-    console.time('collectMetadataAndLyrics');
-
     // YouTube Video Meta 호출
-    console.timeLog('collectMetadataAndLyrics', 'before fetchYouTubeVideoMeta');
     const meta = await fetchYouTubeVideoMeta(videoId, process.env.YOUTUBE_API_KEY!);
-    console.timeLog('collectMetadataAndLyrics', 'after fetchYouTubeVideoMeta');
 
     if (!meta) {
       console.log('[collectMetadataAndLyrics] 메타 정보 없음');
@@ -606,13 +602,11 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     const title = preprocessArtistOrTitle(refined.title);
 
     clearLyricsCache();
-    console.timeLog('collectMetadataAndLyrics', 'before getLyricsFromCacheOrFetch');
 
     // 가사 캐시 혹은 서버에서 가사 fetch
     const lyricsResult = await getLyricsFromCacheOrFetch(artist, title, {
       fetch: async () => fetchLyricsWithAliasFallback(artist, title),
     });
-    console.timeLog('collectMetadataAndLyrics', 'after getLyricsFromCacheOrFetch');
 
     console.log('[Lyrics] API 가사 데이터 수신 완료:', lyricsResult);
 
@@ -635,7 +629,6 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
 
     finishParsingLyrics(parsedLyrics);
     onLyricsUpdated(parsedLyrics);
-    console.timeEnd('collectMetadataAndLyrics');
 
     // shiftedLyrics: Line[] 배열 (각 원소에 'text'가 있다고 가정)
     //const lyricsText = shiftedLyrics.map((line) => line.text).join('\n');
@@ -687,7 +680,6 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       console.log('[Lyrics] 수집 중복 방지 중...');
       return; // 필요시 캐시된 데이터 반환하도록 개선 가능
     }
-    console.time('tryCollectMetadataAndLyrics');
 
     if (videoId === lastCollectedVideoId && isLyricsOverlayMounted()) {
       console.log('[Lyrics] 이미 처리한 videoId, 수집 스킵:', videoId);
