@@ -18,3 +18,16 @@ export function tryDetectVideoChange(videoId: string | null, trigger: () => void
     trigger();
   }
 }
+
+/**
+ * URL에서 videoId 추출
+ * @param url - 검사할 URL 문자열
+ * @returns videoId 문자열 또는 null (추출 실패 시)
+ */
+export function extractVideoIdFromUrl(url: string): string | null {
+  const match = url.match(/[?&]v=([^&]+)/);
+  console.log(
+    `[extractVideoIdFromUrl] url: ${url}, match: ${match}, videoId: ${match && match[1] !== undefined ? match[1] : null}`,
+  );
+  return match && match[1] !== undefined ? match[1] : null;
+}

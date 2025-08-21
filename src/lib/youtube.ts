@@ -16,17 +16,21 @@ export const detectYouTubeVideo = (): { videoId: string; title: string } | null 
     : null;
 };
 
-// SPA 네비게이션 대응
-export const setupSPAObserver = (callback: () => void): MutationObserver => {
-  const observer = new MutationObserver(() => {
-    if (detectYouTubeVideo()) callback();
-  });
+// 유튜브 영상 페이지 진입(또는 변화) 시점을 감지
+export function setupSPAObserver(callback: () => void): MutationObserver {
+  const targetNode = document.querySelector('#page-manager') || document.body;
 
-  observer.observe(document.body, {
+  const config: MutationObserverInit = {
     childList: true,
     subtree: true,
-    attributes: true,
+    attributes: false,
+  };
+
+  const observer = new MutationObserver(() => {
+    callback();
   });
 
-  return observer; // MutationObserver 반환
-};
+  observer.observe(targetNode, config);
+
+  return observer;
+}

@@ -8,7 +8,6 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { detectYouTubeVideo, setupSPAObserver } from '@lib/youtube';
 import { debounce } from '@lib/utils/common/common';
 import { STORAGE_KEYS } from '@constants/storageKeys';
-import { MESSAGE_TYPES } from '@constants/messageTypes';
 import { DOM_IDS } from '@constants/doomIds';
 import { fetchYouTubeVideoMeta } from '@background/api/youtube';
 import { isMusicVideo } from '@lib/utils/audio/musicDetection';
@@ -17,7 +16,6 @@ import {
   YOUTUBE_MINI_PLAYER_CLASSES,
   YOUTUBE_MINI_PLAYER_CONTAINER_SELECTOR,
   YOUTUBE_PLAYER_SELECTOR,
-  YOUTUBE_WATCH_PATH,
 } from '@constants/youtubeSelectors';
 import { extractArtistAndTitle, fallbackArtistAndTitle } from '@lib/utils/lyrics/meta/artistTitle';
 import {
@@ -33,7 +31,7 @@ import { FullLyrics } from '@components/lyrics/FullLyrics/FullLyrics';
 import { isAdPlaying } from '@lib/utils/dom/domUtils';
 import { parseLyrics } from '@lib/utils/lyrics/parsers/lyricsParser';
 import { Line } from '@lib/types/lyrics';
-import { tryDetectVideoChange } from '@lib/utils/platform/videoDetection';
+import { extractVideoIdFromUrl, tryDetectVideoChange } from '@lib/utils/platform/videoDetection';
 import { clearLyricsCache, setToLyricsCache } from '@lib/utils/cache/lyricsCache';
 import { normalizeLyricsQuery } from '@lib/utils/lyrics/meta/queryNormalizer';
 import { getLyricsFromCacheOrFetch } from '@lib/utils/lyrics/meta/getLyricsFromCacheOrFetch';
@@ -42,6 +40,8 @@ import 'normalize.css';
 import { cleanupMediaElementSource } from '@lib/utils/audio/audio';
 import { startAdWatcher } from '@lib/utils/infra/adWatcher';
 import { checkIfMiniPlayerActive } from '@lib/utils/platform/playerUtils';
+import { isWatchPage as checkIsWatchPage } from '@lib/utils/common/urlUtils';
+import { hasUrlChanged } from '@lib/utils/platform/navigation';
 
 (() => {
   // 새로고침 시 contentscript 내 중복 실행 방지
@@ -54,16 +54,18 @@ import { checkIfMiniPlayerActive } from '@lib/utils/platform/playerUtils';
   // --- 플래그 및 관리 객체 ---
   let isDetectionActive = false; // 감지 시스템 활성화 여부
   let isDetecting = false; // 영상 감지 함수 진입 여부(동시 실행 방지)
+
   let lastVideoId: string | null = null;
+  let lastUrl = window.location.href;
+
   let lastRenderedLyrics = '';
   let latestLyrics: Line[] = [];
   let contentEnabled = false;
   let lyricsOverlayRoot: Root | null = null; // 렌더링된 root 인스턴스 보관
   let lyricsOverlayElement: HTMLElement | null = null;
-  let lastUrl = window.location.href;
   let spaObserverShouldTriggerDetection = true;
   let isRetryingDetection = false; // 재시도 중복 제어 플래그
-  const isMiniToFullTransitioning = false;
+  let isFirstMutation = true;
 
   // font
   let lyricsFontColorCurrent = '#FFFFFF';
@@ -88,6 +90,7 @@ import { checkIfMiniPlayerActive } from '@lib/utils/platform/playerUtils';
   const getContentEnabled = () => contentEnabled;
   const uiManager = new UIResourceManager();
   const RETRY_DELAY = 300;
+  const isMiniToFullTransitioning = false;
 
   interface DetectionObserverManager {
     spaObserver: MutationObserver | null;
@@ -119,7 +122,7 @@ import { checkIfMiniPlayerActive } from '@lib/utils/platform/playerUtils';
 
     listenerManager.removeAll();
     removeAllObservers();
-    cleanupAllUIElements();
+    cleanupOverlayUI();
   };
 
   // 가사 배열 cleanup
@@ -143,14 +146,6 @@ import { checkIfMiniPlayerActive } from '@lib/utils/platform/playerUtils';
       lyricsOverlayElement = null;
       console.log('[cleanupOverlayUI] Lyrics overlay element 제거 완료');
     }
-  }
-
-  // ✅ UI 요소 cleanup 용도
-  function cleanupAllUIElements() {
-    console.log('cleanupAllUIElements 실행');
-
-    uiManager.cleanup();
-    cleanupOverlayUI();
   }
 
   // 루트 엘리먼트 생성
@@ -494,11 +489,11 @@ import { checkIfMiniPlayerActive } from '@lib/utils/platform/playerUtils';
     }
   }
 
-  // ✅ URL 변경 핸들러 개선
+  // ✅ URL 변경 핸들러 개선, 변화에 따른 상세 후처리(UI 초기화, 중복 방지 등)**를 담당하는 하위 레벨 함수
   const handleUrlChange = (url: string) => {
     console.log('handleUrlChange가 실행됨.');
     const isMini = checkIfMiniPlayerActive();
-    const currentVideoId = detectYouTubeVideo()?.videoId;
+    const currentVideoId = extractVideoIdFromUrl(url);
     console.log('currentVideoId:', currentVideoId, 'lastVideoId:', lastVideoId);
 
     // 영상 id가 같으면 cleanup 스킵
@@ -519,18 +514,18 @@ import { checkIfMiniPlayerActive } from '@lib/utils/platform/playerUtils';
       console.log('[handleUrlChange] URL 동일, 새로고침 또는 동작 보장용 감지 실행');
 
       lastVideoId = null;
-      cleanupAllUIElements();
+      cleanupOverlayUI();
       handleVideoDetectionGuarded();
       return;
     }
 
     // 페이지/영상 바뀌기 직전에 강제 cleanup
-    cleanupAllUIElements();
+    cleanupOverlayUI();
     console.log('handleUrlChange 내부의 cleanupAllUIElements가 실행!');
     lastVideoId = null;
     lastUrl = url;
 
-    const isWatchPage = url.includes(YOUTUBE_WATCH_PATH);
+    const isWatchPage = checkIsWatchPage(url);
 
     console.log(`[URL Change] ${url}, isWatchPage: ${isWatchPage}`);
 
@@ -678,9 +673,10 @@ import { checkIfMiniPlayerActive } from '@lib/utils/platform/playerUtils';
     console.log('handleVideoDetection 실행');
     if (isDetecting) return;
     isDetecting = true;
+    let videoData;
 
     try {
-      const videoData = detectYouTubeVideo();
+      videoData = detectYouTubeVideo();
       if (!videoData || !videoData.videoId) {
         console.log('[handleVideoDetection] 비디오 감지 실패');
         return;
@@ -721,6 +717,11 @@ import { checkIfMiniPlayerActive } from '@lib/utils/platform/playerUtils';
       console.error('[handleVideoDetection] 에러 발생:', error);
     } finally {
       isDetecting = false;
+
+      if (videoData && videoData.videoId) {
+        lastVideoId = videoData.videoId;
+      }
+      console.log(`[handleVideoDetection] lastVieoId: ${lastVideoId}, lastUrl: ${lastUrl}`);
     }
   };
   // --- wrapper ---
@@ -756,39 +757,35 @@ import { checkIfMiniPlayerActive } from '@lib/utils/platform/playerUtils';
   }
 
   // --- 스토리지, UI, SPA 이벤트, visibility 이벤트 일괄 관리 ---
-  // SPA 네비게이션 메시지 핸들러
-  chrome.runtime.onMessage.addListener((message) => {
-    if (message.type === MESSAGE_TYPES.SPA_NAVIGATION_DETECTED) {
-      if (!contentEnabled) return; // 비활성화 시 아무 동작도 하지 않음
-      const { url, isWatchPage } = message.payload;
-      console.log(`[SPA Navigation] ${url}, isWatchPage: ${isWatchPage}`);
+  // SPA URL 변화 처리 공통 함수, URL 변화의 감지와 상태 판단을 담당하는 상위 레벨 함수
+  function handleSpaUrlChange(url: string) {
+    if (!contentEnabled) return;
+    const currentVideoId = extractVideoIdFromUrl(url);
+    const currentIsWatchPage = checkIsWatchPage(url);
 
-      // 미니플레이어 전환 플래그가 true일 때는 감지 호출 스킵
-      if (isMiniToFullTransitioning) {
-        console.log('[SPA Navigation] 미니 -> 일반 전환 중 감지 호출 스킵');
-        return;
-      }
+    const videoIdChanged = currentVideoId !== lastVideoId;
+    const urlChanged = hasUrlChanged(url, lastUrl);
+    const watchPageChanged = currentIsWatchPage !== checkIsWatchPage(lastUrl);
 
-      if (url !== lastUrl) {
-        if (isMiniToFullTransitioning) {
-          console.log('[SPA Navigation] url이 같지는 않지만, 미니 -> 일반 전환 중 감지 호출 스킵');
-          return;
-        }
+    console.log(
+      `[SPA] url: ${url} videoIdChanged: ${videoIdChanged} urlChanged: ${urlChanged} watchPageChanged: ${watchPageChanged}`,
+    );
 
-        spaObserverShouldTriggerDetection = false; // 메시지 리스너가 감지 호출 담당
-        handleUrlChangeGuarded(url);
-
-        // 감지 호출 후 일정 시간 뒤 다시 SPA 옵저버 활성화 허용
-        setTimeout(() => {
-          spaObserverShouldTriggerDetection = true;
-          console.log('[SPA Navigation] SPA 옵저버 감지 호출 재활성화');
-        }, 5000);
-      } else {
-        // URL 변동 없으면 감지 호출 안 함
-        console.log('[SPA Navigation] URL 변경 없음, 감지 생략:', url);
-      }
+    if (isMiniToFullTransitioning) {
+      console.log('[SPA] 미니-일반 전환 중 감지 호출 스킵');
+      return;
     }
-  });
+    // 영상 -> 영상, videoId가 있는 곳으로 url 변경된 상황
+    if (videoIdChanged || (urlChanged && watchPageChanged)) {
+      spaObserverShouldTriggerDetection = false;
+      handleUrlChangeGuarded(url);
+      setTimeout(() => {
+        spaObserverShouldTriggerDetection = true;
+      }, 5000);
+    } else {
+      console.log('[SPA] 영상 및 페이지 변동 없음, 감지 생략');
+    }
+  }
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     console.log('[content] onMessage 수신:', message);
@@ -879,6 +876,7 @@ import { checkIfMiniPlayerActive } from '@lib/utils/platform/playerUtils';
       console.error('[runInitialDetection] 감지 재시도 중 error:', error);
     });
     lastUrl = window.location.href;
+    console.log(`[runInitialDetection] lastVieoId: ${lastVideoId}, lastUrl: ${lastUrl}`);
   }
   // --- video DOM 등장 관찰용 MutationObserver 등록 함수 ---
   function setupVideoElementObserver() {
@@ -905,6 +903,11 @@ import { checkIfMiniPlayerActive } from '@lib/utils/platform/playerUtils';
 
     let lastIsMini = YOUTUBE_MINI_PLAYER_CLASSES.some((c) => player.classList.contains(c));
     const observer = new MutationObserver(() => {
+      if (isFirstMutation) {
+        isFirstMutation = false;
+        lastIsMini = YOUTUBE_MINI_PLAYER_CLASSES.some((c) => player.classList.contains(c));
+        return;
+      }
       const isMini = YOUTUBE_MINI_PLAYER_CLASSES.some((c) => player.classList.contains(c));
       if (lastIsMini && !isMini) {
         console.log('[Transition] 미니 -> 기본 유지');
@@ -950,12 +953,13 @@ import { checkIfMiniPlayerActive } from '@lib/utils/platform/playerUtils';
 
     // 유튜브 SPA 내비게이션 같은 URL 변화 감지
     detectionObserverManager.spaObserver = setupSPAObserver(() => {
+      console.log('[spaObserver] 실행 중');
       const currentUrl = window.location.href;
       if (currentUrl !== lastUrl) {
-        lastUrl = currentUrl;
         // 플래그가 true일 때만 감지 호출
         if (spaObserverShouldTriggerDetection) {
-          handleVideoDetectionGuarded();
+          handleSpaUrlChange(currentUrl);
+          lastUrl = currentUrl;
         } else {
           console.log('[SPA Observer] 감지 호출 스킵 (메시지 리스너 우선)');
         }
