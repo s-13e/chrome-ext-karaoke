@@ -105,6 +105,9 @@ lib/utils/audio/musicDetection.ts
 lib/utils/audio/vad.ts
 lib/utils/cache/lyricsCache.ts
 lib/utils/common/common.ts
+lib/utils/common/concurrencyLimiter.ts
+lib/utils/common/limitedFetchLyrics.ts
+lib/utils/common/requestLimiter.ts
 lib/utils/common/time.ts
 lib/utils/common/typeGuards.ts
 lib/utils/common/urlUtils.ts
@@ -165,6 +168,8 @@ styles/GlobalStyle.ts
 ```typescript
 // background/api/lrclib.ts
 import { Line } from '@lib/types/lyrics';
+import { RequestLimiter } from '@lib/utils/common/requestLimiter';
+
 export interface LrcLibLyricsResult {
   lyrics: string | Line[];
   duration?: number;
@@ -174,51 +179,105 @@ export interface LrcLibLyricsResult {
   etag?: string;
 }
 
+// 검색 후보 항목
+export interface SearchCandidate {
+  id: string;
+  title?: string;
+  artist_name?: string;
+  // 필요시 추가 필드 작성
+}
+
+const requestLimiter = new RequestLimiter(5); // 동시 최대 5개 요청 제한
+
 // artist_name과 track_name으로 한정 검색: 오탐지를 줄이기 위한 별도 함수
 export async function fetchLyricsByArtistAndTrack(artist: string, title: string): Promise<LrcLibLyricsResult | null> {
   async function searchWithParams(artistParam: string, titleParam: string): Promise<LrcLibLyricsResult | null> {
     const endpoint = `https://lrclib.net/api/search?artist_name=${encodeURIComponent(artistParam)}&track_name=${encodeURIComponent(titleParam)}`;
     const searchRes = await fetch(endpoint);
     if (!searchRes.ok) return null;
-    const searchData = await searchRes.json();
 
-    let fallbackResult: LrcLibLyricsResult | null = null;
+    const searchData: SearchCandidate[] = await searchRes.json();
+    const limitedCandidates = searchData.slice(0, 10);
+
     const normalizedReqTitle = titleParam.trim().toLowerCase();
+    let fallbackResult: LrcLibLyricsResult | null = null;
 
-    for (const candidate of searchData) {
-      const detailRes = await fetch(`https://lrclib.net/api/get/${candidate.id}`);
-      if (!detailRes.ok) continue;
-      const detail = await detailRes.json();
+    // 요청 취소용 AbortController 배열 생성
+    const controllers: AbortController[] = limitedCandidates.map(() => new AbortController());
+    let resolved = false;
 
-      const lyrics = detail.syncedLyrics || detail.plainLyrics;
-      if (!lyrics) continue;
+    async function fetchLyricDetail(candidate: SearchCandidate): Promise<LrcLibLyricsResult | null> {
+      const index = searchData.findIndex((c) => c.id === candidate.id);
+      const controller = controllers[index];
+      if (!controller) return null;
 
-      const candidateTitle = detail.title?.trim().toLowerCase() ?? '';
+      try {
+        const detailRes = await fetch(`https://lrclib.net/api/get/${candidate.id}`, { signal: controller.signal });
 
-      // strict ver
-      if (candidateTitle === normalizedReqTitle) {
-        console.log('가사:', lyrics);
-        return {
-          lyrics,
-          duration: detail.duration,
-          artist: detail.artist,
-          title: detail.title,
-          id: candidate.id,
+        if (!detailRes.ok) return null;
+
+        const detail = (await detailRes.json()) as {
+          syncedLyrics?: string | Line[];
+          plainLyrics?: string | Line[];
+          duration?: number;
+          artist?: string;
+          title?: string;
         };
-      }
-      // alternative ver
-      if (!fallbackResult) {
-        console.log('2nd 가사:', lyrics);
-        fallbackResult = {
-          lyrics,
-          duration: detail.duration,
-          artist: detail.artist,
-          title: detail.title,
-          id: candidate.id,
-        };
+
+        const lyrics = detail.syncedLyrics || detail.plainLyrics;
+        if (!lyrics) return null;
+
+        const candidateTitle = detail.title?.trim().toLowerCase() ?? '';
+
+        if (candidateTitle === normalizedReqTitle) {
+          if (!resolved) {
+            resolved = true;
+            controllers.forEach((ctrl, ctrlIndex) => {
+              if (ctrlIndex !== index) ctrl.abort();
+            });
+          }
+          console.log('가사:', lyrics);
+          return {
+            lyrics,
+            duration: detail.duration,
+            artist: detail.artist,
+            title: detail.title,
+            id: candidate.id,
+          };
+        } else if (!fallbackResult) {
+          console.log('2nd 가사:', lyrics);
+          fallbackResult = {
+            lyrics,
+            duration: detail.duration,
+            artist: detail.artist,
+            title: detail.title,
+            id: candidate.id,
+          };
+          if (!resolved) {
+            resolved = true;
+            controllers.forEach((ctrl, ctrlIndex) => {
+              if (ctrlIndex !== index) ctrl.abort();
+            });
+          }
+        }
+        return null;
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          console.log(`Request aborted for lyric detail ${candidate.id}`);
+          return null;
+        }
+        console.error(`Error fetching lyric detail ${candidate.id}:`, err);
+        return null;
       }
     }
-    return fallbackResult;
+
+    // concurrency 제한을 위해 limitedFetchLyrics 대신 requestLimiter.enqueue 사용
+    const results = await Promise.all(
+      limitedCandidates.map((candidate) => requestLimiter.enqueue(() => fetchLyricDetail(candidate))),
+    );
+    // 배열에서 첫번째 유효 결과 찾기, 없으면 fallbackResult 반환
+    const validResult = results.find((res) => res !== null) || fallbackResult || null;
+    return validResult;
   }
 
   // 1차 시도: 정상 아티스트-곡명 순서
@@ -230,7 +289,6 @@ export async function fetchLyricsByArtistAndTrack(artist: string, title: string)
     const result2 = await searchWithParams(title, artist);
     if (result2 !== null) return result2;
   }
-
   return null;
 }
 ```
@@ -3296,17 +3354,18 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
   // --- 플래그 및 관리 객체 ---
   let isDetectionActive = false; // 감지 시스템 활성화 여부
   let isDetecting = false; // 영상 감지 함수 진입 여부(동시 실행 방지)
+
   let lastVideoId: string | null = null;
+  let lastUrl = window.location.href;
+
   let lastRenderedLyrics = '';
   let latestLyrics: Line[] = [];
   let contentEnabled = false;
   let lyricsOverlayRoot: Root | null = null; // 렌더링된 root 인스턴스 보관
   let lyricsOverlayElement: HTMLElement | null = null;
-  let lastUrl = window.location.href;
   let spaObserverShouldTriggerDetection = true;
   let isRetryingDetection = false; // 재시도 중복 제어 플래그
   let isFirstMutation = true;
-  let lastHandledUrl = '';
 
   // font
   let lyricsFontColorCurrent = '#FFFFFF';
@@ -3344,11 +3403,6 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     videoElementObserver: null,
     // ...other observers
   };
-
-  // 2. 초기값을 chrome.storage에서 읽어옴
-  chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED], (result) => {
-    contentEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
-  });
 
   // --- Observer 및 리스너 관리 함수 ---
   const removeAllObservers = (): void => {
@@ -3425,6 +3479,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     await injectCSS(); // CSS 먼저 완전히 로드 대기
     // 이제야 DOM 생성 후 body에 append
     lyricsOverlayElement = injectLyricsOverlayRoot();
+    console.log('[Lyrics] 오버레이 DOM 생성 및 body 삽입 완료');
 
     if (lyricsOverlayElement) {
       // visibility hidden 상태에서 보여주도록 변경
@@ -3507,9 +3562,36 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
         rerenderLyricsOverlay();
       }
     });
+
+    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+      console.log('[content] onMessage 수신:', message);
+
+      if (message.type === 'GET_LATEST_LYRICS') {
+        console.log('[content] GET_LATEST_LYRICS 요청 수신 - latestLyrics 길이:', latestLyrics.length);
+        sendResponse({ lyrics: latestLyrics });
+      }
+
+      // ✅ 오프셋 적용 반영 처리
+      if (message.type === 'APPLY_OFFSET_LYRICS') {
+        const { offset, lyrics } = message.payload;
+        console.log(`[content] APPLY_OFFSET_LYRICS 수신 → offset: ${offset}, 가사 길이: ${lyrics.length}`);
+
+        latestLyrics = lyrics; // 전역 최신 가사 교체
+        rerenderLyricsOverlay(); // full / sync 모드에 즉시 적용
+      }
+    });
+
+    // ✅ Visibility API를 통한 탭 전환 추가 감지
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        tryDetectionWithRetry(0, 5, 200);
+      }
+    });
   }
   function onLyricsUpdated(newLyrics: Line[]) {
     latestLyrics = newLyrics;
+    console.log('[Lyrics] 가사 상태 업데이트 완료');
+
     rerenderLyricsOverlay();
   }
   function isLyricsOverlayMounted(): boolean {
@@ -3777,19 +3859,6 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
   };
   const handleUrlChangeGuarded = withContentEnabled(getContentEnabled, handleUrlChange);
 
-  function handlePageChange() {
-    console.log('새 동영상 페이지 진입 감지됨');
-    handleUrlChangeGuarded(window.location.href); // 실제 처리 함수 호출
-  }
-
-  function handlePageChangeSafely() {
-    const currentUrl = window.location.href;
-    if (currentUrl !== lastHandledUrl) {
-      lastHandledUrl = currentUrl;
-      handlePageChange();
-    }
-  }
-
   function finishParsingLyrics(lyricsArray: Line[]) {
     latestLyrics = lyricsArray; // 원본만 저장
 
@@ -3799,8 +3868,13 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
 
   // 1. 영상과 크게 무관한 메타데이터, 가사 정보를 확보하는 함수
   async function collectMetadataAndLyrics(videoId: string) {
+    console.time('collectMetadataAndLyrics');
+
     // YouTube Video Meta 호출
+    console.timeLog('collectMetadataAndLyrics', 'before fetchYouTubeVideoMeta');
     const meta = await fetchYouTubeVideoMeta(videoId, process.env.YOUTUBE_API_KEY!);
+    console.timeLog('collectMetadataAndLyrics', 'after fetchYouTubeVideoMeta');
+
     if (!meta) {
       console.log('[collectMetadataAndLyrics] 메타 정보 없음');
       throw new Error('메타 정보 없음');
@@ -3812,6 +3886,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     }
     // 아티스트, 타이틀 파싱(기존 처리 로직 사용)
     let parsed = extractArtistAndTitle(meta.title);
+
     if (!parsed) {
       const fallback = fallbackArtistAndTitle(meta);
       if (!fallback) {
@@ -3831,11 +3906,15 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     const title = preprocessArtistOrTitle(refined.title);
 
     clearLyricsCache();
+    console.timeLog('collectMetadataAndLyrics', 'before getLyricsFromCacheOrFetch');
 
     // 가사 캐시 혹은 서버에서 가사 fetch
     const lyricsResult = await getLyricsFromCacheOrFetch(artist, title, {
       fetch: async () => fetchLyricsWithAliasFallback(artist, title),
     });
+    console.timeLog('collectMetadataAndLyrics', 'after getLyricsFromCacheOrFetch');
+
+    console.log('[Lyrics] API 가사 데이터 수신 완료:', lyricsResult);
 
     if (!lyricsResult) {
       throw new Error('가사 없음');
@@ -3856,6 +3935,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
 
     finishParsingLyrics(parsedLyrics);
     onLyricsUpdated(parsedLyrics);
+    console.timeEnd('collectMetadataAndLyrics');
 
     // shiftedLyrics: Line[] 배열 (각 원소에 'text'가 있다고 가정)
     //const lyricsText = shiftedLyrics.map((line) => line.text).join('\n');
@@ -3907,6 +3987,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       console.log('[Lyrics] 수집 중복 방지 중...');
       return; // 필요시 캐시된 데이터 반환하도록 개선 가능
     }
+    console.time('tryCollectMetadataAndLyrics');
 
     if (videoId === lastCollectedVideoId && isLyricsOverlayMounted()) {
       console.log('[Lyrics] 이미 처리한 videoId, 수집 스킵:', videoId);
@@ -3916,6 +3997,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       isCollecting = true;
       const data = await collectMetadataAndLyrics(videoId);
       lastCollectedVideoId = videoId;
+
       return data;
     } finally {
       isCollecting = false;
@@ -3925,7 +4007,10 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
   // 영상 감지 핸들러 (순수 로직)
   const handleVideoDetection = async () => {
     console.log('handleVideoDetection 실행');
-    if (isDetecting) return;
+    if (isDetecting) {
+      console.log('[handleVideoDetection] 이미 실행되고 있음');
+      return;
+    }
     isDetecting = true;
     let videoData;
 
@@ -3975,7 +4060,6 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       if (videoData && videoData.videoId) {
         lastVideoId = videoData.videoId;
       }
-      console.log(`[handleVideoDetection] lastVieoId: ${lastVideoId}, lastUrl: ${lastUrl}`);
     }
   };
   // --- wrapper ---
@@ -4041,31 +4125,6 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     }
   }
 
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    console.log('[content] onMessage 수신:', message);
-
-    if (message.type === 'GET_LATEST_LYRICS') {
-      console.log('[content] GET_LATEST_LYRICS 요청 수신 - latestLyrics 길이:', latestLyrics.length);
-      sendResponse({ lyrics: latestLyrics });
-    }
-
-    // ✅ 오프셋 적용 반영 처리
-    if (message.type === 'APPLY_OFFSET_LYRICS') {
-      const { offset, lyrics } = message.payload;
-      console.log(`[content] APPLY_OFFSET_LYRICS 수신 → offset: ${offset}, 가사 길이: ${lyrics.length}`);
-
-      latestLyrics = lyrics; // 전역 최신 가사 교체
-      rerenderLyricsOverlay(); // full / sync 모드에 즉시 적용
-    }
-  });
-
-  // ✅ Visibility API를 통한 탭 전환 추가 감지
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-      tryDetectionWithRetry(0, 5, 200);
-    }
-  });
-
   // 재시도 함수: 현재 시도 횟수, 최대 시도 횟수, 인터벌(ms)
   function tryDetectionWithRetry(attempt: number, maxAttempts: number, interval: number) {
     if (attempt >= maxAttempts) {
@@ -4130,7 +4189,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       console.error('[runInitialDetection] 감지 재시도 중 error:', error);
     });
     lastUrl = window.location.href;
-    console.log(`[runInitialDetection] lastVieoId: ${lastVideoId}, lastUrl: ${lastUrl}`);
+    console.log(`[runInitialDetection] lastVideoId: ${lastVideoId}, lastUrl: ${lastUrl}`);
   }
   // --- video DOM 등장 관찰용 MutationObserver 등록 함수 ---
   function setupVideoElementObserver() {
@@ -4205,12 +4264,9 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     }
     cleanupAllResources();
 
-    // 유튜브 SPA 내비게이션 같은 URL 변화 감지
-    detectionObserverManager.spaObserver = setupSPAObserver(() => {
-      console.log('spaObserver 실행');
+    const debouncedSpaObserverCallback = debounce(() => {
       const currentUrl = window.location.href;
       if (currentUrl !== lastUrl) {
-        // 플래그가 true일 때만 감지 호출
         if (spaObserverShouldTriggerDetection) {
           handleSpaUrlChange(currentUrl);
           lastUrl = currentUrl;
@@ -4218,7 +4274,9 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
           console.log('[SPA Observer] 감지 호출 스킵 (메시지 리스너 우선)');
         }
       }
-    });
+    }, 200); // debounce delay can be tuned, example 200ms
+
+    detectionObserverManager.spaObserver = setupSPAObserver(debouncedSpaObserverCallback);
 
     // 광고 감지 시작
     initAdWatcher();
@@ -4260,6 +4318,10 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     try {
       await initializeI18n();
 
+      chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED], (result) => {
+        contentEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
+      });
+
       // 루트 컨테이너 준비 및 렌더링
       const rootElement = document.getElementById(DOM_IDS.ROOT_CONTAINER) || createRootElement();
       const root = createRoot(rootElement);
@@ -4274,32 +4336,6 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       initListenersAndState();
       setupMiniToBasicTransitionObserver();
       setupBasicToMiniTransitionObserver();
-
-      window.addEventListener('yt-navigate-finish', handlePageChangeSafely);
-
-      // 백업 MutationObserver 등록
-      function spaCallback() {
-        console.log('spaCallback 실행');
-        const currentLocation = window.location.href;
-        if (currentLocation !== lastUrl) {
-          if (spaObserverShouldTriggerDetection) {
-            handleSpaUrlChange(currentLocation);
-            lastUrl = currentLocation;
-          } else {
-            console.log('spaCallback 스킵 중');
-          }
-        }
-      }
-
-      // apply debounce to the callback
-      const debouncedSpaCallback = debounce(spaCallback, 200);
-
-      // then set up observer with the debounced callback
-      const spaObserver = setupSPAObserver(debouncedSpaCallback);
-
-      // register in observer manager
-      detectionObserverManager.spaObserver = spaObserver;
-
       runInitialDetection();
 
       // 감지 시스템 활성/비활성 상태 동기화
@@ -5013,6 +5049,82 @@ export const throttle = <T extends (...args: unknown[]) => unknown>(
 };
 ```
 
+## File: lib/utils/common/concurrencyLimiter.ts
+```typescript
+import pLimit from 'p-limit';
+
+export function createConcurrencyLimiter(concurrency: number) {
+  const limit = pLimit(concurrency);
+
+  return async function limitedConcurrency<T, R>(items: T[], fn: (item: T) => Promise<R>): Promise<R[]> {
+    const tasks = items.map((item) => limit(() => fn(item)));
+    return Promise.all(tasks);
+  };
+}
+```
+
+## File: lib/utils/common/limitedFetchLyrics.ts
+```typescript
+// limitedFetchLyrics.ts (또는 utils/limitedFetchLyrics.ts)
+import { createConcurrencyLimiter } from './concurrencyLimiter';
+
+export const limitedFetchLyrics = createConcurrencyLimiter(5);
+```
+
+## File: lib/utils/common/requestLimiter.ts
+```typescript
+// src/lib/utils/common/requestLimiter.ts
+type PendingRequest<T = unknown> = {
+  resolve: (value: T | PromiseLike<T>) => void;
+  reject: (reason: unknown) => void;
+  fn: () => Promise<T>;
+};
+
+export class RequestLimiter {
+  private maxConcurrent: number;
+  private runningCount: number;
+  private queue: PendingRequest[];
+
+  constructor(maxConcurrent = 5) {
+    this.maxConcurrent = maxConcurrent;
+    this.runningCount = 0;
+    this.queue = [];
+  }
+
+  public async enqueue<T>(fn: () => Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      // 타입 단언으로 queue에 넣을 때 타입 불일치 해소
+      const request = { resolve, reject, fn } as PendingRequest<unknown>;
+      this.queue.push(request);
+      this.runNext();
+    });
+  }
+
+  private runNext() {
+    if (this.runningCount >= this.maxConcurrent) return;
+    const request = this.queue.shift();
+    if (!request) return;
+
+    this.runningCount++;
+    request
+      .fn()
+      .then((result) => {
+        request.resolve(result);
+      })
+      .catch((err) => {
+        request.reject(err);
+      })
+      .finally(() => {
+        this.runningCount--;
+        this.runNext();
+      });
+  }
+}
+
+// 싱글톤 인스턴스 생성 예시
+export const defaultRequestLimiter = new RequestLimiter(5);
+```
+
 ## File: lib/utils/common/time.ts
 ```typescript
 /**
@@ -5100,7 +5212,7 @@ export const isArrayOfType = <T>(arr: unknown, guard: (item: unknown) => item is
 
 ## File: lib/utils/common/urlUtils.ts
 ```typescript
-import { YOUTUBE_WATCH_PATH } from "@constants/youtubeSelectors";
+import { YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
 
 /**
  * URL이 유튜브 영상 페이지인지 판단
@@ -6437,11 +6549,19 @@ export const detectYouTubeVideo = (): { videoId: string; title: string } | null 
 // 유튜브 영상 페이지 진입(또는 변화) 시점을 감지
 export function setupSPAObserver(callback: () => void): MutationObserver {
   const targetNode = document.querySelector('#page-manager') || document.body;
-  const config = { childList: true, subtree: true, attributes: false };
+
+  const config: MutationObserverInit = {
+    childList: true,
+    subtree: true,
+    attributes: false,
+  };
+
   const observer = new MutationObserver(() => {
     callback();
   });
+
   observer.observe(targetNode, config);
+
   return observer;
 }
 ```

@@ -20,6 +20,7 @@
 - Kuroshiro by Hexen Qi (MIT License, https://github.com/hexenq/kuroshiro)
 - kuroshiro-analyzer-kuromoji by Hexen Qi (MIT License, https://github.com/hexenq/kuroshiro-analyzer-kuromoji)
 - pinyin by hotoo (MIT License, https://github.com/hotoo/pinyin)
+- p-limit by sindresorhus (MIT License, https://github.com/sindresorhus/p-limit)
 
 - @emotion/react, @emotion/styled by Emotion Team (MIT License, https://emotion.sh/docs/introduction)
 - react, react-dom by Meta (Facebook) (MIT License, https://react.dev/)

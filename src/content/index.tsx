@@ -104,11 +104,6 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     // ...other observers
   };
 
-  // 2. 초기값을 chrome.storage에서 읽어옴
-  chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED], (result) => {
-    contentEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
-  });
-
   // --- Observer 및 리스너 관리 함수 ---
   const removeAllObservers = (): void => {
     Object.values(detectionObserverManager).forEach((obs) => obs?.disconnect && obs.disconnect());
@@ -184,6 +179,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     await injectCSS(); // CSS 먼저 완전히 로드 대기
     // 이제야 DOM 생성 후 body에 append
     lyricsOverlayElement = injectLyricsOverlayRoot();
+    console.log('[Lyrics] 오버레이 DOM 생성 및 body 삽입 완료');
 
     if (lyricsOverlayElement) {
       // visibility hidden 상태에서 보여주도록 변경
@@ -266,9 +262,36 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
         rerenderLyricsOverlay();
       }
     });
+
+    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+      console.log('[content] onMessage 수신:', message);
+
+      if (message.type === 'GET_LATEST_LYRICS') {
+        console.log('[content] GET_LATEST_LYRICS 요청 수신 - latestLyrics 길이:', latestLyrics.length);
+        sendResponse({ lyrics: latestLyrics });
+      }
+
+      // ✅ 오프셋 적용 반영 처리
+      if (message.type === 'APPLY_OFFSET_LYRICS') {
+        const { offset, lyrics } = message.payload;
+        console.log(`[content] APPLY_OFFSET_LYRICS 수신 → offset: ${offset}, 가사 길이: ${lyrics.length}`);
+
+        latestLyrics = lyrics; // 전역 최신 가사 교체
+        rerenderLyricsOverlay(); // full / sync 모드에 즉시 적용
+      }
+    });
+
+    // ✅ Visibility API를 통한 탭 전환 추가 감지
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        tryDetectionWithRetry(0, 5, 200);
+      }
+    });
   }
   function onLyricsUpdated(newLyrics: Line[]) {
     latestLyrics = newLyrics;
+    console.log('[Lyrics] 가사 상태 업데이트 완료');
+
     rerenderLyricsOverlay();
   }
   function isLyricsOverlayMounted(): boolean {
@@ -545,8 +568,13 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
 
   // 1. 영상과 크게 무관한 메타데이터, 가사 정보를 확보하는 함수
   async function collectMetadataAndLyrics(videoId: string) {
+    console.time('collectMetadataAndLyrics');
+
     // YouTube Video Meta 호출
+    console.timeLog('collectMetadataAndLyrics', 'before fetchYouTubeVideoMeta');
     const meta = await fetchYouTubeVideoMeta(videoId, process.env.YOUTUBE_API_KEY!);
+    console.timeLog('collectMetadataAndLyrics', 'after fetchYouTubeVideoMeta');
+
     if (!meta) {
       console.log('[collectMetadataAndLyrics] 메타 정보 없음');
       throw new Error('메타 정보 없음');
@@ -558,6 +586,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     }
     // 아티스트, 타이틀 파싱(기존 처리 로직 사용)
     let parsed = extractArtistAndTitle(meta.title);
+
     if (!parsed) {
       const fallback = fallbackArtistAndTitle(meta);
       if (!fallback) {
@@ -577,11 +606,15 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     const title = preprocessArtistOrTitle(refined.title);
 
     clearLyricsCache();
+    console.timeLog('collectMetadataAndLyrics', 'before getLyricsFromCacheOrFetch');
 
     // 가사 캐시 혹은 서버에서 가사 fetch
     const lyricsResult = await getLyricsFromCacheOrFetch(artist, title, {
       fetch: async () => fetchLyricsWithAliasFallback(artist, title),
     });
+    console.timeLog('collectMetadataAndLyrics', 'after getLyricsFromCacheOrFetch');
+
+    console.log('[Lyrics] API 가사 데이터 수신 완료:', lyricsResult);
 
     if (!lyricsResult) {
       throw new Error('가사 없음');
@@ -602,6 +635,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
 
     finishParsingLyrics(parsedLyrics);
     onLyricsUpdated(parsedLyrics);
+    console.timeEnd('collectMetadataAndLyrics');
 
     // shiftedLyrics: Line[] 배열 (각 원소에 'text'가 있다고 가정)
     //const lyricsText = shiftedLyrics.map((line) => line.text).join('\n');
@@ -653,6 +687,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       console.log('[Lyrics] 수집 중복 방지 중...');
       return; // 필요시 캐시된 데이터 반환하도록 개선 가능
     }
+    console.time('tryCollectMetadataAndLyrics');
 
     if (videoId === lastCollectedVideoId && isLyricsOverlayMounted()) {
       console.log('[Lyrics] 이미 처리한 videoId, 수집 스킵:', videoId);
@@ -662,6 +697,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       isCollecting = true;
       const data = await collectMetadataAndLyrics(videoId);
       lastCollectedVideoId = videoId;
+
       return data;
     } finally {
       isCollecting = false;
@@ -671,7 +707,10 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
   // 영상 감지 핸들러 (순수 로직)
   const handleVideoDetection = async () => {
     console.log('handleVideoDetection 실행');
-    if (isDetecting) return;
+    if (isDetecting) {
+      console.log('[handleVideoDetection] 이미 실행되고 있음');
+      return;
+    }
     isDetecting = true;
     let videoData;
 
@@ -721,7 +760,6 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       if (videoData && videoData.videoId) {
         lastVideoId = videoData.videoId;
       }
-      console.log(`[handleVideoDetection] lastVieoId: ${lastVideoId}, lastUrl: ${lastUrl}`);
     }
   };
   // --- wrapper ---
@@ -787,31 +825,6 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     }
   }
 
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    console.log('[content] onMessage 수신:', message);
-
-    if (message.type === 'GET_LATEST_LYRICS') {
-      console.log('[content] GET_LATEST_LYRICS 요청 수신 - latestLyrics 길이:', latestLyrics.length);
-      sendResponse({ lyrics: latestLyrics });
-    }
-
-    // ✅ 오프셋 적용 반영 처리
-    if (message.type === 'APPLY_OFFSET_LYRICS') {
-      const { offset, lyrics } = message.payload;
-      console.log(`[content] APPLY_OFFSET_LYRICS 수신 → offset: ${offset}, 가사 길이: ${lyrics.length}`);
-
-      latestLyrics = lyrics; // 전역 최신 가사 교체
-      rerenderLyricsOverlay(); // full / sync 모드에 즉시 적용
-    }
-  });
-
-  // ✅ Visibility API를 통한 탭 전환 추가 감지
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-      tryDetectionWithRetry(0, 5, 200);
-    }
-  });
-
   // 재시도 함수: 현재 시도 횟수, 최대 시도 횟수, 인터벌(ms)
   function tryDetectionWithRetry(attempt: number, maxAttempts: number, interval: number) {
     if (attempt >= maxAttempts) {
@@ -876,7 +889,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       console.error('[runInitialDetection] 감지 재시도 중 error:', error);
     });
     lastUrl = window.location.href;
-    console.log(`[runInitialDetection] lastVieoId: ${lastVideoId}, lastUrl: ${lastUrl}`);
+    console.log(`[runInitialDetection] lastVideoId: ${lastVideoId}, lastUrl: ${lastUrl}`);
   }
   // --- video DOM 등장 관찰용 MutationObserver 등록 함수 ---
   function setupVideoElementObserver() {
@@ -951,12 +964,9 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     }
     cleanupAllResources();
 
-    // 유튜브 SPA 내비게이션 같은 URL 변화 감지
-    detectionObserverManager.spaObserver = setupSPAObserver(() => {
-      console.log('[spaObserver] 실행 중');
+    const debouncedSpaObserverCallback = debounce(() => {
       const currentUrl = window.location.href;
       if (currentUrl !== lastUrl) {
-        // 플래그가 true일 때만 감지 호출
         if (spaObserverShouldTriggerDetection) {
           handleSpaUrlChange(currentUrl);
           lastUrl = currentUrl;
@@ -964,7 +974,9 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
           console.log('[SPA Observer] 감지 호출 스킵 (메시지 리스너 우선)');
         }
       }
-    });
+    }, 200); // debounce delay can be tuned, example 200ms
+
+    detectionObserverManager.spaObserver = setupSPAObserver(debouncedSpaObserverCallback);
 
     // 광고 감지 시작
     initAdWatcher();
@@ -1005,6 +1017,10 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     console.log('content app initializeApp 시작');
     try {
       await initializeI18n();
+
+      chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED], (result) => {
+        contentEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
+      });
 
       // 루트 컨테이너 준비 및 렌더링
       const rootElement = document.getElementById(DOM_IDS.ROOT_CONTAINER) || createRootElement();
