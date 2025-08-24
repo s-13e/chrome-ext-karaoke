@@ -1,0 +1,42 @@
+/* 한 세트(현재+발음) 묶음 */
+.lyricItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 12px; /* 세트 간 간격 */
+}
+
+/* 현재 가사 라인 */
+.lyricLine {
+  margin-bottom: 0; /* 발음이 있으면 붙이고 */
+  font-weight: bold;
+}
+
+/* 발음 가사 라인 */
+.pronunciation {
+  font-size: clamp(17px, calc(0.6vw + 0.6vh), 28px);
+  opacity: 0.85;
+  font-weight: 400;
+  transition:
+    font-size 0.15s ease,
+    font-weight 0.15s ease,
+    opacity 0.15s ease;
+}
+
+/* 발음만 있는 경우 */
+.lyricItem:not(:has(.lyricLine)) .pronunciation {
+  font-size: clamp(20px, calc(1vw + 1vh), 36px);
+  font-weight: 600; /* 단독일 때 굵게 */
+}
+
+/* 전체화면 - 발음 가사 */
+:fullscreen .pronunciation,
+:-webkit-full-screen .pronunciation {
+  font-size: clamp(22px, calc(1.6vw + 1.6vh), 36px);
+}
+
+/* 전체화면 - 발음만 있는 경우 */
+:fullscreen .lyricItem:not(:has(.lyricLine)) .pronunciation,
+:-webkit-full-screen .lyricItem:not(:has(.lyricLine)) .pronunciation {
+  font-size: clamp(28px, calc(2vw + 2vh), 52px);
+}

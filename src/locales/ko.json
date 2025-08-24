@@ -9,5 +9,12 @@
   "extLicense": "라이센스",
   "extContact": "문의",
   "extPersonalSettings": "개인 설정",
-  "extGeneralSettings": "일반 설정"
+  "extGeneralSettings": "일반 설정",
+  "extSongs": "노래",
+  "extArtist": "가수",
+  "extLyricist": "작곡가",
+  "extComposer": "작사가",
+  "extLyricsSourceLabel": "가사 출처",
+  "extUnknownSourceText": "정보 없음",
+  "extSongCopyrightWarning": "제공 가사는 저작권자의 요청 시 즉시 삭제됩니다. 저작권은 해당 권리자(작사가/작곡가/등록협회 등)에 있습니다."
 }

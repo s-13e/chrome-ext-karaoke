@@ -116,6 +116,7 @@ module.exports = {
       patterns: [
         { from: 'manifest.json', to: 'manifest.json' },
         { from: 'public/assets/images', to: 'assets/images' },
+        { from: 'public/assets/fonts', to: 'assets/fonts' },
         { from: 'src/assets/icons', to: 'assets/icons' },
         { from: 'src/content/content.css', to: 'content/content.css' },
         {

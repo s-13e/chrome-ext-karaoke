@@ -189,6 +189,7 @@ export default [
       'react/jsx-key': 'error',
       'react/jsx-no-useless-fragment': 'error',
       'react/react-in-jsx-scope': 'off',
+      'react/prop-types': 'off',
     },
   },
   // React-hooks 규칙칙

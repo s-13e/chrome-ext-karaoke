@@ -2,9 +2,9 @@ import React, { useMemo } from 'react';
 import { useCurrentTime } from '@hooks/useCurrentTime';
 import { getDisplayLines } from '@lib/utils/lyrics/display/lyricsDisplay';
 import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/display/lyricsOffset';
-import { usePronunciations } from '../PronunciationLyrics/usePronunciation';
+import { usePronunciations } from '../common/usePronunciation';
 import { Line } from '@lib/types/lyrics';
-
+import { LyricLine } from '../common/LyricLine';
 import styles from './styles.module.css';
 
 interface DualHighlightLyricsProps {
@@ -15,33 +15,6 @@ interface DualHighlightLyricsProps {
   showRealtimeLyrics: boolean;
   showPronunciationLyrics: boolean;
 }
-
-const LyricLine: React.FC<{
-  text?: string;
-  pron?: string;
-  showText: boolean;
-  showPron: boolean;
-  fontColor?: string;
-  pronunciationColor?: string;
-}> = ({ text, pron, showText, showPron, fontColor, pronunciationColor }) => {
-  if (!showText && !showPron) return null;
-
-  return (
-    <div className={styles.lyricItem}>
-      {showText && text && (
-        <div className={styles.lyricLine} style={{ color: fontColor }}>
-          {text}
-        </div>
-      )}
-      {showPron && pron && (
-        <div className={styles.pronunciation} style={{ color: pronunciationColor }}>
-          {pron}
-        </div>
-      )}
-    </div>
-  );
-};
-
 export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
   lyrics,
   offset,
@@ -64,6 +37,11 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
   const topPron = top ? pronList[shiftedLyrics.findIndex((l) => l.text === top)] : '';
   const bottomPron = bottom ? pronList[shiftedLyrics.findIndex((l) => l.text === bottom)] : '';
 
+  // ✅ 추가: 색상 변경은 원본 타임 라인 기준
+  const highlightIndex = useMemo(() => {
+    return shiftedLyrics.findLastIndex((line) => adjustedTime >= line.time);
+  }, [lyrics, adjustedTime]);
+
   return (
     <div className={styles.dualHighlightSubtitle} style={{ color: fontColor }}>
       <LyricLine
@@ -71,7 +49,11 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
         pron={topPron}
         showText={showRealtimeLyrics}
         showPron={showPronunciationLyrics}
-        fontColor={fontColor}
+        fontColor={
+          lyrics.findIndex((l) => l.text === top) <= highlightIndex
+            ? 'blue' // 하이라이트 색상
+            : fontColor
+        }
         pronunciationColor={pronunciationColor}
       />
       <LyricLine
@@ -79,7 +61,7 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
         pron={bottomPron}
         showText={showRealtimeLyrics}
         showPron={showPronunciationLyrics}
-        fontColor={fontColor}
+        fontColor={lyrics.findIndex((l) => l.text === bottom) <= highlightIndex ? 'blue' : fontColor}
         pronunciationColor={pronunciationColor}
       />
     </div>

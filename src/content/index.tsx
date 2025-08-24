@@ -25,7 +25,7 @@ import {
 } from '@lib/utils/lyrics/parsers/stringUtils';
 import { listenerManager } from '@lib/utils/infra/listenerManager';
 import { withContentEnabled } from '@lib/utils/platform/contentGuard';
-import { injectLyricsOverlayRoot } from '@components/lyrics/LyricsOverlayRoot';
+import { injectLyricsOverlayRoot } from '@components/lyrics/infra/LyricsOverlayRoot';
 import { DualHighlightLyrics } from '@components/lyrics/SyncLyrics/DualHighlightLyrics';
 import { FullLyrics } from '@components/lyrics/FullLyrics/FullLyrics';
 import { isAdPlaying } from '@lib/utils/dom/domUtils';
@@ -175,7 +175,6 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
 
   // DOM 및 React root 생성 함수, 호출 시 existing overlay DOM 체크
   async function createOverlayRoot() {
-    console.log('createOverlayRoot 실행');
     await injectCSS(); // CSS 먼저 완전히 로드 대기
     // 이제야 DOM 생성 후 body에 append
     lyricsOverlayElement = injectLyricsOverlayRoot();
@@ -638,6 +637,28 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     return { meta, lyricsDuration, parsedLyrics };
   }
 
+  // delay 함수 (Promise 기반 6초 대기)
+  // async function pauseVideoAndDelay(videoElem: HTMLMediaElement, ms: number) {
+  //   if (!videoElem) return;
+
+  //   try {
+  //     if (!videoElem.paused) {
+  //       videoElem.pause();
+  //       console.log(`영상 일시정지, ${ms}ms 대기 시작`);
+  //     }
+
+  //     await new Promise((resolve) => setTimeout(resolve, ms));
+
+  //     console.log(`${ms}ms 대기 종료, 영상 재생 재개`);
+
+  //     await videoElem.play().catch((e) => {
+  //       console.warn('영상 재생 재개 실패:', e);
+  //     });
+  //   } catch (error) {
+  //     console.error('영상 일시정지 대기 중 예외 발생:', error);
+  //   }
+  // }
+
   // 2. 영상 엘리먼트가 준비된 후, 실제 분석 및 렌더링 수행하는 함수
   async function analyzeAudioAndRenderLyrics(
     meta: { durationSec?: number },
@@ -706,6 +727,13 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     isDetecting = true;
     let videoData;
 
+    // 비디오 엘리먼트가 준비되었으면 본 분석 및 렌더링 실행
+    const videoElem = document.querySelector('video');
+    if (!videoElem) {
+      console.log('[handleVideoDetection] video element 미존재, 렌더링 생략');
+      return;
+    }
+
     try {
       videoData = detectYouTubeVideo();
       if (!videoData || !videoData.videoId) {
@@ -734,15 +762,9 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
         console.warn('가사 수집 데이터 없음');
         return;
       }
+
       const { meta, lyricsDuration, parsedLyrics } = collected;
 
-      // 2. 비디오 엘리먼트가 준비되었으면 본 분석 및 렌더링 실행
-      const videoElem = document.querySelector('video');
-
-      if (!videoElem) {
-        console.log('[handleVideoDetection] video element 미존재, 렌더링 생략');
-        return;
-      }
       await analyzeAudioAndRenderLyrics(meta, lyricsDuration, videoElem, parsedLyrics);
     } catch (error) {
       console.error('[handleVideoDetection] 에러 발생:', error);

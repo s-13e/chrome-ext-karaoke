@@ -9,5 +9,12 @@
   "extLicense": "License",
   "extContact": "Contact",
   "extPersonalSettings": "Personal Settings",
-  "extGeneralSettings": "General Settings"
+  "extGeneralSettings": "General Settings",
+  "extSongs": "Title",
+  "extArtist": "Artist",
+  "extLyricist": "Lyricist",
+  "extComposer": "Composer",
+  "extLyricsSourceLabel": "Lyrics Source",
+  "extUnknownSourceText": "Unknown Information",
+  "extSongCopyrightWarning": "Displayed lyrics may be immediately removed at the request of the copyright owner. All rights belong to the original creators (lyricist, composer) or relevant copyright agencies."
 }

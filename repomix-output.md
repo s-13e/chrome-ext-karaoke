@@ -58,10 +58,12 @@ components/karaoke-player-settings/MainMenu.module.css
 components/karaoke-player-settings/MainMenu.tsx
 components/karaoke-player-settings/MusicNoteButton.tsx
 components/karaoke-player-settings/styles.module.css
+components/lyrics/common/LyricLine.tsx
+components/lyrics/common/styles.module.css
 components/lyrics/FullLyrics/FullLyrics.tsx
 components/lyrics/FullLyrics/styles.module.css
-components/lyrics/LyricsOverlayRoot.module.css
-components/lyrics/LyricsOverlayRoot.tsx
+components/lyrics/infra/LyricsOverlayRoot.module.css
+components/lyrics/infra/LyricsOverlayRoot.tsx
 components/lyrics/PronunciationLyrics/usePronunciation.ts
 components/lyrics/SingleLineLyrics/SingleLineLyrics.tsx
 components/lyrics/SingleLineLyrics/styles.module.css
@@ -166,7 +168,6 @@ styles/GlobalStyle.ts
 
 ## File: background/api/lrclib.ts
 ```typescript
-// background/api/lrclib.ts
 import { Line } from '@lib/types/lyrics';
 import { RequestLimiter } from '@lib/utils/common/requestLimiter';
 
@@ -179,43 +180,63 @@ export interface LrcLibLyricsResult {
   etag?: string;
 }
 
-// 검색 후보 항목
 export interface SearchCandidate {
   id: string;
   title?: string;
   artist_name?: string;
-  // 필요시 추가 필드 작성
 }
 
-const requestLimiter = new RequestLimiter(5); // 동시 최대 5개 요청 제한
+const requestLimiter = new RequestLimiter(5); // 최대 동시 5개 요청 제한
 
-// artist_name과 track_name으로 한정 검색: 오탐지를 줄이기 위한 별도 함수
 export async function fetchLyricsByArtistAndTrack(artist: string, title: string): Promise<LrcLibLyricsResult | null> {
-  async function searchWithParams(artistParam: string, titleParam: string): Promise<LrcLibLyricsResult | null> {
-    const endpoint = `https://lrclib.net/api/search?artist_name=${encodeURIComponent(artistParam)}&track_name=${encodeURIComponent(titleParam)}`;
+  async function searchWithParams(
+    artistParam: string,
+    titleParam: string,
+    _attemptNumber: number,
+  ): Promise<LrcLibLyricsResult | null> {
+    const endpoint = `https://lrclib.net/api/search?artist_name=${encodeURIComponent(
+      artistParam,
+    )}&track_name=${encodeURIComponent(titleParam)}`;
+
     const searchRes = await fetch(endpoint);
-    if (!searchRes.ok) return null;
+    if (!searchRes.ok) {
+      console.warn(`Search API response not OK, status: ${searchRes.status}`);
+      return null;
+    }
 
     const searchData: SearchCandidate[] = await searchRes.json();
     const limitedCandidates = searchData.slice(0, 10);
 
     const normalizedReqTitle = titleParam.trim().toLowerCase();
-    let fallbackResult: LrcLibLyricsResult | null = null;
 
-    // 요청 취소용 AbortController 배열 생성
-    const controllers: AbortController[] = limitedCandidates.map(() => new AbortController());
-    let resolved = false;
+    let fallbackSynced: LrcLibLyricsResult | null = null;
+    let fallbackPlain: LrcLibLyricsResult | null = null;
 
-    async function fetchLyricDetail(candidate: SearchCandidate): Promise<LrcLibLyricsResult | null> {
-      const index = searchData.findIndex((c) => c.id === candidate.id);
-      const controller = controllers[index];
-      if (!controller) return null;
+    // 타임아웃을 구현하기 위한 Promise
+    const timeoutMs = 7000; // 7초 타임아웃
+    let timeoutId: ReturnType<typeof setTimeout> | undefined = undefined;
 
+    // 타임아웃 Promise
+    const timeoutPromise = new Promise<null>((resolve) => {
+      timeoutId = setTimeout(() => {
+        console.warn(`Timeout after ${timeoutMs} ms waiting for lyric details`);
+        resolve(null);
+      }, timeoutMs);
+    });
+
+    async function fetchLyricDetail(candidate: SearchCandidate): Promise<
+      | (LrcLibLyricsResult & {
+          hasSynced: boolean;
+          isStrictMatch: boolean;
+        })
+      | null
+    > {
       try {
-        const detailRes = await fetch(`https://lrclib.net/api/get/${candidate.id}`, { signal: controller.signal });
-
-        if (!detailRes.ok) return null;
-
+        const detailRes = await fetch(`https://lrclib.net/api/get/${candidate.id}`);
+        if (!detailRes.ok) {
+          console.warn(`Detail API response not OK for candidate id ${candidate.id}, status: ${detailRes.status}`);
+          return null;
+        }
         const detail = (await detailRes.json()) as {
           syncedLyrics?: string | Line[];
           plainLyrics?: string | Line[];
@@ -225,68 +246,106 @@ export async function fetchLyricsByArtistAndTrack(artist: string, title: string)
         };
 
         const lyrics = detail.syncedLyrics || detail.plainLyrics;
-        if (!lyrics) return null;
-
-        const candidateTitle = detail.title?.trim().toLowerCase() ?? '';
-
-        if (candidateTitle === normalizedReqTitle) {
-          if (!resolved) {
-            resolved = true;
-            controllers.forEach((ctrl, ctrlIndex) => {
-              if (ctrlIndex !== index) ctrl.abort();
-            });
-          }
-          console.log('가사:', lyrics);
-          return {
-            lyrics,
-            duration: detail.duration,
-            artist: detail.artist,
-            title: detail.title,
-            id: candidate.id,
-          };
-        } else if (!fallbackResult) {
-          console.log('2nd 가사:', lyrics);
-          fallbackResult = {
-            lyrics,
-            duration: detail.duration,
-            artist: detail.artist,
-            title: detail.title,
-            id: candidate.id,
-          };
-          if (!resolved) {
-            resolved = true;
-            controllers.forEach((ctrl, ctrlIndex) => {
-              if (ctrlIndex !== index) ctrl.abort();
-            });
-          }
-        }
-        return null;
-      } catch (err: unknown) {
-        if (err instanceof DOMException && err.name === 'AbortError') {
-          console.log(`Request aborted for lyric detail ${candidate.id}`);
+        if (!lyrics) {
+          console.warn(`No lyrics found for candidate id ${candidate.id}`);
           return null;
         }
+
+        const candidateTitle = (detail.title ?? '').trim().toLowerCase();
+        const isStrictMatch = candidateTitle === normalizedReqTitle;
+
+        if (detail.syncedLyrics && !isStrictMatch && !fallbackSynced) {
+          fallbackSynced = {
+            lyrics,
+            duration: detail.duration,
+            artist: detail.artist,
+            title: detail.title,
+            id: candidate.id,
+          };
+        } else if (!detail.syncedLyrics && !fallbackPlain) {
+          fallbackPlain = {
+            lyrics,
+            duration: detail.duration,
+            artist: detail.artist,
+            title: detail.title,
+            id: candidate.id,
+          };
+        }
+
+        return {
+          lyrics,
+          duration: detail.duration,
+          artist: detail.artist,
+          title: detail.title,
+          id: candidate.id,
+          hasSynced: !!detail.syncedLyrics,
+          isStrictMatch,
+        };
+      } catch (err) {
         console.error(`Error fetching lyric detail ${candidate.id}:`, err);
         return null;
       }
     }
 
-    // concurrency 제한을 위해 limitedFetchLyrics 대신 requestLimiter.enqueue 사용
-    const results = await Promise.all(
+    // 요청 배치
+    const resultsPromise = Promise.all(
       limitedCandidates.map((candidate) => requestLimiter.enqueue(() => fetchLyricDetail(candidate))),
     );
-    // 배열에서 첫번째 유효 결과 찾기, 없으면 fallbackResult 반환
-    const validResult = results.find((res) => res !== null) || fallbackResult || null;
-    return validResult;
+
+    // 타임아웃 또는 모두 완료 중 먼저 도착하는 것을 선택
+    const results = (await Promise.race([resultsPromise, timeoutPromise])) || [];
+    clearTimeout(timeoutId);
+
+    // 타임아웃시에도 결과가 부분적으로 나올 수 있으니 validResults 구성
+    const validResults = Array.isArray(results)
+      ? (results.filter((res) => res !== null) as (LrcLibLyricsResult & {
+          hasSynced: boolean;
+          isStrictMatch: boolean;
+        })[])
+      : [];
+
+    if (!validResults.length && (fallbackSynced || fallbackPlain)) {
+      console.log('No valid results, returning fallback');
+      return fallbackSynced || fallbackPlain;
+    }
+    if (!validResults.length) {
+      console.log('No results found');
+      return null;
+    }
+
+    const strictSynced = validResults.find((res) => res.hasSynced && res.isStrictMatch);
+    if (strictSynced) {
+      console.log('Returning strict matched synced lyrics');
+      return strictSynced;
+    }
+
+    if (fallbackSynced) {
+      console.log('Returning fallback synced lyrics');
+      return fallbackSynced;
+    }
+
+    const strictPlain = validResults.find((res) => !res.hasSynced && res.isStrictMatch);
+    if (strictPlain) {
+      console.log('Returning strict matched plain lyrics');
+      return strictPlain;
+    }
+
+    if (fallbackPlain) {
+      console.log('Returning fallback plain lyrics');
+      return fallbackPlain;
+    }
+
+    console.log('Returning first valid result as fallback');
+    return validResults[0] || null;
   }
 
   // 1차 시도: 정상 아티스트-곡명 순서
-  const result1 = await searchWithParams(artist, title);
+  const result1 = await searchWithParams(artist, title, 1);
   if (result1 !== null) return result1;
 
-  // 2차 시도: 아티스트와 곡명을 뒤바꿔서 검색
+  // 2차 시도: 곡명-아티스트 순서
   if (artist.toLowerCase() !== title.toLowerCase()) {
-    const result2 = await searchWithParams(title, artist);
+    const result2 = await searchWithParams(title, artist, 2);
     if (result2 !== null) return result2;
   }
   return null;
@@ -2381,6 +2440,83 @@ export const MusicNoteButton: React.FC<Props> = ({ iconPath, contentEnabled, men
 }
 ```
 
+## File: components/lyrics/common/LyricLine.tsx
+```typescript
+import styles from './styles.module.css';
+
+export const LyricLine: React.FC<{
+  text?: string;
+  pron?: string;
+  showText: boolean;
+  showPron: boolean;
+  fontColor?: string;
+  pronunciationColor?: string;
+}> = ({ text, pron, showText, showPron, fontColor, pronunciationColor }) => {
+  if (!showText && !showPron) return null;
+
+  return (
+    <div className={styles.lyricItem}>
+      {showText && text && (
+        <div className={styles.lyricLine} style={{ color: fontColor }}>
+          {text}
+        </div>
+      )}
+      {showPron && pron && (
+        <div className={styles.pronunciation} style={{ color: pronunciationColor }}>
+          {pron}
+        </div>
+      )}
+    </div>
+  );
+};
+```
+
+## File: components/lyrics/common/styles.module.css
+```css
+/* 한 세트(현재+발음) 묶음 */
+.lyricItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 12px; /* 세트 간 간격 */
+}
+
+/* 현재 가사 라인 */
+.lyricLine {
+  margin-bottom: 0; /* 발음이 있으면 붙이고 */
+  font-weight: bold;
+}
+
+/* 발음 가사 라인 */
+.pronunciation {
+  font-size: clamp(17px, calc(0.6vw + 0.6vh), 28px);
+  opacity: 0.85;
+  font-weight: 400;
+  transition:
+    font-size 0.15s ease,
+    font-weight 0.15s ease,
+    opacity 0.15s ease;
+}
+
+/* 발음만 있는 경우 */
+.lyricItem:not(:has(.lyricLine)) .pronunciation {
+  font-size: clamp(20px, calc(1vw + 1vh), 36px);
+  font-weight: 600; /* 단독일 때 굵게 */
+}
+
+/* 전체화면 - 발음 가사 */
+:fullscreen .pronunciation,
+:-webkit-full-screen .pronunciation {
+  font-size: clamp(22px, calc(1.6vw + 1.6vh), 36px);
+}
+
+/* 전체화면 - 발음만 있는 경우 */
+:fullscreen .lyricItem:not(:has(.lyricLine)) .pronunciation,
+:-webkit-full-screen .lyricItem:not(:has(.lyricLine)) .pronunciation {
+  font-size: clamp(28px, calc(2vw + 2vh), 52px);
+}
+```
+
 ## File: components/lyrics/FullLyrics/FullLyrics.tsx
 ```typescript
 // src/components/lyrics/FullLyricsView/FullLyricsView.tsx
@@ -2526,7 +2662,7 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({
 }
 ```
 
-## File: components/lyrics/LyricsOverlayRoot.module.css
+## File: components/lyrics/infra/LyricsOverlayRoot.module.css
 ```css
 .overlayRoot {
   position: absolute;
@@ -2541,7 +2677,7 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({
 }
 ```
 
-## File: components/lyrics/LyricsOverlayRoot.tsx
+## File: components/lyrics/infra/LyricsOverlayRoot.tsx
 ```typescript
 import { YOUTUBE_PLAYER_SELECTOR } from '@constants/youtubeSelectors';
 import styles from './LyricsOverlayRoot.module.css';
@@ -2734,7 +2870,7 @@ import { getDisplayLines } from '@lib/utils/lyrics/display/lyricsDisplay';
 import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/display/lyricsOffset';
 import { usePronunciations } from '../PronunciationLyrics/usePronunciation';
 import { Line } from '@lib/types/lyrics';
-
+import { LyricLine } from '../common/LyricLine';
 import styles from './styles.module.css';
 
 interface DualHighlightLyricsProps {
@@ -2745,33 +2881,6 @@ interface DualHighlightLyricsProps {
   showRealtimeLyrics: boolean;
   showPronunciationLyrics: boolean;
 }
-
-const LyricLine: React.FC<{
-  text?: string;
-  pron?: string;
-  showText: boolean;
-  showPron: boolean;
-  fontColor?: string;
-  pronunciationColor?: string;
-}> = ({ text, pron, showText, showPron, fontColor, pronunciationColor }) => {
-  if (!showText && !showPron) return null;
-
-  return (
-    <div className={styles.lyricItem}>
-      {showText && text && (
-        <div className={styles.lyricLine} style={{ color: fontColor }}>
-          {text}
-        </div>
-      )}
-      {showPron && pron && (
-        <div className={styles.pronunciation} style={{ color: pronunciationColor }}>
-          {pron}
-        </div>
-      )}
-    </div>
-  );
-};
-
 export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
   lyrics,
   offset,
@@ -2794,6 +2903,11 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
   const topPron = top ? pronList[shiftedLyrics.findIndex((l) => l.text === top)] : '';
   const bottomPron = bottom ? pronList[shiftedLyrics.findIndex((l) => l.text === bottom)] : '';
 
+  // ✅ 추가: 색상 변경은 원본 타임 라인 기준
+  const highlightIndex = useMemo(() => {
+    return shiftedLyrics.findLastIndex((line) => adjustedTime >= line.time);
+  }, [lyrics, adjustedTime]);
+
   return (
     <div className={styles.dualHighlightSubtitle} style={{ color: fontColor }}>
       <LyricLine
@@ -2801,7 +2915,11 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
         pron={topPron}
         showText={showRealtimeLyrics}
         showPron={showPronunciationLyrics}
-        fontColor={fontColor}
+        fontColor={
+          lyrics.findIndex((l) => l.text === top) <= highlightIndex
+            ? 'blue' // 하이라이트 색상
+            : fontColor
+        }
         pronunciationColor={pronunciationColor}
       />
       <LyricLine
@@ -2809,7 +2927,7 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
         pron={bottomPron}
         showText={showRealtimeLyrics}
         showPron={showPronunciationLyrics}
-        fontColor={fontColor}
+        fontColor={lyrics.findIndex((l) => l.text === bottom) <= highlightIndex ? 'blue' : fontColor}
         pronunciationColor={pronunciationColor}
       />
     </div>
@@ -2845,75 +2963,6 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
 :-webkit-full-screen .dual-highlight-subtitle {
   /* 전체화면에서는 더 크게! */
   font-size: clamp(2rem, calc(2.5rem + 2vw), 4rem);
-}
-
-/* 한 세트(현재+발음) 묶음 */
-.lyricItem {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-bottom: 12px; /* 세트 간 간격 */
-}
-
-/* 현재 가사 라인 */
-.lyricLine {
-  margin-bottom: 0; /* 발음이 있으면 붙이고 */
-}
-
-/* 발음 가사 라인 */
-.pronunciation {
-  font-size: clamp(17px, calc(0.6vw + 0.6vh), 28px);
-  opacity: 0.85;
-  font-weight: 400;
-  transition:
-    font-size 0.15s ease,
-    font-weight 0.15s ease,
-    opacity 0.15s ease;
-}
-
-/* 현재 줄 전체 강조
-.active .lyricLine {
-}
-*/
-/* 발음만 있는 경우 */
-.lyricItem:not(:has(.lyricLine)) .pronunciation {
-  font-size: clamp(20px, calc(1vw + 1vh), 36px);
-  font-weight: 600; /* 단독일 때 굵게 */
-}
-
-/* 전체화면 - 발음 가사 */
-:fullscreen .pronunciation,
-:-webkit-full-screen .pronunciation {
-  font-size: clamp(22px, calc(1.6vw + 1.6vh), 36px);
-}
-
-/* 전체화면 - 발음만 있는 경우 */
-:fullscreen .lyricItem:not(:has(.lyricLine)) .pronunciation,
-:-webkit-full-screen .lyricItem:not(:has(.lyricLine)) .pronunciation {
-  font-size: clamp(28px, calc(2vw + 2vh), 52px);
-}
-.animated {
-  /* 왼쪽에서 오른쪽으로 빨간색이 채워지는 효과 */
-  background: linear-gradient(to right, red 50%, #fff 50%);
-  background-size: 200% 100%;
-  background-position: left bottom;
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: revealText 1.5s linear forwards;
-}
-@keyframes revealText {
-  0% {
-    background-position: right bottom;
-  }
-  100% {
-    background-position: left bottom;
-  }
-}
-
-/* 이미 부른 줄 (전체 빨간색) */
-.past {
-  color: red;
 }
 ```
 
@@ -3325,7 +3374,7 @@ import {
 } from '@lib/utils/lyrics/parsers/stringUtils';
 import { listenerManager } from '@lib/utils/infra/listenerManager';
 import { withContentEnabled } from '@lib/utils/platform/contentGuard';
-import { injectLyricsOverlayRoot } from '@components/lyrics/LyricsOverlayRoot';
+import { injectLyricsOverlayRoot } from '@components/lyrics/infra/LyricsOverlayRoot';
 import { DualHighlightLyrics } from '@components/lyrics/SyncLyrics/DualHighlightLyrics';
 import { FullLyrics } from '@components/lyrics/FullLyrics/FullLyrics';
 import { isAdPlaying } from '@lib/utils/dom/domUtils';
@@ -3868,12 +3917,8 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
 
   // 1. 영상과 크게 무관한 메타데이터, 가사 정보를 확보하는 함수
   async function collectMetadataAndLyrics(videoId: string) {
-    console.time('collectMetadataAndLyrics');
-
     // YouTube Video Meta 호출
-    console.timeLog('collectMetadataAndLyrics', 'before fetchYouTubeVideoMeta');
     const meta = await fetchYouTubeVideoMeta(videoId, process.env.YOUTUBE_API_KEY!);
-    console.timeLog('collectMetadataAndLyrics', 'after fetchYouTubeVideoMeta');
 
     if (!meta) {
       console.log('[collectMetadataAndLyrics] 메타 정보 없음');
@@ -3906,13 +3951,11 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     const title = preprocessArtistOrTitle(refined.title);
 
     clearLyricsCache();
-    console.timeLog('collectMetadataAndLyrics', 'before getLyricsFromCacheOrFetch');
 
     // 가사 캐시 혹은 서버에서 가사 fetch
     const lyricsResult = await getLyricsFromCacheOrFetch(artist, title, {
       fetch: async () => fetchLyricsWithAliasFallback(artist, title),
     });
-    console.timeLog('collectMetadataAndLyrics', 'after getLyricsFromCacheOrFetch');
 
     console.log('[Lyrics] API 가사 데이터 수신 완료:', lyricsResult);
 
@@ -3935,7 +3978,6 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
 
     finishParsingLyrics(parsedLyrics);
     onLyricsUpdated(parsedLyrics);
-    console.timeEnd('collectMetadataAndLyrics');
 
     // shiftedLyrics: Line[] 배열 (각 원소에 'text'가 있다고 가정)
     //const lyricsText = shiftedLyrics.map((line) => line.text).join('\n');
@@ -3987,7 +4029,6 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       console.log('[Lyrics] 수집 중복 방지 중...');
       return; // 필요시 캐시된 데이터 반환하도록 개선 가능
     }
-    console.time('tryCollectMetadataAndLyrics');
 
     if (videoId === lastCollectedVideoId && isLyricsOverlayMounted()) {
       console.log('[Lyrics] 이미 처리한 videoId, 수집 스킵:', videoId);

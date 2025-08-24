@@ -4,7 +4,7 @@ import styles from './styles.module.css';
 import { Line } from '@lib/types/lyrics';
 import { useCurrentTime } from '@hooks/useCurrentTime';
 import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/display/lyricsOffset';
-import { usePronunciations } from '../PronunciationLyrics/usePronunciation';
+import { usePronunciations } from '../common/usePronunciation';
 
 interface FullLyricsProps {
   lyrics: Line[];
