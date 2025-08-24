@@ -1,6 +1,5 @@
 // src/lib/utils/domUtils.ts
-
-import { YOUTUBE_PLAYER_SELECTOR } from '@constants/youtubeSelectors';
+import { YOUTUBE_AD_SELECTOR, YOUTUBE_PLAYER_SELECTOR } from '@constants/youtubeSelectors';
 
 // 요소 대기 함수
 export const waitForElement = <T extends Element>(selector: string, timeout = 5000): Promise<T> => {
@@ -68,5 +67,7 @@ export const toggleClass = (element: Element, className: string, force?: boolean
 
 export function isAdPlaying() {
   const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR);
-  return player && (player.classList.contains('ad-showing') || player.classList.contains('ad-interrupting'));
+  const adElement = document.querySelector(YOUTUBE_AD_SELECTOR);
+
+  return player != null && !!adElement;
 }
