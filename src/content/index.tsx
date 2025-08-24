@@ -70,7 +70,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
   // font
   let lyricsFontColorCurrent = '#FFFFFF';
   let lyricsFontColorPronunciation = '#FFFFFF';
-  let isOverlayInitializing = false;
+  // let isOverlayInitializing = false;
 
   let showRealtimeLyrics = true; // 현재 가사 ui 보이게
   let showPronunciationLyrics = true;
@@ -129,22 +129,12 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     lastRenderedLyrics = '';
     latestLyrics = [];
     console.log('[resetLyricsState] 가사 상태 초기화 완료');
+    realOverlayRender();
   }
 
   // UI 오버레이 cleanup
   function cleanupOverlayUI() {
     uiManager.cleanup();
-
-    if (lyricsOverlayRoot) {
-      lyricsOverlayRoot.unmount();
-      lyricsOverlayRoot = null;
-    }
-
-    if (lyricsOverlayElement && lyricsOverlayElement.parentNode) {
-      lyricsOverlayElement.parentNode.removeChild(lyricsOverlayElement);
-      lyricsOverlayElement = null;
-      console.log('[cleanupOverlayUI] Lyrics overlay element 제거 완료');
-    }
   }
 
   // 루트 엘리먼트 생성
@@ -180,18 +170,16 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
   // DOM 및 React root 생성 함수, 호출 시 existing overlay DOM 체크
   async function createOverlayRoot() {
     await injectCSS(); // CSS 먼저 완전히 로드 대기
-    // 이제야 DOM 생성 후 body에 append
-    lyricsOverlayElement = injectLyricsOverlayRoot();
-    console.log('[Lyrics] 오버레이 DOM 생성 및 body 삽입 완료');
 
-    if (lyricsOverlayElement) {
-      // visibility hidden 상태에서 보여주도록 변경
+    if (!lyricsOverlayElement) {
+      lyricsOverlayElement = injectLyricsOverlayRoot();
       lyricsOverlayElement.style.visibility = 'visible';
+      console.log('[Lyrics] 오버레이 DOM 생성 및 body에 삽입');
     }
 
     if (!lyricsOverlayRoot && lyricsOverlayElement) {
       lyricsOverlayRoot = createRoot(lyricsOverlayElement);
-      console.log('[createOverlayRoot] React Root 생성 완료');
+      console.log('[createOverlayRoot] React Root 초기 1회 생성 완료');
     }
   }
 
@@ -217,7 +205,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
         }
         // 최초 렌더 호출
         if (latestLyrics.length > 0) {
-          rerenderLyricsOverlay();
+          realOverlayRender();
         }
       },
     );
@@ -262,7 +250,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       }
 
       if (needRerender) {
-        rerenderLyricsOverlay();
+        realOverlayRender();
       }
     });
 
@@ -280,7 +268,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
         console.log(`[content] APPLY_OFFSET_LYRICS 수신 → offset: ${offset}, 가사 길이: ${lyrics.length}`);
 
         latestLyrics = lyrics; // 전역 최신 가사 교체
-        rerenderLyricsOverlay(); // full / sync 모드에 즉시 적용
+        realOverlayRender(); // full / sync 모드에 즉시 적용
       }
     });
 
@@ -295,43 +283,29 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     latestLyrics = newLyrics;
     console.log('[Lyrics] 가사 상태 업데이트 완료');
 
-    rerenderLyricsOverlay();
+    realOverlayRender();
   }
   function isLyricsOverlayMounted(): boolean {
     return !!lyricsOverlayRoot && !!lyricsOverlayElement && document.body.contains(lyricsOverlayElement);
   }
 
-  function hideLyricsOverlay() {
-    const isMiniPlayer = checkIfMiniPlayerActive();
-    if (isMiniPlayer) {
-      console.log('[hideLyricsOverlay] 미니플레이어 상태 - 클린업 취소');
-      return;
-    }
-
-    console.log('[hideLyricsOverlay] 미니 플레이어 아니고, hideLyricsOverlay 실행');
-    const overlay = document.getElementById('lyrics-cc-overlay');
-    if (overlay && overlay.parentNode) {
-      overlay.parentNode.removeChild(overlay); // 1. 오버레이 DOM 완전 제거
-      console.log('[hideLyricsOverlay] lyrics-cc-overlay 제거');
-
-      lyricsOverlayRoot = null; // 2. React Root 인스턴스 해제
-      lyricsOverlayElement = null; // 3. 전역 DOM 참조 변수 초기화
-    }
-    resetLyricsState();
-  }
-
   // sync 가사만 랜더링 함.
-  function showLyricsOverlay(lyrics: Line[], offset?: number) {
+  async function showLyricsOverlay(lyrics: Line[], offset?: number) {
     console.log('[showLyricsOverlay] called');
-
     if (!lyricsOverlayElement || !lyricsOverlayRoot) {
-      createOverlayRoot();
+      await createOverlayRoot();
     }
 
     if (!lyricsOverlayElement) {
       console.warn('[showLyricsOverlay] lyricsOverlayElement가 없음, 함수 종료');
       return;
     }
+
+    if (!lyricsOverlayRoot) {
+      console.warn('[showLyricsOverlay] lyricsOverlayRoot가 없음, 렌더링 불가');
+      return;
+    }
+
     lyricsOverlayElement.style.display = '';
 
     if (lyricsMode !== 'sync') {
@@ -339,16 +313,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     }
     if (!showRealtimeLyrics && !showPronunciationLyrics) {
       console.log('[showLyricsOverlay] 현재가사/발음가사 모두 꺼짐 → hide');
-      hideLyricsOverlay();
-      return;
-    }
-    // React Root 인스턴스가 없으면 (예외 상황) 생성 (평상시 createOverlayRoot에서 처리되어야 함)
-    if (!lyricsOverlayRoot && lyricsOverlayElement) {
-      lyricsOverlayRoot = createRoot(lyricsOverlayElement);
-    }
-
-    if (!lyricsOverlayRoot) {
-      console.warn('[showLyricsOverlay] lyricsOverlayRoot가 없음, 렌더링 불가');
+      resetLyricsState();
       return;
     }
 
@@ -363,65 +328,19 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       />,
     );
   }
-  // 현재 가사/전체 가사의 분기 함수
-  // full 모드 전용
-  async function rerenderLyricsOverlay() {
-    console.log('[rerenderLyricsOverlay] 호출됨, 상태:', {
-      lyricsOverlayElement,
-      lyricsOverlayRoot,
-      showRealtimeLyrics,
-      showPronunciationLyrics,
-      lyricsMode,
-      latestLyricsLength: latestLyrics.length,
-      lyricsFontColorCurrent,
-      lyricsFontColorPronunciation,
-    });
 
-    // [1] overlay, root 둘 중 하나라도 없으면 반드시 비동기 fetch-storage 후 render!
-    if (!lyricsOverlayElement || !lyricsOverlayRoot) {
-      if (isOverlayInitializing) {
-        console.log('[rerenderLyricsOverlay] 초기화 중 중복 호출 무시');
-        return;
-      }
-      isOverlayInitializing = true;
-
-      await injectCSS();
-      createOverlayRoot();
-
-      chrome.storage.sync.get(['lyricsFontColorCurrent', 'lyricsFontColorPronunciation'], (items) => {
-        console.log('[rerenderLyricsOverlay] storage.get 결과:', items);
-
-        if (typeof items.lyricsFontColorCurrent === 'string') {
-          lyricsFontColorCurrent = items.lyricsFontColorCurrent;
-        } else {
-          console.log(
-            '[rerenderLyricsOverlay] lyricsFontColorCurrent가 저장소에 없음, 디폴트 사용:',
-            lyricsFontColorCurrent,
-          );
-        }
-
-        if (typeof items.lyricsFontColorPronunciation === 'string') {
-          lyricsFontColorPronunciation = items.lyricsFontColorPronunciation;
-        } else {
-          console.log(
-            '[rerenderLyricsOverlay] lyricsFontColorPronunciation가 저장소에 없음, 디폴트 사용:',
-            lyricsFontColorPronunciation,
-          );
-        }
-        realOverlayRender(); // storage fetch 완료 후 렌더 호출
-        isOverlayInitializing = false;
-      });
-      return;
-    }
-    realOverlayRender();
-  }
-
-  function realOverlayRender() {
+  async function realOverlayRender() {
     if (!showRealtimeLyrics && !showPronunciationLyrics) {
-      hideLyricsOverlay();
+      resetLyricsState();
       return;
     }
-    if (!lyricsOverlayRoot) return;
+    if (!lyricsOverlayElement || !lyricsOverlayRoot) {
+      await createOverlayRoot();
+    }
+    if (!lyricsOverlayRoot) {
+      console.warn('[realOverlayRender] lyricsOverlayRoot가 없음, 렌더링 불가');
+      return;
+    }
 
     if (lyricsMode === 'full') {
       lyricsOverlayRoot.render(
@@ -446,11 +365,11 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       );
     } else {
       console.warn('[realOverlayRender] 알 수 없는 lyricsMode:', lyricsMode);
-      hideLyricsOverlay();
+      resetLyricsState();
     }
   }
 
-  //rerenderLyricsOverlay() 호출해서 현재 모드에 맞게 "무엇을 보여줄지" 판단.
+  // 현재 모드에 맞게 "무엇을 보여줄지" 판단.
   function renderLyricsOverlay(lyrics: Line[]) {
     const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR);
     if (!player) return;
@@ -458,7 +377,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     console.log('[renderLyricsOverlay] 호출됨, lyrics 길이:', lyrics.length);
 
     latestLyrics = lyrics;
-    rerenderLyricsOverlay();
+    realOverlayRender();
 
     const lyricsStr = JSON.stringify(lyrics);
     if (lastRenderedLyrics === lyricsStr) return;
@@ -471,7 +390,8 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     }
 
     if (!showRealtimeLyrics && !showPronunciationLyrics) {
-      hideLyricsOverlay();
+      console.log('[renderLyricsOverlay] 여기서 resetLyricsState');
+      resetLyricsState();
       return;
     }
     // 최신 lyrics를 클로저로 안전하게 캡처
@@ -490,7 +410,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
         if (lyricsMode === 'sync' && (showRealtimeLyrics || showPronunciationLyrics)) {
           showLyricsIfNotAd(latestLyrics);
         } else {
-          rerenderLyricsOverlay();
+          realOverlayRender();
         }
       }
     });
@@ -505,12 +425,13 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
 
   function showLyricsIfNotAd(lyrics: Line[], offset?: number) {
     if (isAdPlaying()) {
-      hideLyricsOverlay();
+      console.log('[showLyricsIfNotAd] resetLyricsState 수행');
+      resetLyricsState();
     } else {
       if (lyricsMode === 'sync' && (showRealtimeLyrics || showPronunciationLyrics)) {
         showLyricsOverlay(lyrics, offset);
       } else if (lyricsMode === 'full') {
-        rerenderLyricsOverlay();
+        realOverlayRender();
       }
     }
   }
@@ -545,7 +466,6 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       return;
     }
 
-    resetLyricsState();
     cleanupOverlayUI();
     console.log('handleUrlChange 내부의 cleanupAllUIElements가 실행!');
     lastVideoId = null;
@@ -756,7 +676,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     // 광고 중이면 가사 숨김 실행 후 종료 또는 조기 리턴
     if (isAdPlaying()) {
       console.log('[handleVideoDetection] 광고 재생 중, 가사 숨김 실행');
-      hideLyricsOverlay();
+      resetLyricsState();
       isDetecting = false;
     }
 
@@ -781,7 +701,6 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       }
 
       // 새 영상이 들어왔으므로 이전 자막 제거
-      hideLyricsOverlay();
       lastVideoId = videoData.videoId;
 
       let collected = null;
@@ -987,7 +906,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       const isMini = YOUTUBE_MINI_PLAYER_CLASSES.some((c) => player.classList.contains(c));
       if (lastIsMini && !isMini) {
         console.log('[Transition] 미니 -> 기본 유지');
-        rerenderLyricsOverlay();
+        realOverlayRender();
       }
       lastIsMini = isMini;
     });
@@ -1007,7 +926,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       if (!lastIsMini && isMini) {
         console.log('[Transition] 기본 → 미니 플레이어 전환 감지');
         // 미니플레이어 전환 시 UI 유지 또는 재렌더링 처리
-        rerenderLyricsOverlay();
+        realOverlayRender();
         // 필요 시 상태 동기화 및 감지 조작 수행
       }
 
@@ -1108,7 +1027,6 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
         else disableDetection();
       });
     } catch (error) {
-      // fallback UI 렌더링
       const rootElement = document.getElementById(DOM_IDS.ROOT_CONTAINER) || createRootElement();
       const root = createRoot(rootElement);
       root.render(<ErrorFallback error={error} resetErrorBoundary={handleReset} />);

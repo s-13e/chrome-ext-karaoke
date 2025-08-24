@@ -77,7 +77,6 @@ export async function fetchLyricsByArtistAndTrack(artist: string, title: string)
 
         const lyrics = detail.syncedLyrics || detail.plainLyrics;
         if (!lyrics) {
-          console.warn(`No lyrics found for candidate id ${candidate.id}`);
           return null;
         }
 
