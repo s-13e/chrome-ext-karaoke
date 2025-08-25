@@ -42,6 +42,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
 import { checkIfMiniPlayerActive } from '@lib/utils/platform/playerUtils';
 import { isWatchPage as checkIsWatchPage } from '@lib/utils/common/urlUtils';
 import { hasUrlChanged } from '@lib/utils/platform/navigation';
+import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
 
 (() => {
   // 새로고침 시 contentscript 내 중복 실행 방지
@@ -89,6 +90,9 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
   //
   let storedMetaForLastCollected: { durationSec?: number } | null = null;
   let storedLyricsDurationForLastCollected: number | undefined = undefined;
+  //
+  let songInfoRoot: Root | null = null;
+  let songInfoContainer: HTMLElement | null = null;
 
   // 가사 모드
   const getContentEnabled = () => contentEnabled;
@@ -180,6 +184,36 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     if (!lyricsOverlayRoot && lyricsOverlayElement) {
       lyricsOverlayRoot = createRoot(lyricsOverlayElement);
       console.log('[createOverlayRoot] React Root 초기 1회 생성 완료');
+    }
+  }
+
+  function renderSongInfoOverlay(title: string, artist: string) {
+    const lyricsOverlayRootElement = document.getElementById('lyrics-cc-overlay');
+    if (!lyricsOverlayRootElement) {
+      console.log('lyricsOverlayRootElement 없음');
+      return;
+    }
+
+    if (!songInfoContainer) {
+      songInfoContainer = document.createElement('div');
+      songInfoContainer.id = 'song-info-overlay-container';
+      songInfoContainer.style.position = 'absolute';
+      songInfoContainer.style.top = '15%';
+      songInfoContainer.style.left = '50%';
+      songInfoContainer.style.transform = 'translateX(-50%)';
+      songInfoContainer.style.width = '100%';
+      songInfoContainer.style.maxWidth = '600px';
+      songInfoContainer.style.pointerEvents = 'auto';
+      songInfoContainer.style.zIndex = '101';
+      lyricsOverlayRootElement.appendChild(songInfoContainer);
+    }
+
+    if (!songInfoRoot && songInfoContainer) {
+      songInfoRoot = createRoot(songInfoContainer);
+    }
+
+    if (songInfoRoot) {
+      songInfoRoot.render(<SongInfoOverlay title={title} artist={artist} />);
     }
   }
 
@@ -525,18 +559,16 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
 
     clearLyricsCache();
 
-    console.log('타이밍 쳌');
-
     // 가사 캐시 혹은 서버에서 가사 fetch
     const lyricsResult = await getLyricsFromCacheOrFetch(artist, title, {
       fetch: async () => fetchLyricsWithAliasFallback(artist, title),
     });
-
-    console.log('[Lyrics] API 가사 데이터 수신 완료:', lyricsResult);
-
     if (!lyricsResult) {
       throw new Error('가사 없음');
     }
+
+    renderSongInfoOverlay(title, artist);
+
     // ----------- 여기서 캐시 저장 추가 -----------
     setToLyricsCache(normalizeLyricsQuery(artist, title, {}), {
       lyrics: lyricsResult.lyrics,
@@ -563,26 +595,27 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
   }
 
   // delay 함수 (Promise 기반 6초 대기)
-  /*   async function pauseVideoAndDelay(videoElem: HTMLMediaElement, ms: number) {
+  async function pauseVideoAndDelay(videoElem: HTMLMediaElement, ms: number) {
     if (!videoElem) return;
-
-    try {
-      if (!videoElem.paused) {
-        videoElem.pause();
-        console.log(`영상 일시정지, ${ms}ms 대기 시작`);
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, ms));
-
-      console.log(`${ms}ms 대기 종료, 영상 재생 재개`);
-
-      await videoElem.play().catch((e) => {
-        console.warn('영상 재생 재개 실패:', e);
-      });
-    } catch (error) {
-      console.error('영상 일시정지 대기 중 예외 발생:', error);
+    console.log('pauseVideoAndDelay 시작');
+    if (!videoElem.paused) {
+      console.log('영상 pause 호출 전');
+      videoElem.pause();
+      console.log(`영상 일시정지, ${ms}ms 대기 시작`);
     }
-  } */
+    await new Promise<void>((resolve) => {
+      console.log('setTimeout 시작');
+      setTimeout(() => {
+        console.log('setTimeout 종료');
+        resolve();
+      }, ms);
+    });
+    console.log(`${ms}ms 대기 종료, 영상 재생 재개`);
+    await videoElem.play().catch((e) => {
+      console.warn('영상 재생 재개 실패:', e);
+    });
+    console.log('pauseVideoAndDelay 종료');
+  }
 
   // 2. 영상 엘리먼트가 준비된 후, 실제 분석 및 렌더링 수행하는 함수
   async function analyzeAudioAndRenderLyrics(
@@ -677,6 +710,10 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     if (isAdPlaying()) {
       console.log('[handleVideoDetection] 광고 재생 중, 가사 숨김 실행');
       resetLyricsState();
+      // analyzeLyricsAfterAd = async () => {
+      //   await pauseVideoAndDelay(videoElem, 6000); // 예: 6초 대기
+      //   analyzeLyricsAfterAd = null;
+      // };
       isDetecting = false;
     }
 
@@ -699,6 +736,10 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
         console.log('[handleVideoDetection] 미니 -> 일반 플레이어 전환 중, 클린업 생략');
         return;
       }
+
+      console.time('beforePause');
+      await pauseVideoAndDelay(videoElem, 6000);
+      console.timeEnd('beforePause');
 
       // 새 영상이 들어왔으므로 이전 자막 제거
       lastVideoId = videoData.videoId;
@@ -797,6 +838,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     // 영상 -> 영상, videoId가 있는 곳으로 url 변경된 상황
     if (videoIdChanged || (urlChanged && watchPageChanged)) {
       spaObserverShouldTriggerDetection = false;
+      resetLyricsState();
       handleUrlChangeGuarded(url);
       setTimeout(() => {
         spaObserverShouldTriggerDetection = true;
@@ -878,10 +920,8 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     const observer = new MutationObserver(() => {
       const videoElem = document.querySelector('video');
       if (videoElem) {
-        console.log('[VideoObserver] video element 찾음, 감지 실행');
         handleVideoDetectionGuarded();
 
-        // 첫 감지 완료 후 observer 해제하여 중복 호출 방지
         observer.disconnect();
         detectionObserverManager.videoElementObserver = null;
       }

@@ -3,22 +3,22 @@
   color: white;
   border-radius: 12px;
   padding: 24px 32px;
-  max-width: 600px;
-  margin: 1.5em auto 0 auto;
+  height: 100%;
+  max-width: 100%;
   box-shadow: 0 2px 14px rgba(0, 0, 0, 0.2);
   font-family: 'Noto Sans KR', sans-serif;
 }
 
 .title {
-  font-size: 2.1rem;
+  font-size: 3rem;
   margin: 0;
   font-weight: 700;
   line-height: 1.2;
 }
 
 .artist {
-  font-size: 1.1rem;
-  margin: 8px 0 4px 0;
+  font-size: 1.5rem;
+  margin: 10px 0 0 0;
   font-weight: 400;
 }
 
@@ -43,8 +43,8 @@
 }
 
 .source {
-  font-size: 0.95rem;
-  margin-top: 12px;
+  font-size: 1rem;
+  margin-top: 25px;
   color: #b2bdd4; /* 연한 블루 그레이 */
 }
 

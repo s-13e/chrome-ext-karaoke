@@ -9,17 +9,10 @@ interface SongInfoOverlayProps {
   composer?: string;
   lyricist?: string;
   key?: string;
-  lyricsSource: string;
+  lyricsSource?: string;
 }
 
-export const SongInfoOverlay: React.FC<SongInfoOverlayProps> = ({
-  title,
-  artist,
-  composer,
-  lyricist,
-  key,
-  lyricsSource = 'LRCLIB',
-}) => {
+export const SongInfoOverlay: React.FC<SongInfoOverlayProps> = ({ title, artist, lyricsSource = 'LRCLIB' }) => {
   const { t } = useTranslation();
 
   return (
@@ -28,28 +21,12 @@ export const SongInfoOverlay: React.FC<SongInfoOverlayProps> = ({
 
       {artist && (
         <h2 className={styles.artist}>
-          {t('extArtist')}
-          {artist}
+          {t('extArtist')} {artist}
         </h2>
       )}
 
-      <div className={styles.infoBlock}>
-        {lyricist && (
-          <div className={styles.lyricist}>
-            {t('extLyricist')} {lyricist}
-          </div>
-        )}
-        {composer && (
-          <div className={styles.composer}>
-            {t('extComposer')} {composer}
-          </div>
-        )}
-        {key && <div className={styles.key}>키_ {key}</div>}
-      </div>
-
       <div className={styles.source}>
-        {t('extLyricsSourceLabel')}
-        {lyricsSource || t('extUnknownSourceText')}
+        {t('extLyricsSourceLabel')} {lyricsSource || t('extUnknownSourceText')}
       </div>
 
       <div className={styles.copyrightNotice}>{t('extSongCopyrightWarning')}</div>

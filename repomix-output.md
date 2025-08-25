@@ -60,15 +60,17 @@ components/karaoke-player-settings/MusicNoteButton.tsx
 components/karaoke-player-settings/styles.module.css
 components/lyrics/common/LyricLine.tsx
 components/lyrics/common/styles.module.css
+components/lyrics/common/usePronunciation.ts
 components/lyrics/FullLyrics/FullLyrics.tsx
 components/lyrics/FullLyrics/styles.module.css
 components/lyrics/infra/LyricsOverlayRoot.module.css
 components/lyrics/infra/LyricsOverlayRoot.tsx
-components/lyrics/PronunciationLyrics/usePronunciation.ts
 components/lyrics/SingleLineLyrics/SingleLineLyrics.tsx
 components/lyrics/SingleLineLyrics/styles.module.css
 components/lyrics/SyncLyrics/DualHighlightLyrics.tsx
 components/lyrics/SyncLyrics/styles.module.css
+components/song-info/SongInfoOverlay.tsx
+components/song-info/styles.module.css
 constants/doomIds.ts
 constants/errorCodes.ts
 constants/errorMessages.ts
@@ -247,7 +249,6 @@ export async function fetchLyricsByArtistAndTrack(artist: string, title: string)
 
         const lyrics = detail.syncedLyrics || detail.plainLyrics;
         if (!lyrics) {
-          console.warn(`No lyrics found for candidate id ${candidate.id}`);
           return null;
         }
 
@@ -2442,6 +2443,7 @@ export const MusicNoteButton: React.FC<Props> = ({ iconPath, contentEnabled, men
 
 ## File: components/lyrics/common/LyricLine.tsx
 ```typescript
+import React from 'react';
 import styles from './styles.module.css';
 
 export const LyricLine: React.FC<{
@@ -2517,6 +2519,77 @@ export const LyricLine: React.FC<{
 }
 ```
 
+## File: components/lyrics/common/usePronunciation.ts
+```typescript
+import { useEffect, useState } from 'react';
+import { splitIntoLangGroups } from '@lib/utils/lyrics/detection/languageSpanSplitter';
+import { transliterateAndMerge } from '@lib/utils/lyrics/detection/languageTransliterator';
+
+// 여러 줄의 가사를 한 번에 변환
+export function usePronunciations(lines: string[]) {
+  const [list, setList] = useState<string[]>(() => Array(lines.length).fill(''));
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function processInBatches(batchSize = 10) {
+      const results: string[] = Array(lines.length).fill('');
+
+      for (let start = 0; start < lines.length; start += batchSize) {
+        const end = Math.min(start + batchSize, lines.length);
+        const batch = lines.slice(start, end);
+
+        // batch 변환 병렬 처리
+        const batchResults = await Promise.all(
+          batch.map(async (text) => {
+            if (!text) return '';
+            try {
+              const spans = splitIntoLangGroups(text);
+              return await transliterateAndMerge(spans);
+            } catch (err) {
+              console.error('[usePronunciations] 변환 오류:', err);
+              return '';
+            }
+          }),
+        );
+
+        // 결과 갱신
+        for (let i = 0; i < batchResults.length; i++) {
+          results[start + i] = batchResults[i] ?? '';
+        }
+
+        // 이미 변환된 일부 리스트를 UI에 반영해서 "점진적"으로 표시
+        if (!cancelled) {
+          setList((prev) => {
+            // 🔹 변환된 부분이 달라진 경우에만 반영
+            const updated = [...prev];
+            let changed = false;
+            for (let i = start; i < end; i++) {
+              if (updated[i] !== results[i]) {
+                updated[i] = results[i] ?? '';
+                changed = true;
+              }
+            }
+            return changed ? updated : prev;
+          });
+        }
+
+        // 브라우저 쉬게 하기 — 다음 batch로 넘어가기 전에 이벤트 루프를 비움
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    }
+
+    processInBatches();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [lines]);
+
+  return list;
+}
+```
+
 ## File: components/lyrics/FullLyrics/FullLyrics.tsx
 ```typescript
 // src/components/lyrics/FullLyricsView/FullLyricsView.tsx
@@ -2525,7 +2598,7 @@ import styles from './styles.module.css';
 import { Line } from '@lib/types/lyrics';
 import { useCurrentTime } from '@hooks/useCurrentTime';
 import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/display/lyricsOffset';
-import { usePronunciations } from '../PronunciationLyrics/usePronunciation';
+import { usePronunciations } from '../common/usePronunciation';
 
 interface FullLyricsProps {
   lyrics: Line[];
@@ -2715,77 +2788,6 @@ export function injectLyricsOverlayRoot() {
 }
 ```
 
-## File: components/lyrics/PronunciationLyrics/usePronunciation.ts
-```typescript
-import { useEffect, useState } from 'react';
-import { splitIntoLangGroups } from '@lib/utils/lyrics/detection/languageSpanSplitter';
-import { transliterateAndMerge } from '@lib/utils/lyrics/detection/languageTransliterator';
-
-// 여러 줄의 가사를 한 번에 변환
-export function usePronunciations(lines: string[]) {
-  const [list, setList] = useState<string[]>(() => Array(lines.length).fill(''));
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function processInBatches(batchSize = 10) {
-      const results: string[] = Array(lines.length).fill('');
-
-      for (let start = 0; start < lines.length; start += batchSize) {
-        const end = Math.min(start + batchSize, lines.length);
-        const batch = lines.slice(start, end);
-
-        // batch 변환 병렬 처리
-        const batchResults = await Promise.all(
-          batch.map(async (text) => {
-            if (!text) return '';
-            try {
-              const spans = splitIntoLangGroups(text);
-              return await transliterateAndMerge(spans);
-            } catch (err) {
-              console.error('[usePronunciations] 변환 오류:', err);
-              return '';
-            }
-          }),
-        );
-
-        // 결과 갱신
-        for (let i = 0; i < batchResults.length; i++) {
-          results[start + i] = batchResults[i] ?? '';
-        }
-
-        // 이미 변환된 일부 리스트를 UI에 반영해서 "점진적"으로 표시
-        if (!cancelled) {
-          setList((prev) => {
-            // 🔹 변환된 부분이 달라진 경우에만 반영
-            const updated = [...prev];
-            let changed = false;
-            for (let i = start; i < end; i++) {
-              if (updated[i] !== results[i]) {
-                updated[i] = results[i] ?? '';
-                changed = true;
-              }
-            }
-            return changed ? updated : prev;
-          });
-        }
-
-        // 브라우저 쉬게 하기 — 다음 batch로 넘어가기 전에 이벤트 루프를 비움
-        await new Promise((resolve) => setTimeout(resolve, 0));
-      }
-    }
-
-    processInBatches();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [lines]);
-
-  return list;
-}
-```
-
 ## File: components/lyrics/SingleLineLyrics/SingleLineLyrics.tsx
 ```typescript
 import React, { useMemo } from 'react';
@@ -2868,7 +2870,7 @@ import React, { useMemo } from 'react';
 import { useCurrentTime } from '@hooks/useCurrentTime';
 import { getDisplayLines } from '@lib/utils/lyrics/display/lyricsDisplay';
 import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/display/lyricsOffset';
-import { usePronunciations } from '../PronunciationLyrics/usePronunciation';
+import { usePronunciations } from '../common/usePronunciation';
 import { Line } from '@lib/types/lyrics';
 import { LyricLine } from '../common/LyricLine';
 import styles from './styles.module.css';
@@ -2963,6 +2965,111 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
 :-webkit-full-screen .dual-highlight-subtitle {
   /* 전체화면에서는 더 크게! */
   font-size: clamp(2rem, calc(2.5rem + 2vw), 4rem);
+}
+```
+
+## File: components/song-info/SongInfoOverlay.tsx
+```typescript
+// src/components/song-info/SongInfoOverlay.tsx
+import React from 'react';
+import { useTranslation } from 'react-i18next';
+import styles from './styles.module.css';
+
+interface SongInfoOverlayProps {
+  title: string;
+  artist: string;
+  composer?: string;
+  lyricist?: string;
+  key?: string;
+  lyricsSource?: string;
+}
+
+export const SongInfoOverlay: React.FC<SongInfoOverlayProps> = ({
+  title,
+  artist,
+  lyricsSource = 'LRCLIB',
+}) => {
+  const { t } = useTranslation();
+
+  return (
+    <div className={styles.overlayContainer}>
+      <h1 className={styles.title}>{title}</h1>
+
+      {artist && (
+        <h2 className={styles.artist}>
+          {t('extArtist')} {artist}
+        </h2>
+      )}
+
+      <div className={styles.source}>
+        {t('extLyricsSourceLabel')} {lyricsSource || t('extUnknownSourceText')}
+      </div>
+
+      <div className={styles.copyrightNotice}>{t('extSongCopyrightWarning')}</div>
+    </div>
+  );
+};
+```
+
+## File: components/song-info/styles.module.css
+```css
+.overlayContainer {
+  background: rgba(0, 0, 0, 0.75);
+  color: white;
+  border-radius: 12px;
+  padding: 24px 32px;
+  max-width: 600px;
+  margin: 1.5em auto 0 auto;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.2);
+  font-family: 'Noto Sans KR', sans-serif;
+}
+
+.title {
+  font-size: 2.1rem;
+  margin: 0;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.artist {
+  font-size: 1.1rem;
+  margin: 8px 0 4px 0;
+  font-weight: 400;
+}
+
+.infoBlock {
+  font-size: 1rem;
+  margin: 10px 0;
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.lyricist {
+  color: #96a7ec; /* 부드러운 파란색 */
+}
+
+.composer {
+  color: #8ac3b8; /* 소프트 그린 */
+}
+
+.key {
+  color: #eccc6b; /* 따뜻한 옐로우 */
+}
+
+.source {
+  font-size: 0.95rem;
+  margin-top: 12px;
+  color: #b2bdd4; /* 연한 블루 그레이 */
+}
+
+.copyrightNotice {
+  font-size: 0.9rem;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid #375189; /* 진한 파란색 */
+  color: #b2bdd4;
+  line-height: 1.4;
 }
 ```
 
@@ -3391,6 +3498,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
 import { checkIfMiniPlayerActive } from '@lib/utils/platform/playerUtils';
 import { isWatchPage as checkIsWatchPage } from '@lib/utils/common/urlUtils';
 import { hasUrlChanged } from '@lib/utils/platform/navigation';
+import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
 
 (() => {
   // 새로고침 시 contentscript 내 중복 실행 방지
@@ -3419,7 +3527,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
   // font
   let lyricsFontColorCurrent = '#FFFFFF';
   let lyricsFontColorPronunciation = '#FFFFFF';
-  let isOverlayInitializing = false;
+  // let isOverlayInitializing = false;
 
   let showRealtimeLyrics = true; // 현재 가사 ui 보이게
   let showPronunciationLyrics = true;
@@ -3430,10 +3538,17 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
   let lastShowPronunciationLyrics: boolean | null = null;
 
   let stopAdWatcher: (() => void) | null = null;
+  let analyzeLyricsAfterAd: (() => Promise<void>) | null = null;
 
   // 중복 가사 호출 방지
   let lastCollectedVideoId: string | null = null;
   let isCollecting = false;
+  //
+  let storedMetaForLastCollected: { durationSec?: number } | null = null;
+  let storedLyricsDurationForLastCollected: number | undefined = undefined;
+  //
+  let songInfoRoot: Root | null = null;
+  let songInfoContainer: HTMLElement | null = null;
 
   // 가사 모드
   const getContentEnabled = () => contentEnabled;
@@ -3474,22 +3589,12 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     lastRenderedLyrics = '';
     latestLyrics = [];
     console.log('[resetLyricsState] 가사 상태 초기화 완료');
+    realOverlayRender();
   }
 
   // UI 오버레이 cleanup
   function cleanupOverlayUI() {
     uiManager.cleanup();
-
-    if (lyricsOverlayRoot) {
-      lyricsOverlayRoot.unmount();
-      lyricsOverlayRoot = null;
-    }
-
-    if (lyricsOverlayElement && lyricsOverlayElement.parentNode) {
-      lyricsOverlayElement.parentNode.removeChild(lyricsOverlayElement);
-      lyricsOverlayElement = null;
-      console.log('[cleanupOverlayUI] Lyrics overlay element 제거 완료');
-    }
   }
 
   // 루트 엘리먼트 생성
@@ -3524,20 +3629,44 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
 
   // DOM 및 React root 생성 함수, 호출 시 existing overlay DOM 체크
   async function createOverlayRoot() {
-    console.log('createOverlayRoot 실행');
     await injectCSS(); // CSS 먼저 완전히 로드 대기
-    // 이제야 DOM 생성 후 body에 append
-    lyricsOverlayElement = injectLyricsOverlayRoot();
-    console.log('[Lyrics] 오버레이 DOM 생성 및 body 삽입 완료');
 
-    if (lyricsOverlayElement) {
-      // visibility hidden 상태에서 보여주도록 변경
+    if (!lyricsOverlayElement) {
+      lyricsOverlayElement = injectLyricsOverlayRoot();
       lyricsOverlayElement.style.visibility = 'visible';
+      console.log('[Lyrics] 오버레이 DOM 생성 및 body에 삽입');
     }
 
     if (!lyricsOverlayRoot && lyricsOverlayElement) {
       lyricsOverlayRoot = createRoot(lyricsOverlayElement);
-      console.log('[createOverlayRoot] React Root 생성 완료');
+      console.log('[createOverlayRoot] React Root 초기 1회 생성 완료');
+    }
+  }
+  function renderSongInfoOverlay(title: string, artist: string) {
+    const lyricsOverlayRootElement = document.getElementById('lyrics-cc-overlay');
+    if (!lyricsOverlayRootElement) return;
+
+    if (!songInfoContainer) {
+      songInfoContainer = document.createElement('div');
+      songInfoContainer.id = 'song-info-overlay-container';
+      songInfoContainer.style.position = 'absolute';
+      songInfoContainer.style.top = '10%';
+      songInfoContainer.style.left = '50%';
+      songInfoContainer.style.transform = 'translateX(-50%)';
+      songInfoContainer.style.width = '100%';
+      songInfoContainer.style.zIndex = '100';
+      lyricsOverlayRootElement.appendChild(songInfoContainer);
+    }
+
+    if (!songInfoRoot && songInfoContainer) {
+      songInfoRoot = createRoot(songInfoContainer);
+    }
+
+    if (songInfoRoot) {
+      songInfoRoot.render(<SongInfoOverlay title={title} artist={artist} />);
+      // setTimeout(() => {
+      //   songInfoRoot!.render(null);
+      // }, 5000);
     }
   }
 
@@ -3563,7 +3692,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
         }
         // 최초 렌더 호출
         if (latestLyrics.length > 0) {
-          rerenderLyricsOverlay();
+          realOverlayRender();
         }
       },
     );
@@ -3608,7 +3737,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       }
 
       if (needRerender) {
-        rerenderLyricsOverlay();
+        realOverlayRender();
       }
     });
 
@@ -3626,7 +3755,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
         console.log(`[content] APPLY_OFFSET_LYRICS 수신 → offset: ${offset}, 가사 길이: ${lyrics.length}`);
 
         latestLyrics = lyrics; // 전역 최신 가사 교체
-        rerenderLyricsOverlay(); // full / sync 모드에 즉시 적용
+        realOverlayRender(); // full / sync 모드에 즉시 적용
       }
     });
 
@@ -3641,43 +3770,29 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     latestLyrics = newLyrics;
     console.log('[Lyrics] 가사 상태 업데이트 완료');
 
-    rerenderLyricsOverlay();
+    realOverlayRender();
   }
   function isLyricsOverlayMounted(): boolean {
     return !!lyricsOverlayRoot && !!lyricsOverlayElement && document.body.contains(lyricsOverlayElement);
   }
 
-  function hideLyricsOverlay() {
-    const isMiniPlayer = checkIfMiniPlayerActive();
-    if (isMiniPlayer) {
-      console.log('[hideLyricsOverlay] 미니플레이어 상태 - 클린업 취소');
-      return;
-    }
-
-    console.log('[hideLyricsOverlay] 미니 플레이어 아니고, hideLyricsOverlay 실행');
-    const overlay = document.getElementById('lyrics-cc-overlay');
-    if (overlay && overlay.parentNode) {
-      overlay.parentNode.removeChild(overlay); // 1. 오버레이 DOM 완전 제거
-      console.log('[hideLyricsOverlay] lyrics-cc-overlay 제거');
-
-      lyricsOverlayRoot = null; // 2. React Root 인스턴스 해제
-      lyricsOverlayElement = null; // 3. 전역 DOM 참조 변수 초기화
-    }
-    resetLyricsState();
-  }
-
   // sync 가사만 랜더링 함.
-  function showLyricsOverlay(lyrics: Line[], offset?: number) {
+  async function showLyricsOverlay(lyrics: Line[], offset?: number) {
     console.log('[showLyricsOverlay] called');
-
     if (!lyricsOverlayElement || !lyricsOverlayRoot) {
-      createOverlayRoot();
+      await createOverlayRoot();
     }
 
     if (!lyricsOverlayElement) {
       console.warn('[showLyricsOverlay] lyricsOverlayElement가 없음, 함수 종료');
       return;
     }
+
+    if (!lyricsOverlayRoot) {
+      console.warn('[showLyricsOverlay] lyricsOverlayRoot가 없음, 렌더링 불가');
+      return;
+    }
+
     lyricsOverlayElement.style.display = '';
 
     if (lyricsMode !== 'sync') {
@@ -3685,16 +3800,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     }
     if (!showRealtimeLyrics && !showPronunciationLyrics) {
       console.log('[showLyricsOverlay] 현재가사/발음가사 모두 꺼짐 → hide');
-      hideLyricsOverlay();
-      return;
-    }
-    // React Root 인스턴스가 없으면 (예외 상황) 생성 (평상시 createOverlayRoot에서 처리되어야 함)
-    if (!lyricsOverlayRoot && lyricsOverlayElement) {
-      lyricsOverlayRoot = createRoot(lyricsOverlayElement);
-    }
-
-    if (!lyricsOverlayRoot) {
-      console.warn('[showLyricsOverlay] lyricsOverlayRoot가 없음, 렌더링 불가');
+      resetLyricsState();
       return;
     }
 
@@ -3709,65 +3815,19 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       />,
     );
   }
-  // 현재 가사/전체 가사의 분기 함수
-  // full 모드 전용
-  async function rerenderLyricsOverlay() {
-    console.log('[rerenderLyricsOverlay] 호출됨, 상태:', {
-      lyricsOverlayElement,
-      lyricsOverlayRoot,
-      showRealtimeLyrics,
-      showPronunciationLyrics,
-      lyricsMode,
-      latestLyricsLength: latestLyrics.length,
-      lyricsFontColorCurrent,
-      lyricsFontColorPronunciation,
-    });
 
-    // [1] overlay, root 둘 중 하나라도 없으면 반드시 비동기 fetch-storage 후 render!
-    if (!lyricsOverlayElement || !lyricsOverlayRoot) {
-      if (isOverlayInitializing) {
-        console.log('[rerenderLyricsOverlay] 초기화 중 중복 호출 무시');
-        return;
-      }
-      isOverlayInitializing = true;
-
-      await injectCSS();
-      createOverlayRoot();
-
-      chrome.storage.sync.get(['lyricsFontColorCurrent', 'lyricsFontColorPronunciation'], (items) => {
-        console.log('[rerenderLyricsOverlay] storage.get 결과:', items);
-
-        if (typeof items.lyricsFontColorCurrent === 'string') {
-          lyricsFontColorCurrent = items.lyricsFontColorCurrent;
-        } else {
-          console.log(
-            '[rerenderLyricsOverlay] lyricsFontColorCurrent가 저장소에 없음, 디폴트 사용:',
-            lyricsFontColorCurrent,
-          );
-        }
-
-        if (typeof items.lyricsFontColorPronunciation === 'string') {
-          lyricsFontColorPronunciation = items.lyricsFontColorPronunciation;
-        } else {
-          console.log(
-            '[rerenderLyricsOverlay] lyricsFontColorPronunciation가 저장소에 없음, 디폴트 사용:',
-            lyricsFontColorPronunciation,
-          );
-        }
-        realOverlayRender(); // storage fetch 완료 후 렌더 호출
-        isOverlayInitializing = false;
-      });
-      return;
-    }
-    realOverlayRender();
-  }
-
-  function realOverlayRender() {
+  async function realOverlayRender() {
     if (!showRealtimeLyrics && !showPronunciationLyrics) {
-      hideLyricsOverlay();
+      resetLyricsState();
       return;
     }
-    if (!lyricsOverlayRoot) return;
+    if (!lyricsOverlayElement || !lyricsOverlayRoot) {
+      await createOverlayRoot();
+    }
+    if (!lyricsOverlayRoot) {
+      console.warn('[realOverlayRender] lyricsOverlayRoot가 없음, 렌더링 불가');
+      return;
+    }
 
     if (lyricsMode === 'full') {
       lyricsOverlayRoot.render(
@@ -3792,11 +3852,11 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       );
     } else {
       console.warn('[realOverlayRender] 알 수 없는 lyricsMode:', lyricsMode);
-      hideLyricsOverlay();
+      resetLyricsState();
     }
   }
 
-  //rerenderLyricsOverlay() 호출해서 현재 모드에 맞게 "무엇을 보여줄지" 판단.
+  // 현재 모드에 맞게 "무엇을 보여줄지" 판단.
   function renderLyricsOverlay(lyrics: Line[]) {
     const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR);
     if (!player) return;
@@ -3804,7 +3864,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     console.log('[renderLyricsOverlay] 호출됨, lyrics 길이:', lyrics.length);
 
     latestLyrics = lyrics;
-    rerenderLyricsOverlay();
+    realOverlayRender();
 
     const lyricsStr = JSON.stringify(lyrics);
     if (lastRenderedLyrics === lyricsStr) return;
@@ -3817,7 +3877,8 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     }
 
     if (!showRealtimeLyrics && !showPronunciationLyrics) {
-      hideLyricsOverlay();
+      console.log('[renderLyricsOverlay] 여기서 resetLyricsState');
+      resetLyricsState();
       return;
     }
     // 최신 lyrics를 클로저로 안전하게 캡처
@@ -3836,7 +3897,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
         if (lyricsMode === 'sync' && (showRealtimeLyrics || showPronunciationLyrics)) {
           showLyricsIfNotAd(latestLyrics);
         } else {
-          rerenderLyricsOverlay();
+          realOverlayRender();
         }
       }
     });
@@ -3851,12 +3912,13 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
 
   function showLyricsIfNotAd(lyrics: Line[], offset?: number) {
     if (isAdPlaying()) {
-      hideLyricsOverlay();
+      console.log('[showLyricsIfNotAd] resetLyricsState 수행');
+      resetLyricsState();
     } else {
       if (lyricsMode === 'sync' && (showRealtimeLyrics || showPronunciationLyrics)) {
         showLyricsOverlay(lyrics, offset);
       } else if (lyricsMode === 'full') {
-        rerenderLyricsOverlay();
+        realOverlayRender();
       }
     }
   }
@@ -3891,7 +3953,6 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       return;
     }
 
-    // 페이지/영상 바뀌기 직전에 강제 cleanup
     cleanupOverlayUI();
     console.log('handleUrlChange 내부의 cleanupAllUIElements가 실행!');
     lastVideoId = null;
@@ -3917,7 +3978,6 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
 
   // 1. 영상과 크게 무관한 메타데이터, 가사 정보를 확보하는 함수
   async function collectMetadataAndLyrics(videoId: string) {
-    // YouTube Video Meta 호출
     const meta = await fetchYouTubeVideoMeta(videoId, process.env.YOUTUBE_API_KEY!);
 
     if (!meta) {
@@ -3956,12 +4016,12 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     const lyricsResult = await getLyricsFromCacheOrFetch(artist, title, {
       fetch: async () => fetchLyricsWithAliasFallback(artist, title),
     });
-
-    console.log('[Lyrics] API 가사 데이터 수신 완료:', lyricsResult);
-
     if (!lyricsResult) {
       throw new Error('가사 없음');
     }
+
+    renderSongInfoOverlay(title, artist);
+
     // ----------- 여기서 캐시 저장 추가 -----------
     setToLyricsCache(normalizeLyricsQuery(artist, title, {}), {
       lyrics: lyricsResult.lyrics,
@@ -3987,6 +4047,28 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     return { meta, lyricsDuration, parsedLyrics };
   }
 
+  // delay 함수 (Promise 기반 6초 대기)
+  /*   async function pauseVideoAndDelay(videoElem: HTMLMediaElement, ms: number) {
+    if (!videoElem) return;
+
+    try {
+      if (!videoElem.paused) {
+        videoElem.pause();
+        console.log(`영상 일시정지, ${ms}ms 대기 시작`);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, ms));
+
+      console.log(`${ms}ms 대기 종료, 영상 재생 재개`);
+
+      await videoElem.play().catch((e) => {
+        console.warn('영상 재생 재개 실패:', e);
+      });
+    } catch (error) {
+      console.error('영상 일시정지 대기 중 예외 발생:', error);
+    }
+  } */
+
   // 2. 영상 엘리먼트가 준비된 후, 실제 분석 및 렌더링 수행하는 함수
   async function analyzeAudioAndRenderLyrics(
     meta: { durationSec?: number },
@@ -3994,11 +4076,6 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     videoElem: HTMLMediaElement,
     shiftedLyrics: Line[],
   ) {
-    if (!videoElem) {
-      console.log('[analyzeAudioAndRenderLyrics] 비디오 엘리먼트가 없음');
-      return;
-    }
-
     const videoDurationSec = meta.durationSec ?? 0;
     const effectiveLyricsDuration =
       lyricsDuration ?? (shiftedLyrics.length > 0 ? (shiftedLyrics[shiftedLyrics.length - 1]?.time ?? 0) : 0);
@@ -4013,7 +4090,6 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
 
     if (isAdPlaying()) {
       console.warn('[analyzeAudioAndRenderLyrics] 광고 중이므로 분석 스킵');
-      hideLyricsOverlay();
       return;
     }
 
@@ -4023,7 +4099,23 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     latestLyrics = shiftedLyrics;
     renderLyricsOverlay(shiftedLyrics);
   }
+  async function analyzeAudioAndRenderLyricsWithAdCheck(
+    meta: { durationSec?: number },
+    lyricsDuration: number | undefined,
+    videoElem: HTMLMediaElement,
+    shiftedLyrics: Line[],
+  ) {
+    if (isAdPlaying()) {
+      console.log('[analyzeAudioAndRenderLyricsWithAdCheck] 광고 중, 분석-렌더 대기');
 
+      analyzeLyricsAfterAd = async () => {
+        await analyzeAudioAndRenderLyrics(meta, lyricsDuration, videoElem, shiftedLyrics);
+        analyzeLyricsAfterAd = null;
+      };
+      return;
+    }
+    await analyzeAudioAndRenderLyrics(meta, lyricsDuration, videoElem, shiftedLyrics);
+  }
   async function tryCollectMetadataAndLyrics(videoId: string) {
     if (isCollecting) {
       console.log('[Lyrics] 수집 중복 방지 중...');
@@ -4034,10 +4126,15 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       console.log('[Lyrics] 이미 처리한 videoId, 수집 스킵:', videoId);
       return;
     }
+
+    isCollecting = true;
     try {
-      isCollecting = true;
       const data = await collectMetadataAndLyrics(videoId);
       lastCollectedVideoId = videoId;
+
+      // 성공 시 전역 상태에 저장
+      storedMetaForLastCollected = data.meta;
+      storedLyricsDurationForLastCollected = data.lyricsDuration;
 
       return data;
     } finally {
@@ -4053,10 +4150,25 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       return;
     }
     isDetecting = true;
-    let videoData;
 
+    // 비디오 엘리먼트가 준비되었으면 본 분석 및 렌더링 실행
+    const videoElem = document.querySelector('video');
+    if (!videoElem) {
+      console.log('[handleVideoDetection] video element 미존재, 렌더링 생략');
+      return;
+    }
+
+    // 광고 중이면 가사 숨김 실행 후 종료 또는 조기 리턴
+    if (isAdPlaying()) {
+      console.log('[handleVideoDetection] 광고 재생 중, 가사 숨김 실행');
+      resetLyricsState();
+      isDetecting = false;
+    }
+
+    let videoData;
     try {
       videoData = detectYouTubeVideo();
+
       if (!videoData || !videoData.videoId) {
         console.log('[handleVideoDetection] 비디오 감지 실패');
         return;
@@ -4074,25 +4186,31 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       }
 
       // 새 영상이 들어왔으므로 이전 자막 제거
-      hideLyricsOverlay();
       lastVideoId = videoData.videoId;
 
-      // 1. 메타데이터 및 가사 수집 (영상 로드 여부 무관)
-      const collected = await tryCollectMetadataAndLyrics(videoData.videoId);
-      if (!collected) {
-        console.warn('가사 수집 데이터 없음');
-        return;
-      }
-      const { meta, lyricsDuration, parsedLyrics } = collected;
+      let collected = null;
+      if (isCollecting) {
+        console.log('[handleVideoDetection] 가사 수집 중복 방지, 기존 최신 가사로 분석·렌더 바로 실행');
 
-      // 2. 비디오 엘리먼트가 준비되었으면 본 분석 및 렌더링 실행
-      const videoElem = document.querySelector('video');
-
-      if (!videoElem) {
-        console.log('[handleVideoDetection] video element 미존재, 렌더링 생략');
+        // 최신 가사와 메타 등 준비됐을 때만 실행하도록 체크
+        if (latestLyrics.length > 0) {
+          await analyzeAudioAndRenderLyricsWithAdCheck(
+            storedMetaForLastCollected ?? {},
+            storedLyricsDurationForLastCollected ?? undefined,
+            videoElem,
+            latestLyrics,
+          );
+        }
         return;
+      } else {
+        // 가사 수집 시도
+        collected = await tryCollectMetadataAndLyrics(videoData.videoId);
+        if (!collected) {
+          console.warn('[handleVideoDetection] 가사 수집 실패 또는 데이터 없음');
+          return;
+        }
+        await analyzeAudioAndRenderLyrics(collected.meta, collected.lyricsDuration, videoElem, collected.parsedLyrics);
       }
-      await analyzeAudioAndRenderLyrics(meta, lyricsDuration, videoElem, parsedLyrics);
     } catch (error) {
       console.error('[handleVideoDetection] 에러 발생:', error);
     } finally {
@@ -4109,14 +4227,14 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
 
   // 1) 광고 종료 감지 콜백용 별도 함수 (가사/메타 수집에 집중)
   async function prefetchMetadataAndLyricsOnAdEnd() {
-    const videoData = detectYouTubeVideo();
-    if (!videoData?.videoId) {
+    const currentVideoId = extractVideoIdFromUrl(window.location.href);
+    if (!currentVideoId) {
       console.log('[AdWatcher] videoId 미존재, 수집 중단');
       return;
     }
     try {
       // 광고 중이라도 가사/메타 데이터는 미리 가져오기 가능
-      await tryCollectMetadataAndLyrics(videoData.videoId);
+      await tryCollectMetadataAndLyrics(currentVideoId);
       console.log('[AdWatcher] 광고 종료 후 메타/가사 선수집 완료');
     } catch (error) {
       console.warn('[AdWatcher] 광고 종료 후 메타/가사 선수집 실패:', error);
@@ -4128,9 +4246,16 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     if (stopAdWatcher) return;
     stopAdWatcher = startAdWatcher(async () => {
       console.log('[AdWatcher] 광고 종료 감지, 선수집 -> 본 감지 순서 시작');
-      lastVideoId = null;
 
+      // 실제로 광고 종료 후 영상 아이디가 바뀌었는지 확인 후 초기화
+      lastVideoId = null;
       await prefetchMetadataAndLyricsOnAdEnd();
+
+      // 광고 종료 후 대기 중인 가사 렌더링 함수 실행
+      if (analyzeLyricsAfterAd) {
+        await analyzeLyricsAfterAd();
+      }
+
       handleVideoDetectionGuarded();
     });
   }
@@ -4157,6 +4282,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     // 영상 -> 영상, videoId가 있는 곳으로 url 변경된 상황
     if (videoIdChanged || (urlChanged && watchPageChanged)) {
       spaObserverShouldTriggerDetection = false;
+      resetLyricsState();
       handleUrlChangeGuarded(url);
       setTimeout(() => {
         spaObserverShouldTriggerDetection = true;
@@ -4204,11 +4330,12 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
     }
 
     isRetryingDetection = true;
-
     try {
       for (let i = 0; i < maxTries; i++) {
         const videoData = detectYouTubeVideo();
-        if (videoData && videoData.videoId) {
+        const currentVideoId = extractVideoIdFromUrl(window.location.href);
+
+        if (videoData && currentVideoId) {
           await handleVideoDetectionGuarded(); // 내부 감지 및 렌더 호출
           return;
         }
@@ -4225,13 +4352,13 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
 
   // 반드시 한 번 실행 (initializeApp 등 진입 시)
   function runInitialDetection() {
-    // 무조건 한 번 감지!
     handleVideoDetectionWithRetry().catch((error) => {
       console.error('[runInitialDetection] 감지 재시도 중 error:', error);
     });
     lastUrl = window.location.href;
     console.log(`[runInitialDetection] lastVideoId: ${lastVideoId}, lastUrl: ${lastUrl}`);
   }
+
   // --- video DOM 등장 관찰용 MutationObserver 등록 함수 ---
   function setupVideoElementObserver() {
     const observer = new MutationObserver(() => {
@@ -4265,7 +4392,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       const isMini = YOUTUBE_MINI_PLAYER_CLASSES.some((c) => player.classList.contains(c));
       if (lastIsMini && !isMini) {
         console.log('[Transition] 미니 -> 기본 유지');
-        rerenderLyricsOverlay();
+        realOverlayRender();
       }
       lastIsMini = isMini;
     });
@@ -4285,7 +4412,7 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
       if (!lastIsMini && isMini) {
         console.log('[Transition] 기본 → 미니 플레이어 전환 감지');
         // 미니플레이어 전환 시 UI 유지 또는 재렌더링 처리
-        rerenderLyricsOverlay();
+        realOverlayRender();
         // 필요 시 상태 동기화 및 감지 조작 수행
       }
 
@@ -4386,7 +4513,6 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
         else disableDetection();
       });
     } catch (error) {
-      // fallback UI 렌더링
       const rootElement = document.getElementById(DOM_IDS.ROOT_CONTAINER) || createRootElement();
       const root = createRoot(rootElement);
       root.render(<ErrorFallback error={error} resetErrorBoundary={handleReset} />);
@@ -5269,8 +5395,7 @@ export function isWatchPage(url: string): boolean {
 ## File: lib/utils/dom/domUtils.ts
 ```typescript
 // src/lib/utils/domUtils.ts
-
-import { YOUTUBE_PLAYER_SELECTOR } from '@constants/youtubeSelectors';
+import { YOUTUBE_AD_SELECTOR, YOUTUBE_PLAYER_SELECTOR } from '@constants/youtubeSelectors';
 
 // 요소 대기 함수
 export const waitForElement = <T extends Element>(selector: string, timeout = 5000): Promise<T> => {
@@ -5338,7 +5463,9 @@ export const toggleClass = (element: Element, className: string, force?: boolean
 
 export function isAdPlaying() {
   const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR);
-  return player && (player.classList.contains('ad-showing') || player.classList.contains('ad-interrupting'));
+  const adElement = document.querySelector(YOUTUBE_AD_SELECTOR);
+
+  return player != null && !!adElement;
 }
 ```
 
@@ -6620,7 +6747,14 @@ export function setupSPAObserver(callback: () => void): MutationObserver {
   "extLicense": "License",
   "extContact": "Contact",
   "extPersonalSettings": "Personal Settings",
-  "extGeneralSettings": "General Settings"
+  "extGeneralSettings": "General Settings",
+  "extSongs": "Title",
+  "extArtist": "Artist",
+  "extLyricist": "Lyricist",
+  "extComposer": "Composer",
+  "extLyricsSourceLabel": "Lyrics Source",
+  "extUnknownSourceText": "Unknown Information",
+  "extSongCopyrightWarning": "Displayed lyrics may be immediately removed at the request of the copyright owner. All rights belong to the original creators (lyricist, composer) or relevant copyright agencies."
 }
 ```
 
@@ -6637,7 +6771,14 @@ export function setupSPAObserver(callback: () => void): MutationObserver {
   "extLicense": "라이센스",
   "extContact": "문의",
   "extPersonalSettings": "개인 설정",
-  "extGeneralSettings": "일반 설정"
+  "extGeneralSettings": "일반 설정",
+  "extSongs": "노래",
+  "extArtist": "가수",
+  "extLyricist": "작곡가",
+  "extComposer": "작사가",
+  "extLyricsSourceLabel": "가사 출처",
+  "extUnknownSourceText": "정보 없음",
+  "extSongCopyrightWarning": "제공 가사는 저작권자의 요청 시 즉시 삭제됩니다. 저작권은 해당 권리자(작사가/작곡가/등록협회 등)에 있습니다."
 }
 ```
 
