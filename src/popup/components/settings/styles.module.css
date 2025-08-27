@@ -1,0 +1,155 @@
+.settingsPanel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #f9f9fb;
+  box-shadow: -3px 0 16px rgba(0, 0, 0, 0.12);
+  border-radius: 12px 0 0 12px;
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+}
+.settingsHeader {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border-bottom: 1px solid #ececec;
+  padding: 10px 12px 10px 12px;
+}
+
+.settingsHeader h2 {
+  font-size: 15px;
+  margin: 5px;
+  font-weight: 700;
+  margin-left: 7px;
+  user-select: none;
+  color: #222;
+}
+
+.settingsContent {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding: 18px 0;
+}
+/* 개인 설정, 일반 섹션 묶음 */
+.sectionGroup {
+  margin-bottom: 24px;
+}
+
+.sectionLabel {
+  color: #9c9c9c;
+  font-weight: 600;
+  margin-bottom: 8px;
+  margin-left: 15px;
+  font-size: 12px;
+  user-select: none;
+}
+
+/* 메뉴 버튼 스타일 */
+.settingsButton {
+  width: 100%;
+  background: #fff;
+  padding: 15px 15px;
+  border: none;
+  border-bottom: 1px solid #ececec;
+  font-weight: 600;
+  font-size: 13px;
+  color: #333;
+  cursor: pointer;
+  transition:
+    background-color 0.2s,
+    box-shadow 0.2s;
+  text-align: left;
+}
+.settingsButton:last-child {
+  border-bottom: none;
+}
+
+/* hover 시 버튼 배경 및 그림자 표시 */
+.settingsButton:hover {
+  background-color: #f0f0f0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  outline: none;
+}
+/* 구분선 */
+.divider {
+  border: none;
+  border-top: 1px solid #ececec;
+  margin: 16px 0;
+  width: 100%;
+  background: transparent;
+}
+
+.menuSection {
+  padding: 10px 15px;
+  height: 100vh; /* 또는 적합한 고정 높이 */
+  display: flex;
+  flex-direction: column;
+}
+.settingMenu {
+  padding: 10px 0;
+}
+.previewBox {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  aspect-ratio: 16 / 9;
+  align-items: center;
+  justify-content: center;
+  min-width: 260px;
+  min-height: 90px;
+  max-width: 350px;
+  padding: 20px 16px;
+  border-radius: 12px;
+  background: rgba(25, 25, 30, 0.9);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  margin-bottom: 24px; /* 설정 메뉴와 구분 */
+  gap: 8px;
+  transition:
+    background 0.25s,
+    box-shadow 0.25s;
+  position: relative; /* 기준 컨테이너로 명시 */
+}
+
+.previewBox > div {
+  width: 100%;
+  text-align: center;
+  line-height: 1.55;
+  word-break: keep-all;
+}
+
+@media (max-width: 400px) {
+  .previewBox {
+    min-width: 180px;
+    padding: 14px 6px;
+  }
+}
+.settingsScrollable {
+  flex-grow: 1;
+  flex: 1 1 0; /* 남은 공간을 모두 차지 */
+  min-height: 0; /* 스크롤 가능하게 해주는 flexbox 속성 */
+  max-height: 600px; /* 필요에 따라 조절 */
+  overflow-y: auto;
+  padding-right: 10px; /* 스크롤바 간섭 방지 선택 사항 */
+}
+.singleMode {
+  position: absolute;
+  bottom: 15%;
+  font-size: 0.8rem;
+}
+
+.syncMode {
+  position: static;
+  /* sync 모드 스타일 */
+  font-size: 1rem;
+  /* 더 세분화된 높이, 간격 조절 */
+}
+
+.fullMode {
+  position: static;
+  /* full 모드 스타일 */
+  font-size: 0.6rem;
+  /* 라인 간격, 줄 높이 등 세부조절 */
+}

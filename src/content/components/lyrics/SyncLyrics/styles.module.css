@@ -2,7 +2,7 @@
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 70px; /* 하단바 위에 적절한 거리만큼 (조정 가능: 60~96px 등) */
+  bottom: 70px;
   display: flex;
   height: 2em;
   flex-direction: column;

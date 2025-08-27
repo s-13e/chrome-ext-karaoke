@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { BackButton } from '@components/common/BackButton';
-import styles from './popupSettingsPanel.module.css';
+import styles from './styles.module.css';
 import { FAQ } from './FAQ';
 import { useTranslation } from 'react-i18next';
 import { Contact } from './Contact';
@@ -90,7 +90,9 @@ function MainMenu({ onNavigate }: MainMenuProps) {
         <button className={styles.settingsButton} onClick={() => onNavigate('contact')}>
           {t('extContact')}
         </button>
-        <button className={styles.settingsButton}>{t('extLicense')}</button>
+        <button className={styles.settingsButton} onClick={() => onNavigate('license')}>
+          {t('extLicense')}
+        </button>
       </div>
     </div>
   );

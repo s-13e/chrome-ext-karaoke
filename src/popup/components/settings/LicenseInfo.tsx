@@ -1,9 +1,9 @@
 import React from 'react';
-import styles from './popupSettingsPanel.module.css';
+import styles from './styles.module.css';
 
 export const LicenseInfo: React.FC = () => {
   return (
-    <div className={styles.sectionGroup}>
+    <div className={styles.menuSection}>
       <div className={styles.sectionLabel}>라이선스 정보</div>
       <p>본 확장 프로그램은 MIT 라이선스에 따라 배포됩니다. 소스 코드는 자유롭게 사용, 수정, 배포가 가능합니다.</p>
       <p>본 확장 프로그램은 다음 오픈소스 라이브러리를 사용하며, 각각의 라이선스 조건을 준수합니다.</p>

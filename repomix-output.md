@@ -157,8 +157,8 @@ popup/components/FAQ.tsx
 popup/components/LanguageSettings.tsx
 popup/components/LicenseInfo.tsx
 popup/components/LyricsSettings.tsx
-popup/components/popupSettingsPanel.module.css
 popup/components/PopupSettingsPanel.tsx
+popup/components/styles.module.css
 popup/index.tsx
 popup/popup.css
 popup/popup.html
@@ -2984,11 +2984,7 @@ interface SongInfoOverlayProps {
   lyricsSource?: string;
 }
 
-export const SongInfoOverlay: React.FC<SongInfoOverlayProps> = ({
-  title,
-  artist,
-  lyricsSource = 'LRCLIB',
-}) => {
+export const SongInfoOverlay: React.FC<SongInfoOverlayProps> = ({ title, artist, lyricsSource = 'LRCLIB' }) => {
   const { t } = useTranslation();
 
   return (
@@ -3018,22 +3014,22 @@ export const SongInfoOverlay: React.FC<SongInfoOverlayProps> = ({
   color: white;
   border-radius: 12px;
   padding: 24px 32px;
-  max-width: 600px;
-  margin: 1.5em auto 0 auto;
+  height: 100%;
+  max-width: 100%;
   box-shadow: 0 2px 14px rgba(0, 0, 0, 0.2);
   font-family: 'Noto Sans KR', sans-serif;
 }
 
 .title {
-  font-size: 2.1rem;
+  font-size: 3rem;
   margin: 0;
   font-weight: 700;
   line-height: 1.2;
 }
 
 .artist {
-  font-size: 1.1rem;
-  margin: 8px 0 4px 0;
+  font-size: 1.5rem;
+  margin: 10px 0 0 0;
   font-weight: 400;
 }
 
@@ -3058,8 +3054,8 @@ export const SongInfoOverlay: React.FC<SongInfoOverlayProps> = ({
 }
 
 .source {
-  font-size: 0.95rem;
-  margin-top: 12px;
+  font-size: 1rem;
+  margin-top: 25px;
   color: #b2bdd4; /* 연한 블루 그레이 */
 }
 
@@ -3642,19 +3638,25 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
       console.log('[createOverlayRoot] React Root 초기 1회 생성 완료');
     }
   }
+
   function renderSongInfoOverlay(title: string, artist: string) {
     const lyricsOverlayRootElement = document.getElementById('lyrics-cc-overlay');
-    if (!lyricsOverlayRootElement) return;
+    if (!lyricsOverlayRootElement) {
+      console.log('lyricsOverlayRootElement 없음');
+      return;
+    }
 
     if (!songInfoContainer) {
       songInfoContainer = document.createElement('div');
       songInfoContainer.id = 'song-info-overlay-container';
       songInfoContainer.style.position = 'absolute';
-      songInfoContainer.style.top = '10%';
+      songInfoContainer.style.top = '15%';
       songInfoContainer.style.left = '50%';
       songInfoContainer.style.transform = 'translateX(-50%)';
       songInfoContainer.style.width = '100%';
-      songInfoContainer.style.zIndex = '100';
+      songInfoContainer.style.maxWidth = '600px';
+      songInfoContainer.style.pointerEvents = 'auto';
+      songInfoContainer.style.zIndex = '101';
       lyricsOverlayRootElement.appendChild(songInfoContainer);
     }
 
@@ -3664,9 +3666,6 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
 
     if (songInfoRoot) {
       songInfoRoot.render(<SongInfoOverlay title={title} artist={artist} />);
-      // setTimeout(() => {
-      //   songInfoRoot!.render(null);
-      // }, 5000);
     }
   }
 
@@ -4048,26 +4047,27 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
   }
 
   // delay 함수 (Promise 기반 6초 대기)
-  /*   async function pauseVideoAndDelay(videoElem: HTMLMediaElement, ms: number) {
+  async function pauseVideoAndDelay(videoElem: HTMLMediaElement, ms: number) {
     if (!videoElem) return;
-
-    try {
-      if (!videoElem.paused) {
-        videoElem.pause();
-        console.log(`영상 일시정지, ${ms}ms 대기 시작`);
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, ms));
-
-      console.log(`${ms}ms 대기 종료, 영상 재생 재개`);
-
-      await videoElem.play().catch((e) => {
-        console.warn('영상 재생 재개 실패:', e);
-      });
-    } catch (error) {
-      console.error('영상 일시정지 대기 중 예외 발생:', error);
+    console.log('pauseVideoAndDelay 시작');
+    if (!videoElem.paused) {
+      console.log('영상 pause 호출 전');
+      videoElem.pause();
+      console.log(`영상 일시정지, ${ms}ms 대기 시작`);
     }
-  } */
+    await new Promise<void>((resolve) => {
+      console.log('setTimeout 시작');
+      setTimeout(() => {
+        console.log('setTimeout 종료');
+        resolve();
+      }, ms);
+    });
+    console.log(`${ms}ms 대기 종료, 영상 재생 재개`);
+    await videoElem.play().catch((e) => {
+      console.warn('영상 재생 재개 실패:', e);
+    });
+    console.log('pauseVideoAndDelay 종료');
+  }
 
   // 2. 영상 엘리먼트가 준비된 후, 실제 분석 및 렌더링 수행하는 함수
   async function analyzeAudioAndRenderLyrics(
@@ -4162,6 +4162,10 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
     if (isAdPlaying()) {
       console.log('[handleVideoDetection] 광고 재생 중, 가사 숨김 실행');
       resetLyricsState();
+      // analyzeLyricsAfterAd = async () => {
+      //   await pauseVideoAndDelay(videoElem, 6000); // 예: 6초 대기
+      //   analyzeLyricsAfterAd = null;
+      // };
       isDetecting = false;
     }
 
@@ -4184,6 +4188,10 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
         console.log('[handleVideoDetection] 미니 -> 일반 플레이어 전환 중, 클린업 생략');
         return;
       }
+
+      console.time('beforePause');
+      await pauseVideoAndDelay(videoElem, 6000);
+      console.timeEnd('beforePause');
 
       // 새 영상이 들어왔으므로 이전 자막 제거
       lastVideoId = videoData.videoId;
@@ -4364,10 +4372,8 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
     const observer = new MutationObserver(() => {
       const videoElem = document.querySelector('video');
       if (videoElem) {
-        console.log('[VideoObserver] video element 찾음, 감지 실행');
         handleVideoDetectionGuarded();
 
-        // 첫 감지 완료 후 observer 해제하여 중복 호출 방지
         observer.disconnect();
         detectionObserverManager.videoElementObserver = null;
       }
@@ -6746,8 +6752,13 @@ export function setupSPAObserver(callback: () => void): MutationObserver {
   "extFAQ": "FAQ",
   "extLicense": "License",
   "extContact": "Contact",
+  "extContactUs": "Contact Us",
   "extPersonalSettings": "Personal Settings",
   "extGeneralSettings": "General Settings",
+  "extLyricsMode": "Lyrics Mode",
+  "extCurrentLyrics": "Current Lyrics",
+  "extFullLyrics": "Full Lyrics",
+  "extSingleLyrics": "Single Lyrics",
   "extSongs": "Title",
   "extArtist": "Artist",
   "extLyricist": "Lyricist",
@@ -6770,8 +6781,13 @@ export function setupSPAObserver(callback: () => void): MutationObserver {
   "extFAQ": "많이 묻는 질문",
   "extLicense": "라이센스",
   "extContact": "문의",
+  "extContactUs": "문의하기",
   "extPersonalSettings": "개인 설정",
   "extGeneralSettings": "일반 설정",
+  "extLyricsMode": "가사 모드",
+  "extCurrentLyrics": "현재 가사",
+  "extFullLyrics": "전체 가사",
+  "extSingleLyrics": "한 줄 가사",
   "extSongs": "노래",
   "extArtist": "가수",
   "extLyricist": "작곡가",
@@ -7043,12 +7059,14 @@ export function App() {
 
 ## File: popup/components/Contact.tsx
 ```typescript
-import styles from './popupSettingsPanel.module.css';
+import { useTranslation } from 'react-i18next';
+import styles from './styles.module.css';
 
 const GOOGLE_FORM_URL =
   'https://docs.google.com/forms/d/e/1FAIpQLSfVhvBVQBG5kfS3npBTMBlTfR1t5uYTg73iRJJG612MmdNhKw/viewform?usp=header';
 
 export function Contact() {
+  const {t} = useTranslation();
   const handleClick = () => {
     window.open(GOOGLE_FORM_URL, '_blank', 'noopener,noreferrer');
   };
@@ -7061,7 +7079,7 @@ export function Contact() {
         onClick={handleClick}
         style={{ fontSize: '1.1rem', padding: '12px 24px' }}
       >
-        문의하기
+        {t('extContactUs')}
       </button>
     </div>
   );
@@ -7207,7 +7225,7 @@ export function LanguageSettings() {
 ## File: popup/components/LicenseInfo.tsx
 ```typescript
 import React from 'react';
-import styles from './popupSettingsPanel.module.css';
+import styles from './styles.module.css';
 
 export const LicenseInfo: React.FC = () => {
   return (
@@ -7232,9 +7250,12 @@ export const LicenseInfo: React.FC = () => {
 ```typescript
 import React from 'react';
 import { useChromeStorage } from '@hooks/useChromeStorage';
-import styles from './popupSettingsPanel.module.css';
+import styles from './styles.module.css';
+import { useTranslation } from 'react-i18next';
 
 export const LyricsSettings: React.FC = () => {
+  const { t } = useTranslation();
+
   // 스토리지에 저장된 설정 불러오기, 기본값 지정
   const [showRealtimeLyrics, setShowRealtimeLyrics] = useChromeStorage('realtimeLyrics', true);
   const [showPronunciationLyrics, setShowPronunciationLyrics] = useChromeStorage('announceLyrics', true);
@@ -7243,35 +7264,63 @@ export const LyricsSettings: React.FC = () => {
     'lyricsFontColorPronunciation',
     '#AAAAAA',
   );
-  const [lyricsMode, setLyricsMode] = useChromeStorage('lyricsMode', 'sync'); // 'sync' | 'full'
+  const [lyricsMode, setLyricsMode] = useChromeStorage('lyricsMode', 'sync'); // 'sync' | 'full' | 'single
 
   // 폰트 모드 옵션
   const modeOptions = [
-    { label: '기본(싱크)', value: 'sync' },
-    { label: '전체가사', value: 'full' },
+    { label: t('extCurrentLyrics'), value: 'sync' },
+    { label: t('extFullLyrics'), value: 'full' },
+    { label: t('extSingleLyrics'), value: 'single' },
   ];
 
+  const previewLyrics: { main: string; sub: string }[] =
+    lyricsMode === 'single'
+      ? [{ main: 'Set ’em on fire', sub: 'Set ’em on fire' }]
+      : lyricsMode === 'sync'
+        ? [
+            { main: '스스로 밝혀', sub: 'Seuseuro Balkyeo' },
+            { main: 'Set ’em on fire', sub: 'Set ’em on fire' },
+          ]
+        : [
+            { main: "And I don't really care if you", sub: '앤드 아이 돈 리얼리 케어 이프 유' },
+            { main: 'like me, like me', sub: '라이크 미, 라이크 미' },
+            { main: "I don't really wanna", sub: '아이 돈 리얼리 워너' },
+            { main: 'know if you like me', sub: '노우 이프 유 라이크 미' },
+          ];
+
   return (
-    <div className={styles.sectionGroup}>
-      <div className={styles.sectionLabel}>가사 설정</div>
+    <div className={styles.menuSection}>
+      <div className={styles.previewBox}>
+        {previewLyrics.map((line, idx) => (
+          <div key={idx} style={{ marginBottom: 12 }}>
+            {showRealtimeLyrics && <div style={{ color: lyricsFontColorCurrent, fontWeight: 'bold' }}>{line.main}</div>}
+            {showPronunciationLyrics && <div style={{ color: lyricsFontColorPronunciation }}>{line.sub}</div>}
+          </div>
+        ))}
+      </div>
 
-      <label className={styles.settingItem}>
-        <input type="checkbox" checked={showRealtimeLyrics} onChange={(e) => setShowRealtimeLyrics(e.target.checked)} />
-        현재 가사 표시
-      </label>
+      <div className={styles.settingMenu}>
+        <label className={styles.settingItem}>
+          <input
+            type="checkbox"
+            checked={showRealtimeLyrics}
+            onChange={(e) => setShowRealtimeLyrics(e.target.checked)}
+          />
+          현재 가사 표시
+        </label>
 
-      <label className={styles.settingItem}>
-        <input
-          type="checkbox"
-          checked={showPronunciationLyrics}
-          onChange={(e) => setShowPronunciationLyrics(e.target.checked)}
-        />
-        발음 가사 표시
-      </label>
-
-      <div className={styles.settingItem}>
+        <label className={styles.settingItem}>
+          <input
+            type="checkbox"
+            checked={showPronunciationLyrics}
+            onChange={(e) => setShowPronunciationLyrics(e.target.checked)}
+          />
+          발음 가사 표시
+        </label>
+      </div>
+      <div className={styles.settingMenu}>
         <label htmlFor="lyricsModeSelect" className={styles.settingLabel}>
-          가사 모드
+          {t('extLyricsMode')}
         </label>
         <select
           id="lyricsModeSelect"
@@ -7287,7 +7336,7 @@ export const LyricsSettings: React.FC = () => {
         </select>
       </div>
 
-      <div className={styles.settingItem}>
+      <div className={styles.settingMenu}>
         <label htmlFor="fontColorCurrent" className={styles.settingLabel}>
           가사 글꼴 색상
         </label>
@@ -7303,7 +7352,7 @@ export const LyricsSettings: React.FC = () => {
         </label>
       </div>
 
-      <div className={styles.settingItem}>
+      <div className={styles.settingMenu}>
         <label htmlFor="fontColorPronunciation" className={styles.settingLabel}>
           발음 가사 색상
         </label>
@@ -7315,103 +7364,32 @@ export const LyricsSettings: React.FC = () => {
           className={styles.colorPicker}
         />
       </div>
+      <div className={styles.settingMenu}>
+        <label>
+          자막 효과
+        </label>
+        <select>
+          <option>
+            a
+          </option>
+          <option>
+            b
+          </option>
+          <option>
+            c
+          </option>
+        </select>
+      </div>
     </div>
   );
 };
-```
-
-## File: popup/components/popupSettingsPanel.module.css
-```css
-.settingsPanel {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 100%;
-  height: 100%;
-  background-color: #f9f9fb;
-  box-shadow: -3px 0 16px rgba(0, 0, 0, 0.12);
-  border-radius: 12px 0 0 12px;
-  display: flex;
-  flex-direction: column;
-  z-index: 1000;
-}
-.settingsHeader {
-  display: flex;
-  align-items: center;
-  background: #fff;
-  border-bottom: 1px solid #ececec;
-  padding: 10px 12px 10px 12px;
-}
-
-.settingsHeader h2 {
-  font-size: 15px;
-  margin: 5px;
-  font-weight: 700;
-  margin-left: 7px;
-  user-select: none;
-  color: #222;
-}
-
-.settingsContent {
-  flex-grow: 1;
-  overflow-y: auto;
-  padding: 18px 0;
-}
-/* 개인 설정, 일반 섹션 묶음 */
-.sectionGroup {
-  margin-bottom: 24px;
-}
-
-.sectionLabel {
-  color: #9c9c9c;
-  font-weight: 600;
-  margin-bottom: 8px;
-  margin-left: 15px;
-  font-size: 12px;
-  user-select: none;
-}
-
-/* 메뉴 버튼 스타일 */
-.settingsButton {
-  width: 100%;
-  background: #fff;
-  padding: 15px 15px;
-  border: none;
-  border-bottom: 1px solid #ececec;
-  font-weight: 600;
-  font-size: 13px;
-  color: #333;
-  cursor: pointer;
-  transition:
-    background-color 0.2s,
-    box-shadow 0.2s;
-  text-align: left;
-}
-.settingsButton:last-child {
-  border-bottom: none;
-}
-
-/* hover 시 버튼 배경 및 그림자 표시 */
-.settingsButton:hover {
-  background-color: #f0f0f0;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
-  outline: none;
-}
-/* 구분선 */
-.divider {
-  border: none;
-  border-top: 1px solid #ececec;
-  margin: 16px 0;
-  width: 100%;
-  background: transparent;
-}
 ```
 
 ## File: popup/components/PopupSettingsPanel.tsx
 ```typescript
 import React, { useState } from 'react';
 import { BackButton } from '@components/common/BackButton';
-import styles from './popupSettingsPanel.module.css';
+import styles from './styles.module.css';
 import { FAQ } from './FAQ';
 import { useTranslation } from 'react-i18next';
 import { Contact } from './Contact';
@@ -7501,10 +7479,136 @@ function MainMenu({ onNavigate }: MainMenuProps) {
         <button className={styles.settingsButton} onClick={() => onNavigate('contact')}>
           {t('extContact')}
         </button>
-        <button className={styles.settingsButton}>{t('extLicense')}</button>
+        <button className={styles.settingsButton} onClick={() => onNavigate('license')}>
+          {t('extLicense')}
+        </button>
       </div>
     </div>
   );
+}
+```
+
+## File: popup/components/styles.module.css
+```css
+.settingsPanel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #f9f9fb;
+  box-shadow: -3px 0 16px rgba(0, 0, 0, 0.12);
+  border-radius: 12px 0 0 12px;
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+}
+.settingsHeader {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border-bottom: 1px solid #ececec;
+  padding: 10px 12px 10px 12px;
+}
+
+.settingsHeader h2 {
+  font-size: 15px;
+  margin: 5px;
+  font-weight: 700;
+  margin-left: 7px;
+  user-select: none;
+  color: #222;
+}
+
+.settingsContent {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding: 18px 0;
+}
+/* 개인 설정, 일반 섹션 묶음 */
+.sectionGroup {
+  margin-bottom: 24px;
+}
+
+.sectionLabel {
+  color: #9c9c9c;
+  font-weight: 600;
+  margin-bottom: 8px;
+  margin-left: 15px;
+  font-size: 12px;
+  user-select: none;
+}
+
+/* 메뉴 버튼 스타일 */
+.settingsButton {
+  width: 100%;
+  background: #fff;
+  padding: 15px 15px;
+  border: none;
+  border-bottom: 1px solid #ececec;
+  font-weight: 600;
+  font-size: 13px;
+  color: #333;
+  cursor: pointer;
+  transition:
+    background-color 0.2s,
+    box-shadow 0.2s;
+  text-align: left;
+}
+.settingsButton:last-child {
+  border-bottom: none;
+}
+
+/* hover 시 버튼 배경 및 그림자 표시 */
+.settingsButton:hover {
+  background-color: #f0f0f0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  outline: none;
+}
+/* 구분선 */
+.divider {
+  border: none;
+  border-top: 1px solid #ececec;
+  margin: 16px 0;
+  width: 100%;
+  background: transparent;
+}
+
+.menuSection {
+  padding: 10px 15px;
+
+}
+.settingMenu {
+  padding: 10px 0;
+}
+.previewBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 260px;
+  min-height: 90px;
+  padding: 20px 16px;
+  border-radius: 12px;
+  background: rgba(25, 25, 30, 0.9);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  margin-bottom: 24px; /* 설정 메뉴와 구분 */
+  gap: 8px;
+  transition: background 0.25s, box-shadow 0.25s;
+}
+
+.previewBox > div {
+  width: 100%;
+  text-align: center;
+  line-height: 1.55;
+  word-break: keep-all;
+}
+
+@media (max-width: 400px) {
+  .previewBox {
+    min-width: 180px;
+    padding: 14px 6px;
+  }
 }
 ```
 

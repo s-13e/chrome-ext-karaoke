@@ -1,4 +1,4 @@
-// src/content/index.tsx
+// ./index.tsx
 import { createRoot, Root } from 'react-dom/client';
 import { App } from './App';
 import { i18nInstance, initializeI18n } from '@services/i18n';
@@ -25,9 +25,9 @@ import {
 } from '@lib/utils/lyrics/parsers/stringUtils';
 import { listenerManager } from '@lib/utils/infra/listenerManager';
 import { withContentEnabled } from '@lib/utils/platform/contentGuard';
-import { injectLyricsOverlayRoot } from '@components/lyrics/infra/LyricsOverlayRoot';
-import { DualHighlightLyrics } from '@components/lyrics/SyncLyrics/DualHighlightLyrics';
-import { FullLyrics } from '@components/lyrics/FullLyrics/FullLyrics';
+import { injectLyricsOverlayRoot } from './components/lyrics/infra/LyricsOverlayRoot';
+import { DualHighlightLyrics } from './components/lyrics/SyncLyrics/DualHighlightLyrics';
+import { FullLyrics } from './components/lyrics/FullLyrics/FullLyrics';
 import { isAdPlaying } from '@lib/utils/dom/domUtils';
 import { parseLyrics } from '@lib/utils/lyrics/parsers/lyricsParser';
 import { Line } from '@lib/types/lyrics';
@@ -42,7 +42,7 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
 import { checkIfMiniPlayerActive } from '@lib/utils/platform/playerUtils';
 import { isWatchPage as checkIsWatchPage } from '@lib/utils/common/urlUtils';
 import { hasUrlChanged } from '@lib/utils/platform/navigation';
-import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
+import { SongInfoOverlay } from './components/song-info/SongInfoOverlay';
 
 (() => {
   // 새로고침 시 contentscript 내 중복 실행 방지

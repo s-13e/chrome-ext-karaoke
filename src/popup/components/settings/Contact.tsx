@@ -1,9 +1,11 @@
-import styles from './popupSettingsPanel.module.css';
+import { useTranslation } from 'react-i18next';
+import styles from './styles.module.css';
 
 const GOOGLE_FORM_URL =
   'https://docs.google.com/forms/d/e/1FAIpQLSfVhvBVQBG5kfS3npBTMBlTfR1t5uYTg73iRJJG612MmdNhKw/viewform?usp=header';
 
 export function Contact() {
+  const { t } = useTranslation();
   const handleClick = () => {
     window.open(GOOGLE_FORM_URL, '_blank', 'noopener,noreferrer');
   };
@@ -16,7 +18,7 @@ export function Contact() {
         onClick={handleClick}
         style={{ fontSize: '1.1rem', padding: '12px 24px' }}
       >
-        문의하기
+        {t('extContactUs')}
       </button>
     </div>
   );
