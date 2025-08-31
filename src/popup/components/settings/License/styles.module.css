@@ -1,0 +1,10 @@
+.libraryList {
+  max-height: 350px;
+  overflow-y: scroll;
+  box-sizing: border-box;
+  padding: 0 16px;
+  line-height: 1.8;
+}
+.libraryItem{
+  padding: 5px 0;
+}

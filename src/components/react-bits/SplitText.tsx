@@ -19,12 +19,16 @@ interface TweenVars {
 interface SplitTextProps {
   text: string;
   className?: string;
+  color?: string;
+  fontFamily?: string;
+  fontWeight?: string | number;
   delay?: number;
   duration?: number;
   ease?: Ease | string;
   splitType?: 'chars' | 'words' | 'lines';
   from?: Partial<TweenVars>;
   to?: Partial<TweenVars>;
+
   threshold?: number;
   rootMargin?: string;
   textAlign?: CSSProperties['textAlign'];
@@ -34,6 +38,9 @@ interface SplitTextProps {
 export const SplitText: FC<SplitTextProps> = ({
   text,
   className = '',
+  color,
+  fontFamily,
+  fontWeight,
   delay = 100,
   duration = 0.6,
   ease = 'power3.out',
@@ -95,6 +102,9 @@ export const SplitText: FC<SplitTextProps> = ({
 
     targets.forEach((t) => {
       t.style.willChange = 'transform, opacity';
+      if (color) t.style.color = color;
+      if (fontFamily) t.style.fontFamily = fontFamily;
+      if (fontWeight) t.style.fontWeight = fontWeight.toString();
     });
 
     const startPct = (1 - threshold) * 100;
@@ -146,7 +156,21 @@ export const SplitText: FC<SplitTextProps> = ({
         splitter.revert();
       }
     };
-  }, [text, delay, duration, ease, splitType, from, to, threshold, rootMargin, onLetterAnimationComplete]);
+  }, [
+    text,
+    color,
+    fontFamily,
+    fontWeight,
+    delay,
+    duration,
+    ease,
+    splitType,
+    from,
+    to,
+    threshold,
+    rootMargin,
+    onLetterAnimationComplete,
+  ]);
 
   return (
     <p

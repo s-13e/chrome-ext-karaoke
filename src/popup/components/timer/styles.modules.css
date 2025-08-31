@@ -22,12 +22,12 @@
   font-size: 48px;
   font-weight: bold;
   letter-spacing: 6px;
-  margin: 6px 0 10px 0;
+  margin: 69px 0 69px 0;
   color: #111;
 }
 .timeSelect {
   border: none;
-    /* Firefox */
+  /* Firefox */
   -moz-appearance: none;
   /* Chrome, Safari, Edge */
   -webkit-appearance: none;
@@ -37,11 +37,11 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 18px;
-  margin-bottom: 10px;
+  gap: 10px;
+  margin-bottom: 20px;
   background: gray;
   box-sizing: border-box;
-  width: 80%;
+  width: 60%;
   margin-left: auto;
   margin-right: auto;
   border-radius: 15px;

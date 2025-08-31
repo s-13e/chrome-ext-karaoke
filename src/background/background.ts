@@ -8,6 +8,10 @@ import { Line } from '@lib/types/lyrics';
 const activeTabs = new Set<number>();
 let lastInjectedUrl = '';
 
+let timerId: ReturnType<typeof setInterval> | null = null;
+let totalSeconds = 0;
+let isPlaying = false;
+
 interface GetLatestLyricsResponse {
   lyrics: Line[];
 }
@@ -25,9 +29,39 @@ interface SetOffsetMessage {
   type: 'SET_OFFSET';
   offset: number;
 }
+interface ApplyOffsetLyricsMessage {
+  type: 'APPLY_OFFSET_LYRICS';
+  offset?: number;
+}
+// popup 메시지
+interface StartTimerMessage {
+  type: 'startTimer';
+  totalSeconds: number;
+}
+
+interface StopTimerMessage {
+  type: 'stopTimer';
+}
+
+interface GetStatusMessage {
+  type: 'getStatus';
+}
+
+interface TickMessage {
+  type: 'tick';
+  totalSeconds: number;
+}
+
+// 확장 메시지 타입 유니온에 포함
+type TimerMessage = StartTimerMessage | StopTimerMessage | GetStatusMessage | TickMessage;
 
 // 확장에서 쓰는 모든 메시지 타입 유니온
-type ExtensionMessage = LyricsReadyMessage | GetLatestLyricsMessage | SetOffsetMessage;
+export type ExtensionMessage =
+  | LyricsReadyMessage
+  | GetLatestLyricsMessage
+  | SetOffsetMessage
+  | ApplyOffsetLyricsMessage
+  | TimerMessage;
 
 // ===== 1. 초기 로드 감지 =====
 chrome.webNavigation.onCompleted.addListener(
@@ -133,12 +167,12 @@ function sendMessageToActiveTab(msg: ExtensionMessage, maxRetries = 3): Promise<
 }
 
 // ===== 4. 메시지 중계 로직 =====
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendResponse) => {
   console.log(`[background] onMessage 수신`, msg);
 
   // --- LYRICS_READY: content → background → 모든 context 방송 ---
   if (msg.type === 'LYRICS_READY') {
-    console.log('[background] LYRICS_READY 수신 - 길이:', msg.length);
+    console.log('[background] LYRICS_READY 수신 - 길이:', msg.lyrics.length);
     // MainMenu, popup, 같은 탭의 다른 content 등 모든 컨텍스트로 전달
     chrome.runtime.sendMessage(msg);
   }
@@ -179,4 +213,27 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
     // 필요시 다른 context에도 전달 가능
   }
+  // --- popup 타이머 기능
+  if (msg.type === 'startTimer') {
+    totalSeconds = msg.totalSeconds;
+    isPlaying = true;
+    if (timerId) clearInterval(timerId);
+    timerId = setInterval(() => {
+      if (totalSeconds <= 0) {
+        clearInterval(timerId!);
+        isPlaying = false;
+      } else {
+        totalSeconds--;
+        chrome.runtime.sendMessage({ type: 'tick', totalSeconds });
+      }
+    }, 1000);
+    sendResponse({ status: 'started' });
+  } else if (msg.type === 'stopTimer') {
+    if (timerId) clearInterval(timerId);
+    isPlaying = false;
+    sendResponse({ status: 'stopped' });
+  } else if (msg.type === 'getStatus') {
+    sendResponse({ totalSeconds, isPlaying });
+  }
+  return true;
 });

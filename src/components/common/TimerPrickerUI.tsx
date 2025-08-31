@@ -4,12 +4,10 @@ interface TimerPickerUIProps {
   hours: number;
   minutes: number;
   seconds: number;
-  setHours: (v: number) => void;
-  setMinutes: (v: number) => void;
-  setSeconds: (v: number) => void;
+  onChange: (h: number, m: number, s: number) => void;
 }
 
-export function TimerPickerUI({ hours, minutes, seconds, setHours, setMinutes, setSeconds }: TimerPickerUIProps) {
+export function TimerPickerUI({ hours, minutes, seconds, onChange }: TimerPickerUIProps) {
   const hourList = Array.from({ length: 7 }, (_, i) => i.toString().padStart(2, '0'));
   const minuteList = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
   const secondList = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
@@ -18,17 +16,17 @@ export function TimerPickerUI({ hours, minutes, seconds, setHours, setMinutes, s
     {
       selectedIndex: hours,
       items: hourList,
-      onUpdate: setHours,
+      onUpdate: (idx: number) => onChange(idx, minutes, seconds),
     },
     {
       selectedIndex: minutes,
       items: minuteList,
-      onUpdate: setMinutes,
+      onUpdate: (idx: number) => onChange(hours, idx, seconds),
     },
     {
       selectedIndex: seconds,
       items: secondList,
-      onUpdate: setSeconds,
+      onUpdate: (idx: number) => onChange(hours, minutes, idx),
     },
   ];
 

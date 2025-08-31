@@ -1,23 +1,31 @@
 import { useEffect, useState } from 'react';
 import styles from './styles.modules.css';
-import { PauseIcon } from '@components/icons/PauseIcon';
-import { PlayIcon } from '@components/icons/PlayIcon';
+import { CiPause1 } from 'react-icons/ci';
 import { TimerPickerUI } from '@components/common/TimerPrickerUI';
+import { ExtensionMessage } from '@background/background';
+import { RiResetRightLine } from 'react-icons/ri';
+import { FiPlay } from 'react-icons/fi';
+import { MdAccessAlarm } from 'react-icons/md';
+import { FaMaxcdn } from 'react-icons/fa';
+import Tooltip from '@mui/material/Tooltip';
+
+const ICON_SIZE = 18;
 
 export function Timer() {
-  const [hours, setHours] = useState(0);
-  const [minutes, setMinutes] = useState(0);
-  const [seconds, setSeconds] = useState(0);
-
   const [totalSeconds, setTotalSeconds] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false); // 재생 중인지
+  const [isEditing, setIsEditing] = useState(true); // 재생 중일 때 style 변경
   const [showToast, setShowToast] = useState(false);
-  const [isEditing, setIsEditing] = useState(true);
 
-  // 시간 입력값이 바뀔 때 totalSeconds 업데이트
-  useEffect(() => {
-    setTotalSeconds(hours * 3600 + minutes * 60 + seconds);
-  }, [hours, minutes, seconds]);
+  // totalSeconds를 시/분/초로 분리 계산
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  // 사용자가 시/분/초 변경 시
+  const handleTimeChange = (h: number, m: number, s: number) => {
+    setTotalSeconds(h * 3600 + m * 60 + s);
+  };
 
   // 타이머 작동 처리
   useEffect(() => {
@@ -25,6 +33,7 @@ export function Timer() {
 
     if (totalSeconds <= 0) {
       setIsPlaying(false);
+      setIsEditing(true);
       return;
     }
     const intervalId = setInterval(() => {
@@ -33,26 +42,6 @@ export function Timer() {
 
     return () => clearInterval(intervalId);
   }, [isPlaying, totalSeconds]);
-
-  // totalSeconds가 바뀌면 시, 분, 초 값 동기화
-  useEffect(() => {
-    const h = Math.floor(totalSeconds / 3600);
-    const m = Math.floor((totalSeconds % 3600) / 60);
-    const s = totalSeconds % 60;
-    setHours(h);
-    setMinutes(m);
-    setSeconds(s);
-  }, [totalSeconds]);
-
-  // 재생 버튼 토글
-  const togglePlay = () => {
-    if (totalSeconds === 0) {
-      setShowToast(true);
-      return;
-    }
-    setIsPlaying((prev) => !prev); // 재생과 멈춤을 토글하도록 수정
-    setIsEditing(false);
-  };
 
   // 초기화
   const resetTimer = () => {
@@ -63,7 +52,7 @@ export function Timer() {
 
   // 최대치 설정
   const maxTimer = () => {
-    const maxSeconds = 6 * 3600 + 45 * 60;
+    const maxSeconds = 6 * 3600 + 59 * 60 + 59;
     setTotalSeconds(maxSeconds);
     setIsPlaying(false);
     setIsEditing(true);
@@ -76,6 +65,41 @@ export function Timer() {
       return () => clearTimeout(timer);
     }
   }, [showToast]);
+
+  useEffect(() => {
+    chrome.runtime.sendMessage({ type: 'getStatus' }, (response) => {
+      setTotalSeconds(response.totalSeconds);
+      setIsPlaying(response.isPlaying);
+      setIsEditing(!response.isPlaying);
+    });
+
+    const listener = (message: ExtensionMessage) => {
+      if (message.type === 'tick') {
+        setTotalSeconds(message.totalSeconds);
+        setIsEditing(false);
+      }
+    };
+
+    chrome.runtime.onMessage.addListener(listener);
+    return () => {
+      chrome.runtime.onMessage.removeListener(listener);
+    };
+  }, []);
+
+  // 재생 버튼 토글
+  const togglePlay = () => {
+    if (totalSeconds === 0) {
+      setShowToast(true);
+      return;
+    }
+    if (isPlaying) {
+      chrome.runtime.sendMessage({ type: 'stopTimer' });
+      setIsPlaying(false);
+    } else {
+      chrome.runtime.sendMessage({ type: 'startTimer', totalSeconds });
+      setIsPlaying(true);
+    }
+  };
 
   return (
     <>
@@ -90,9 +114,7 @@ export function Timer() {
           hours={hours}
           minutes={minutes}
           seconds={seconds}
-          setHours={setHours}
-          setMinutes={setMinutes}
-          setSeconds={setSeconds}
+          onChange={handleTimeChange} // (h, m, s) => setTotalSeconds(...)
         />
       ) : (
         <div className={styles.timer}>
@@ -103,24 +125,38 @@ export function Timer() {
 
       {/* 타이머 컨트롤 아이콘 버튼 */}
       <div className={styles.timerControls}>
-        <button className={styles.iconButton} aria-label="초기화" onClick={resetTimer}>
-          <span role="img" aria-label="초기화">
-            ↩️
-          </span>
-        </button>
-        <button className={styles.iconButton} aria-label={isPlaying ? '일시정지' : '재생'} onClick={togglePlay}>
-          {isPlaying ? <PauseIcon width={24} height={24} /> : <PlayIcon width={24} height={24} />}
-        </button>
-        <button className={styles.iconButton} aria-label="알림">
-          <span role="img" aria-label="알림">
-            ⏰
-          </span>
-        </button>
-        <button className={styles.iconButton} aria-label="최대치" onClick={maxTimer}>
-          <span role="img" aria-label="최대치">
-            MAX
-          </span>
-        </button>
+        <Tooltip title="초기화" arrow>
+          <button
+            className={styles.iconButton}
+            aria-label="초기화"
+            onClick={resetTimer}
+            disabled={isPlaying}
+            data-tip
+            data-for="resetTip"
+          >
+            <RiResetRightLine size={ICON_SIZE} color={isPlaying ? '#c1c1c1cf' : 'white'} />
+          </button>
+        </Tooltip>
+
+        <Tooltip title="타이머 시작" arrow>
+          <button className={styles.iconButton} aria-label={isPlaying ? '일시정지' : '재생'} onClick={togglePlay}>
+            {isPlaying ? (
+              <CiPause1 size={ICON_SIZE} style={{ color: 'white' }} />
+            ) : (
+              <FiPlay size={ICON_SIZE} style={{ color: 'white' }} />
+            )}
+          </button>
+        </Tooltip>
+        <Tooltip title="알림" arrow>
+          <button className={styles.iconButton} aria-label="알림">
+            <MdAccessAlarm size={ICON_SIZE} style={{ color: 'white' }} />
+          </button>
+        </Tooltip>
+        <Tooltip title="최대치" arrow>
+          <button className={styles.iconButton} aria-label="최대치" onClick={maxTimer}>
+            <FaMaxcdn size={ICON_SIZE} style={{ color: 'white' }} />
+          </button>
+        </Tooltip>
       </div>
 
       {/* 설명 문구 */}

@@ -83,6 +83,7 @@ module.exports = {
       '@components': path.resolve(__dirname, '../src/components'),
       '@constants': path.resolve(__dirname, '../src/constants'),
       '@hooks': path.resolve(__dirname, '../src/hooks'),
+      '@popup': path.resolve(__dirname, '../src/popup'),
       '@styles': path.resolve(__dirname, '../src/styles'),
       '@services': path.resolve(__dirname, '../src/services'),
       '@lib': path.resolve(__dirname, '../src/lib'),

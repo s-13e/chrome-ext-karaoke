@@ -2,7 +2,11 @@ import React, { useState } from 'react';
 import { useChromeStorage } from '@hooks/useChromeStorage';
 import { useTranslation } from 'react-i18next';
 import styles from './styles.module.css';
-import SplitText from '@components/react-bits/SplitText';
+import { SplitText } from '@components/react-bits/SplitText';
+import { BlurText } from '@components/react-bits/BlurText';
+import { TextType } from '@components/react-bits/TextType';
+import { FuzzyText } from '@components/react-bits/FuzzyText';
+import { GlitchText } from '@components/react-bits/GlitchText';
 
 export const LyricsSettings: React.FC = () => {
   const { t } = useTranslation();
@@ -28,7 +32,9 @@ export const LyricsSettings: React.FC = () => {
   const fontEffectOptions = [
     { label: 'SplitText', value: 'splitType' },
     { label: 'BlurText', value: 'blurType' },
-    { label: 'TextText', value: 'textType' },
+    { label: 'TextType', value: 'textType' },
+    { label: 'FuzzyText', value: 'fuzzyType' },
+    { label: 'GlitchText', value: 'glitchType' },
   ];
 
   const previewLyrics: { main: string; sub: string }[] =
@@ -48,16 +54,30 @@ export const LyricsSettings: React.FC = () => {
 
   // 자막 효과별 메인 텍스트 렌더링 처리 (확장용)
   const renderMainText = (text: string, idx: number) => {
+    const baseClass = styles.lyricsText;
+
     switch (fontEffect) {
       case 'splitType':
-        return <SplitText key={idx} text={text} className="" />;
-      // case 'blurType':
-      //   return <BlurText key={idx} text={text} />;
-      // case 'textType':
-      //   return <TextText key={idx} text={text} />;
+        return <SplitText key={idx} text={text} color={lyricsFontColorCurrent} className={baseClass} />;
+      case 'blurType':
+        return <BlurText key={idx} text={text} color={lyricsFontColorCurrent} className={baseClass} />;
+      case 'textType':
+        return <TextType key={idx} text={text} textColors={[lyricsFontColorCurrent]} className={baseClass} />;
+      case 'fuzzyType':
+        return (
+          <FuzzyText key={idx} fontSize={12} color={lyricsFontColorCurrent} className={baseClass}>
+            {text}
+          </FuzzyText>
+        );
+      case 'glitchType':
+        return (
+          <GlitchText key={idx} className={baseClass}>
+            {text}
+          </GlitchText>
+        );
       default:
         return (
-          <div key={idx} style={{ color: lyricsFontColorCurrent, fontWeight: 'bold' }}>
+          <div key={idx} style={{ color: lyricsFontColorCurrent, fontWeight: 'bold', margin: 0 }}>
             {text}
           </div>
         );
@@ -80,7 +100,7 @@ export const LyricsSettings: React.FC = () => {
         ))}
       </div>
       <div className={styles.settingsScrollable}>
-        <div className={styles.settingMenu}>
+        <div className={styles.checkboxRow}>
           <label className={styles.settingItem}>
             <input
               type="checkbox"

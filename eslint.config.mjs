@@ -8,7 +8,6 @@ import tseslint from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
 import pluginReact from 'eslint-plugin-react'; // 이름 변경
 import reactHooks from 'eslint-plugin-react-hooks';
-import { defineConfig } from 'eslint/config';
 import globals from 'globals';
 import importPlugin from 'eslint-plugin-import';
 
@@ -32,7 +31,7 @@ export default [
     files: ['**/*.{js,ts,jsx,tsx}'],
     plugins: {
       import: importPlugin,
-      prettier: prettierPlugin, // ✅ 추가
+      prettier: prettierPlugin,
     },
     rules: {
       'prefer-const': 'error',
@@ -45,8 +44,8 @@ export default [
       globals: {
         ...globals.browser,
         ...globals.node,
-        chrome: 'readonly', // 크롬 확장용
-        YT: 'readonly', // 👈 추가
+        chrome: 'readonly',
+        YT: 'readonly',
       },
     },
     settings: {
@@ -190,6 +189,13 @@ export default [
       'react/jsx-no-useless-fragment': 'error',
       'react/react-in-jsx-scope': 'off',
       'react/prop-types': 'off',
+    },
+  },
+  {
+    name: 'react-bits-ignore-any',
+    files: ['src/components/react-bits/**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
     },
   },
   // React-hooks 규칙칙

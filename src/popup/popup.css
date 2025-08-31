@@ -1,5 +1,5 @@
 body {
-  width: 300px;
+  width: 350px;
   height: 450px;
   max-width: 360px;
   margin: 0 auto;
@@ -53,8 +53,8 @@ input:checked + .slider:before {
   height: 32px;
   margin-left: auto;
   margin-right: auto;
-  margin-top: 30px;
-  margin-bottom: 30px;
+  margin-top: 20px;
+  margin-bottom: 20px;
   background: #f4f4f4;
   border-radius: 5px;
   box-shadow:

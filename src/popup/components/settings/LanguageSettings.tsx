@@ -7,6 +7,7 @@ import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, SupportedLanguage, NATIVE_LANGUA
 import { syncLanguage } from '@services/i18n';
 import { MESSAGE_TYPES } from '@constants/messageTypes';
 import { STORAGE_KEYS } from '@constants/storageKeys';
+import styles from './styles.module.css';
 
 export function LanguageSettings() {
   const { t, i18n } = useTranslation();
@@ -53,8 +54,9 @@ export function LanguageSettings() {
   };
 
   return (
-    <div className="language-selector">
+    <div className={styles.menuSection}>
       <h2>{t('extLanguage')}</h2>
+      <p>사용자 인터페이스가 해당 언어로 제공합니다.</p>
       <select value={currentLang} onChange={handleChange} disabled={isChanging} aria-busy={isChanging}>
         {SUPPORTED_LANGUAGES.map((lang) => (
           <option key={lang} value={lang}>

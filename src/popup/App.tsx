@@ -11,6 +11,8 @@ import { PopupSettingsPanel } from './components/settings/PopupSettingsPanel';
 import './popup.css';
 import { Timer } from './components/timer/Timer';
 import { History } from './components/history/History';
+import { IoSettingsOutline } from 'react-icons/io5';
+
 interface LanguageChangeMessage {
   type: typeof MESSAGE_TYPES.LANGUAGE_CHANGED;
   language: string;
@@ -93,7 +95,7 @@ export function App() {
       <div className="popup-header">
         <h2>{t('extName')}</h2>
         <button id="go-to-options" className="icon-button" onClick={() => setShowSettings(true)}>
-          <img src="../assets/icons/setting.png" alt="설정" width={24} height={24} />
+          <IoSettingsOutline size={16} />
         </button>
       </div>
       <div className="popup-wrapper">

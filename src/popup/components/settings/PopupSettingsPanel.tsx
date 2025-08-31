@@ -6,9 +6,20 @@ import { useTranslation } from 'react-i18next';
 import { Contact } from './Contact';
 import { LanguageSettings } from './LanguageSettings';
 import { LyricsSettings } from './LyricsSettings';
-import { LicenseInfo } from './LicenseInfo';
+import { LicenseInfo } from './License/LicenseInfo';
+import { OpenSourceLicenseList } from './License/OpenSourceLicenseList';
+import { ExtensionLicense } from './License/ExtensionLicense';
 
-type ComponentKey = 'main' | 'faq' | 'contact' | 'license' | 'language' | 'lyricsSettings';
+export type ComponentKey =
+  | 'main'
+  | 'faq'
+  | 'contact'
+  | 'license'
+  | 'openSourceList'
+  | 'extensionLicense'
+  | 'language'
+  | 'lyricsSettings';
+
 interface PopupSettingsPanelProps {
   onBack: () => void;
 }
@@ -18,6 +29,12 @@ interface MainMenuProps {
 
 export const PopupSettingsPanel: React.FC<PopupSettingsPanelProps> = ({ onBack }) => {
   const { t } = useTranslation();
+  const [history, setHistory] = useState<ComponentKey[]>(['main']);
+  const activeComponent = history[history.length - 1] as ComponentKey;
+
+  const handleNavigate = (key: ComponentKey) => {
+    setHistory((prev) => [...prev, key]);
+  };
 
   const titles: Record<ComponentKey, string> = {
     main: t('extSetting'),
@@ -26,8 +43,9 @@ export const PopupSettingsPanel: React.FC<PopupSettingsPanelProps> = ({ onBack }
     license: t('extLicense'),
     language: t('extLanguage'),
     lyricsSettings: t('extLyrics'),
+    openSourceList: t('extOpenSourceList'),
+    extensionLicense: t(''),
   };
-  const [activeComponent, setActiveComponent] = useState<ComponentKey>('main');
 
   let ContentComponent;
   if (activeComponent === 'faq') ContentComponent = FAQ;
@@ -35,16 +53,16 @@ export const PopupSettingsPanel: React.FC<PopupSettingsPanelProps> = ({ onBack }
   else if (activeComponent === 'language') ContentComponent = LanguageSettings;
   else if (activeComponent === 'lyricsSettings') ContentComponent = LyricsSettings;
   else if (activeComponent === 'license') ContentComponent = LicenseInfo;
+  else if (activeComponent === 'openSourceList') ContentComponent = OpenSourceLicenseList;
+  else if (activeComponent === 'extensionLicense') ContentComponent = ExtensionLicense;
   else ContentComponent = MainMenu; // 초기 메뉴
 
   // BackButton 클릭 핸들러 분리
   const handleBackButtonClick = () => {
-    if (activeComponent === 'main') {
-      // 현재 초기 메뉴면 부모(onBack) 콜백 호출 -> App.tsx 등 상위로 이동
-      onBack();
+    if (history.length <= 1) {
+      onBack(); // 최상위 화면에서 상위 콜백 호출
     } else {
-      // FAQ 등 상세화면이면 초기 메뉴로 변경
-      setActiveComponent('main');
+      setHistory((prev) => prev.slice(0, prev.length - 1));
     }
   };
 
@@ -60,10 +78,11 @@ export const PopupSettingsPanel: React.FC<PopupSettingsPanelProps> = ({ onBack }
         />
         <h2>{titles[activeComponent] || t('extSetting')}</h2>
       </div>
-      <ContentComponent onNavigate={setActiveComponent} />
+      <ContentComponent onNavigate={handleNavigate} />
     </div>
   );
 };
+
 function MainMenu({ onNavigate }: MainMenuProps) {
   const { t } = useTranslation();
 
@@ -74,8 +93,6 @@ function MainMenu({ onNavigate }: MainMenuProps) {
         <button className={styles.settingsButton} onClick={() => onNavigate('lyricsSettings')}>
           {t('extLyrics')}
         </button>
-        <button className={styles.settingsButton}>싱크 조절</button>
-        <button className={styles.settingsButton}>스타일 변경</button>
         <button className={styles.settingsButton} onClick={() => onNavigate('language')}>
           {t('extLanguage')}
         </button>

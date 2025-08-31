@@ -1,5 +1,7 @@
-// FAQ.tsx
-import styles from './FAQ.module.css';
+import { useState } from 'react';
+import faqStyles from './FAQ.module.css';
+import styles from './styles.module.css';
+import { useTranslation } from 'react-i18next';
 
 const faqList = [
   {
@@ -15,14 +17,35 @@ const faqList = [
 ];
 
 export function FAQ() {
+  const { t } = useTranslation();
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+
+  const handleToggle = (idx: number) => {
+    setOpenIndex((prev) => (prev === idx ? null : idx));
+  };
   return (
-    <div className={styles.faqContent}>
-      {faqList.map((item, idx) => (
-        <div key={idx} className={styles.faqItem}>
-          <div className={styles.faqQuestion}>{item.question}</div>
-          <div className={styles.faqAnswer}>{item.answer}</div>
-        </div>
-      ))}
+    <div className={styles.menuSection}>
+      <h3> {t('extFAQ')}</h3>
+      <div className={faqStyles.faqContent}>
+        {faqList.map((item, idx) => (
+          <div key={idx} className={faqStyles.faqItem}>
+            <button
+              className={faqStyles.faqQuestion}
+              onClick={() => handleToggle(idx)}
+              aria-expanded={openIndex === idx}
+              aria-controls={`faq-answer-${idx}`}
+            >
+              {item.question}
+              <span className={faqStyles.faqIcon}>{openIndex === idx ? '−' : '+'}</span>
+            </button>
+            {openIndex === idx && (
+              <div id={`faq-answer-${idx}`} className={faqStyles.faqAnswer}>
+                {item.answer}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -81,6 +81,18 @@
   width: 100%;
   background: transparent;
 }
+.checkboxRow {
+  display: flex;
+  gap: 24px; /* 라벨 간 간격 조정 */
+  align-items: center; /* 세로 중앙 정렬 */
+  padding: 10px 0;
+}
+
+.settingItem {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* 체크박스와 라벨 사이 간격 */
+}
 
 .menuSection {
   padding: 10px 15px;
@@ -88,8 +100,15 @@
   display: flex;
   flex-direction: column;
 }
+.menuSection h4 {
+  margin: 10px 0;
+}
 .settingMenu {
   padding: 10px 0;
+  flex-wrap: wrap;
+}
+.settingMenu label {
+  padding: 0 20px 0 0;
 }
 .previewBox {
   display: flex;
@@ -134,6 +153,8 @@
   overflow-y: auto;
   padding-right: 10px; /* 스크롤바 간섭 방지 선택 사항 */
 }
+
+/* 가사의 세 모드 */
 .singleMode {
   position: absolute;
   bottom: 15%;
@@ -141,10 +162,9 @@
 }
 
 .syncMode {
-  position: static;
-  /* sync 모드 스타일 */
-  font-size: 1rem;
-  /* 더 세분화된 높이, 간격 조절 */
+  position: relative;
+  font-size: 0.7rem;
+  top: 20%;
 }
 
 .fullMode {
@@ -152,4 +172,51 @@
   /* full 모드 스타일 */
   font-size: 0.6rem;
   /* 라인 간격, 줄 높이 등 세부조절 */
+}
+
+/* 드롭다운 */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-color: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 8px 36px 8px 16px; /* 오른쪽 공간 확보 */
+  font-size: 14px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: #333;
+  cursor: pointer;
+  min-width: 160px;
+  transition:
+    border-color 0.3s,
+    box-shadow 0.3s;
+  position: relative;
+  background-image: url('data:image/svg+xml;utf8,<svg width="16" height="16" xmlns="http://www.w3.org/2000/svg"><polyline points="4,6 8,10 12,6" fill="none" stroke="%23666" stroke-width="2" stroke-linecap="round"/></svg>');
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px 16px;
+}
+
+/* 포커스 시 테두리 강조 */
+select:focus {
+  outline: none;
+  border-color: #4a90e2;
+  box-shadow: 0 0 8px rgba(74, 144, 226, 0.2);
+}
+
+/* 비활성화 */
+select:disabled {
+  background-color: #f5f5f5;
+  color: #999;
+  border-color: #ddd;
+}
+
+/**/
+.lyricsText {
+  display: inline-block;
+  font-weight: bold;
+  margin: 0;
+  justify-content: center;
+  font-size: 0.7rem;
 }
