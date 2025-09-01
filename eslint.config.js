@@ -1,26 +1,20 @@
-import { FlatCompat } from '@eslint/eslintrc';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import js from '@eslint/js';
-import prettierConfig from 'eslint-config-prettier';
-import prettierPlugin from 'eslint-plugin-prettier';
-import tseslint from '@typescript-eslint/eslint-plugin';
-import tsParser from '@typescript-eslint/parser';
-import pluginReact from 'eslint-plugin-react'; // 이름 변경
-import reactHooks from 'eslint-plugin-react-hooks';
-import globals from 'globals';
-import importPlugin from 'eslint-plugin-import';
-
-// CommonJS 변수 모방 (필수)
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const { FlatCompat } = require('@eslint/eslintrc');
+const js = require('@eslint/js');
+const prettierConfig = require('eslint-config-prettier');
+const prettierPlugin = require('eslint-plugin-prettier');
+const tseslint = require('@typescript-eslint/eslint-plugin');
+const tsParser = require('@typescript-eslint/parser');
+const pluginReact = require('eslint-plugin-react');
+const reactHooks = require('eslint-plugin-react-hooks');
+const globals = require('globals');
+const importPlugin = require('eslint-plugin-import');
 
 const compat = new FlatCompat({
   baseDirectory: __dirname,
-  recommendedConfig: js.configs.recommended, // 기본 추천 설정
+  recommendedConfig: js.configs.recommended,
 });
 
-export default [
+module.exports = [
   js.configs.recommended,
   ...compat.extends('plugin:import/recommended'),
   ...compat.extends('plugin:react/recommended'),
@@ -37,9 +31,11 @@ export default [
       'prefer-const': 'error',
       'import/no-default-export': 'error',
       'prettier/prettier': 'error',
+      'no-console': 'warn',
+      'no-debugger': 'warn',
     },
     languageOptions: {
-      ecmaVersion: 2022,
+      ecmaVersion: 'latest',
       sourceType: 'module',
       globals: {
         ...globals.browser,

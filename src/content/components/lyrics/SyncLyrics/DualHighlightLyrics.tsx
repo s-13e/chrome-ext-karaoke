@@ -37,7 +37,7 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
   const topPron = top ? pronList[shiftedLyrics.findIndex((l) => l.text === top)] : '';
   const bottomPron = bottom ? pronList[shiftedLyrics.findIndex((l) => l.text === bottom)] : '';
 
-  // ✅ 추가: 색상 변경은 원본 타임 라인 기준
+  // 원본 타임 라인 기준
   const highlightIndex = useMemo(() => {
     return shiftedLyrics.findLastIndex((line) => adjustedTime >= line.time);
   }, [lyrics, adjustedTime]);

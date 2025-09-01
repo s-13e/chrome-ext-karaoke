@@ -46,10 +46,10 @@ export const LyricsSettings: React.FC = () => {
             { main: 'Set ’em on fire', sub: 'Set ’em on fire' },
           ]
         : [
-            { main: "And I don't really care if you", sub: '앤드 아이 돈 리얼리 케어 이프 유' },
-            { main: 'like me, like me', sub: '라이크 미, 라이크 미' },
-            { main: "I don't really wanna", sub: '아이 돈 리얼리 워너' },
-            { main: 'know if you like me', sub: '노우 이프 유 라이크 미' },
+            { main: `And I don't really care if you`, sub: `앤드 아이 돈 리얼리 케어 이프 유` },
+            { main: `like me, like me`, sub: `라이크 미, 라이크 미` },
+            { main: `I don't really wanna`, sub: `아이 돈 리얼리 워너` },
+            { main: `know if you like me`, sub: `노우 이프 유 라이크 미` },
           ];
 
   // 자막 효과별 메인 텍스트 렌더링 처리 (확장용)
@@ -82,6 +82,45 @@ export const LyricsSettings: React.FC = () => {
           </div>
         );
     }
+  };
+  // 컴포넌트 초기 마운트 시 chrome.storage에서 상태 불러오기
+  React.useEffect(() => {
+    chrome.storage.sync.get(
+      [
+        'realtimeLyrics',
+        'announceLyrics',
+        'lyricsFontColorCurrent',
+        'lyricsFontColorPronunciation',
+        'lyricsMode',
+        'lyricsFontEffect',
+      ],
+      (items) => {
+        if (typeof items.realtimeLyrics === 'boolean') setShowRealtimeLyrics(items.realtimeLyrics);
+        if (typeof items.announceLyrics === 'boolean') setShowPronunciationLyrics(items.announceLyrics);
+        if (typeof items.lyricsFontColorCurrent === 'string') setLyricsFontColorCurrent(items.lyricsFontColorCurrent);
+        if (typeof items.lyricsFontColorPronunciation === 'string')
+          setLyricsFontColorPronunciation(items.lyricsFontColorPronunciation);
+        if (typeof items.lyricsMode === 'string') setLyricsMode(items.lyricsMode);
+        if (typeof items.lyricsFontEffect === 'string') setFontEffect(items.lyricsFontEffect);
+      },
+    );
+  }, []);
+  // 적용 버튼 클릭 시 현재 상태 저장
+  const handleApply = () => {
+    chrome.storage.sync.set(
+      {
+        realtimeLyrics: showRealtimeLyrics,
+        announceLyrics: showPronunciationLyrics,
+        lyricsFontColorCurrent,
+        lyricsFontColorPronunciation,
+        lyricsMode,
+        lyricsFontEffect: fontEffect,
+      },
+      () => {
+        // 저장 완료 후 알림 혹은 상태 표시 추가 가능
+        console.log('Lyrics settings saved');
+      },
+    );
   };
 
   return (
@@ -183,6 +222,9 @@ export const LyricsSettings: React.FC = () => {
             ))}
           </select>
         </div>
+        <button className={styles.applyButton} onClick={handleApply}>
+          {t('apply')}
+        </button>
       </div>
     </div>
   );

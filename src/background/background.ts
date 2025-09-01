@@ -172,7 +172,8 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendRespon
 
   // --- LYRICS_READY: content → background → 모든 context 방송 ---
   if (msg.type === 'LYRICS_READY') {
-    console.log('[background] LYRICS_READY 수신 - 길이:', msg.lyrics.length);
+    const lyricsLength = Array.isArray(msg.lyrics) ? msg.lyrics.length : 0;
+    console.log('[background] LYRICS_READY 수신 - 길이:', lyricsLength);
     // MainMenu, popup, 같은 탭의 다른 content 등 모든 컨텍스트로 전달
     chrome.runtime.sendMessage(msg);
   }

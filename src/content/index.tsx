@@ -62,7 +62,9 @@ import { SongInfoOverlay } from './components/song-info/SongInfoOverlay';
   let lastRenderedLyrics = '';
   let latestLyrics: Line[] = [];
   let contentEnabled = false;
-  let lyricsOverlayRoot: Root | null = null; // 렌더링된 root 인스턴스 보관
+
+  let lyricsOverlayRoot: Root | null = null; // React 루트 인스턴스 저장용 전역 변수
+
   let lyricsOverlayElement: HTMLElement | null = null;
   let spaObserverShouldTriggerDetection = true;
   let isRetryingDetection = false; // 재시도 중복 제어 플래그
@@ -595,27 +597,27 @@ import { SongInfoOverlay } from './components/song-info/SongInfoOverlay';
   }
 
   // delay 함수 (Promise 기반 6초 대기)
-  async function pauseVideoAndDelay(videoElem: HTMLMediaElement, ms: number) {
-    if (!videoElem) return;
-    console.log('pauseVideoAndDelay 시작');
-    if (!videoElem.paused) {
-      console.log('영상 pause 호출 전');
-      videoElem.pause();
-      console.log(`영상 일시정지, ${ms}ms 대기 시작`);
-    }
-    await new Promise<void>((resolve) => {
-      console.log('setTimeout 시작');
-      setTimeout(() => {
-        console.log('setTimeout 종료');
-        resolve();
-      }, ms);
-    });
-    console.log(`${ms}ms 대기 종료, 영상 재생 재개`);
-    await videoElem.play().catch((e) => {
-      console.warn('영상 재생 재개 실패:', e);
-    });
-    console.log('pauseVideoAndDelay 종료');
-  }
+  // async function pauseVideoAndDelay(videoElem: HTMLMediaElement, ms: number) {
+  //   if (!videoElem) return;
+  //   console.log('pauseVideoAndDelay 시작');
+  //   if (!videoElem.paused) {
+  //     console.log('영상 pause 호출 전');
+  //     videoElem.pause();
+  //     console.log(`영상 일시정지, ${ms}ms 대기 시작`);
+  //   }
+  //   await new Promise<void>((resolve) => {
+  //     console.log('setTimeout 시작');
+  //     setTimeout(() => {
+  //       console.log('setTimeout 종료');
+  //       resolve();
+  //     }, ms);
+  //   });
+  //   console.log(`${ms}ms 대기 종료, 영상 재생 재개`);
+  //   await videoElem.play().catch((e) => {
+  //     console.warn('영상 재생 재개 실패:', e);
+  //   });
+  //   console.log('pauseVideoAndDelay 종료');
+  // }
 
   // 2. 영상 엘리먼트가 준비된 후, 실제 분석 및 렌더링 수행하는 함수
   async function analyzeAudioAndRenderLyrics(
@@ -737,9 +739,9 @@ import { SongInfoOverlay } from './components/song-info/SongInfoOverlay';
         return;
       }
 
-      console.time('beforePause');
-      await pauseVideoAndDelay(videoElem, 6000);
-      console.timeEnd('beforePause');
+      // console.time('beforePause');
+      // await pauseVideoAndDelay(videoElem, 6000);
+      // console.timeEnd('beforePause');
 
       // 새 영상이 들어왔으므로 이전 자막 제거
       lastVideoId = videoData.videoId;
@@ -1034,6 +1036,29 @@ import { SongInfoOverlay } from './components/song-info/SongInfoOverlay';
     window.location.reload();
   };
 
+  // 앱 UI 및 감지 초기화 함수
+  function setupAppResources() {
+    const rootElement = document.getElementById(DOM_IDS.ROOT_CONTAINER) || createRootElement();
+
+    if (!lyricsOverlayRoot) {
+      lyricsOverlayRoot = createRoot(rootElement);
+    }
+
+    lyricsOverlayRoot.render(
+      <ErrorBoundary FallbackComponent={ErrorFallback} onReset={handleReset}>
+        <I18nextProvider i18n={i18nInstance}>
+          <App />
+        </I18nextProvider>
+      </ErrorBoundary>,
+    );
+
+    initListenersAndState();
+    setupMiniToBasicTransitionObserver();
+    setupBasicToMiniTransitionObserver();
+    runInitialDetection();
+
+    enableDetection();
+  }
   // 앱 초기화
   const initializeApp = async () => {
     console.log('content app initializeApp 시작');
@@ -1042,29 +1067,27 @@ import { SongInfoOverlay } from './components/song-info/SongInfoOverlay';
 
       chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED], (result) => {
         contentEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
+        if (!contentEnabled) {
+          console.log('[Content] 콘텐츠 비활성 상태 - UI 렌더링 및 리스너 초기화 건너뜀');
+          return;
+        }
+        setupAppResources();
       });
 
-      // 루트 컨테이너 준비 및 렌더링
-      const rootElement = document.getElementById(DOM_IDS.ROOT_CONTAINER) || createRootElement();
-      const root = createRoot(rootElement);
-      root.render(
-        <ErrorBoundary FallbackComponent={ErrorFallback} onReset={handleReset}>
-          <I18nextProvider i18n={i18nInstance}>
-            <App />
-          </I18nextProvider>
-        </ErrorBoundary>,
-      );
+      // 저장소 변경 감지 등록 - 활성화 상태 변하면 처리
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === 'sync' && STORAGE_KEYS.CONTENT_ENABLED in changes) {
+          contentEnabled = changes[STORAGE_KEYS.CONTENT_ENABLED]?.newValue;
+          console.log('[Content] 저장소 변경 감지, 활성화 상태:', contentEnabled);
 
-      initListenersAndState();
-      setupMiniToBasicTransitionObserver();
-      setupBasicToMiniTransitionObserver();
-      runInitialDetection();
-
-      // 감지 시스템 활성/비활성 상태 동기화
-      chrome.storage.sync.get(STORAGE_KEYS.CONTENT_ENABLED, (result) => {
-        const enabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? true;
-        if (enabled) enableDetection();
-        else disableDetection();
+          if (contentEnabled) {
+            setupAppResources();
+          } else {
+            disableDetection();
+            cleanupAllResources();
+            // 필요 시 UI 클린업 등도 수행
+          }
+        }
       });
     } catch (error) {
       const rootElement = document.getElementById(DOM_IDS.ROOT_CONTAINER) || createRootElement();

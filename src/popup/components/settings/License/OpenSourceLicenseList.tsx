@@ -70,7 +70,7 @@ const OPEN_SOURCE_LIBS = [
     link: 'https://github.com/davidhdev/react-bits/blob/main/LICENSE.md)',
   },
   {
-    name: 'framer-motion',
+    name: 'motion',
     author: 'Motion B.V',
     license: 'MIT',
     link: 'https://github.com/motiondivision/motion/blob/main/LICENSE.md',

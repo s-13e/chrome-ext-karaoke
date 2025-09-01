@@ -1,16 +1,18 @@
 // MusicNoteButton.tsx
-import React, { useRef } from 'react';
+import React, { ReactNode, useRef } from 'react';
 import { useEffect } from 'react';
 import styles from './styles.module.css';
+import ReactDOM from 'react-dom/client';
 
 interface Props {
-  iconPath: string;
+  icon: ReactNode;
   contentEnabled: boolean;
-  menuVisible: boolean; // 추가된 prop
+  menuVisible: boolean;
   onClick?: () => void;
 }
-export const MusicNoteButton: React.FC<Props> = ({ iconPath, contentEnabled, menuVisible, onClick }) => {
+export const MusicNoteButton: React.FC<Props> = ({ icon, contentEnabled, menuVisible, onClick }) => {
   const btnRef = useRef<HTMLButtonElement | null>(null);
+  const iconRootRef = useRef<ReactDOM.Root | null>(null);
 
   useEffect(() => {
     const rightControls = document.querySelector('.ytp-right-controls');
@@ -24,20 +26,14 @@ export const MusicNoteButton: React.FC<Props> = ({ iconPath, contentEnabled, men
 
     btn.className = `${styles.musicNoteButton} ytp-button ytp-music-note-button`;
     btn.setAttribute('aria-label', '노트');
+    btn.setAttribute('data-tooltip', '노트');
     btn.tabIndex = 0;
 
-    const iconImg = document.createElement('img');
-    iconImg.src = iconPath;
-    iconImg.alt = 'music note';
-    iconImg.className = styles.icon || '';
-    btn.appendChild(iconImg);
+    iconRootRef.current = ReactDOM.createRoot(btn);
+    iconRootRef.current.render(icon);
 
-    btn.setAttribute('data-tooltip', '노트');
-
-    // 클릭 이벤트: toggle clicked 클래스 + onClick 호출
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      // 클릭 시 클래스 토글은 지금 상태와 메뉴 상태 때문에 불필요, 아래 useEffect로 상태 반영 권장
       onClick?.();
     });
 
@@ -62,10 +58,11 @@ export const MusicNoteButton: React.FC<Props> = ({ iconPath, contentEnabled, men
 
     // Cleanup
     return () => {
+      iconRootRef.current?.unmount();
       btn.remove();
       document.body.removeEventListener('click', handleBodyClick);
     };
-  }, [iconPath, contentEnabled, onClick]);
+  }, [icon, contentEnabled, onClick]);
 
   // menuVisible 상태에 따라 클래스와 data 속성 조절
   useEffect(() => {

@@ -12,6 +12,7 @@ import './popup.css';
 import { Timer } from './components/timer/Timer';
 import { History } from './components/history/History';
 import { IoSettingsOutline } from 'react-icons/io5';
+import { useChromeStorage } from '@hooks/useChromeStorage';
 
 interface LanguageChangeMessage {
   type: typeof MESSAGE_TYPES.LANGUAGE_CHANGED;
@@ -21,9 +22,18 @@ export function App() {
   const { t, i18n } = useTranslation();
   const { phase } = useLangLoader();
 
-  // const [enabled, setEnabled] = useChromeStorage(STORAGE_KEYS.CONTENT_ENABLED, false);
+  const [, setEnabled] = useChromeStorage(STORAGE_KEYS.CONTENT_ENABLED, false);
   const [showSettings, setShowSettings] = useState(false);
   const [activeTab, setActiveTab] = useState<'timer' | 'history'>('timer');
+
+  // Timer의 재생 상태를 App에서 관리
+  const [, setTimerPlaying] = useState(false);
+
+  // Timer 재생 상태 변경 시 호출되는 콜백
+  const handleTimerPlayChange = (playing: boolean) => {
+    setTimerPlaying(playing);
+    setEnabled(playing);
+  };
 
   useEffect(() => {
     console.log('[Popup] Setting up language listeners');
@@ -116,7 +126,7 @@ export function App() {
             히스토리
           </button>
         </div>
-        <div>{activeTab === 'timer' ? <Timer /> : <History />}</div>
+        <div>{activeTab === 'timer' ? <Timer onPlayStateChange={handleTimerPlayChange} /> : <History />}</div>
       </div>
     </div>
   );

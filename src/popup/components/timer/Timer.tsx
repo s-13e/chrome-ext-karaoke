@@ -10,8 +10,10 @@ import { FaMaxcdn } from 'react-icons/fa';
 import Tooltip from '@mui/material/Tooltip';
 
 const ICON_SIZE = 18;
-
-export function Timer() {
+interface TimerProps {
+  onPlayStateChange?: (playing: boolean) => void;
+}
+export function Timer({ onPlayStateChange }: TimerProps) {
   const [totalSeconds, setTotalSeconds] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false); // 재생 중인지
   const [isEditing, setIsEditing] = useState(true); // 재생 중일 때 style 변경
@@ -21,6 +23,13 @@ export function Timer() {
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
+
+  // 타이머 재생 상태 변화 시 부모 콜백 호출
+  useEffect(() => {
+    if (onPlayStateChange) {
+      onPlayStateChange(isPlaying);
+    }
+  }, [isPlaying, onPlayStateChange]);
 
   // 사용자가 시/분/초 변경 시
   const handleTimeChange = (h: number, m: number, s: number) => {

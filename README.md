@@ -15,7 +15,7 @@
 ### effects
 
 - react-bits by David Haz (MIT License with Commons Clause Restriction, https://github.com/davidhdev/react-bits/blob/main/LICENSE.md)
-- framer-motion by Motion B.V. (MIT License, https://github.com/motiondivision/motion/blob/main/LICENSE.md)
+- motion by Motion B.V. (MIT License, https://github.com/motiondivision/motion/blob/main/LICENSE.md)
 - matter-js by Liam Brummitt and contributors (MIT License, https://github.com/liabru/matter-js/blob/master/LICENSE)
 
 ### library

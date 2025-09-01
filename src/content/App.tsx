@@ -7,7 +7,9 @@ import { STORAGE_KEYS } from '@constants/storageKeys';
 import { useChromeStorage } from '@hooks/useChromeStorage';
 import { MusicNoteButton } from './components/karaoke-player-settings/MusicNoteButton';
 import { MainMenu } from './components/karaoke-player-settings/MainMenu';
+import { RiMusicAiLine } from 'react-icons/ri';
 // import { LyricsContainer } from './components/LyricsContainer';
+import musicNoteStyles from './components/karaoke-player-settings/styles.module.css';
 
 export function App() {
   // 버튼 클릭 핸들러(토글)
@@ -85,7 +87,7 @@ export function App() {
     <>
       {contentEnabled && (
         <MusicNoteButton
-          iconPath={chrome.runtime.getURL('assets/icons/music_note.png')}
+          icon={<RiMusicAiLine className={musicNoteStyles.icon} size={24} color="white" />}
           contentEnabled={contentEnabled}
           menuVisible={menuVisible}
           onClick={handleMusicNoteClick}
