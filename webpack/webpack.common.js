@@ -77,6 +77,7 @@ module.exports = {
   resolve: {
     alias: {
       '@background': path.resolve(__dirname, '../src/background'),
+      '@content': path.resolve(__dirname, '../src/content'),
       '@locales': path.resolve(__dirname, '../src/locales'),
       '@assets': path.resolve(__dirname, '../src/assets'),
       '@public_assets': path.resolve(__dirname, '../public/assets'),

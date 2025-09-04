@@ -44,33 +44,22 @@ components/common/BackButton.tsx
 components/common/ErrorFallback.tsx
 components/common/LoadingOverlay.tsx
 components/common/styles.module.css
+components/common/TimerPrickerUI.tsx
 components/common/ToggleSwitch.tsx
 components/icons/ArrowIcon.tsx
 components/icons/DisplayIcon.tsx
 components/icons/FontIcon.tsx
 components/icons/IconLyricsSync.tsx
-components/karaoke-player-settings/AdvancedSettingsMenu.tsx
-components/karaoke-player-settings/FontStyleMenu.tsx
-components/karaoke-player-settings/LyricsDisplayMenu.tsx
-components/karaoke-player-settings/LyricsOffsetControl.tsx
-components/karaoke-player-settings/LyricsOffsetMenu.tsx
-components/karaoke-player-settings/MainMenu.module.css
-components/karaoke-player-settings/MainMenu.tsx
-components/karaoke-player-settings/MusicNoteButton.tsx
-components/karaoke-player-settings/styles.module.css
-components/lyrics/common/LyricLine.tsx
-components/lyrics/common/styles.module.css
-components/lyrics/common/usePronunciation.ts
-components/lyrics/FullLyrics/FullLyrics.tsx
-components/lyrics/FullLyrics/styles.module.css
-components/lyrics/infra/LyricsOverlayRoot.module.css
-components/lyrics/infra/LyricsOverlayRoot.tsx
-components/lyrics/SingleLineLyrics/SingleLineLyrics.tsx
-components/lyrics/SingleLineLyrics/styles.module.css
-components/lyrics/SyncLyrics/DualHighlightLyrics.tsx
-components/lyrics/SyncLyrics/styles.module.css
-components/song-info/SongInfoOverlay.tsx
-components/song-info/styles.module.css
+components/icons/PauseIcon.tsx
+components/icons/PlayIcon.tsx
+components/icons/ResetIcon.tsx
+components/react-bits/BlurText.tsx
+components/react-bits/FallingText.tsx
+components/react-bits/FuzzyText.tsx
+components/react-bits/GlitchText.tsx
+components/react-bits/SplitText.tsx
+components/react-bits/styles.module.css
+components/react-bits/TextType.tsx
 constants/doomIds.ts
 constants/errorCodes.ts
 constants/errorMessages.ts
@@ -83,8 +72,28 @@ constants/storageKeys.ts
 constants/time.ts
 constants/youtubeSelectors.ts
 content/App.tsx
-content/components/LyricsContainer.tsx
-content/components/SyncSubtitle.tsx
+content/components/karaoke-player-settings/AdvancedSettingsMenu.tsx
+content/components/karaoke-player-settings/FontStyleMenu.tsx
+content/components/karaoke-player-settings/LyricsDisplayMenu.tsx
+content/components/karaoke-player-settings/LyricsOffsetControl.tsx
+content/components/karaoke-player-settings/LyricsOffsetMenu.tsx
+content/components/karaoke-player-settings/MainMenu.module.css
+content/components/karaoke-player-settings/MainMenu.tsx
+content/components/karaoke-player-settings/MusicNoteButton.tsx
+content/components/karaoke-player-settings/styles.module.css
+content/components/lyrics/common/LyricLine.tsx
+content/components/lyrics/common/styles.module.css
+content/components/lyrics/common/usePronunciation.ts
+content/components/lyrics/FullLyrics/FullLyrics.tsx
+content/components/lyrics/FullLyrics/styles.module.css
+content/components/lyrics/infra/LyricsOverlayRoot.module.css
+content/components/lyrics/infra/LyricsOverlayRoot.tsx
+content/components/lyrics/SingleLineLyrics/SingleLineLyrics.tsx
+content/components/lyrics/SingleLineLyrics/styles.module.css
+content/components/lyrics/SyncLyrics/DualHighlightLyrics.tsx
+content/components/lyrics/SyncLyrics/styles.module.css
+content/components/song-info/SongInfoOverlay.tsx
+content/components/song-info/styles.module.css
 content/index.tsx
 hooks/useChromeStorage.ts
 hooks/useCurrentTime.ts
@@ -98,6 +107,7 @@ lib/types/i18next.d.ts
 lib/types/kuroshiro-modules.d.ts
 lib/types/lyrics.ts
 lib/types/message.ts
+lib/types/react-scroll-picker.d.ts
 lib/types/svg.d.ts
 lib/types/translationKeys.ts
 lib/types/video.ts
@@ -119,6 +129,7 @@ lib/utils/dom/domUtils.ts
 lib/utils/dom/styleInjection.ts
 lib/utils/infra/adWatcher.ts
 lib/utils/infra/listenerManager.ts
+lib/utils/infra/overlayManager.ts
 lib/utils/infra/registerAllListeners.ts
 lib/utils/infra/singletonListener.ts
 lib/utils/infra/uiResourceManager.ts
@@ -151,14 +162,20 @@ options/Options.css
 options/options.html
 payment/pay.txt
 popup/App.tsx
-popup/components/Contact.tsx
-popup/components/FAQ.module.css
-popup/components/FAQ.tsx
-popup/components/LanguageSettings.tsx
-popup/components/LicenseInfo.tsx
-popup/components/LyricsSettings.tsx
-popup/components/PopupSettingsPanel.tsx
-popup/components/styles.module.css
+popup/components/history/History.tsx
+popup/components/settings/Contact.tsx
+popup/components/settings/FAQ.module.css
+popup/components/settings/FAQ.tsx
+popup/components/settings/LanguageSettings.tsx
+popup/components/settings/License/ExtensionLicense.tsx
+popup/components/settings/License/LicenseInfo.tsx
+popup/components/settings/License/OpenSourceLicenseList.tsx
+popup/components/settings/License/styles.module.css
+popup/components/settings/LyricsSettings.tsx
+popup/components/settings/PopupSettingsPanel.tsx
+popup/components/settings/styles.module.css
+popup/components/timer/styles.modules.css
+popup/components/timer/Timer.tsx
 popup/index.tsx
 popup/popup.css
 popup/popup.html
@@ -673,6 +690,10 @@ import { Line } from '@lib/types/lyrics';
 const activeTabs = new Set<number>();
 let lastInjectedUrl = '';
 
+let timerId: ReturnType<typeof setInterval> | null = null;
+let totalSeconds = 0;
+let isPlaying = false;
+
 interface GetLatestLyricsResponse {
   lyrics: Line[];
 }
@@ -690,9 +711,39 @@ interface SetOffsetMessage {
   type: 'SET_OFFSET';
   offset: number;
 }
+interface ApplyOffsetLyricsMessage {
+  type: 'APPLY_OFFSET_LYRICS';
+  offset?: number;
+}
+// popup 메시지
+interface StartTimerMessage {
+  type: 'startTimer';
+  totalSeconds: number;
+}
+
+interface StopTimerMessage {
+  type: 'stopTimer';
+}
+
+interface GetStatusMessage {
+  type: 'getStatus';
+}
+
+interface TickMessage {
+  type: 'tick';
+  totalSeconds: number;
+}
+
+// 확장 메시지 타입 유니온에 포함
+type TimerMessage = StartTimerMessage | StopTimerMessage | GetStatusMessage | TickMessage;
 
 // 확장에서 쓰는 모든 메시지 타입 유니온
-type ExtensionMessage = LyricsReadyMessage | GetLatestLyricsMessage | SetOffsetMessage;
+export type ExtensionMessage =
+  | LyricsReadyMessage
+  | GetLatestLyricsMessage
+  | SetOffsetMessage
+  | ApplyOffsetLyricsMessage
+  | TimerMessage;
 
 // ===== 1. 초기 로드 감지 =====
 chrome.webNavigation.onCompleted.addListener(
@@ -798,12 +849,13 @@ function sendMessageToActiveTab(msg: ExtensionMessage, maxRetries = 3): Promise<
 }
 
 // ===== 4. 메시지 중계 로직 =====
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendResponse) => {
   console.log(`[background] onMessage 수신`, msg);
 
   // --- LYRICS_READY: content → background → 모든 context 방송 ---
   if (msg.type === 'LYRICS_READY') {
-    console.log('[background] LYRICS_READY 수신 - 길이:', msg.length);
+    const lyricsLength = Array.isArray(msg.lyrics) ? msg.lyrics.length : 0;
+    console.log('[background] LYRICS_READY 수신 - 길이:', lyricsLength);
     // MainMenu, popup, 같은 탭의 다른 content 등 모든 컨텍스트로 전달
     chrome.runtime.sendMessage(msg);
   }
@@ -844,6 +896,29 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
     // 필요시 다른 context에도 전달 가능
   }
+  // --- popup 타이머 기능
+  if (msg.type === 'startTimer') {
+    totalSeconds = msg.totalSeconds;
+    isPlaying = true;
+    if (timerId) clearInterval(timerId);
+    timerId = setInterval(() => {
+      if (totalSeconds <= 0) {
+        clearInterval(timerId!);
+        isPlaying = false;
+      } else {
+        totalSeconds--;
+        chrome.runtime.sendMessage({ type: 'tick', totalSeconds });
+      }
+    }, 1000);
+    sendResponse({ status: 'started' });
+  } else if (msg.type === 'stopTimer') {
+    if (timerId) clearInterval(timerId);
+    isPlaying = false;
+    sendResponse({ status: 'stopped' });
+  } else if (msg.type === 'getStatus') {
+    sendResponse({ totalSeconds, isPlaying });
+  }
+  return true;
 });
 ```
 
@@ -1035,6 +1110,48 @@ LoadingOverlay.displayName = 'LoadingOverlay';
 }
 ```
 
+## File: components/common/TimerPrickerUI.tsx
+```typescript
+import { Picker } from '@web-lite/scroll-picker';
+
+interface TimerPickerUIProps {
+  hours: number;
+  minutes: number;
+  seconds: number;
+  onChange: (h: number, m: number, s: number) => void;
+}
+
+export function TimerPickerUI({ hours, minutes, seconds, onChange }: TimerPickerUIProps) {
+  const hourList = Array.from({ length: 7 }, (_, i) => i.toString().padStart(2, '0'));
+  const minuteList = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
+  const secondList = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
+
+  const values = [
+    {
+      selectedIndex: hours,
+      items: hourList,
+      onUpdate: (idx: number) => onChange(idx, minutes, seconds),
+    },
+    {
+      selectedIndex: minutes,
+      items: minuteList,
+      onUpdate: (idx: number) => onChange(hours, idx, seconds),
+    },
+    {
+      selectedIndex: seconds,
+      items: secondList,
+      onUpdate: (idx: number) => onChange(hours, minutes, idx),
+    },
+  ];
+
+  return (
+    <div style={{ margin: '24px auto', width: 'fit-content' }}>
+      <Picker values={values} />
+    </div>
+  );
+}
+```
+
 ## File: components/common/ToggleSwitch.tsx
 ```typescript
 import React from 'react';
@@ -1211,7 +1328,1447 @@ export const IconLyricsSync: React.FC<IconLyricsSyncProps> = ({
 );
 ```
 
-## File: components/karaoke-player-settings/AdvancedSettingsMenu.tsx
+## File: components/icons/PauseIcon.tsx
+```typescript
+import React from 'react';
+
+export function PauseIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg width={24} height={24} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <rect x="6" y="5" width="4" height="14" fill="currentColor" />
+      <rect x="14" y="5" width="4" height="14" fill="currentColor" />
+    </svg>
+  );
+}
+```
+
+## File: components/icons/PlayIcon.tsx
+```typescript
+import React from 'react';
+
+export function PlayIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg width={24} height={24} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <path d="M8 5v14l11-7-11-7z" fill="currentColor" />
+    </svg>
+  );
+}
+```
+
+## File: components/icons/ResetIcon.tsx
+```typescript
+import React from 'react';
+
+export function ResetIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      width={props.width || 48}
+      height={props.height || 48}
+      viewBox="0 0 48 48"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      {...props}
+    >
+      {/* 원형의 회전 경로 */}
+      <path
+        d="M24 5
+           a19 19 0 1 1 -16 9"
+        stroke="currentColor"
+        strokeWidth={5}
+        fill="none"
+        strokeLinecap="round"
+      />
+      {/* 두껍고 넓은 (좌방향) 화살표 머리 */}
+      <polyline
+        points="13,7 13,13 19,13"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={5}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+```
+
+## File: components/react-bits/BlurText.tsx
+```typescript
+import { motion } from 'motion/react';
+import { useEffect, useRef, useState, useMemo, FC } from 'react';
+
+type Keyframes = Record<string, Array<string | number>>;
+
+type AnimationStep = Record<string, string | number>;
+
+type EasingFunction = (t: number) => number;
+
+interface BlurTextProps {
+  text?: string;
+  delay?: number;
+  className?: string;
+  color?: string;
+  fontFamily?: string;
+  fontWeight?: string | number;
+  animateBy?: 'words' | 'chars';
+  direction?: 'top' | 'bottom';
+  threshold?: number;
+  rootMargin?: string;
+  animationFrom?: AnimationStep;
+  animationTo?: AnimationStep[];
+  easing?: EasingFunction;
+  onAnimationComplete?: () => void;
+  stepDuration?: number;
+}
+
+const buildKeyframes = (from: AnimationStep, steps: AnimationStep[]): Keyframes => {
+  const keys = new Set([...Object.keys(from), ...steps.flatMap((s) => Object.keys(s))]);
+  const keyframes: Keyframes = {};
+  keys.forEach((k) => {
+    const values = [from[k], ...steps.map((s) => s[k])].filter((v) => v !== undefined);
+    keyframes[k] = values;
+  });
+  return keyframes;
+};
+
+export const BlurText: FC<BlurTextProps> = ({
+  text = '',
+  delay = 200,
+  className = '',
+  color,
+  fontFamily,
+  fontWeight,
+  animateBy = 'words',
+  direction = 'top',
+  threshold = 0.1,
+  rootMargin = '0px',
+  animationFrom,
+  animationTo,
+  easing = (t: number) => t,
+  onAnimationComplete,
+  stepDuration = 0.35,
+}) => {
+  const elements = animateBy === 'words' ? text.split(' ') : text.split('');
+  const [inView, setInView] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setInView(true);
+          observer.unobserve(entry.target);
+        }
+      },
+      { threshold, rootMargin },
+    );
+    observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, [threshold, rootMargin]);
+
+  const defaultFrom = useMemo(
+    () =>
+      direction === 'top' ? { filter: 'blur(10px)', opacity: 0, y: -50 } : { filter: 'blur(10px)', opacity: 0, y: 50 },
+    [direction],
+  );
+
+  const defaultTo = useMemo(
+    () => [
+      {
+        filter: 'blur(5px)',
+        opacity: 0.5,
+        y: direction === 'top' ? 5 : -5,
+      },
+      { filter: 'blur(0px)', opacity: 1, y: 0 },
+    ],
+    [direction],
+  );
+
+  const fromSnapshot = animationFrom ?? defaultFrom;
+  const toSnapshots = animationTo ?? defaultTo;
+
+  const stepCount = toSnapshots.length + 1;
+  const totalDuration = stepDuration * (stepCount - 1);
+  const times = Array.from({ length: stepCount }, (_, i) => (stepCount === 1 ? 0 : i / (stepCount - 1)));
+
+  return (
+    <p ref={ref} className={className} style={{ display: 'flex', flexWrap: 'wrap' }}>
+      {elements.map((segment, index) => {
+        const animateKeyframes = buildKeyframes(fromSnapshot, toSnapshots);
+
+        const spanTransition = {
+          duration: totalDuration,
+          times,
+          delay: (index * delay) / 1000,
+          ease: easing,
+        };
+
+        return (
+          <motion.span
+            className="inline-block will-change-[transform,filter,opacity]"
+            key={index}
+            style={{
+              display: 'inline-block',
+              marginRight: '0.2em',
+              color,
+              fontFamily,
+              fontWeight,
+            }}
+            initial={fromSnapshot}
+            animate={inView ? animateKeyframes : fromSnapshot}
+            transition={spanTransition}
+            onAnimationComplete={index === elements.length - 1 ? onAnimationComplete : undefined}
+          >
+            {segment === ' ' ? '\u00A0' : segment}
+            {animateBy === 'words' && index < elements.length - 1 && '\u00A0'}
+          </motion.span>
+        );
+      })}
+    </p>
+  );
+};
+```
+
+## File: components/react-bits/FallingText.tsx
+```typescript
+import React, { useRef, useState, useEffect } from 'react';
+import Matter from 'matter-js';
+import './styles.module.css';
+
+interface FallingTextProps {
+  className?: string;
+  text?: string;
+  highlightWords?: string[];
+  highlightClass?: string;
+  trigger?: 'auto' | 'scroll' | 'click' | 'hover';
+  backgroundColor?: string;
+  wireframes?: boolean;
+  gravity?: number;
+  mouseConstraintStiffness?: number;
+  fontSize?: string | number;
+}
+
+export const FallingText: React.FC<FallingTextProps> = ({
+  className = '',
+  text = '',
+  highlightWords = [],
+  highlightClass = 'highlighted',
+  trigger = 'auto',
+  backgroundColor = 'transparent',
+  wireframes = false,
+  gravity = 1,
+  mouseConstraintStiffness = 0.2,
+  fontSize = '1rem',
+}) => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const textRef = useRef<HTMLDivElement | null>(null);
+  const canvasContainerRef = useRef<HTMLDivElement | null>(null);
+  const [effectStarted, setEffectStarted] = useState(false);
+
+  useEffect(() => {
+    if (!textRef.current) return;
+    const words = text.split(' ');
+    const newHTML = words
+      .map((word) => {
+        const isHighlighted = highlightWords.some((hw) => word.startsWith(hw));
+        return `<span class="word ${isHighlighted ? highlightClass : ''}">${word}</span>`;
+      })
+      .join(' ');
+    textRef.current.innerHTML = newHTML;
+  }, [text, highlightWords, highlightClass]);
+
+  useEffect(() => {
+    if (trigger === 'auto') {
+      setEffectStarted(true);
+      return;
+    }
+    if (trigger === 'scroll' && containerRef.current) {
+      const observer = new IntersectionObserver(
+        ([entry]) => {
+          if (entry && entry.isIntersecting) {
+            setEffectStarted(true);
+            observer.disconnect();
+          }
+        },
+        { threshold: 0.1 },
+      );
+
+      observer.observe(containerRef.current);
+      return () => observer.disconnect();
+    }
+  }, [trigger]);
+
+  useEffect(() => {
+    if (!effectStarted) return;
+    if (!containerRef.current || !textRef.current || !canvasContainerRef.current) return;
+
+    const { Engine, Render, World, Bodies, Runner, Mouse, MouseConstraint, Body } = Matter;
+
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const width = containerRect.width;
+    const height = containerRect.height;
+    if (width <= 0 || height <= 0) {
+      return;
+    }
+
+    const engine = Engine.create();
+    engine.world.gravity.y = gravity;
+
+    const render = Render.create({
+      element: canvasContainerRef.current,
+      engine,
+      options: {
+        width,
+        height,
+        background: backgroundColor,
+        wireframes,
+      },
+    });
+
+    const boundaryOptions = {
+      isStatic: true,
+      render: { fillStyle: 'transparent' },
+    };
+
+    const floor = Bodies.rectangle(width / 2, height + 25, width, 50, boundaryOptions);
+    const leftWall = Bodies.rectangle(-25, height / 2, 50, height, boundaryOptions);
+    const rightWall = Bodies.rectangle(width + 25, height / 2, 50, height, boundaryOptions);
+    const ceiling = Bodies.rectangle(width / 2, -25, width, 50, boundaryOptions);
+
+    const wordSpans = textRef.current.querySelectorAll<HTMLSpanElement>('.word');
+
+    const wordBodies = Array.from(wordSpans).map((elem) => {
+      const rect = elem.getBoundingClientRect();
+      const x = rect.left - containerRect.left + rect.width / 2;
+      const y = rect.top - containerRect.top + rect.height / 2;
+      const body = Bodies.rectangle(x, y, rect.width, rect.height, {
+        render: { fillStyle: 'transparent' },
+        restitution: 0.8,
+        frictionAir: 0.01,
+        friction: 0.2,
+      });
+      Body.setVelocity(body, {
+        x: (Math.random() - 0.5) * 5,
+        y: 0,
+      });
+      Body.setAngularVelocity(body, (Math.random() - 0.5) * 0.05);
+      return { elem, body };
+    });
+
+    wordBodies.forEach(({ elem, body }) => {
+      elem.style.position = 'absolute';
+      elem.style.left = `${body.position.x - body.bounds.max.x + body.bounds.min.x / 2}px`;
+      elem.style.top = `${body.position.y - body.bounds.max.y + body.bounds.min.y / 2}px`;
+      elem.style.transform = 'none';
+    });
+
+    const mouse = Mouse.create(containerRef.current);
+    const mouseConstraint = MouseConstraint.create(engine, {
+      mouse,
+      constraint: {
+        stiffness: mouseConstraintStiffness,
+        render: { visible: false },
+      },
+    });
+
+    render.mouse = mouse;
+
+    World.add(engine.world, [floor, leftWall, rightWall, ceiling, mouseConstraint, ...wordBodies.map((wb) => wb.body)]);
+
+    const runner = Runner.create();
+    Runner.run(runner, engine);
+    Render.run(render);
+
+    const updateLoop = () => {
+      wordBodies.forEach(({ body, elem }) => {
+        const { x, y } = body.position;
+        elem.style.left = `${x}px`;
+        elem.style.top = `${y}px`;
+        elem.style.transform = `translate(-50%, -50%) rotate(${body.angle}rad)`;
+      });
+      Matter.Engine.update(engine);
+      requestAnimationFrame(updateLoop);
+    };
+
+    updateLoop();
+
+    return () => {
+      Render.stop(render);
+      Runner.stop(runner);
+      if (render.canvas && canvasContainerRef.current) {
+        canvasContainerRef.current.removeChild(render.canvas);
+      }
+      World.clear(engine.world, false);
+      Engine.clear(engine);
+    };
+  }, [effectStarted, gravity, wireframes, backgroundColor, mouseConstraintStiffness]);
+
+  const handleTrigger = () => {
+    if (!effectStarted && (trigger === 'click' || trigger === 'hover')) {
+      setEffectStarted(true);
+    }
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      className={`falling-text-container ${className}`}
+      onClick={trigger === 'click' ? handleTrigger : undefined}
+      onMouseEnter={trigger === 'hover' ? handleTrigger : undefined}
+      style={{
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        ref={textRef}
+        className="falling-text-target"
+        style={{
+          fontSize,
+          lineHeight: 1.4,
+        }}
+      />
+      <div ref={canvasContainerRef} className="falling-text-canvas" />
+    </div>
+  );
+};
+```
+
+## File: components/react-bits/FuzzyText.tsx
+```typescript
+import React, { useEffect, useRef } from 'react';
+
+interface FuzzyTextProps {
+  children: React.ReactNode;
+  fontSize?: string | number;
+  fontWeight?: number | string;
+  fontFamily?: string;
+  color?: string;
+  enableHover?: boolean;
+  baseIntensity?: number;
+  hoverIntensity?: number;
+  className?: string;
+}
+
+export const FuzzyText: React.FC<FuzzyTextProps> = ({
+  children,
+  fontSize = 'clamp(2rem, 10vw, 10rem)',
+  fontWeight = 900,
+  fontFamily = 'inherit',
+  color = '#fff',
+  enableHover = true,
+  baseIntensity = 0.18,
+  hoverIntensity = 0.5,
+  className = '',
+}) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    let animationFrameId: number;
+    let isCancelled = false;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const init = async () => {
+      if (document.fonts?.ready) {
+        await document.fonts.ready;
+      }
+      if (isCancelled) return;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const computedFontFamily =
+        fontFamily === 'inherit' ? window.getComputedStyle(canvas).fontFamily || 'sans-serif' : fontFamily;
+
+      const fontSizeStr = typeof fontSize === 'number' ? `${fontSize}px` : fontSize;
+      let numericFontSize: number;
+      if (typeof fontSize === 'number') {
+        numericFontSize = fontSize;
+      } else {
+        const temp = document.createElement('span');
+        temp.style.fontSize = fontSize;
+        document.body.appendChild(temp);
+        const computedSize = window.getComputedStyle(temp).fontSize;
+        numericFontSize = parseFloat(computedSize);
+        document.body.removeChild(temp);
+      }
+
+      const text = React.Children.toArray(children).join('');
+
+      const offscreen = document.createElement('canvas');
+      const offCtx = offscreen.getContext('2d');
+      if (!offCtx) return;
+
+      offCtx.font = `${fontWeight} ${fontSizeStr} ${computedFontFamily}`;
+      offCtx.textBaseline = 'alphabetic';
+      const metrics = offCtx.measureText(text);
+
+      const actualLeft = metrics.actualBoundingBoxLeft ?? 0;
+      const actualRight = metrics.actualBoundingBoxRight ?? metrics.width;
+      const actualAscent = metrics.actualBoundingBoxAscent ?? numericFontSize;
+      const actualDescent = metrics.actualBoundingBoxDescent ?? numericFontSize * 0.2;
+
+      const textBoundingWidth = Math.ceil(actualLeft + actualRight);
+      const tightHeight = Math.ceil(actualAscent + actualDescent);
+
+      const extraWidthBuffer = 10;
+      const offscreenWidth = textBoundingWidth + extraWidthBuffer;
+
+      offscreen.width = offscreenWidth;
+      offscreen.height = tightHeight;
+
+      const xOffset = extraWidthBuffer / 2;
+      offCtx.font = `${fontWeight} ${fontSizeStr} ${computedFontFamily}`;
+      offCtx.textBaseline = 'alphabetic';
+      offCtx.fillStyle = color;
+      offCtx.fillText(text, xOffset - actualLeft, actualAscent);
+
+      const horizontalMargin = 50;
+      const verticalMargin = 0;
+      canvas.width = offscreenWidth + horizontalMargin * 2;
+      canvas.height = tightHeight + verticalMargin * 2;
+      ctx.translate(horizontalMargin, verticalMargin);
+
+      const interactiveLeft = horizontalMargin + xOffset;
+      const interactiveTop = verticalMargin;
+      const interactiveRight = interactiveLeft + textBoundingWidth;
+      const interactiveBottom = interactiveTop + tightHeight;
+
+      let isHovering = false;
+      const fuzzRange = 30;
+
+      const run = () => {
+        if (isCancelled) return;
+        ctx.clearRect(-fuzzRange, -fuzzRange, offscreenWidth + 2 * fuzzRange, tightHeight + 2 * fuzzRange);
+        const intensity = isHovering ? hoverIntensity : baseIntensity;
+        for (let j = 0; j < tightHeight; j++) {
+          const dx = Math.floor(intensity * (Math.random() - 0.5) * fuzzRange);
+          ctx.drawImage(offscreen, 0, j, offscreenWidth, 1, dx, j, offscreenWidth, 1);
+        }
+        animationFrameId = window.requestAnimationFrame(run);
+      };
+
+      run();
+
+      const isInsideTextArea = (x: number, y: number): boolean => {
+        return x >= interactiveLeft && x <= interactiveRight && y >= interactiveTop && y <= interactiveBottom;
+      };
+
+      const handleMouseMove = (e: MouseEvent) => {
+        if (!enableHover) return;
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        isHovering = isInsideTextArea(x, y);
+      };
+
+      const handleMouseLeave = () => {
+        isHovering = false;
+      };
+
+      const handleTouchMove = (e: TouchEvent) => {
+        if (!enableHover) return;
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.touches[0];
+        if (!touch) return;
+        const x = touch.clientX - rect.left;
+        const y = touch.clientY - rect.top;
+        isHovering = isInsideTextArea(x, y);
+      };
+
+      const handleTouchEnd = () => {
+        isHovering = false;
+      };
+
+      if (enableHover) {
+        canvas.addEventListener('mousemove', handleMouseMove);
+        canvas.addEventListener('mouseleave', handleMouseLeave);
+        canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+        canvas.addEventListener('touchend', handleTouchEnd);
+      }
+
+      const cleanup = () => {
+        window.cancelAnimationFrame(animationFrameId);
+        if (enableHover) {
+          canvas.removeEventListener('mousemove', handleMouseMove);
+          canvas.removeEventListener('mouseleave', handleMouseLeave);
+          canvas.removeEventListener('touchmove', handleTouchMove);
+          canvas.removeEventListener('touchend', handleTouchEnd);
+        }
+      };
+
+      (canvas as any).cleanupFuzzyText = cleanup;
+    };
+
+    init();
+
+    return () => {
+      isCancelled = true;
+      window.cancelAnimationFrame(animationFrameId);
+      if (canvas && (canvas as any).cleanupFuzzyText) {
+        (canvas as any).cleanupFuzzyText();
+      }
+    };
+  }, [children, fontSize, fontWeight, fontFamily, color, enableHover, baseIntensity, hoverIntensity]);
+
+  return <canvas ref={canvasRef} className={className} />;
+};
+```
+
+## File: components/react-bits/GlitchText.tsx
+```typescript
+import { CSSProperties, FC, ReactNode } from 'react';
+import styles from './styles.module.css';
+
+interface GlitchTextProps {
+  children: ReactNode;
+  speed?: number;
+  enableShadows?: boolean;
+  enableOnHover?: boolean;
+  className?: string;
+}
+
+export const GlitchText: FC<GlitchTextProps> = ({
+  children,
+  speed = 1,
+  enableShadows = true,
+  //enableOnHover = false,
+  className = '',
+}) => {
+  const inlineStyles: CSSProperties & { [key: string]: string } = {
+    '--after-duration': `${speed * 3}s`,
+    '--before-duration': `${speed * 2}s`,
+    '--after-shadow': enableShadows ? '-5px 0 red' : 'none',
+    '--before-shadow': enableShadows ? '5px 0 cyan' : 'none',
+  };
+
+  //const hoverClass = enableOnHover ? 'enable-on-hover' : '';
+
+  return (
+    <div
+      className={`${styles.glitch} ${className}`}
+      style={inlineStyles}
+      data-text={typeof children === 'string' ? children : undefined}
+    >
+      {children}
+    </div>
+  );
+};
+```
+
+## File: components/react-bits/SplitText.tsx
+```typescript
+import { useRef, useEffect, CSSProperties, FC } from 'react';
+import { gsap } from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { SplitText as GSAPSplitText } from 'gsap/SplitText';
+
+gsap.registerPlugin(ScrollTrigger, GSAPSplitText);
+
+type TweenValue =
+  | number
+  | string
+  | boolean
+  | ((target: unknown, index?: number, targets?: unknown[]) => number | string | boolean);
+type Ease = string | ((t: number) => number);
+
+interface TweenVars {
+  [key: string]: TweenValue | TweenValue[] | undefined;
+}
+
+interface SplitTextProps {
+  text: string;
+  className?: string;
+  color?: string;
+  fontFamily?: string;
+  fontWeight?: string | number;
+  delay?: number;
+  duration?: number;
+  ease?: Ease | string;
+  splitType?: 'chars' | 'words' | 'lines';
+  from?: Partial<TweenVars>;
+  to?: Partial<TweenVars>;
+
+  threshold?: number;
+  rootMargin?: string;
+  textAlign?: CSSProperties['textAlign'];
+  onLetterAnimationComplete?: () => void;
+}
+
+export const SplitText: FC<SplitTextProps> = ({
+  text,
+  className = '',
+  color,
+  fontFamily,
+  fontWeight,
+  delay = 100,
+  duration = 0.6,
+  ease = 'power3.out',
+  splitType = 'chars',
+  from = { opacity: 0, y: 40 },
+  to = { opacity: 1, y: 0 },
+  threshold = 0.1,
+  rootMargin = '-100px',
+  textAlign = 'center',
+  onLetterAnimationComplete,
+}) => {
+  const ref = useRef(null);
+  const animationCompletedRef = useRef(false);
+  const scrollTriggerRef = useRef<ScrollTrigger | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !ref.current || !text) return;
+
+    const el = ref.current as HTMLElement | null;
+    if (!el) return;
+
+    animationCompletedRef.current = false;
+
+    const absoluteLines = splitType === 'lines';
+    if (absoluteLines) el.style.position = 'relative';
+
+    let splitter;
+    try {
+      splitter = new GSAPSplitText(el, {
+        type: splitType,
+        absolute: absoluteLines,
+        linesClass: 'split-line',
+      });
+    } catch (error) {
+      console.error('Failed to create SplitText:', error);
+      return;
+    }
+
+    let targets: HTMLElement[] = [];
+    switch (splitType) {
+      case 'lines':
+        targets = splitter.lines as HTMLElement[];
+        break;
+      case 'words':
+        targets = splitter.words as HTMLElement[];
+        break;
+      case 'chars':
+        targets = splitter.chars as HTMLElement[];
+        break;
+      default:
+        targets = splitter.chars as HTMLElement[];
+    }
+
+    if (!targets || targets.length === 0) {
+      console.warn('No targets found for SplitText animation');
+      splitter.revert();
+      return;
+    }
+
+    targets.forEach((t) => {
+      t.style.willChange = 'transform, opacity';
+      if (color) t.style.color = color;
+      if (fontFamily) t.style.fontFamily = fontFamily;
+      if (fontWeight) t.style.fontWeight = fontWeight.toString();
+    });
+
+    const startPct = (1 - threshold) * 100;
+    const marginMatch = /^(-?\d+(?:\.\d+)?)(px|em|rem|%)?$/.exec(rootMargin);
+    const marginValue = marginMatch && marginMatch[1] !== undefined ? parseFloat(marginMatch[1]) : 0;
+    const marginUnit = marginMatch ? marginMatch[2] || 'px' : 'px';
+    const sign = marginValue < 0 ? `-=${Math.abs(marginValue)}${marginUnit}` : `+=${marginValue}${marginUnit}`;
+    const start = `top ${startPct}%${sign}`;
+
+    const tl = gsap.timeline({
+      scrollTrigger: {
+        trigger: el,
+        start,
+        toggleActions: 'play none none none',
+        once: true,
+        onToggle: (self) => {
+          scrollTriggerRef.current = self;
+        },
+      },
+      smoothChildTiming: true,
+      onComplete: () => {
+        animationCompletedRef.current = true;
+        gsap.set(targets, {
+          ...to,
+          clearProps: 'willChange',
+          immediateRender: true,
+        });
+        onLetterAnimationComplete?.();
+      },
+    });
+
+    tl.set(targets, { ...from, immediateRender: false, force3D: true });
+    tl.to(targets, {
+      ...to,
+      duration,
+      ease,
+      stagger: delay / 1000,
+      force3D: true,
+    });
+
+    return () => {
+      tl.kill();
+      if (scrollTriggerRef.current) {
+        scrollTriggerRef.current.kill();
+        scrollTriggerRef.current = null;
+      }
+      gsap.killTweensOf(targets);
+      if (splitter) {
+        splitter.revert();
+      }
+    };
+  }, [
+    text,
+    color,
+    fontFamily,
+    fontWeight,
+    delay,
+    duration,
+    ease,
+    splitType,
+    from,
+    to,
+    threshold,
+    rootMargin,
+    onLetterAnimationComplete,
+  ]);
+
+  return (
+    <p
+      ref={ref}
+      className={`split-parent ${className}`}
+      style={{
+        textAlign,
+        overflow: 'hidden',
+        display: 'inline-block',
+        whiteSpace: 'normal',
+        wordWrap: 'break-word',
+      }}
+    >
+      {text}
+    </p>
+  );
+};
+```
+
+## File: components/react-bits/styles.module.css
+```css
+/* TextType */
+.text-type {
+  display: inline-block;
+  white-space: pre-wrap;
+}
+
+.text-type__cursor {
+  margin-left: 0.25rem;
+  display: inline-block;
+  opacity: 1;
+}
+
+.text-type__cursor--hidden {
+  display: none;
+}
+
+/* GlitchType */
+.glitch {
+  color: #fff;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  font-weight: 900;
+  position: relative;
+  margin: 0 auto;
+  user-select: none;
+  cursor: pointer;
+}
+
+.glitch::after,
+.glitch::before {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  color: #fff;
+  background-color: #060010;
+  overflow: hidden;
+  clip-path: inset(0 0 0 0);
+}
+
+.glitch:not(.enable-on-hover)::after {
+  left: 10px;
+  text-shadow: var(--after-shadow, -10px 0 red);
+  animation: animate-glitch var(--after-duration, 3s) infinite linear alternate-reverse;
+}
+.glitch:not(.enable-on-hover)::before {
+  left: -10px;
+  text-shadow: var(--before-shadow, 10px 0 cyan);
+  animation: animate-glitch var(--before-duration, 2s) infinite linear alternate-reverse;
+}
+
+.glitch.enable-on-hover::after,
+.glitch.enable-on-hover::before {
+  content: '';
+  opacity: 0;
+  animation: none;
+}
+
+.glitch.enable-on-hover:hover::after {
+  content: attr(data-text);
+  opacity: 1;
+  left: 10px;
+  text-shadow: var(--after-shadow, -10px 0 red);
+  animation: animate-glitch var(--after-duration, 3s) infinite linear alternate-reverse;
+}
+.glitch.enable-on-hover:hover::before {
+  content: attr(data-text);
+  opacity: 1;
+  left: -10px;
+  text-shadow: var(--before-shadow, 10px 0 cyan);
+  animation: animate-glitch var(--before-duration, 2s) infinite linear alternate-reverse;
+}
+
+@keyframes animate-glitch {
+  0%   { clip-path: inset(20% 0 50% 0); }
+  5%   { clip-path: inset(10% 0 60% 0); }
+  10%  { clip-path: inset(15% 0 55% 0); }
+  15%  { clip-path: inset(25% 0 35% 0); }
+  20%  { clip-path: inset(30% 0 40% 0); }
+  25%  { clip-path: inset(40% 0 20% 0); }
+  30%  { clip-path: inset(10% 0 60% 0); }
+  35%  { clip-path: inset(15% 0 55% 0); }
+  40%  { clip-path: inset(25% 0 35% 0); }
+  45%  { clip-path: inset(30% 0 40% 0); }
+  50%  { clip-path: inset(20% 0 50% 0); }
+  55%  { clip-path: inset(10% 0 60% 0); }
+  60%  { clip-path: inset(15% 0 55% 0); }
+  65%  { clip-path: inset(25% 0 35% 0); }
+  70%  { clip-path: inset(30% 0 40% 0); }
+  75%  { clip-path: inset(40% 0 20% 0); }
+  80%  { clip-path: inset(20% 0 50% 0); }
+  85%  { clip-path: inset(10% 0 60% 0); }
+  90%  { clip-path: inset(15% 0 55% 0); }
+  95%  { clip-path: inset(25% 0 35% 0); }
+  100% { clip-path: inset(30% 0 40% 0); }
+}
+
+/* Falling Text */
+.falling-text-container {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  text-align: center;
+  padding-top: 2em;
+}
+
+.falling-text-target {
+  display: inline-block;
+}
+
+.word {
+  display: inline-block;
+  margin: 0 2px;
+  user-select: none;
+}
+
+.highlighted {
+  color: cyan;
+  font-weight: bold;
+}
+
+.falling-text-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+}
+/**/
+```
+
+## File: components/react-bits/TextType.tsx
+```typescript
+'use client';
+import { useEffect, useRef, useState, createElement, useMemo, useCallback, ElementType } from 'react';
+import { gsap } from 'gsap';
+import './styles.module.css';
+
+type TextTypeProps = {
+  text: string | string[];
+  as?: ElementType;
+  typingSpeed?: number;
+  initialDelay?: number;
+  pauseDuration?: number;
+  deletingSpeed?: number;
+  loop?: boolean;
+  className?: string;
+  showCursor?: boolean;
+  hideCursorWhileTyping?: boolean;
+  cursorCharacter?: string;
+  cursorClassName?: string;
+  cursorBlinkDuration?: number;
+  textColors?: string[];
+  variableSpeed?: { min: number; max: number };
+  onSentenceComplete?: (sentence: string, index: number) => void;
+  startOnVisible?: boolean;
+  reverseMode?: boolean;
+  [key: string]: any;
+};
+
+export const TextType = ({
+  text,
+  as: Component = 'div',
+  typingSpeed = 50,
+  initialDelay = 0,
+  pauseDuration = 2000,
+  deletingSpeed = 30,
+  loop = true,
+  className = '',
+  showCursor = true,
+  hideCursorWhileTyping = false,
+  cursorCharacter = '|',
+  cursorClassName = '',
+  cursorBlinkDuration = 0.5,
+  textColors = [],
+  variableSpeed,
+  onSentenceComplete,
+  startOnVisible = false,
+  reverseMode = false,
+  ...props
+}: TextTypeProps) => {
+  const [displayedText, setDisplayedText] = useState<string>('');
+  const [currentCharIndex, setCurrentCharIndex] = useState<number>(0);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [currentTextIndex, setCurrentTextIndex] = useState<number>(0);
+  const [isVisible, setIsVisible] = useState<boolean>(!startOnVisible);
+
+  const cursorRef = useRef<HTMLElement | null>(null);
+  const containerRef = useRef<HTMLElement | null>(null);
+
+  const textArray = useMemo(() => (Array.isArray(text) ? text : [text]), [text]);
+
+  const getRandomSpeed = useCallback(() => {
+    if (!variableSpeed) return typingSpeed;
+    const { min, max } = variableSpeed;
+    return Math.random() * (max - min) + min;
+  }, [variableSpeed, typingSpeed]);
+
+  const getCurrentTextColor = () => {
+    if (textColors.length === 0) return '#ffffff'; // 혹은 기본색
+    return textColors[currentTextIndex % textColors.length];
+  };
+
+  useEffect(() => {
+    if (!startOnVisible || !containerRef.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setIsVisible(true);
+          }
+        });
+      },
+      { threshold: 0.1 },
+    );
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, [startOnVisible]);
+
+  useEffect(() => {
+    if (showCursor && cursorRef.current) {
+      gsap.set(cursorRef.current, { opacity: 1 });
+      gsap.to(cursorRef.current, {
+        opacity: 0,
+        duration: cursorBlinkDuration,
+        repeat: -1,
+        yoyo: true,
+        ease: 'power2.inOut',
+      });
+    }
+  }, [showCursor, cursorBlinkDuration]);
+
+  useEffect(() => {
+    if (!isVisible) return;
+    let timeout: ReturnType<typeof setTimeout>;
+
+    const currentText = textArray[currentTextIndex] ?? '';
+    const processedText = reverseMode ? currentText.split('').reverse().join('') : currentText;
+
+    const executeTypingAnimation = () => {
+      if (isDeleting) {
+        if (displayedText === '') {
+          setIsDeleting(false);
+          if (currentTextIndex === textArray.length - 1 && !loop) {
+            return;
+          }
+          if (onSentenceComplete) {
+            onSentenceComplete(currentText, currentTextIndex);
+          }
+          setCurrentTextIndex((prev) => (prev + 1) % textArray.length);
+          setCurrentCharIndex(0);
+          timeout = setTimeout(() => {}, pauseDuration);
+        } else {
+          timeout = setTimeout(() => {
+            setDisplayedText((prev) => prev.slice(0, -1));
+          }, deletingSpeed);
+        }
+      } else {
+        if (processedText && currentCharIndex < processedText.length) {
+          timeout = setTimeout(
+            () => {
+              setDisplayedText((prev) => prev + processedText[currentCharIndex]);
+              setCurrentCharIndex((prev) => prev + 1);
+            },
+            variableSpeed ? getRandomSpeed() : typingSpeed,
+          );
+        } else if (textArray.length > 1) {
+          timeout = setTimeout(() => {
+            setIsDeleting(true);
+          }, pauseDuration);
+        }
+      }
+    };
+
+    if (currentCharIndex === 0 && !isDeleting && displayedText === '') {
+      timeout = setTimeout(executeTypingAnimation, initialDelay);
+    } else {
+      executeTypingAnimation();
+    }
+    return () => clearTimeout(timeout);
+  }, [
+    currentCharIndex,
+    displayedText,
+    isDeleting,
+    typingSpeed,
+    deletingSpeed,
+    pauseDuration,
+    textArray,
+    currentTextIndex,
+    loop,
+    initialDelay,
+    isVisible,
+    reverseMode,
+    variableSpeed,
+    onSentenceComplete,
+  ]);
+
+  const shouldHideCursor =
+    hideCursorWhileTyping && (currentCharIndex < (textArray[currentTextIndex]?.length ?? 0) || isDeleting);
+
+  return createElement(
+    Component,
+    {
+      ref: containerRef,
+      className: `text-type ${className}`,
+      style: { color: getCurrentTextColor() }, // 여기서 색상 적용
+      ...props,
+    },
+    displayedText,
+    showCursor &&
+      !shouldHideCursor &&
+      createElement('span', { ref: cursorRef, className: cursorClassName }, cursorCharacter),
+  );
+};
+```
+
+## File: constants/doomIds.ts
+```typescript
+export const DOM_IDS = {
+  ROOT_CONTAINER: 'chrome-extension-root',
+} as const;
+```
+
+## File: constants/errorCodes.ts
+```typescript
+// src/constants/errorCodes.ts
+export const ERROR_CODES = {
+  NETWORK_FAILURE: 1001,
+  AUTH_EXPIRED: 2001,
+  RATE_LIMIT: 3001,
+} as const;
+```
+
+## File: constants/errorMessages.ts
+```typescript
+export const ERROR_MESSAGES = {
+  LYRIC_FETCH_FAILED: '가사 조회 실패',
+  VIDEO_DETECTION_FAILED: '영상 감지 실패',
+  INJECTION_FAILED: '스크립트 주입 실패',
+} as const;
+```
+
+## File: constants/keywords.ts
+```typescript
+export const SPECIAL_MUSIC_KEYWORDS = ['ed', 'op', 'mv', 'ost'];
+export const INTRO_OUTRO_KEYWORDS = ['mv', 'remix', 'stage', 'full cam', '직캠', 'fan cam', 'stage mix', '최초 공개'];
+export const MUSIC_KEYWORDS = [
+  // 영어
+  'official',
+  'official video',
+  'performance video',
+  'Official Lyric Video',
+  'mv',
+  'm/v',
+  'music video',
+  'lyric',
+  'lyrics',
+  'cover',
+  'remix',
+  'instrumental',
+  'karaoke',
+  'tj karaoke',
+  'ky karaoke',
+  // 한국어
+  '노래방',
+  '가사',
+  '커버',
+  '노래',
+  '뮤직비디오',
+  '뮤비',
+  // 일본어
+  '歌ってみた',
+];
+export const EXTRA_KEYWORDS = [
+  ...MUSIC_KEYWORDS,
+  // 영어
+  'animation',
+  'League of Legends',
+  'kbs',
+  'sbs',
+  'mbc',
+  'jtbc',
+  'music bank',
+  'inkigayo',
+  // 'live',
+  'full cam',
+  'clean ver.',
+  'Show! MusicCore',
+  // 한국어
+  '뮤직뱅크',
+  '음악중심',
+  '인기가요',
+  '쇼챔피언',
+  '방송',
+  '직캠',
+  '원테이크',
+  '교차편집',
+  '풀캠',
+  '안방1열',
+  '직캠4k',
+  'stage mix',
+];
+```
+
+## File: constants/languages.ts
+```typescript
+// 언어 관련 상수
+export const DEFAULT_LANGUAGE: SupportedLanguage = 'en';
+export const SUPPORTED_LANGUAGES = ['en', 'ko'] as const;
+export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
+
+export const MAX_RETRIES = 3;
+export const INITIAL_DELAY = 1000; // 1초
+
+export const NATIVE_LANGUAGE_NAMES = {
+  en: 'English',
+  ko: '한국어',
+} as const;
+
+// i18next 네임스페이스
+export const I18N_NAMESPACE = 'translation' as const;
+```
+
+## File: constants/messageTypes.ts
+```typescript
+export const MESSAGE_TYPES = {
+  TOGGLE_CONTENT: 'TOGGLE_CONTENT',
+  LANGUAGE_CHANGED: 'LANGUAGE_CHANGED',
+  VIDEO_DETECTED: 'VIDEO_DETECTED',
+  LYRICS_DATA: 'LYRICS_DATA',
+  NO_LYRICS_FOUND: 'NO_LYRICS_FOUND',
+  SPA_NAVIGATION_DETECTED: 'SPA_NAVIGATION_DETECTED',
+} as const;
+
+export type MessageType = (typeof MESSAGE_TYPES)[keyof typeof MESSAGE_TYPES];
+```
+
+## File: constants/paths.ts
+```typescript
+export const PATHS = {
+  CONTENT_SCRIPT: 'content/content.js',
+};
+```
+
+## File: constants/platforms.ts
+```typescript
+// src/constants/platforms.ts
+import { DetectionConfig } from '@lib/types/config';
+import { YOUTUBE_HOST, YOUTUBE_REGEX } from './youtubeSelectors';
+
+export const YOUTUBE_CONFIG: DetectionConfig = {
+  hostSuffix: YOUTUBE_HOST,
+  urlRegex: YOUTUBE_REGEX,
+};
+
+// 추후 다른 플랫폼 설정 추가 가능
+// export const NETFLIX_CONFIG: DetectionConfig = { ... };
+```
+
+## File: constants/storageKeys.ts
+```typescript
+export const STORAGE_KEYS = {
+  CONTENT_ENABLED: 'contentEnabled',
+  LANGUAGE: 'language',
+  LAST_VIDEO_ID: 'lastVideoId',
+} as const;
+```
+
+## File: constants/time.ts
+```typescript
+export const DEBOUNCE_DELAY = 1000; // ms
+export const SYNC_OFFSET_THRESHOLD = 0.5; // seconds
+export const EXECUTION_COOLDOWN = 10000; // 10초
+```
+
+## File: constants/youtubeSelectors.ts
+```typescript
+// constants/youtubeSelectors.ts
+export const YOUTUBE_HOST = 'youtube.com';
+
+export const YOUTUBE_PLAYER_SELECTOR = '#movie_player';
+export const YOUTUBE_PLAYER_CONTAINER = 'ytd-player';
+export const YOUTUBE_VIDEO_SELECTOR = 'video.html5-main-video';
+export const YOUTUBE_AD_SELECTOR = '.ad-showing, .ad-interrupting';
+
+// 유튜브 미니플레이어 관련 클래스명 및 셀렉터
+export const YOUTUBE_MINI_PLAYER_CONTAINER_SELECTOR = '.html5-video-player';
+export const YOUTUBE_MINI_PLAYER_CLASSES = ['ytp-miniplayer', 'ytp-small-mode'];
+
+// (선택적) 미니플레이어 UI 표시 여부 확인용 셀렉터
+export const YOUTUBE_MINI_PLAYER_UI_SELECTOR = '.ytp-miniplayer-ui';
+
+// 유튜브 URL 관련 상수
+export const YOUTUBE_WATCH_PATH = '/watch';
+export const YOUTUBE_VIDEO_ID_PARAM = 'v';
+
+// DOM 선택자 관련 상수
+export const YOUTUBE_TITLE_SELECTOR = 'h1.ytd-watch-metadata > yt-formatted-string';
+
+export const YOUTUBE_REGEX = /youtube\.com\/watch\?v=[\w-]{11}/;
+```
+
+## File: content/App.tsx
+```typescript
+// src/content/App.tsx
+import { useEffect, useState } from 'react';
+import { i18nInstance } from '@services/i18n';
+import { isToggleContentMessage } from '@lib/utils/common/typeGuards';
+import { ContentScriptMessage } from '@lib/types/message';
+import { STORAGE_KEYS } from '@constants/storageKeys';
+import { useChromeStorage } from '@hooks/useChromeStorage';
+import { MusicNoteButton } from './components/karaoke-player-settings/MusicNoteButton';
+import { MainMenu } from './components/karaoke-player-settings/MainMenu';
+import { RiMusicAiLine } from 'react-icons/ri';
+// import { LyricsContainer } from './components/LyricsContainer';
+import musicNoteStyles from './components/karaoke-player-settings/styles.module.css';
+
+export function App() {
+  // 버튼 클릭 핸들러(토글)
+  useEffect(() => {
+    console.log('[Content] Setting up storage listener');
+
+    const handleStorageChange = (changes: Record<string, chrome.storage.StorageChange>) => {
+      if (changes[STORAGE_KEYS.LANGUAGE]?.newValue) {
+        const newLang = changes[STORAGE_KEYS.LANGUAGE]?.newValue;
+        console.log(`[Content] Storage change detected: ${newLang}`);
+
+        // ✅ 실제 언어 변경 적용
+        if (i18nInstance.language !== newLang) {
+          console.log(`[Content] Changing language: ${i18nInstance.language} -> ${newLang}`);
+          i18nInstance.changeLanguage(newLang);
+        }
+      }
+    };
+
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    return () => chrome.storage.onChanged.removeListener(handleStorageChange);
+  }, []);
+
+  useEffect(() => {
+    // 콘텐츠 제어 함수
+    const updateContent = (enabled: boolean) => {
+      console.log(enabled ? '콘텐츠 활성화' : '콘텐츠 비활성화');
+    };
+    // 언어 변경 감지 리스너
+    const handleLanguageChange = () => {
+      console.log('Language changed to:', i18nInstance.language);
+    };
+
+    // 1. 초기 상태 불러오기
+    chrome.storage.sync.get(STORAGE_KEYS.CONTENT_ENABLED, (result) => {
+      updateContent(result.contentEnabled ?? false);
+    });
+
+    // 2. 메시지 리스너 등록
+    const messageListener = (request: ContentScriptMessage) => {
+      if (isToggleContentMessage(request)) {
+        updateContent(request.enabled); // ✅ 정확한 타입 추론
+      }
+    };
+
+    i18nInstance.on('languageChanged', handleLanguageChange);
+    chrome.runtime.onMessage.addListener(messageListener);
+
+    return () => {
+      i18nInstance.off('languageChanged', handleLanguageChange);
+      chrome.runtime.onMessage.removeListener(messageListener);
+    };
+  }, []);
+
+  const [offset, setOffset] = useState(0);
+  const [contentEnabled] = useChromeStorage('contentEnabled', true);
+
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+
+  const handleMusicNoteClick = () => {
+    const btn = document.querySelector('.ytp-music-note-button');
+    if (btn) {
+      const rect = btn.getBoundingClientRect();
+      setMenuPosition({
+        left: rect.left + rect.width / 2 + window.scrollX,
+        top: rect.bottom + window.scrollY - 60,
+      });
+
+      setMenuVisible((v) => !v);
+    }
+  };
+
+  return (
+    <>
+      {contentEnabled && (
+        <MusicNoteButton
+          icon={<RiMusicAiLine className={musicNoteStyles.icon} size={24} color="white" />}
+          contentEnabled={contentEnabled}
+          menuVisible={menuVisible}
+          onClick={handleMusicNoteClick}
+        />
+      )}
+      {menuVisible && (
+        <MainMenu
+          position={menuPosition}
+          visible={true}
+          onClose={() => setMenuVisible(false)}
+          offset={offset}
+          setOffset={setOffset}
+        />
+      )}
+    </>
+  );
+}
+```
+
+## File: content/components/karaoke-player-settings/AdvancedSettingsMenu.tsx
 ```typescript
 // 기타 메뉴
 // src/components/karaoke-player-settings/AdvancedSettingsMenu.tsx
@@ -1236,7 +2793,7 @@ export const AdvancedSettingsMenu: React.FC<AdvancedSettingsMenuProps> = ({ onBa
 };
 ```
 
-## File: components/karaoke-player-settings/FontStyleMenu.tsx
+## File: content/components/karaoke-player-settings/FontStyleMenu.tsx
 ```typescript
 import React, { useEffect, useState } from 'react';
 import { BackButton } from '@components/common/BackButton';
@@ -1351,7 +2908,7 @@ export const FontStyleMenu: React.FC<FontStyleMenuProps> = ({ onBack }) => {
 };
 ```
 
-## File: components/karaoke-player-settings/LyricsDisplayMenu.tsx
+## File: content/components/karaoke-player-settings/LyricsDisplayMenu.tsx
 ```typescript
 // 가사 디스플레이 상세 메뉴
 // src/components/karaoke-player-settings/LyricsDisplayMenu.tsx
@@ -1483,7 +3040,7 @@ export const LyricsDisplayMenu: React.FC<LyricsDisplayMenuProps> = ({ onBack }) 
 };
 ```
 
-## File: components/karaoke-player-settings/LyricsOffsetControl.tsx
+## File: content/components/karaoke-player-settings/LyricsOffsetControl.tsx
 ```typescript
 import React, { useState, useRef, useEffect } from 'react';
 import styles from './MainMenu.module.css';
@@ -1620,7 +3177,7 @@ export const LyricsOffsetControl: React.FC<LyricsOffsetControlProps> = ({
 };
 ```
 
-## File: components/karaoke-player-settings/LyricsOffsetMenu.tsx
+## File: content/components/karaoke-player-settings/LyricsOffsetMenu.tsx
 ```typescript
 // 가사 싱크
 // src/components/karaoke-player-settings/LyricsOffsetMenuMenu.tsx
@@ -1630,7 +3187,7 @@ import styles from './MainMenu.module.css';
 import { LyricsOffsetControl } from './LyricsOffsetControl';
 import { Line } from '@lib/types/lyrics';
 import { applyOffsetToLyrics } from '@lib/utils/lyrics/display/lyricsOffset';
-import { SingleLineLyrics } from '@components/lyrics/SingleLineLyrics/SingleLineLyrics';
+import { SingleLineLyrics } from '../lyrics/SingleLineLyrics/SingleLineLyrics';
 
 interface LyricsOffsetMenuProps {
   originalLyrics: Line[];
@@ -1829,7 +3386,7 @@ export const LyricsOffsetMenu: React.FC<LyricsOffsetMenuProps> = ({
 };
 ```
 
-## File: components/karaoke-player-settings/MainMenu.module.css
+## File: content/components/karaoke-player-settings/MainMenu.module.css
 ```css
 .container {
   min-width: 266px;
@@ -2113,7 +3670,7 @@ export const LyricsOffsetMenu: React.FC<LyricsOffsetMenuProps> = ({
 }
 ```
 
-## File: components/karaoke-player-settings/MainMenu.tsx
+## File: content/components/karaoke-player-settings/MainMenu.tsx
 ```typescript
 // 1차 메뉴
 
@@ -2277,21 +3834,23 @@ export const MainMenu: React.FC<MainMenuProps> = ({ visible, position, onClose, 
 };
 ```
 
-## File: components/karaoke-player-settings/MusicNoteButton.tsx
+## File: content/components/karaoke-player-settings/MusicNoteButton.tsx
 ```typescript
 // MusicNoteButton.tsx
-import React, { useRef } from 'react';
+import React, { ReactNode, useRef } from 'react';
 import { useEffect } from 'react';
 import styles from './styles.module.css';
+import ReactDOM from 'react-dom/client';
 
 interface Props {
-  iconPath: string;
+  icon: ReactNode;
   contentEnabled: boolean;
-  menuVisible: boolean; // 추가된 prop
+  menuVisible: boolean;
   onClick?: () => void;
 }
-export const MusicNoteButton: React.FC<Props> = ({ iconPath, contentEnabled, menuVisible, onClick }) => {
+export const MusicNoteButton: React.FC<Props> = ({ icon, contentEnabled, menuVisible, onClick }) => {
   const btnRef = useRef<HTMLButtonElement | null>(null);
+  const iconRootRef = useRef<ReactDOM.Root | null>(null);
 
   useEffect(() => {
     const rightControls = document.querySelector('.ytp-right-controls');
@@ -2305,20 +3864,14 @@ export const MusicNoteButton: React.FC<Props> = ({ iconPath, contentEnabled, men
 
     btn.className = `${styles.musicNoteButton} ytp-button ytp-music-note-button`;
     btn.setAttribute('aria-label', '노트');
+    btn.setAttribute('data-tooltip', '노트');
     btn.tabIndex = 0;
 
-    const iconImg = document.createElement('img');
-    iconImg.src = iconPath;
-    iconImg.alt = 'music note';
-    iconImg.className = styles.icon || '';
-    btn.appendChild(iconImg);
+    iconRootRef.current = ReactDOM.createRoot(btn);
+    iconRootRef.current.render(icon);
 
-    btn.setAttribute('data-tooltip', '노트');
-
-    // 클릭 이벤트: toggle clicked 클래스 + onClick 호출
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      // 클릭 시 클래스 토글은 지금 상태와 메뉴 상태 때문에 불필요, 아래 useEffect로 상태 반영 권장
       onClick?.();
     });
 
@@ -2343,10 +3896,11 @@ export const MusicNoteButton: React.FC<Props> = ({ iconPath, contentEnabled, men
 
     // Cleanup
     return () => {
+      iconRootRef.current?.unmount();
       btn.remove();
       document.body.removeEventListener('click', handleBodyClick);
     };
-  }, [iconPath, contentEnabled, onClick]);
+  }, [icon, contentEnabled, onClick]);
 
   // menuVisible 상태에 따라 클래스와 data 속성 조절
   useEffect(() => {
@@ -2360,22 +3914,25 @@ export const MusicNoteButton: React.FC<Props> = ({ iconPath, contentEnabled, men
 };
 ```
 
-## File: components/karaoke-player-settings/styles.module.css
+## File: content/components/karaoke-player-settings/styles.module.css
 ```css
 /* styles.module.css */
-
 .musicNoteButton {
   background: none;
   border: none;
   box-sizing: border-box;
   cursor: pointer;
-  display: inline-flex;
+  display: flex; /* 변경! */
+  align-items: center; /* 중앙 정렬 추가 */
+  justify-content: center; /* 중앙 정렬 추가 */
   padding: 0;
-  height: 48px;
-  width: 48px;
+  height: 36px;   /* ⇐ 48px → 36px 권장, 유튜브 기본 컨트롤바 버튼 높이와 맞춰줌 */
+  width: 36px;    /* ⇐ 48px → 36px */
   opacity: 0.8;
   transition: opacity 0.15s;
+  position: relative; /* 툴팁 Absolute 위치에 필요하면 추가 */
 }
+
 .musicNoteButton:hover {
   opacity: 1;
 }
@@ -2441,7 +3998,7 @@ export const MusicNoteButton: React.FC<Props> = ({ iconPath, contentEnabled, men
 }
 ```
 
-## File: components/lyrics/common/LyricLine.tsx
+## File: content/components/lyrics/common/LyricLine.tsx
 ```typescript
 import React from 'react';
 import styles from './styles.module.css';
@@ -2473,7 +4030,7 @@ export const LyricLine: React.FC<{
 };
 ```
 
-## File: components/lyrics/common/styles.module.css
+## File: content/components/lyrics/common/styles.module.css
 ```css
 /* 한 세트(현재+발음) 묶음 */
 .lyricItem {
@@ -2519,7 +4076,7 @@ export const LyricLine: React.FC<{
 }
 ```
 
-## File: components/lyrics/common/usePronunciation.ts
+## File: content/components/lyrics/common/usePronunciation.ts
 ```typescript
 import { useEffect, useState } from 'react';
 import { splitIntoLangGroups } from '@lib/utils/lyrics/detection/languageSpanSplitter';
@@ -2590,7 +4147,7 @@ export function usePronunciations(lines: string[]) {
 }
 ```
 
-## File: components/lyrics/FullLyrics/FullLyrics.tsx
+## File: content/components/lyrics/FullLyrics/FullLyrics.tsx
 ```typescript
 // src/components/lyrics/FullLyricsView/FullLyricsView.tsx
 import React, { useRef, useEffect, useMemo } from 'react';
@@ -2669,7 +4226,7 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({
 };
 ```
 
-## File: components/lyrics/FullLyrics/styles.module.css
+## File: content/components/lyrics/FullLyrics/styles.module.css
 ```css
 .fullLyricsContainer {
   position: absolute;
@@ -2735,7 +4292,7 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({
 }
 ```
 
-## File: components/lyrics/infra/LyricsOverlayRoot.module.css
+## File: content/components/lyrics/infra/LyricsOverlayRoot.module.css
 ```css
 .overlayRoot {
   position: absolute;
@@ -2750,24 +4307,20 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({
 }
 ```
 
-## File: components/lyrics/infra/LyricsOverlayRoot.tsx
+## File: content/components/lyrics/infra/LyricsOverlayRoot.tsx
 ```typescript
 import { YOUTUBE_PLAYER_SELECTOR } from '@constants/youtubeSelectors';
 import styles from './LyricsOverlayRoot.module.css';
 
 export function injectLyricsOverlayRoot() {
-  console.log('[injectLyricsOverlayRoot] 실행, 기존 root:', document.getElementById('lyrics-cc-overlay'));
-
   let overlay = document.getElementById('lyrics-cc-overlay');
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = 'lyrics-cc-overlay';
     overlay.className = styles.overlayRoot!;
-    // CSS 로드 전 깜빡임 방지용 숨김 처리 추가
-    overlay.style.visibility = 'hidden';
+    overlay.style.visibility = 'hidden'; // CSS 로드 전 깜빡임 방지용 숨김 처리 추가
 
     const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR) as HTMLElement | null;
-
     if (player) {
       // 부모 요소 position 체크 및 relative 지정 (필수)
       const computedStyle = getComputedStyle(player);
@@ -2777,7 +4330,10 @@ export function injectLyricsOverlayRoot() {
       }
 
       player.appendChild(overlay);
-      console.log('[LyricsOverlayRoot] 오버레이 루트 DOM 삽입 성공');
+      console.log(
+        'injectLyricsRoot: #lyrics-cc-overlay element exists?',
+        !!document.getElementById('lyrics-cc-overlay'),
+      );
     } else {
       console.warn('[LyricsOverlayRoot] 유튜브 플레이어 컨테이너를 찾지 못함');
     }
@@ -2788,7 +4344,7 @@ export function injectLyricsOverlayRoot() {
 }
 ```
 
-## File: components/lyrics/SingleLineLyrics/SingleLineLyrics.tsx
+## File: content/components/lyrics/SingleLineLyrics/SingleLineLyrics.tsx
 ```typescript
 import React, { useMemo } from 'react';
 import { Line } from '@lib/types/lyrics';
@@ -2845,7 +4401,7 @@ export const SingleLineLyrics: React.FC<SingleLineLyricsProps & { currentTime: n
 };
 ```
 
-## File: components/lyrics/SingleLineLyrics/styles.module.css
+## File: content/components/lyrics/SingleLineLyrics/styles.module.css
 ```css
 .singleLineSubtitle {
   position: absolute;
@@ -2864,7 +4420,7 @@ export const SingleLineLyrics: React.FC<SingleLineLyricsProps & { currentTime: n
 }
 ```
 
-## File: components/lyrics/SyncLyrics/DualHighlightLyrics.tsx
+## File: content/components/lyrics/SyncLyrics/DualHighlightLyrics.tsx
 ```typescript
 import React, { useMemo } from 'react';
 import { useCurrentTime } from '@hooks/useCurrentTime';
@@ -2905,7 +4461,7 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
   const topPron = top ? pronList[shiftedLyrics.findIndex((l) => l.text === top)] : '';
   const bottomPron = bottom ? pronList[shiftedLyrics.findIndex((l) => l.text === bottom)] : '';
 
-  // ✅ 추가: 색상 변경은 원본 타임 라인 기준
+  // 원본 타임 라인 기준
   const highlightIndex = useMemo(() => {
     return shiftedLyrics.findLastIndex((line) => adjustedTime >= line.time);
   }, [lyrics, adjustedTime]);
@@ -2937,13 +4493,13 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
 };
 ```
 
-## File: components/lyrics/SyncLyrics/styles.module.css
+## File: content/components/lyrics/SyncLyrics/styles.module.css
 ```css
 .dual-highlight-subtitle {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 70px; /* 하단바 위에 적절한 거리만큼 (조정 가능: 60~96px 등) */
+  bottom: 70px;
   display: flex;
   height: 2em;
   flex-direction: column;
@@ -2968,7 +4524,7 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
 }
 ```
 
-## File: components/song-info/SongInfoOverlay.tsx
+## File: content/components/song-info/SongInfoOverlay.tsx
 ```typescript
 // src/components/song-info/SongInfoOverlay.tsx
 import React from 'react';
@@ -3007,15 +4563,19 @@ export const SongInfoOverlay: React.FC<SongInfoOverlayProps> = ({ title, artist,
 };
 ```
 
-## File: components/song-info/styles.module.css
+## File: content/components/song-info/styles.module.css
 ```css
 .overlayContainer {
+  position: relative;
   background: rgba(0, 0, 0, 0.75);
   color: white;
   border-radius: 12px;
   padding: 24px 32px;
-  height: 100%;
-  max-width: 100%;
+  height: 30%;
+  max-width: 70%;
+  width: 70%;
+  top: 10%;
+  margin: auto;
   box-shadow: 0 2px 14px rgba(0, 0, 0, 0.2);
   font-family: 'Noto Sans KR', sans-serif;
 }
@@ -3069,389 +4629,9 @@ export const SongInfoOverlay: React.FC<SongInfoOverlayProps> = ({ title, artist,
 }
 ```
 
-## File: constants/doomIds.ts
-```typescript
-export const DOM_IDS = {
-  ROOT_CONTAINER: 'chrome-extension-root',
-  LYRICS_CONTAINER: 'lyrics-root',
-} as const;
-```
-
-## File: constants/errorCodes.ts
-```typescript
-// src/constants/errorCodes.ts
-export const ERROR_CODES = {
-  NETWORK_FAILURE: 1001,
-  AUTH_EXPIRED: 2001,
-  RATE_LIMIT: 3001,
-} as const;
-```
-
-## File: constants/errorMessages.ts
-```typescript
-export const ERROR_MESSAGES = {
-  LYRIC_FETCH_FAILED: '가사 조회 실패',
-  VIDEO_DETECTION_FAILED: '영상 감지 실패',
-  INJECTION_FAILED: '스크립트 주입 실패',
-} as const;
-```
-
-## File: constants/keywords.ts
-```typescript
-export const SPECIAL_MUSIC_KEYWORDS = ['ed', 'op', 'mv', 'ost'];
-export const INTRO_OUTRO_KEYWORDS = ['mv', 'remix', 'stage', 'full cam', '직캠', 'fan cam', 'stage mix', '최초 공개'];
-export const MUSIC_KEYWORDS = [
-  // 영어
-  'official',
-  'official video',
-  'performance video',
-  'Official Lyric Video',
-  'mv',
-  'm/v',
-  'music video',
-  'lyric',
-  'lyrics',
-  'cover',
-  'remix',
-  'instrumental',
-  'karaoke',
-  'tj karaoke',
-  'ky karaoke',
-  // 한국어
-  '노래방',
-  '가사',
-  '커버',
-  '노래',
-  '뮤직비디오',
-  '뮤비',
-  // 일본어
-  '歌ってみた',
-];
-export const EXTRA_KEYWORDS = [
-  ...MUSIC_KEYWORDS,
-  // 영어
-  'animation',
-  'League of Legends',
-  'kbs',
-  'sbs',
-  'mbc',
-  'jtbc',
-  'music bank',
-  'inkigayo',
-  // 'live',
-  'full cam',
-  'clean ver.',
-  'Show! MusicCore',
-  // 한국어
-  '뮤직뱅크',
-  '음악중심',
-  '인기가요',
-  '쇼챔피언',
-  '방송',
-  '직캠',
-  '원테이크',
-  '교차편집',
-  '풀캠',
-  '안방1열',
-  '직캠4k',
-  'stage mix',
-];
-```
-
-## File: constants/languages.ts
-```typescript
-// 언어 관련 상수
-export const DEFAULT_LANGUAGE: SupportedLanguage = 'en';
-export const SUPPORTED_LANGUAGES = ['en', 'ko'] as const;
-export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
-
-export const MAX_RETRIES = 3;
-export const INITIAL_DELAY = 1000; // 1초
-
-export const NATIVE_LANGUAGE_NAMES = {
-  en: 'English',
-  ko: '한국어',
-} as const;
-
-// i18next 네임스페이스
-export const I18N_NAMESPACE = 'translation' as const;
-```
-
-## File: constants/messageTypes.ts
-```typescript
-export const MESSAGE_TYPES = {
-  TOGGLE_CONTENT: 'TOGGLE_CONTENT',
-  LANGUAGE_CHANGED: 'LANGUAGE_CHANGED',
-  VIDEO_DETECTED: 'VIDEO_DETECTED',
-  LYRICS_DATA: 'LYRICS_DATA',
-  NO_LYRICS_FOUND: 'NO_LYRICS_FOUND',
-  SPA_NAVIGATION_DETECTED: 'SPA_NAVIGATION_DETECTED',
-} as const;
-
-export type MessageType = (typeof MESSAGE_TYPES)[keyof typeof MESSAGE_TYPES];
-```
-
-## File: constants/paths.ts
-```typescript
-export const PATHS = {
-  CONTENT_SCRIPT: 'content/content.js',
-  OPTIONS_HTML: 'options.html',
-  ICON_SETTING: '@public_assets/icons/setting.png',
-};
-```
-
-## File: constants/platforms.ts
-```typescript
-// src/constants/platforms.ts
-import { DetectionConfig } from '@lib/types/config';
-import { YOUTUBE_HOST, YOUTUBE_REGEX } from './youtubeSelectors';
-
-export const YOUTUBE_CONFIG: DetectionConfig = {
-  hostSuffix: YOUTUBE_HOST,
-  urlRegex: YOUTUBE_REGEX,
-};
-
-// 추후 다른 플랫폼 설정 추가 가능
-// export const NETFLIX_CONFIG: DetectionConfig = { ... };
-```
-
-## File: constants/storageKeys.ts
-```typescript
-export const STORAGE_KEYS = {
-  CONTENT_ENABLED: 'contentEnabled',
-  LANGUAGE: 'language',
-  LAST_VIDEO_ID: 'lastVideoId',
-} as const;
-```
-
-## File: constants/time.ts
-```typescript
-export const DEBOUNCE_DELAY = 1000; // ms
-export const SYNC_OFFSET_THRESHOLD = 0.5; // seconds
-export const EXECUTION_COOLDOWN = 10000; // 10초
-```
-
-## File: constants/youtubeSelectors.ts
-```typescript
-// constants/youtubeSelectors.ts
-export const YOUTUBE_HOST = 'youtube.com';
-
-export const YOUTUBE_PLAYER_SELECTOR = '#movie_player';
-export const YOUTUBE_PLAYER_CONTAINER = 'ytd-player';
-export const YOUTUBE_VIDEO_SELECTOR = 'video.html5-main-video';
-export const YOUTUBE_AD_SELECTOR = '.ad-showing, .ad-interrupting';
-
-// 유튜브 미니플레이어 관련 클래스명 및 셀렉터
-export const YOUTUBE_MINI_PLAYER_CONTAINER_SELECTOR = '.html5-video-player';
-export const YOUTUBE_MINI_PLAYER_CLASSES = ['ytp-miniplayer', 'ytp-small-mode'];
-
-// (선택적) 미니플레이어 UI 표시 여부 확인용 셀렉터
-export const YOUTUBE_MINI_PLAYER_UI_SELECTOR = '.ytp-miniplayer-ui';
-
-// 유튜브 URL 관련 상수
-export const YOUTUBE_WATCH_PATH = '/watch';
-export const YOUTUBE_VIDEO_ID_PARAM = 'v';
-
-// DOM 선택자 관련 상수
-export const YOUTUBE_TITLE_SELECTOR = 'h1.ytd-watch-metadata > yt-formatted-string';
-
-export const YOUTUBE_REGEX = /youtube\.com\/watch\?v=[\w-]{11}/;
-```
-
-## File: content/App.tsx
-```typescript
-// src/content/App.tsx
-import { useEffect, useState } from 'react';
-import { i18nInstance } from '@services/i18n';
-import { isToggleContentMessage } from '@lib/utils/common/typeGuards';
-import { ContentScriptMessage } from '@lib/types/message';
-import { STORAGE_KEYS } from '@constants/storageKeys';
-import { useChromeStorage } from '@hooks/useChromeStorage';
-import { MusicNoteButton } from '@components/karaoke-player-settings/MusicNoteButton';
-import { MainMenu } from '@components/karaoke-player-settings/MainMenu';
-// import { LyricsContainer } from './components/LyricsContainer';
-
-export function App() {
-  // 버튼 클릭 핸들러(토글)
-  useEffect(() => {
-    console.log('[Content] Setting up storage listener');
-
-    const handleStorageChange = (changes: Record<string, chrome.storage.StorageChange>) => {
-      if (changes[STORAGE_KEYS.LANGUAGE]?.newValue) {
-        const newLang = changes[STORAGE_KEYS.LANGUAGE]?.newValue;
-        console.log(`[Content] Storage change detected: ${newLang}`);
-
-        // ✅ 실제 언어 변경 적용
-        if (i18nInstance.language !== newLang) {
-          console.log(`[Content] Changing language: ${i18nInstance.language} -> ${newLang}`);
-          i18nInstance.changeLanguage(newLang);
-        }
-      }
-    };
-
-    chrome.storage.onChanged.addListener(handleStorageChange);
-    return () => chrome.storage.onChanged.removeListener(handleStorageChange);
-  }, []);
-
-  useEffect(() => {
-    // 콘텐츠 제어 함수
-    const updateContent = (enabled: boolean) => {
-      console.log(enabled ? '콘텐츠 활성화' : '콘텐츠 비활성화');
-    };
-    // 언어 변경 감지 리스너
-    const handleLanguageChange = () => {
-      console.log('Language changed to:', i18nInstance.language);
-    };
-
-    // 1. 초기 상태 불러오기
-    chrome.storage.sync.get(STORAGE_KEYS.CONTENT_ENABLED, (result) => {
-      updateContent(result.contentEnabled ?? false);
-    });
-
-    // 2. 메시지 리스너 등록
-    const messageListener = (request: ContentScriptMessage) => {
-      if (isToggleContentMessage(request)) {
-        updateContent(request.enabled); // ✅ 정확한 타입 추론
-      }
-    };
-
-    i18nInstance.on('languageChanged', handleLanguageChange);
-    chrome.runtime.onMessage.addListener(messageListener);
-
-    return () => {
-      i18nInstance.off('languageChanged', handleLanguageChange);
-      chrome.runtime.onMessage.removeListener(messageListener);
-    };
-  }, []);
-
-  const [offset, setOffset] = useState(0);
-  const [contentEnabled] = useChromeStorage('contentEnabled', true);
-
-  const [menuVisible, setMenuVisible] = useState(false);
-  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
-
-  const handleMusicNoteClick = () => {
-    const btn = document.querySelector('.ytp-music-note-button');
-    if (btn) {
-      const rect = btn.getBoundingClientRect();
-      setMenuPosition({
-        left: rect.left + rect.width / 2 + window.scrollX,
-        top: rect.bottom + window.scrollY - 60,
-      });
-
-      setMenuVisible((v) => !v);
-    }
-  };
-
-  return (
-    <>
-      {contentEnabled && (
-        <MusicNoteButton
-          iconPath={chrome.runtime.getURL('assets/icons/music_note.png')}
-          contentEnabled={contentEnabled}
-          menuVisible={menuVisible}
-          onClick={handleMusicNoteClick}
-        />
-      )}
-      {menuVisible && (
-        <MainMenu
-          position={menuPosition}
-          visible={true}
-          onClose={() => setMenuVisible(false)}
-          offset={offset}
-          setOffset={setOffset}
-        />
-      )}
-    </>
-  );
-}
-```
-
-## File: content/components/LyricsContainer.tsx
-```typescript
-import React, { useEffect, useState } from 'react';
-import { SyncSubtitle } from './SyncSubtitle';
-import { createRoot } from 'react-dom/client';
-
-export const LyricsContainer: React.FC<{ lyrics: string }> = ({ lyrics }) => {
-  const [currentTime, setCurrentTime] = useState(0);
-
-  useEffect(() => {
-    const video = document.querySelector('video');
-    if (!video) return;
-
-    const updateTime = () => setCurrentTime(video.currentTime);
-    video.addEventListener('timeupdate', updateTime);
-
-    return () => video.removeEventListener('timeupdate', updateTime);
-  }, []);
-
-  return (
-    <div className="lyrics-container">
-      <SyncSubtitle lyrics={lyrics} currentTime={currentTime} />
-    </div>
-  );
-};
-
-// DOM에 컨테이너 초기화
-export const initLyricsContainer = (data: { lyrics: string }) => {
-  let container = document.getElementById('lyrics-root');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'lyrics-root';
-    document.body.appendChild(container);
-  }
-
-  const root = createRoot(container);
-  root.render(<LyricsContainer lyrics={data.lyrics} />);
-};
-```
-
-## File: content/components/SyncSubtitle.tsx
-```typescript
-import React from 'react';
-import { parseTimeToSeconds } from '@lib/utils/common/time';
-import { Line } from '@lib/types/lyrics';
-
-export const SyncSubtitle: React.FC<{
-  lyrics: string;
-  currentTime: number;
-}> = ({ lyrics, currentTime }) => {
-  // 가사 파싱
-  const parsedLyrics: Line[] = lyrics.split('\n').reduce<Line[]>((acc, line) => {
-    const match = line.match(/\[(\d+):(\d+\.\d+)\](.*)/);
-    if (!match) return acc;
-
-    const [, min, sec, text] = match;
-    // text가 undefined일 경우 빈 문자열로 대체
-    const safeText = (text ?? '').trim();
-    if (safeText === '') return acc; // 빈 줄은 제외
-
-    const time = parseTimeToSeconds(`${min}:${sec}`);
-    acc.push({ time, text: safeText });
-    return acc;
-  }, []);
-
-  // 현재 시간에 해당하는 가사 찾기
-  const currentLineIndex = parsedLyrics.findIndex((line, index) => {
-    const nextLine = parsedLyrics[index + 1];
-    return currentTime >= line.time && (!nextLine || currentTime < nextLine.time);
-  });
-
-  return (
-    <div className="subtitle-display">
-      {currentLineIndex >= 0 && parsedLyrics[currentLineIndex] && (
-        <div className="current-line">{parsedLyrics[currentLineIndex].text}</div>
-      )}
-    </div>
-  );
-};
-```
-
 ## File: content/index.tsx
 ```typescript
-// src/content/index.tsx
-import { createRoot, Root } from 'react-dom/client';
+// ./index.tsx
 import { App } from './App';
 import { i18nInstance, initializeI18n } from '@services/i18n';
 import { ErrorFallback } from '@components/common/ErrorFallback';
@@ -3460,15 +4640,10 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { detectYouTubeVideo, setupSPAObserver } from '@lib/youtube';
 import { debounce } from '@lib/utils/common/common';
 import { STORAGE_KEYS } from '@constants/storageKeys';
-import { DOM_IDS } from '@constants/doomIds';
 import { fetchYouTubeVideoMeta } from '@background/api/youtube';
 import { isMusicVideo } from '@lib/utils/audio/musicDetection';
 import { UIResourceManager } from '@lib/utils/infra/uiResourceManager';
-import {
-  YOUTUBE_MINI_PLAYER_CLASSES,
-  YOUTUBE_MINI_PLAYER_CONTAINER_SELECTOR,
-  YOUTUBE_PLAYER_SELECTOR,
-} from '@constants/youtubeSelectors';
+import { YOUTUBE_MINI_PLAYER_CLASSES, YOUTUBE_MINI_PLAYER_CONTAINER_SELECTOR } from '@constants/youtubeSelectors';
 import { extractArtistAndTitle, fallbackArtistAndTitle } from '@lib/utils/lyrics/meta/artistTitle';
 import {
   cleanTopicName,
@@ -3477,9 +4652,8 @@ import {
 } from '@lib/utils/lyrics/parsers/stringUtils';
 import { listenerManager } from '@lib/utils/infra/listenerManager';
 import { withContentEnabled } from '@lib/utils/platform/contentGuard';
-import { injectLyricsOverlayRoot } from '@components/lyrics/infra/LyricsOverlayRoot';
-import { DualHighlightLyrics } from '@components/lyrics/SyncLyrics/DualHighlightLyrics';
-import { FullLyrics } from '@components/lyrics/FullLyrics/FullLyrics';
+import { DualHighlightLyrics } from './components/lyrics/SyncLyrics/DualHighlightLyrics';
+import { FullLyrics } from './components/lyrics/FullLyrics/FullLyrics';
 import { isAdPlaying } from '@lib/utils/dom/domUtils';
 import { parseLyrics } from '@lib/utils/lyrics/parsers/lyricsParser';
 import { Line } from '@lib/types/lyrics';
@@ -3494,7 +4668,8 @@ import { startAdWatcher } from '@lib/utils/infra/adWatcher';
 import { checkIfMiniPlayerActive } from '@lib/utils/platform/playerUtils';
 import { isWatchPage as checkIsWatchPage } from '@lib/utils/common/urlUtils';
 import { hasUrlChanged } from '@lib/utils/platform/navigation';
-import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
+import { SongInfoOverlay } from './components/song-info/SongInfoOverlay';
+import { overlayManager } from '@lib/utils/infra/overlayManager';
 
 (() => {
   // 새로고침 시 contentscript 내 중복 실행 방지
@@ -3511,11 +4686,9 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
   let lastVideoId: string | null = null;
   let lastUrl = window.location.href;
 
-  let lastRenderedLyrics = '';
   let latestLyrics: Line[] = [];
   let contentEnabled = false;
-  let lyricsOverlayRoot: Root | null = null; // 렌더링된 root 인스턴스 보관
-  let lyricsOverlayElement: HTMLElement | null = null;
+
   let spaObserverShouldTriggerDetection = true;
   let isRetryingDetection = false; // 재시도 중복 제어 플래그
   let isFirstMutation = true;
@@ -3523,15 +4696,11 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
   // font
   let lyricsFontColorCurrent = '#FFFFFF';
   let lyricsFontColorPronunciation = '#FFFFFF';
-  // let isOverlayInitializing = false;
 
   let showRealtimeLyrics = true; // 현재 가사 ui 보이게
   let showPronunciationLyrics = true;
 
   let lyricsMode: 'sync' | 'full' = 'sync';
-  let lastLyricsMode: 'sync' | 'full' | null = null;
-  let lastShowRealtimeLyrics: boolean | null = null;
-  let lastShowPronunciationLyrics: boolean | null = null;
 
   let stopAdWatcher: (() => void) | null = null;
   let analyzeLyricsAfterAd: (() => Promise<void>) | null = null;
@@ -3542,9 +4711,6 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
   //
   let storedMetaForLastCollected: { durationSec?: number } | null = null;
   let storedLyricsDurationForLastCollected: number | undefined = undefined;
-  //
-  let songInfoRoot: Root | null = null;
-  let songInfoContainer: HTMLElement | null = null;
 
   // 가사 모드
   const getContentEnabled = () => contentEnabled;
@@ -3564,6 +4730,20 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
     // ...other observers
   };
 
+  //
+  // clear, clean logic
+  /**
+   * 모든 리스너와 옵저버, UI 리소스, 오버레이, 가사 상태 데이터를 포함해
+   * 콘텐츠 관련 전반적인 리소스를 정리하는 최상위 클린업 함수
+   */
+  const cleanupAllResources = (): void => {
+    console.log('cleanupAllResources 실행');
+
+    listenerManager.removeAll();
+    removeAllObservers();
+    resetLyricsData();
+  };
+
   // --- Observer 및 리스너 관리 함수 ---
   const removeAllObservers = (): void => {
     Object.values(detectionObserverManager).forEach((obs) => obs?.disconnect && obs.disconnect());
@@ -3572,101 +4752,74 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
     detectionObserverManager.videoElementObserver = null;
   };
 
-  const cleanupAllResources = (): void => {
-    console.log('cleanupAllResources 실행');
-
-    listenerManager.removeAll();
-    removeAllObservers();
-    cleanupOverlayUI();
-  };
-
-  // 가사 배열 cleanup
-  function resetLyricsState() {
-    lastRenderedLyrics = '';
+  /**
+   * 렌더링된 가사 데이터를 초기화하고,
+   * 화면에 표시된 가사 렌더링을 초기 상태로 재실행하는 함수
+   */
+  function resetLyricsData() {
     latestLyrics = [];
-    console.log('[resetLyricsState] 가사 상태 초기화 완료');
-    realOverlayRender();
+    console.log('[resetLyricsData] 가사 상태 초기화 완료');
+
+    // 최신 상태 반영 위해 화면 재렌더링
+    renderLyricsOverlay(latestLyrics);
   }
 
-  // UI 오버레이 cleanup
+  /**
+   * UI 관련해서 직접 관리하는 DOM/스타일 등 리소스를 삭제하고,
+   * 오버레이 React Root(가사, 노래정보)를 unmount 및 DOM에서 제거하는 함수
+   */
   function cleanupOverlayUI() {
+    console.log('[cleanupOverlayUI] 실행');
     uiManager.cleanup();
+    overlayManager.cleanupOverlay('lyrics');
+    overlayManager.cleanupOverlay('songInfo');
   }
 
-  // 루트 엘리먼트 생성
-  const createRootElement = () => {
-    console.log('createRootElement 실행');
+  /**
+   * 가사 상태 초기화와 UI 오버레이 클린업을 한번에 실행하는 통합 클린업 함수.
+   * 기본적으로 대부분의 리소스 정리를 위해 호출됨
+   */
+  function resetAllUI() {
+    console.log('[resetAllUI] 실행');
+    resetLyricsData();
+    cleanupOverlayUI();
+  }
 
-    const root = document.createElement('div');
-    root.id = DOM_IDS.ROOT_CONTAINER;
-    document.body.appendChild(root);
-    return root;
-  };
-
-  const injectCSS = () => {
-    const cssId = 'karaoke-styles';
-    if (document.getElementById(cssId)) return Promise.resolve();
-
-    return new Promise((resolve) => {
-      const link = document.createElement('link');
-      link.id = cssId;
-      link.rel = 'stylesheet';
-      link.href = chrome.runtime.getURL('content/style.css');
-
-      link.onload = () => {
-        resolve(null);
-      };
-      link.onerror = () => {
-        resolve(null); // 실패해도 바로 resolve
-      };
-      document.head.appendChild(link);
-    });
-  };
-
-  // DOM 및 React root 생성 함수, 호출 시 existing overlay DOM 체크
-  async function createOverlayRoot() {
-    await injectCSS(); // CSS 먼저 완전히 로드 대기
-
-    if (!lyricsOverlayElement) {
-      lyricsOverlayElement = injectLyricsOverlayRoot();
-      lyricsOverlayElement.style.visibility = 'visible';
-      console.log('[Lyrics] 오버레이 DOM 생성 및 body에 삽입');
-    }
-
-    if (!lyricsOverlayRoot && lyricsOverlayElement) {
-      lyricsOverlayRoot = createRoot(lyricsOverlayElement);
-      console.log('[createOverlayRoot] React Root 초기 1회 생성 완료');
+  // 가사 렌더링 함수
+  async function renderLyricsOverlay(lyrics: Line[], offset = 0) {
+    if (lyricsMode === 'full') {
+      overlayManager.renderOverlay(
+        'lyrics',
+        <FullLyrics
+          lyrics={lyrics}
+          offset={offset}
+          fontColor={lyricsFontColorCurrent}
+          pronunciationColor={lyricsFontColorPronunciation}
+          showRealtimeLyrics={showRealtimeLyrics}
+          showPronunciationLyrics={showPronunciationLyrics}
+        />,
+      );
+    } else if (lyricsMode === 'sync') {
+      overlayManager.renderOverlay(
+        'lyrics',
+        <DualHighlightLyrics
+          lyrics={lyrics}
+          offset={offset}
+          fontColor={lyricsFontColorCurrent}
+          pronunciationColor={lyricsFontColorPronunciation}
+          showRealtimeLyrics={showRealtimeLyrics}
+          showPronunciationLyrics={showPronunciationLyrics}
+        />,
+      );
+    } else {
+      console.log('[renderLyricsOverlay] else 문으로 overlay cleanup 실행');
+      overlayManager.cleanupOverlay('lyrics');
     }
   }
 
-  function renderSongInfoOverlay(title: string, artist: string) {
-    const lyricsOverlayRootElement = document.getElementById('lyrics-cc-overlay');
-    if (!lyricsOverlayRootElement) {
-      console.log('lyricsOverlayRootElement 없음');
-      return;
-    }
-
-    if (!songInfoContainer) {
-      songInfoContainer = document.createElement('div');
-      songInfoContainer.id = 'song-info-overlay-container';
-      songInfoContainer.style.position = 'absolute';
-      songInfoContainer.style.top = '15%';
-      songInfoContainer.style.left = '50%';
-      songInfoContainer.style.transform = 'translateX(-50%)';
-      songInfoContainer.style.width = '100%';
-      songInfoContainer.style.maxWidth = '600px';
-      songInfoContainer.style.pointerEvents = 'auto';
-      songInfoContainer.style.zIndex = '101';
-      lyricsOverlayRootElement.appendChild(songInfoContainer);
-    }
-
-    if (!songInfoRoot && songInfoContainer) {
-      songInfoRoot = createRoot(songInfoContainer);
-    }
-
-    if (songInfoRoot) {
-      songInfoRoot.render(<SongInfoOverlay title={title} artist={artist} />);
-    }
+  // 노래 정보 렌더링
+  function renderSongInfo(title: string, artist: string) {
+    overlayManager.renderOverlay('songInfo', <SongInfoOverlay title={title} artist={artist} lyricsSource="LRCLIB" />);
   }
 
   function initListenersAndState() {
@@ -3691,54 +4844,13 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
         }
         // 최초 렌더 호출
         if (latestLyrics.length > 0) {
-          realOverlayRender();
+          renderLyricsOverlay(latestLyrics);
         }
       },
     );
+
     // 2. 저장소 변경 감지 - 실시간 업데이트
-    chrome.storage.onChanged.addListener((changes, areaName) => {
-      if (areaName !== 'sync') return;
-      let needRerender = false;
-      console.log('[storage.onChanged] 변경 감지됨:', changes);
-
-      if ('lyricsFontColorCurrent' in changes) {
-        const newColor = changes.lyricsFontColorCurrent.newValue;
-        console.log('[storage.onChanged] lyricsFontColorCurrent 변경:', newColor);
-
-        if (typeof newColor === 'string' && newColor !== lyricsFontColorCurrent) {
-          lyricsFontColorCurrent = newColor;
-          needRerender = true;
-        }
-      }
-      if ('lyricsFontColorPronunciation' in changes) {
-        const newColor = changes.lyricsFontColorPronunciation.newValue;
-        console.log('[storage.onChanged] lyricsFontColorPronunciation 변경:', newColor);
-
-        if (typeof newColor === 'string' && newColor !== lyricsFontColorPronunciation) {
-          lyricsFontColorPronunciation = newColor;
-          needRerender = true;
-        }
-      }
-      if ('realtimeLyrics' in changes) {
-        showRealtimeLyrics = changes.realtimeLyrics.newValue;
-        console.log('[storage.onChanged] realtimeLyrics 변경:', showRealtimeLyrics);
-        needRerender = true;
-      }
-      if ('announceLyrics' in changes) {
-        showPronunciationLyrics = changes.announceLyrics.newValue;
-        console.log('[storage.onChanged] announceLyrics 변경:', showPronunciationLyrics);
-        needRerender = true;
-      }
-      if ('lyricsMode' in changes) {
-        lyricsMode = changes.lyricsMode.newValue;
-        console.log('[storage.onChanged] lyricsMode 변경:', lyricsMode);
-        needRerender = true;
-      }
-
-      if (needRerender) {
-        realOverlayRender();
-      }
-    });
+    setupStorageListeners();
 
     chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       console.log('[content] onMessage 수신:', message);
@@ -3753,8 +4865,7 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
         const { offset, lyrics } = message.payload;
         console.log(`[content] APPLY_OFFSET_LYRICS 수신 → offset: ${offset}, 가사 길이: ${lyrics.length}`);
 
-        latestLyrics = lyrics; // 전역 최신 가사 교체
-        realOverlayRender(); // full / sync 모드에 즉시 적용
+        onLyricsUpdated(lyrics);
       }
     });
 
@@ -3765,161 +4876,58 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
       }
     });
   }
+
   function onLyricsUpdated(newLyrics: Line[]) {
     latestLyrics = newLyrics;
     console.log('[Lyrics] 가사 상태 업데이트 완료');
 
-    realOverlayRender();
+    renderLyricsOverlay(latestLyrics);
   }
+
   function isLyricsOverlayMounted(): boolean {
-    return !!lyricsOverlayRoot && !!lyricsOverlayElement && document.body.contains(lyricsOverlayElement);
+    return overlayManager.isOverlayMounted('lyrics');
   }
 
-  // sync 가사만 랜더링 함.
-  async function showLyricsOverlay(lyrics: Line[], offset?: number) {
-    console.log('[showLyricsOverlay] called');
-    if (!lyricsOverlayElement || !lyricsOverlayRoot) {
-      await createOverlayRoot();
-    }
+  // 스토리지 변경 리스너 등록
+  function setupStorageListeners() {
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName !== 'sync') return;
+      let needRerender = false;
 
-    if (!lyricsOverlayElement) {
-      console.warn('[showLyricsOverlay] lyricsOverlayElement가 없음, 함수 종료');
-      return;
-    }
-
-    if (!lyricsOverlayRoot) {
-      console.warn('[showLyricsOverlay] lyricsOverlayRoot가 없음, 렌더링 불가');
-      return;
-    }
-
-    lyricsOverlayElement.style.display = '';
-
-    if (lyricsMode !== 'sync') {
-      return;
-    }
-    if (!showRealtimeLyrics && !showPronunciationLyrics) {
-      console.log('[showLyricsOverlay] 현재가사/발음가사 모두 꺼짐 → hide');
-      resetLyricsState();
-      return;
-    }
-
-    lyricsOverlayRoot.render(
-      <DualHighlightLyrics
-        lyrics={lyrics}
-        offset={offset}
-        fontColor={lyricsFontColorCurrent}
-        pronunciationColor={lyricsFontColorPronunciation}
-        showRealtimeLyrics={showRealtimeLyrics}
-        showPronunciationLyrics={showPronunciationLyrics}
-      />,
-    );
-  }
-
-  async function realOverlayRender() {
-    if (!showRealtimeLyrics && !showPronunciationLyrics) {
-      resetLyricsState();
-      return;
-    }
-    if (!lyricsOverlayElement || !lyricsOverlayRoot) {
-      await createOverlayRoot();
-    }
-    if (!lyricsOverlayRoot) {
-      console.warn('[realOverlayRender] lyricsOverlayRoot가 없음, 렌더링 불가');
-      return;
-    }
-
-    if (lyricsMode === 'full') {
-      lyricsOverlayRoot.render(
-        <FullLyrics
-          lyrics={latestLyrics}
-          fontColor={lyricsFontColorCurrent}
-          pronunciationColor={lyricsFontColorPronunciation}
-          showRealtimeLyrics={showRealtimeLyrics}
-          showPronunciationLyrics={showPronunciationLyrics}
-        />,
-      );
-    } else if (lyricsMode === 'sync') {
-      lyricsOverlayRoot.render(
-        <DualHighlightLyrics
-          lyrics={latestLyrics}
-          offset={0} // 필요 시 offset 변수
-          fontColor={lyricsFontColorCurrent}
-          pronunciationColor={lyricsFontColorPronunciation}
-          showRealtimeLyrics={showRealtimeLyrics}
-          showPronunciationLyrics={showPronunciationLyrics}
-        />,
-      );
-    } else {
-      console.warn('[realOverlayRender] 알 수 없는 lyricsMode:', lyricsMode);
-      resetLyricsState();
-    }
-  }
-
-  // 현재 모드에 맞게 "무엇을 보여줄지" 판단.
-  function renderLyricsOverlay(lyrics: Line[]) {
-    const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR);
-    if (!player) return;
-
-    console.log('[renderLyricsOverlay] 호출됨, lyrics 길이:', lyrics.length);
-
-    latestLyrics = lyrics;
-    realOverlayRender();
-
-    const lyricsStr = JSON.stringify(lyrics);
-    if (lastRenderedLyrics === lyricsStr) return;
-    lastRenderedLyrics = lyricsStr;
-
-    // Observer 중복 생성 방지
-    if (detectionObserverManager.lyricsObserver) {
-      detectionObserverManager.lyricsObserver.disconnect();
-      detectionObserverManager.lyricsObserver = null;
-    }
-
-    if (!showRealtimeLyrics && !showPronunciationLyrics) {
-      console.log('[renderLyricsOverlay] 여기서 resetLyricsState');
-      resetLyricsState();
-      return;
-    }
-    // 최신 lyrics를 클로저로 안전하게 캡처
-    detectionObserverManager.lyricsObserver = new MutationObserver(() => {
-      if (
-        lyricsMode !== lastLyricsMode ||
-        showRealtimeLyrics !== lastShowRealtimeLyrics ||
-        showPronunciationLyrics !== lastShowPronunciationLyrics
-      ) {
-        lastLyricsMode = lyricsMode;
-        lastShowRealtimeLyrics = showRealtimeLyrics;
-        lastShowPronunciationLyrics = showPronunciationLyrics; // 추가 상태 저장
-
-        console.log('[MutationObserver] lyricsMode or showRealtimeLyrics changed, updating UI');
-
-        if (lyricsMode === 'sync' && (showRealtimeLyrics || showPronunciationLyrics)) {
-          showLyricsIfNotAd(latestLyrics);
-        } else {
-          realOverlayRender();
+      if ('lyricsFontColorCurrent' in changes) {
+        const newColor = changes.lyricsFontColorCurrent.newValue;
+        if (typeof newColor === 'string' && newColor !== lyricsFontColorCurrent) {
+          lyricsFontColorCurrent = newColor;
+          needRerender = true;
         }
       }
-    });
-
-    detectionObserverManager.lyricsObserver.observe(player, {
-      attributes: true,
-      attributeFilter: ['class'],
-      attributeOldValue: true,
-    });
-    showLyricsIfNotAd(lyrics);
-  }
-
-  function showLyricsIfNotAd(lyrics: Line[], offset?: number) {
-    if (isAdPlaying()) {
-      console.log('[showLyricsIfNotAd] resetLyricsState 수행');
-      resetLyricsState();
-    } else {
-      if (lyricsMode === 'sync' && (showRealtimeLyrics || showPronunciationLyrics)) {
-        showLyricsOverlay(lyrics, offset);
-      } else if (lyricsMode === 'full') {
-        realOverlayRender();
+      if ('lyricsFontColorPronunciation' in changes) {
+        const newColor = changes.lyricsFontColorPronunciation.newValue;
+        if (typeof newColor === 'string' && newColor !== lyricsFontColorPronunciation) {
+          lyricsFontColorPronunciation = newColor;
+          needRerender = true;
+        }
       }
-    }
+      if ('realtimeLyrics' in changes) {
+        showRealtimeLyrics = !!changes.realtimeLyrics.newValue;
+        needRerender = true;
+      }
+      if ('announceLyrics' in changes) {
+        showPronunciationLyrics = !!changes.announceLyrics.newValue;
+        needRerender = true;
+      }
+      if ('lyricsMode' in changes) {
+        const m = changes.lyricsMode.newValue;
+        if (m === 'sync' || m === 'full') {
+          lyricsMode = m;
+          needRerender = true;
+        }
+      }
+
+      if (needRerender && latestLyrics.length) {
+        renderLyricsOverlay(latestLyrics);
+      }
+    });
   }
 
   // ✅ URL 변경 핸들러 개선, 변화에 따른 상세 후처리(UI 초기화, 중복 방지 등)**를 담당하는 하위 레벨 함수
@@ -3953,7 +4961,7 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
     }
 
     cleanupOverlayUI();
-    console.log('handleUrlChange 내부의 cleanupAllUIElements가 실행!');
+    console.log('handleUrlChange 내부의 cleanupOverlayUI 실행!');
     lastVideoId = null;
     lastUrl = url;
 
@@ -3967,13 +4975,6 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
     }
   };
   const handleUrlChangeGuarded = withContentEnabled(getContentEnabled, handleUrlChange);
-
-  function finishParsingLyrics(lyricsArray: Line[]) {
-    latestLyrics = lyricsArray; // 원본만 저장
-
-    // background로 가사 준비 완료 신호 전송
-    chrome.runtime.sendMessage({ type: 'LYRICS_READY', length: lyricsArray.length });
-  }
 
   // 1. 영상과 크게 무관한 메타데이터, 가사 정보를 확보하는 함수
   async function collectMetadataAndLyrics(videoId: string) {
@@ -4019,7 +5020,7 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
       throw new Error('가사 없음');
     }
 
-    renderSongInfoOverlay(title, artist);
+    renderSongInfo(title, artist);
 
     // ----------- 여기서 캐시 저장 추가 -----------
     setToLyricsCache(normalizeLyricsQuery(artist, title, {}), {
@@ -4035,38 +5036,11 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
     // 가사 파싱, 기본 전처리 + 앞당기기(3초 예시)
     const parsedLyrics: Line[] = typeof lyrics === 'string' ? parseLyrics(lyrics) : lyrics;
 
-    finishParsingLyrics(parsedLyrics);
+    chrome.runtime.sendMessage({ type: 'LYRICS_READY', length: parsedLyrics.length });
     onLyricsUpdated(parsedLyrics);
-
-    // shiftedLyrics: Line[] 배열 (각 원소에 'text'가 있다고 가정)
-    //const lyricsText = shiftedLyrics.map((line) => line.text).join('\n');
-    //const lyricsLang = await detectLyricsLanguage(lyricsText, 2);
 
     // 이 함수는 성공시 meta 및 shiftedLyrics 반환 (후속 분석용)
     return { meta, lyricsDuration, parsedLyrics };
-  }
-
-  // delay 함수 (Promise 기반 6초 대기)
-  async function pauseVideoAndDelay(videoElem: HTMLMediaElement, ms: number) {
-    if (!videoElem) return;
-    console.log('pauseVideoAndDelay 시작');
-    if (!videoElem.paused) {
-      console.log('영상 pause 호출 전');
-      videoElem.pause();
-      console.log(`영상 일시정지, ${ms}ms 대기 시작`);
-    }
-    await new Promise<void>((resolve) => {
-      console.log('setTimeout 시작');
-      setTimeout(() => {
-        console.log('setTimeout 종료');
-        resolve();
-      }, ms);
-    });
-    console.log(`${ms}ms 대기 종료, 영상 재생 재개`);
-    await videoElem.play().catch((e) => {
-      console.warn('영상 재생 재개 실패:', e);
-    });
-    console.log('pauseVideoAndDelay 종료');
   }
 
   // 2. 영상 엘리먼트가 준비된 후, 실제 분석 및 렌더링 수행하는 함수
@@ -4097,8 +5071,9 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
     cleanupMediaElementSource(videoElem);
 
     latestLyrics = shiftedLyrics;
-    renderLyricsOverlay(shiftedLyrics);
+    onLyricsUpdated(shiftedLyrics);
   }
+
   async function analyzeAudioAndRenderLyricsWithAdCheck(
     meta: { durationSec?: number },
     lyricsDuration: number | undefined,
@@ -4116,6 +5091,7 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
     }
     await analyzeAudioAndRenderLyrics(meta, lyricsDuration, videoElem, shiftedLyrics);
   }
+
   async function tryCollectMetadataAndLyrics(videoId: string) {
     if (isCollecting) {
       console.log('[Lyrics] 수집 중복 방지 중...');
@@ -4161,7 +5137,7 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
     // 광고 중이면 가사 숨김 실행 후 종료 또는 조기 리턴
     if (isAdPlaying()) {
       console.log('[handleVideoDetection] 광고 재생 중, 가사 숨김 실행');
-      resetLyricsState();
+      resetLyricsData();
       // analyzeLyricsAfterAd = async () => {
       //   await pauseVideoAndDelay(videoElem, 6000); // 예: 6초 대기
       //   analyzeLyricsAfterAd = null;
@@ -4189,9 +5165,9 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
         return;
       }
 
-      console.time('beforePause');
-      await pauseVideoAndDelay(videoElem, 6000);
-      console.timeEnd('beforePause');
+      // console.time('beforePause');
+      // await pauseVideoAndDelay(videoElem, 6000);
+      // console.timeEnd('beforePause');
 
       // 새 영상이 들어왔으므로 이전 자막 제거
       lastVideoId = videoData.videoId;
@@ -4290,7 +5266,7 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
     // 영상 -> 영상, videoId가 있는 곳으로 url 변경된 상황
     if (videoIdChanged || (urlChanged && watchPageChanged)) {
       spaObserverShouldTriggerDetection = false;
-      resetLyricsState();
+      resetLyricsData();
       handleUrlChangeGuarded(url);
       setTimeout(() => {
         spaObserverShouldTriggerDetection = true;
@@ -4398,7 +5374,7 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
       const isMini = YOUTUBE_MINI_PLAYER_CLASSES.some((c) => player.classList.contains(c));
       if (lastIsMini && !isMini) {
         console.log('[Transition] 미니 -> 기본 유지');
-        realOverlayRender();
+        renderLyricsOverlay(latestLyrics);
       }
       lastIsMini = isMini;
     });
@@ -4418,8 +5394,7 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
       if (!lastIsMini && isMini) {
         console.log('[Transition] 기본 → 미니 플레이어 전환 감지');
         // 미니플레이어 전환 시 UI 유지 또는 재렌더링 처리
-        realOverlayRender();
-        // 필요 시 상태 동기화 및 감지 조작 수행
+        renderLyricsOverlay(latestLyrics); // 필요 시 상태 동기화 및 감지 조작 수행
       }
 
       lastIsMini = isMini;
@@ -4432,6 +5407,7 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
 
   // 감지 시스템 활성화
   const enableDetection = async () => {
+    console.log('[enableDetection] cleanupAllResources 실행');
     if (isDetectionActive) {
       console.log('[SKIP] 감지 시스템 이미 활성화됨');
       return;
@@ -4463,6 +5439,8 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
   };
   // 감지 시스템 완전 비활성화
   const disableDetection = () => {
+    console.log('[disableDetection] cleanupAllResources 실행');
+
     cleanupAllResources();
 
     if (detectionObserverManager.videoElementObserver) {
@@ -4486,6 +5464,29 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
     window.location.reload();
   };
 
+  // 앱 UI 및 감지 초기화 함수
+  function setupAppResources() {
+    if (!overlayManager.isInitialized('lyrics')) {
+      overlayManager.createOverlayRoot('lyrics');
+    }
+
+    overlayManager.renderOverlay(
+      'lyrics',
+      <ErrorBoundary FallbackComponent={ErrorFallback} onReset={handleReset}>
+        <I18nextProvider i18n={i18nInstance}>
+          <App />
+        </I18nextProvider>
+      </ErrorBoundary>,
+    );
+
+    initListenersAndState();
+    setupMiniToBasicTransitionObserver();
+    setupBasicToMiniTransitionObserver();
+    runInitialDetection();
+
+    enableDetection();
+  }
+
   // 앱 초기화
   const initializeApp = async () => {
     console.log('content app initializeApp 시작');
@@ -4494,34 +5495,32 @@ import { SongInfoOverlay } from '@components/song-info/SongInfoOverlay';
 
       chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED], (result) => {
         contentEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
+        if (!contentEnabled) {
+          console.log('[Content] 콘텐츠 비활성 상태 - UI 렌더링 및 리스너 초기화 건너뜀');
+          return;
+        }
+        setupAppResources();
       });
 
-      // 루트 컨테이너 준비 및 렌더링
-      const rootElement = document.getElementById(DOM_IDS.ROOT_CONTAINER) || createRootElement();
-      const root = createRoot(rootElement);
-      root.render(
-        <ErrorBoundary FallbackComponent={ErrorFallback} onReset={handleReset}>
-          <I18nextProvider i18n={i18nInstance}>
-            <App />
-          </I18nextProvider>
-        </ErrorBoundary>,
-      );
+      // 저장소 변경 감지 등록 - 활성화 상태 변하면 처리
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === 'sync' && STORAGE_KEYS.CONTENT_ENABLED in changes) {
+          contentEnabled = changes[STORAGE_KEYS.CONTENT_ENABLED]?.newValue;
+          console.log('[Content] 저장소 변경 감지, 활성화 상태:', contentEnabled);
 
-      initListenersAndState();
-      setupMiniToBasicTransitionObserver();
-      setupBasicToMiniTransitionObserver();
-      runInitialDetection();
+          if (contentEnabled) {
+            setupAppResources();
+          } else {
+            disableDetection();
+            console.log('[initialize App] cleanupAllResources 실행');
 
-      // 감지 시스템 활성/비활성 상태 동기화
-      chrome.storage.sync.get(STORAGE_KEYS.CONTENT_ENABLED, (result) => {
-        const enabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? true;
-        if (enabled) enableDetection();
-        else disableDetection();
+            cleanupAllResources();
+            // 필요 시 UI 클린업 등도 수행
+          }
+        }
       });
     } catch (error) {
-      const rootElement = document.getElementById(DOM_IDS.ROOT_CONTAINER) || createRootElement();
-      const root = createRoot(rootElement);
-      root.render(<ErrorFallback error={error} resetErrorBoundary={handleReset} />);
+      console.log(error);
     }
   };
 
@@ -4792,6 +5791,11 @@ export type ToggleContentMessage = {
 // 2. 확장 가능한 유니온 타입
 export type ContentScriptMessage = ToggleContentMessage;
 // | AnotherMessageType
+```
+
+## File: lib/types/react-scroll-picker.d.ts
+```typescript
+declare module 'react-scroll-picker';
 ```
 
 ## File: lib/types/svg.d.ts
@@ -5564,6 +6568,169 @@ class ListenerManager {
 
 // 싱글 인스턴스 export (프로젝트 전체에서 공유)
 export const listenerManager = new ListenerManager();
+```
+
+## File: lib/utils/infra/overlayManager.ts
+```typescript
+// src/lib/utils/infra/overlayManager.ts
+import { createRoot, Root } from 'react-dom/client';
+import { injectLyricsOverlayRoot } from '@content/components/lyrics/infra/LyricsOverlayRoot';
+
+/**
+ * OverlayManager는 가사 오버레이, 노래 정보 오버레이 등
+ * 여러 React Root 및 관련 DOM 컨테이너를 중앙에서 관리하는 싱글톤 클래스입니다.
+ * 내부 DOM 엘리먼트 및 Root 중복생성 방지, 상태 확인, 렌더, 클린업 기능을 제공합니다.
+ *
+ * 낮은 수준의 DOM 생성/조작은 필요하면 src/lib/utils/dom 등으로 위임할 수 있습니다.
+ */
+export type OverlayType = 'lyrics' | 'songInfo' | string;
+
+export interface OverlayInstance {
+  root: Root;
+  container: HTMLElement;
+}
+
+class OverlayManager {
+  private overlays: Map<OverlayType, OverlayInstance> = new Map();
+  private isInitializedFlags: Map<OverlayType, boolean> = new Map();
+
+  // 내부: 타입별 컨테이너 생성 - 필요시 외부 API 호출
+  private createContainer(type: OverlayType): HTMLElement {
+    console.log(`[OverlayManager] createContainer called for type: ${type}`);
+    let container: HTMLElement | null = null;
+
+    if (type === 'lyrics') {
+      container = injectLyricsOverlayRoot();
+      console.log('[OverlayManager] injectLyricsRoot called, returned:', container);
+      if (!container) {
+        console.error('[OverlayManager] injectLyricsRoot 반환값 null');
+        // 재시도 또는 기본 생성 시도 로직 추가 가능
+        container = document.createElement('div');
+        container.id = 'lyrics-cc-overlay';
+        document.body.appendChild(container);
+        console.warn('[OverlayManager] fallback: 기본 overlay container 생성');
+      }
+      console.log('[OverlayManager] lyrics container connected to DOM?', document.body.contains(container));
+    } else if (type === 'songInfo') {
+      container = document.getElementById('song-info-overlay-container');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'song-info-overlay-container';
+        container.style.width = '100%';
+        container.style.height = '100%';
+
+        const lyricsOverlayRoot = document.getElementById('lyrics-cc-overlay');
+        if (!lyricsOverlayRoot) {
+          throw new Error('[OverlayManager] Lyrics overlay root not found');
+        }
+        lyricsOverlayRoot.appendChild(container);
+      }
+    } else {
+      // 확장성 고려 - 새로운 타입일 경우 기본 스타일 및 body append
+      container = document.getElementById(`${type}-overlay-container`);
+      console.log(`[OverlayManager] container for type ${type} found:`, container);
+      if (!container) {
+        container = document.createElement('div');
+        container.id = `${type}-overlay-container`;
+
+        document.body.appendChild(container);
+        console.log(`[OverlayManager] created and appended container for type ${type}`);
+      }
+      console.log(`[OverlayManager] container connected to DOM?`, document.body.contains(container));
+    }
+
+    // 가시성 보장
+    container.style.visibility = 'visible';
+    console.log(`[OverlayManager] returning container for type ${type}:`, container);
+    return container;
+  }
+
+  /**
+   * Overlay React Root 생성 및 초기 마운트
+   * 중복 생성 방지
+   */
+  public createOverlayRoot(type: OverlayType): Root {
+    if (this.overlays.has(type)) {
+      return this.overlays.get(type)!.root;
+    }
+
+    const container = this.createContainer(type);
+    const root = createRoot(container);
+
+    this.overlays.set(type, { root, container });
+    this.isInitializedFlags.set(type, true);
+
+    return root;
+  }
+
+  /** 특정 타입 Overlay React Root가 마운트되었는지 확인 */
+  public isOverlayMounted(type: OverlayType): boolean {
+    if (!this.overlays.has(type)) return false;
+    const instance = this.overlays.get(type)!;
+    return document.body.contains(instance.container);
+  }
+
+  /** 특정 타입 Overlay React Root에 렌더링 수행 */
+  public renderOverlay(type: OverlayType, element: React.ReactNode): void {
+    if (!this.overlays.has(type)) {
+      this.createOverlayRoot(type);
+    }
+    this.overlays.get(type)?.root.render(element);
+  }
+
+  /** 특정 타입 Overlay 클린업 (React Root unmount + DOM 제거) */
+  public cleanupOverlay(type: OverlayType): void {
+    if (!this.overlays.has(type)) return;
+    const { root, container } = this.overlays.get(type)!;
+    try {
+      root.unmount();
+    } catch (e) {
+      console.warn(`[OverlayManager] unmount error for ${type}:`, e);
+    }
+    if (container.parentNode) {
+      container.parentNode.removeChild(container);
+    }
+    this.overlays.delete(type);
+    this.isInitializedFlags.delete(type);
+  }
+
+  /** 모든 관리 중인 오버레이 일괄 클린업 */
+  public cleanupAll(): void {
+    this.overlays.forEach((_instance, type) => {
+      this.cleanupOverlay(type);
+    });
+  }
+
+  /** 특정 타입 Overlay container 반환(없으면 null) */
+  public getContainer(type: OverlayType): HTMLElement | null {
+    return this.overlays.get(type)?.container || null;
+  }
+
+  /** 오버레이 타입별 초기화 상태 반환 */
+  public isInitialized(type: OverlayType): boolean {
+    return this.isInitializedFlags.get(type) ?? false;
+  }
+
+  /** 특정 타입 Overlay container visibility 조절 */
+  public setVisibility(type: OverlayType, visible: boolean): void {
+    const container = this.getContainer(type);
+    if (!container) return;
+    container.style.display = visible ? '' : 'none';
+  }
+
+  // 싱글톤 인스턴스
+  private static instance: OverlayManager;
+
+  public static getInstance(): OverlayManager {
+    if (!OverlayManager.instance) {
+      OverlayManager.instance = new OverlayManager();
+    }
+    return OverlayManager.instance;
+  }
+}
+
+// 싱글톤 객체 export
+export const overlayManager = OverlayManager.getInstance();
 ```
 
 ## File: lib/utils/infra/registerAllListeners.ts
@@ -6751,6 +7918,8 @@ export function setupSPAObserver(callback: () => void): MutationObserver {
   "extPronunciation": "Pronunciation",
   "extFAQ": "FAQ",
   "extLicense": "License",
+  "extOpenSourceList": "OpenSourceList",
+  "extOpenSourceDetail": "OpenSourceDetail",
   "extContact": "Contact",
   "extContactUs": "Contact Us",
   "extPersonalSettings": "Personal Settings",
@@ -6780,6 +7949,8 @@ export function setupSPAObserver(callback: () => void): MutationObserver {
   "extPronunciation": "발음",
   "extFAQ": "많이 묻는 질문",
   "extLicense": "라이센스",
+  "extOpenSourceList": "OpenSourceList",
+  "extOpenSourceDetail": "OpenSourceDetail",
   "extContact": "문의",
   "extContactUs": "문의하기",
   "extPersonalSettings": "개인 설정",
@@ -6951,16 +8122,20 @@ ExtensionPay 로 구현할 예정
 ## File: popup/App.tsx
 ```typescript
 // poup/App.tsx
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLangLoader } from '@hooks/useLangLoader';
 import { useTranslation } from 'react-i18next';
-import { useChromeStorage } from '@hooks/useChromeStorage';
+// import { useChromeStorage } from '@hooks/useChromeStorage';
 import { MESSAGE_TYPES } from '@constants/messageTypes';
 import { ErrorFallback } from '@components/common/ErrorFallback';
 import { LoadingOverlay } from '@components/common/LoadingOverlay';
 import { STORAGE_KEYS } from '@constants/storageKeys';
-import { PopupSettingsPanel } from './components/PopupSettingsPanel';
+import { PopupSettingsPanel } from './components/settings/PopupSettingsPanel';
 import './popup.css';
+import { Timer } from './components/timer/Timer';
+import { History } from './components/history/History';
+import { IoSettingsOutline } from 'react-icons/io5';
+import { useChromeStorage } from '@hooks/useChromeStorage';
 
 interface LanguageChangeMessage {
   type: typeof MESSAGE_TYPES.LANGUAGE_CHANGED;
@@ -6970,8 +8145,18 @@ export function App() {
   const { t, i18n } = useTranslation();
   const { phase } = useLangLoader();
 
-  const [enabled, setEnabled] = useChromeStorage(STORAGE_KEYS.CONTENT_ENABLED, false);
+  const [, setEnabled] = useChromeStorage(STORAGE_KEYS.CONTENT_ENABLED, false);
   const [showSettings, setShowSettings] = useState(false);
+  const [activeTab, setActiveTab] = useState<'timer' | 'history'>('timer');
+
+  // Timer의 재생 상태를 App에서 관리
+  const [, setTimerPlaying] = useState(false);
+
+  // Timer 재생 상태 변경 시 호출되는 콜백
+  const handleTimerPlayChange = (playing: boolean) => {
+    setTimerPlaying(playing);
+    setEnabled(playing);
+  };
 
   useEffect(() => {
     console.log('[Popup] Setting up language listeners');
@@ -7020,19 +8205,19 @@ export function App() {
   if (phase !== 'ready') return <LoadingOverlay />;
 
   // 스위치 상태 변경 핸들러
-  const handleToggle = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.checked;
-    setEnabled(newValue);
+  // const handleToggle = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  //   const newValue = e.target.checked;
+  //   // setEnabled(newValue);
 
-    // 현재 활성 탭에 메시지 전송
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]?.id)
-        chrome.tabs.sendMessage(tabs[0].id, {
-          type: MESSAGE_TYPES.TOGGLE_CONTENT,
-          enabled: newValue,
-        });
-    });
-  };
+  //   // 현재 활성 탭에 메시지 전송
+  //   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+  //     if (tabs[0]?.id)
+  //       chrome.tabs.sendMessage(tabs[0].id, {
+  //         type: MESSAGE_TYPES.TOGGLE_CONTENT,
+  //         enabled: newValue,
+  //       });
+  //   });
+  // };
 
   if (showSettings) {
     return <PopupSettingsPanel onBack={() => setShowSettings(false)} />;
@@ -7043,21 +8228,47 @@ export function App() {
       <div className="popup-header">
         <h2>{t('extName')}</h2>
         <button id="go-to-options" className="icon-button" onClick={() => setShowSettings(true)}>
-          <img src="../assets/icons/setting.png" alt="설정" width={24} height={24} />
+          <IoSettingsOutline size={16} />
         </button>
       </div>
-      <div>
-        <label className="switch">
-          <input type="checkbox" checked={enabled} onChange={handleToggle} />
-          <span className="slider"></span>
-        </label>
+      <div className="popup-wrapper">
+        <div className="popup-tabs">
+          <div className="slider" style={{ transform: activeTab === 'timer' ? 'translateX(0)' : 'translateX(100%)' }} />
+          <button
+            className={`tab ${activeTab === 'timer' ? 'active' : ''}`}
+            onClick={() => setActiveTab('timer')}
+            type="button"
+          >
+            타이머 설정
+          </button>
+          <button
+            className={`tab ${activeTab === 'history' ? 'active' : ''}`}
+            onClick={() => setActiveTab('history')}
+            type="button"
+          >
+            히스토리
+          </button>
+        </div>
+        <div>{activeTab === 'timer' ? <Timer onPlayStateChange={handleTimerPlayChange} /> : <History />}</div>
       </div>
     </div>
   );
 }
 ```
 
-## File: popup/components/Contact.tsx
+## File: popup/components/history/History.tsx
+```typescript
+export function History() {
+  return (
+    <div className="history-panel">
+      {/* 히스토리 UI 내용 작성 */}
+      <p>히스토리 탭 컨텐츠입니다.</p>
+    </div>
+  );
+}
+```
+
+## File: popup/components/settings/Contact.tsx
 ```typescript
 import { useTranslation } from 'react-i18next';
 import styles from './styles.module.css';
@@ -7066,7 +8277,7 @@ const GOOGLE_FORM_URL =
   'https://docs.google.com/forms/d/e/1FAIpQLSfVhvBVQBG5kfS3npBTMBlTfR1t5uYTg73iRJJG612MmdNhKw/viewform?usp=header';
 
 export function Contact() {
-  const {t} = useTranslation();
+  const { t } = useTranslation();
   const handleClick = () => {
     window.open(GOOGLE_FORM_URL, '_blank', 'noopener,noreferrer');
   };
@@ -7086,42 +8297,71 @@ export function Contact() {
 }
 ```
 
-## File: popup/components/FAQ.module.css
+## File: popup/components/settings/FAQ.module.css
 ```css
 .faqContent {
-  padding: 22px 22px; /* 상하좌우 여백 조절 */
-}
-
-.faqTitle {
-  font-size: 18px;
-  font-weight: 700;
-  margin-bottom: 18px;
-  margin-left: 2px;
+  margin: 16px 0;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  overflow-y: scroll;
+  padding: 0;
+  box-sizing: border-box;
 }
 
 .faqItem {
-  margin-bottom: 20px;
+  border-bottom: 1px solid #eee;
 }
 
 .faqQuestion {
-  color: #888;
-  font-weight: 600;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 14px;
+  font-weight: 500;
   font-size: 15px;
-  margin-bottom: 7px;
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+
+.faqQuestion:focus {
+  outline: 2px solid #4a90e2;
+}
+
+.faqIcon {
+  font-size: 18px;
+  font-weight: bold;
 }
 
 .faqAnswer {
-  color: #222;
-  font-size: 15px;
-  line-height: 1.6;
-  margin-bottom: 2px;
+  padding: 15px;
+  font-size: 13px;
+  color: #555;
+  animation: fadeIn 0.2s;
+  line-height: 1.8;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 500px;
+  }
 }
 ```
 
-## File: popup/components/FAQ.tsx
+## File: popup/components/settings/FAQ.tsx
 ```typescript
-// FAQ.tsx
-import styles from './FAQ.module.css';
+import { useState } from 'react';
+import faqStyles from './FAQ.module.css';
+import styles from './styles.module.css';
+import { useTranslation } from 'react-i18next';
 
 const faqList = [
   {
@@ -7137,20 +8377,41 @@ const faqList = [
 ];
 
 export function FAQ() {
+  const { t } = useTranslation();
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+
+  const handleToggle = (idx: number) => {
+    setOpenIndex((prev) => (prev === idx ? null : idx));
+  };
   return (
-    <div className={styles.faqContent}>
-      {faqList.map((item, idx) => (
-        <div key={idx} className={styles.faqItem}>
-          <div className={styles.faqQuestion}>{item.question}</div>
-          <div className={styles.faqAnswer}>{item.answer}</div>
-        </div>
-      ))}
+    <div className={styles.menuSection}>
+      <h3> {t('extFAQ')}</h3>
+      <div className={faqStyles.faqContent}>
+        {faqList.map((item, idx) => (
+          <div key={idx} className={faqStyles.faqItem}>
+            <button
+              className={faqStyles.faqQuestion}
+              onClick={() => handleToggle(idx)}
+              aria-expanded={openIndex === idx}
+              aria-controls={`faq-answer-${idx}`}
+            >
+              {item.question}
+              <span className={faqStyles.faqIcon}>{openIndex === idx ? '−' : '+'}</span>
+            </button>
+            {openIndex === idx && (
+              <div id={`faq-answer-${idx}`} className={faqStyles.faqAnswer}>
+                {item.answer}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 ```
 
-## File: popup/components/LanguageSettings.tsx
+## File: popup/components/settings/LanguageSettings.tsx
 ```typescript
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7161,6 +8422,7 @@ import { DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, SupportedLanguage, NATIVE_LANGUA
 import { syncLanguage } from '@services/i18n';
 import { MESSAGE_TYPES } from '@constants/messageTypes';
 import { STORAGE_KEYS } from '@constants/storageKeys';
+import styles from './styles.module.css';
 
 export function LanguageSettings() {
   const { t, i18n } = useTranslation();
@@ -7207,8 +8469,9 @@ export function LanguageSettings() {
   };
 
   return (
-    <div className="language-selector">
+    <div className={styles.menuSection}>
       <h2>{t('extLanguage')}</h2>
+      <p>사용자 인터페이스가 해당 언어로 제공합니다.</p>
       <select value={currentLang} onChange={handleChange} disabled={isChanging} aria-busy={isChanging}>
         {SUPPORTED_LANGUAGES.map((lang) => (
           <option key={lang} value={lang}>
@@ -7222,36 +8485,190 @@ export function LanguageSettings() {
 }
 ```
 
-## File: popup/components/LicenseInfo.tsx
+## File: popup/components/settings/License/ExtensionLicense.tsx
 ```typescript
 import React from 'react';
 import styles from './styles.module.css';
 
-export const LicenseInfo: React.FC = () => {
+export const ExtensionLicense: React.FC = () => {
   return (
-    <div className={styles.sectionGroup}>
-      <div className={styles.sectionLabel}>라이선스 정보</div>
-      <p>본 확장 프로그램은 MIT 라이선스에 따라 배포됩니다. 소스 코드는 자유롭게 사용, 수정, 배포가 가능합니다.</p>
-      <p>본 확장 프로그램은 다음 오픈소스 라이브러리를 사용하며, 각각의 라이선스 조건을 준수합니다.</p>
-      <ul>
-        <li>라이브러리 A - Apache 2.0 License</li>
-        <li>라이브러리 B - MIT License</li>
-        {/* 필요한 경우 추가 명시 */}
-      </ul>
-      <p>프로그램은 “있는 그대로” 제공되며, 사용 중 발생하는 문제에 대해서 개발자는 법적 책임을 지지 않습니다.</p>
-      <p>개인정보 처리에 관한 자세한 내용은 개인정보처리방침 페이지를 참고하시기 바랍니다.</p>
-      <p>저작권 © 2025 [개발자명 또는 회사명]. All rights reserved.</p>
+    <div className={styles.openSourceList}>
+      <h2>Extension licenses</h2>
+      <p></p>
     </div>
   );
 };
 ```
 
-## File: popup/components/LyricsSettings.tsx
+## File: popup/components/settings/License/LicenseInfo.tsx
 ```typescript
 import React from 'react';
+import styles from '@popup/components/settings/styles.module.css';
+import { ComponentKey } from '../PopupSettingsPanel';
+
+// LicenseInfo.tsx props
+interface LicenseInfoProps {
+  onNavigate: (key: ComponentKey) => void;
+}
+
+export const LicenseInfo: React.FC<LicenseInfoProps> = ({ onNavigate }) => {
+  const handleOpenSourceList = () => onNavigate('openSourceList');
+  const handleShowExtensionLicense = () => onNavigate('extensionLicense');
+  return (
+    <div className={styles.menuSection}>
+      <div className={styles.sectionLabel}>라이선스 정보</div>
+      <div>
+        <button onClick={handleShowExtensionLicense}>크롬 확장 라이선스</button>
+        <button onClick={handleOpenSourceList}>오픈소스 라이선스</button>
+      </div>
+    </div>
+  );
+};
+```
+
+## File: popup/components/settings/License/OpenSourceLicenseList.tsx
+```typescript
+import React from 'react';
+import styles from '@popup/components/settings/styles.module.css';
+import licenseStyles from './styles.module.css';
+
+const OPEN_SOURCE_LIBS = [
+  {
+    name: 'get-artist-title',
+    author: 'James Kyburz',
+    license: 'MIT',
+    link: 'https://github.com/goto-bus-stop/get-artist-title/blob/HEAD/LICENSE',
+  },
+  {
+    name: '@daun_jung/korean-romanizer',
+    author: 'Daun Jung',
+    license: 'MIT',
+    link: 'https://github.com/daunJung-dev/korean-romanizer/blob/master/LICENSE',
+  },
+  {
+    name: 'Kuroshiro',
+    author: 'Hexen Qi',
+    license: 'MIT',
+    link: 'https://github.com/hexenq/kuroshiro/blob/master/LICENSE',
+  },
+  {
+    name: 'kuroshiro-analyzer-kuromoji',
+    author: 'Hexen Qi',
+    license: 'MIT',
+    link: 'https://github.com/hexenq/kuroshiro-analyzer-kuromoji/blob/master/LICENSE',
+  },
+  {
+    name: 'pinyin',
+    author: 'hotoo',
+    license: 'MIT',
+    link: 'https://hotoo.mit-license.org/',
+  },
+  {
+    name: 'p-limit',
+    author: 'sindresorhus',
+    license: 'MIT',
+    link: 'https://github.com/sindresorhus/p-limit/blob/main/license',
+  },
+  {
+    name: '@emotion/react',
+    author: 'EMOTION TEAM',
+    license: 'MIT',
+    link: 'https://github.com/emotion-js/emotion/blob/main/LICENSE',
+  },
+  {
+    name: '@emotion/styled',
+    author: 'EMOTION TEAM',
+    license: 'MIT',
+    link: 'https://github.com/emotion-js/emotion/blob/main/LICENSE',
+  },
+  {
+    name: '@mui/material',
+    author: 'MUI TEAM',
+    license: 'MIT',
+    link: 'https://github.com/mui/material-ui/blob/master/LICENSE',
+  },
+  {
+    name: 'react-icons',
+    author: 'kamijin_fanta',
+    license: 'MIT',
+    link: 'https://github.com/react-icons/react-icons/blob/master/LICENSE',
+  },
+  {
+    name: 'react-bits',
+    author: 'David Haz',
+    license: 'MIT + Commons Clause',
+    link: 'https://github.com/davidhdev/react-bits/blob/main/LICENSE.md)',
+  },
+  {
+    name: 'motion',
+    author: 'Motion B.V',
+    license: 'MIT',
+    link: 'https://github.com/motiondivision/motion/blob/main/LICENSE.md',
+  },
+  {
+    name: 'matter-js',
+    author: 'Liam Brummitt and contributors',
+    license: 'MIT',
+    link: 'https://github.com/liabru/matter-js/blob/master/LICENSE',
+  },
+  {
+    name: 'axios',
+    author: 'Matt Zabriskie & Collaborators',
+    license: 'MIT',
+    link: 'https://github.com/axios/axios/blob/v1.x/LICENSE',
+  },
+  // 필요시 README.md와 package.json 기반 라이브러리 추가
+];
+
+export const OpenSourceLicenseList: React.FC = () => {
+  return (
+    <div className={styles.menuSection}>
+      <h4>Open Source Libraries</h4>
+      <ul className={licenseStyles.libraryList}>
+        {OPEN_SOURCE_LIBS.map((lib, idx) => (
+          <li key={idx} className={licenseStyles.libraryItem}>
+            <div>
+              <strong>{lib.name}</strong> <span style={{ color: '#888' }}>({lib.license} License)</span>
+            </div>
+            <div style={{ fontSize: '0.93em' }}>
+              Author: {lib.author} <br />
+              <a href={lib.link} target="_blank" rel="noopener noreferrer">
+                License / Project Link
+              </a>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+```
+
+## File: popup/components/settings/License/styles.module.css
+```css
+.libraryList {
+  max-height: 350px;
+  overflow-y: scroll;
+  box-sizing: border-box;
+  padding: 0 16px;
+  line-height: 1.8;
+}
+.libraryItem{
+  padding: 5px 0;
+}
+```
+
+## File: popup/components/settings/LyricsSettings.tsx
+```typescript
+import React, { useState } from 'react';
 import { useChromeStorage } from '@hooks/useChromeStorage';
-import styles from './styles.module.css';
 import { useTranslation } from 'react-i18next';
+import styles from './styles.module.css';
+import { SplitText } from '@components/react-bits/SplitText';
+import { BlurText } from '@components/react-bits/BlurText';
+import { TextType } from '@components/react-bits/TextType';
+import { FuzzyText } from '@components/react-bits/FuzzyText';
+import { GlitchText } from '@components/react-bits/GlitchText';
 
 export const LyricsSettings: React.FC = () => {
   const { t } = useTranslation();
@@ -7264,13 +8681,22 @@ export const LyricsSettings: React.FC = () => {
     'lyricsFontColorPronunciation',
     '#AAAAAA',
   );
-  const [lyricsMode, setLyricsMode] = useChromeStorage('lyricsMode', 'sync'); // 'sync' | 'full' | 'single
+  const [lyricsMode, setLyricsMode] = useChromeStorage('lyricsMode', 'sync'); // 'sync' | 'full' | 'single'
+
+  const [fontEffect, setFontEffect] = useState<string>(''); // 효과 타입 저장
 
   // 폰트 모드 옵션
   const modeOptions = [
     { label: t('extCurrentLyrics'), value: 'sync' },
     { label: t('extFullLyrics'), value: 'full' },
     { label: t('extSingleLyrics'), value: 'single' },
+  ];
+  const fontEffectOptions = [
+    { label: 'SplitText', value: 'splitType' },
+    { label: 'BlurText', value: 'blurType' },
+    { label: 'TextType', value: 'textType' },
+    { label: 'FuzzyText', value: 'fuzzyType' },
+    { label: 'GlitchText', value: 'glitchType' },
   ];
 
   const previewLyrics: { main: string; sub: string }[] =
@@ -7282,110 +8708,192 @@ export const LyricsSettings: React.FC = () => {
             { main: 'Set ’em on fire', sub: 'Set ’em on fire' },
           ]
         : [
-            { main: "And I don't really care if you", sub: '앤드 아이 돈 리얼리 케어 이프 유' },
-            { main: 'like me, like me', sub: '라이크 미, 라이크 미' },
-            { main: "I don't really wanna", sub: '아이 돈 리얼리 워너' },
-            { main: 'know if you like me', sub: '노우 이프 유 라이크 미' },
+            { main: `And I don't really care if you`, sub: `앤드 아이 돈 리얼리 케어 이프 유` },
+            { main: `like me, like me`, sub: `라이크 미, 라이크 미` },
+            { main: `I don't really wanna`, sub: `아이 돈 리얼리 워너` },
+            { main: `know if you like me`, sub: `노우 이프 유 라이크 미` },
           ];
+
+  // 자막 효과별 메인 텍스트 렌더링 처리 (확장용)
+  const renderMainText = (text: string, idx: number) => {
+    const baseClass = styles.lyricsText;
+
+    switch (fontEffect) {
+      case 'splitType':
+        return <SplitText key={idx} text={text} color={lyricsFontColorCurrent} className={baseClass} />;
+      case 'blurType':
+        return <BlurText key={idx} text={text} color={lyricsFontColorCurrent} className={baseClass} />;
+      case 'textType':
+        return <TextType key={idx} text={text} textColors={[lyricsFontColorCurrent]} className={baseClass} />;
+      case 'fuzzyType':
+        return (
+          <FuzzyText key={idx} fontSize={12} color={lyricsFontColorCurrent} className={baseClass}>
+            {text}
+          </FuzzyText>
+        );
+      case 'glitchType':
+        return (
+          <GlitchText key={idx} className={baseClass}>
+            {text}
+          </GlitchText>
+        );
+      default:
+        return (
+          <div key={idx} style={{ color: lyricsFontColorCurrent, fontWeight: 'bold', margin: 0 }}>
+            {text}
+          </div>
+        );
+    }
+  };
+  // 컴포넌트 초기 마운트 시 chrome.storage에서 상태 불러오기
+  React.useEffect(() => {
+    chrome.storage.sync.get(
+      [
+        'realtimeLyrics',
+        'announceLyrics',
+        'lyricsFontColorCurrent',
+        'lyricsFontColorPronunciation',
+        'lyricsMode',
+        'lyricsFontEffect',
+      ],
+      (items) => {
+        if (typeof items.realtimeLyrics === 'boolean') setShowRealtimeLyrics(items.realtimeLyrics);
+        if (typeof items.announceLyrics === 'boolean') setShowPronunciationLyrics(items.announceLyrics);
+        if (typeof items.lyricsFontColorCurrent === 'string') setLyricsFontColorCurrent(items.lyricsFontColorCurrent);
+        if (typeof items.lyricsFontColorPronunciation === 'string')
+          setLyricsFontColorPronunciation(items.lyricsFontColorPronunciation);
+        if (typeof items.lyricsMode === 'string') setLyricsMode(items.lyricsMode);
+        if (typeof items.lyricsFontEffect === 'string') setFontEffect(items.lyricsFontEffect);
+      },
+    );
+  }, []);
+  // 적용 버튼 클릭 시 현재 상태 저장
+  const handleApply = () => {
+    chrome.storage.sync.set(
+      {
+        realtimeLyrics: showRealtimeLyrics,
+        announceLyrics: showPronunciationLyrics,
+        lyricsFontColorCurrent,
+        lyricsFontColorPronunciation,
+        lyricsMode,
+        lyricsFontEffect: fontEffect,
+      },
+      () => {
+        // 저장 완료 후 알림 혹은 상태 표시 추가 가능
+        console.log('Lyrics settings saved');
+      },
+    );
+  };
 
   return (
     <div className={styles.menuSection}>
       <div className={styles.previewBox}>
         {previewLyrics.map((line, idx) => (
-          <div key={idx} style={{ marginBottom: 12 }}>
-            {showRealtimeLyrics && <div style={{ color: lyricsFontColorCurrent, fontWeight: 'bold' }}>{line.main}</div>}
+          <div
+            key={idx}
+            className={`${styles.previewLine} ${
+              lyricsMode === 'single' ? styles.singleMode : lyricsMode === 'sync' ? styles.syncMode : styles.fullMode
+            }`}
+          >
+            {showRealtimeLyrics && renderMainText(line.main, idx)}
             {showPronunciationLyrics && <div style={{ color: lyricsFontColorPronunciation }}>{line.sub}</div>}
           </div>
         ))}
       </div>
+      <div className={styles.settingsScrollable}>
+        <div className={styles.checkboxRow}>
+          <label className={styles.settingItem}>
+            <input
+              type="checkbox"
+              checked={showRealtimeLyrics}
+              onChange={(e) => setShowRealtimeLyrics(e.target.checked)}
+            />
+            현재 가사 표시
+          </label>
 
-      <div className={styles.settingMenu}>
-        <label className={styles.settingItem}>
+          <label className={styles.settingItem}>
+            <input
+              type="checkbox"
+              checked={showPronunciationLyrics}
+              onChange={(e) => setShowPronunciationLyrics(e.target.checked)}
+            />
+            발음 가사 표시
+          </label>
+        </div>
+        <div className={styles.settingMenu}>
+          <label htmlFor="lyricsModeSelect" className={styles.settingLabel}>
+            {t('extLyricsMode')}
+          </label>
+          <select
+            id="lyricsModeSelect"
+            value={lyricsMode}
+            onChange={(e) => setLyricsMode(e.target.value)}
+            className={styles.settingSelect}
+          >
+            {modeOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className={styles.settingMenu}>
+          <label htmlFor="fontColorCurrent" className={styles.settingLabel}>
+            가사 글꼴 색상
+          </label>
           <input
-            type="checkbox"
-            checked={showRealtimeLyrics}
-            onChange={(e) => setShowRealtimeLyrics(e.target.checked)}
+            id="fontColorCurrent"
+            type="color"
+            value={lyricsFontColorCurrent}
+            onChange={(e) => setLyricsFontColorCurrent(e.target.value)}
+            className={styles.colorPicker}
           />
-          현재 가사 표시
-        </label>
+          <label htmlFor="fontColorCurrent" className={styles.settingLabel}>
+            가사 하이라이트 색상
+          </label>
+        </div>
 
-        <label className={styles.settingItem}>
+        <div className={styles.settingMenu}>
+          <label htmlFor="fontColorPronunciation" className={styles.settingLabel}>
+            발음 가사 색상
+          </label>
           <input
-            type="checkbox"
-            checked={showPronunciationLyrics}
-            onChange={(e) => setShowPronunciationLyrics(e.target.checked)}
+            id="fontColorPronunciation"
+            type="color"
+            value={lyricsFontColorPronunciation}
+            onChange={(e) => setLyricsFontColorPronunciation(e.target.value)}
+            className={styles.colorPicker}
           />
-          발음 가사 표시
-        </label>
-      </div>
-      <div className={styles.settingMenu}>
-        <label htmlFor="lyricsModeSelect" className={styles.settingLabel}>
-          {t('extLyricsMode')}
-        </label>
-        <select
-          id="lyricsModeSelect"
-          value={lyricsMode}
-          onChange={(e) => setLyricsMode(e.target.value)}
-          className={styles.settingSelect}
-        >
-          {modeOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className={styles.settingMenu}>
-        <label htmlFor="fontColorCurrent" className={styles.settingLabel}>
-          가사 글꼴 색상
-        </label>
-        <input
-          id="fontColorCurrent"
-          type="color"
-          value={lyricsFontColorCurrent}
-          onChange={(e) => setLyricsFontColorCurrent(e.target.value)}
-          className={styles.colorPicker}
-        />
-        <label htmlFor="fontColorCurrent" className={styles.settingLabel}>
-          가사 하이라이트 색상
-        </label>
-      </div>
-
-      <div className={styles.settingMenu}>
-        <label htmlFor="fontColorPronunciation" className={styles.settingLabel}>
-          발음 가사 색상
-        </label>
-        <input
-          id="fontColorPronunciation"
-          type="color"
-          value={lyricsFontColorPronunciation}
-          onChange={(e) => setLyricsFontColorPronunciation(e.target.value)}
-          className={styles.colorPicker}
-        />
-      </div>
-      <div className={styles.settingMenu}>
-        <label>
-          자막 효과
-        </label>
-        <select>
-          <option>
-            a
-          </option>
-          <option>
-            b
-          </option>
-          <option>
-            c
-          </option>
-        </select>
+        </div>
+        <div className={styles.settingMenu}>
+          <label htmlFor="fontEffectSelect" className={styles.settingLabel}>
+            자막 효과
+          </label>
+          <select
+            id="fontEffectSelect"
+            className={styles.settingSelect}
+            value={fontEffect}
+            onChange={(e) => setFontEffect(e.target.value)}
+          >
+            <option value="">기본 (효과 없음)</option>
+            {fontEffectOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button className={styles.applyButton} onClick={handleApply}>
+          {t('apply')}
+        </button>
       </div>
     </div>
   );
 };
 ```
 
-## File: popup/components/PopupSettingsPanel.tsx
+## File: popup/components/settings/PopupSettingsPanel.tsx
 ```typescript
 import React, { useState } from 'react';
 import { BackButton } from '@components/common/BackButton';
@@ -7395,9 +8903,20 @@ import { useTranslation } from 'react-i18next';
 import { Contact } from './Contact';
 import { LanguageSettings } from './LanguageSettings';
 import { LyricsSettings } from './LyricsSettings';
-import { LicenseInfo } from './LicenseInfo';
+import { LicenseInfo } from './License/LicenseInfo';
+import { OpenSourceLicenseList } from './License/OpenSourceLicenseList';
+import { ExtensionLicense } from './License/ExtensionLicense';
 
-type ComponentKey = 'main' | 'faq' | 'contact' | 'license' | 'language' | 'lyricsSettings';
+export type ComponentKey =
+  | 'main'
+  | 'faq'
+  | 'contact'
+  | 'license'
+  | 'openSourceList'
+  | 'extensionLicense'
+  | 'language'
+  | 'lyricsSettings';
+
 interface PopupSettingsPanelProps {
   onBack: () => void;
 }
@@ -7407,6 +8926,12 @@ interface MainMenuProps {
 
 export const PopupSettingsPanel: React.FC<PopupSettingsPanelProps> = ({ onBack }) => {
   const { t } = useTranslation();
+  const [history, setHistory] = useState<ComponentKey[]>(['main']);
+  const activeComponent = history[history.length - 1] as ComponentKey;
+
+  const handleNavigate = (key: ComponentKey) => {
+    setHistory((prev) => [...prev, key]);
+  };
 
   const titles: Record<ComponentKey, string> = {
     main: t('extSetting'),
@@ -7415,8 +8940,9 @@ export const PopupSettingsPanel: React.FC<PopupSettingsPanelProps> = ({ onBack }
     license: t('extLicense'),
     language: t('extLanguage'),
     lyricsSettings: t('extLyrics'),
+    openSourceList: t('extOpenSourceList'),
+    extensionLicense: t(''),
   };
-  const [activeComponent, setActiveComponent] = useState<ComponentKey>('main');
 
   let ContentComponent;
   if (activeComponent === 'faq') ContentComponent = FAQ;
@@ -7424,16 +8950,16 @@ export const PopupSettingsPanel: React.FC<PopupSettingsPanelProps> = ({ onBack }
   else if (activeComponent === 'language') ContentComponent = LanguageSettings;
   else if (activeComponent === 'lyricsSettings') ContentComponent = LyricsSettings;
   else if (activeComponent === 'license') ContentComponent = LicenseInfo;
+  else if (activeComponent === 'openSourceList') ContentComponent = OpenSourceLicenseList;
+  else if (activeComponent === 'extensionLicense') ContentComponent = ExtensionLicense;
   else ContentComponent = MainMenu; // 초기 메뉴
 
   // BackButton 클릭 핸들러 분리
   const handleBackButtonClick = () => {
-    if (activeComponent === 'main') {
-      // 현재 초기 메뉴면 부모(onBack) 콜백 호출 -> App.tsx 등 상위로 이동
-      onBack();
+    if (history.length <= 1) {
+      onBack(); // 최상위 화면에서 상위 콜백 호출
     } else {
-      // FAQ 등 상세화면이면 초기 메뉴로 변경
-      setActiveComponent('main');
+      setHistory((prev) => prev.slice(0, prev.length - 1));
     }
   };
 
@@ -7449,10 +8975,11 @@ export const PopupSettingsPanel: React.FC<PopupSettingsPanelProps> = ({ onBack }
         />
         <h2>{titles[activeComponent] || t('extSetting')}</h2>
       </div>
-      <ContentComponent onNavigate={setActiveComponent} />
+      <ContentComponent onNavigate={handleNavigate} />
     </div>
   );
 };
+
 function MainMenu({ onNavigate }: MainMenuProps) {
   const { t } = useTranslation();
 
@@ -7463,8 +8990,6 @@ function MainMenu({ onNavigate }: MainMenuProps) {
         <button className={styles.settingsButton} onClick={() => onNavigate('lyricsSettings')}>
           {t('extLyrics')}
         </button>
-        <button className={styles.settingsButton}>싱크 조절</button>
-        <button className={styles.settingsButton}>스타일 변경</button>
         <button className={styles.settingsButton} onClick={() => onNavigate('language')}>
           {t('extLanguage')}
         </button>
@@ -7488,7 +9013,7 @@ function MainMenu({ onNavigate }: MainMenuProps) {
 }
 ```
 
-## File: popup/components/styles.module.css
+## File: popup/components/settings/styles.module.css
 ```css
 .settingsPanel {
   position: absolute;
@@ -7573,28 +9098,55 @@ function MainMenu({ onNavigate }: MainMenuProps) {
   width: 100%;
   background: transparent;
 }
+.checkboxRow {
+  display: flex;
+  gap: 24px; /* 라벨 간 간격 조정 */
+  align-items: center; /* 세로 중앙 정렬 */
+  padding: 10px 0;
+}
+
+.settingItem {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* 체크박스와 라벨 사이 간격 */
+}
 
 .menuSection {
   padding: 10px 15px;
-
+  height: 100vh; /* 또는 적합한 고정 높이 */
+  display: flex;
+  flex-direction: column;
+}
+.menuSection h4 {
+  margin: 10px 0;
 }
 .settingMenu {
   padding: 10px 0;
+  flex-wrap: wrap;
+}
+.settingMenu label {
+  padding: 0 20px 0 0;
 }
 .previewBox {
   display: flex;
+  flex: none;
   flex-direction: column;
+  aspect-ratio: 16 / 9;
   align-items: center;
   justify-content: center;
   min-width: 260px;
   min-height: 90px;
+  max-width: 350px;
   padding: 20px 16px;
   border-radius: 12px;
   background: rgba(25, 25, 30, 0.9);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
   margin-bottom: 24px; /* 설정 메뉴와 구분 */
   gap: 8px;
-  transition: background 0.25s, box-shadow 0.25s;
+  transition:
+    background 0.25s,
+    box-shadow 0.25s;
+  position: relative; /* 기준 컨테이너로 명시 */
 }
 
 .previewBox > div {
@@ -7609,6 +9161,334 @@ function MainMenu({ onNavigate }: MainMenuProps) {
     min-width: 180px;
     padding: 14px 6px;
   }
+}
+.settingsScrollable {
+  flex-grow: 1;
+  flex: 1 1 0; /* 남은 공간을 모두 차지 */
+  min-height: 0; /* 스크롤 가능하게 해주는 flexbox 속성 */
+  max-height: 600px; /* 필요에 따라 조절 */
+  overflow-y: auto;
+  padding-right: 10px; /* 스크롤바 간섭 방지 선택 사항 */
+}
+
+/* 가사의 세 모드 */
+.singleMode {
+  position: absolute;
+  bottom: 15%;
+  font-size: 0.8rem;
+}
+
+.syncMode {
+  position: relative;
+  font-size: 0.7rem;
+  top: 20%;
+}
+
+.fullMode {
+  position: static;
+  /* full 모드 스타일 */
+  font-size: 0.6rem;
+  /* 라인 간격, 줄 높이 등 세부조절 */
+}
+
+/* 드롭다운 */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-color: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 8px 36px 8px 16px; /* 오른쪽 공간 확보 */
+  font-size: 14px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: #333;
+  cursor: pointer;
+  min-width: 160px;
+  transition:
+    border-color 0.3s,
+    box-shadow 0.3s;
+  position: relative;
+  background-image: url('data:image/svg+xml;utf8,<svg width="16" height="16" xmlns="http://www.w3.org/2000/svg"><polyline points="4,6 8,10 12,6" fill="none" stroke="%23666" stroke-width="2" stroke-linecap="round"/></svg>');
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px 16px;
+}
+
+/* 포커스 시 테두리 강조 */
+select:focus {
+  outline: none;
+  border-color: #4a90e2;
+  box-shadow: 0 0 8px rgba(74, 144, 226, 0.2);
+}
+
+/* 비활성화 */
+select:disabled {
+  background-color: #f5f5f5;
+  color: #999;
+  border-color: #ddd;
+}
+
+/**/
+.lyricsText {
+  display: inline-block;
+  font-weight: bold;
+  margin: 0;
+  justify-content: center;
+  font-size: 0.7rem;
+}
+```
+
+## File: popup/components/timer/styles.modules.css
+```css
+/* 가사 정보 */
+.songInfo {
+  text-align: center;
+  font-size: 16px;
+  font-weight: 500;
+  color: #222;
+  margin: 12px 0 8px 0;
+  letter-spacing: 0.5px;
+  animation: fadeIn 0.9s;
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+/* 타이머 */
+.timer {
+  text-align: center;
+  font-size: 48px;
+  font-weight: bold;
+  letter-spacing: 6px;
+  margin: 69px 0 69px 0;
+  color: #111;
+}
+.timeSelect {
+  border: none;
+  /* Firefox */
+  -moz-appearance: none;
+  /* Chrome, Safari, Edge */
+  -webkit-appearance: none;
+  appearance: none;
+}
+.timerControls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  background: gray;
+  box-sizing: border-box;
+  width: 60%;
+  margin-left: auto;
+  margin-right: auto;
+  border-radius: 15px;
+  height: 30px;
+}
+
+/* 부가 설명 */
+.popupGuide {
+  text-align: center;
+  margin-top: 4px;
+  font-size: 15px;
+  color: #222;
+  opacity: 0.7;
+  letter-spacing: 0.5px;
+}
+.iconButton {
+  background: transparent;
+  border: none;
+  cursor: pointer; /* 마우스 오버 시 포인터 */
+  outline: none; /* 포커스 테두리 제거 (접근성 필요시 조정) */
+  display: inline-flex; /* 아이콘 정렬에 유리 */
+  align-items: center;
+  justify-content: center;
+}
+```
+
+## File: popup/components/timer/Timer.tsx
+```typescript
+import { useEffect, useState } from 'react';
+import styles from './styles.modules.css';
+import { CiPause1 } from 'react-icons/ci';
+import { TimerPickerUI } from '@components/common/TimerPrickerUI';
+import { ExtensionMessage } from '@background/background';
+import { RiResetRightLine } from 'react-icons/ri';
+import { FiPlay } from 'react-icons/fi';
+import { MdAccessAlarm } from 'react-icons/md';
+import { FaMaxcdn } from 'react-icons/fa';
+import Tooltip from '@mui/material/Tooltip';
+
+const ICON_SIZE = 18;
+interface TimerProps {
+  onPlayStateChange?: (playing: boolean) => void;
+}
+export function Timer({ onPlayStateChange }: TimerProps) {
+  const [totalSeconds, setTotalSeconds] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false); // 재생 중인지
+  const [isEditing, setIsEditing] = useState(true); // 재생 중일 때 style 변경
+  const [showToast, setShowToast] = useState(false);
+
+  // totalSeconds를 시/분/초로 분리 계산
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  // 타이머 재생 상태 변화 시 부모 콜백 호출
+  useEffect(() => {
+    if (onPlayStateChange) {
+      onPlayStateChange(isPlaying);
+    }
+  }, [isPlaying, onPlayStateChange]);
+
+  // 사용자가 시/분/초 변경 시
+  const handleTimeChange = (h: number, m: number, s: number) => {
+    setTotalSeconds(h * 3600 + m * 60 + s);
+  };
+
+  // 타이머 작동 처리
+  useEffect(() => {
+    if (!isPlaying) return;
+
+    if (totalSeconds <= 0) {
+      setIsPlaying(false);
+      setIsEditing(true);
+      return;
+    }
+    const intervalId = setInterval(() => {
+      setTotalSeconds((prev) => prev - 1);
+    }, 1000);
+
+    return () => clearInterval(intervalId);
+  }, [isPlaying, totalSeconds]);
+
+  // 초기화
+  const resetTimer = () => {
+    setTotalSeconds(0);
+    setIsPlaying(false);
+    setIsEditing(true);
+  };
+
+  // 최대치 설정
+  const maxTimer = () => {
+    const maxSeconds = 6 * 3600 + 59 * 60 + 59;
+    setTotalSeconds(maxSeconds);
+    setIsPlaying(false);
+    setIsEditing(true);
+  };
+
+  // 2초 후 토스트 자동 사라지기
+  useEffect(() => {
+    if (showToast) {
+      const timer = setTimeout(() => setShowToast(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    chrome.runtime.sendMessage({ type: 'getStatus' }, (response) => {
+      setTotalSeconds(response.totalSeconds);
+      setIsPlaying(response.isPlaying);
+      setIsEditing(!response.isPlaying);
+    });
+
+    const listener = (message: ExtensionMessage) => {
+      if (message.type === 'tick') {
+        setTotalSeconds(message.totalSeconds);
+        setIsEditing(false);
+      }
+    };
+
+    chrome.runtime.onMessage.addListener(listener);
+    return () => {
+      chrome.runtime.onMessage.removeListener(listener);
+    };
+  }, []);
+
+  // 재생 버튼 토글
+  const togglePlay = () => {
+    if (totalSeconds === 0) {
+      setShowToast(true);
+      return;
+    }
+    if (isPlaying) {
+      chrome.runtime.sendMessage({ type: 'stopTimer' });
+      setIsPlaying(false);
+    } else {
+      chrome.runtime.sendMessage({ type: 'startTimer', totalSeconds });
+      setIsPlaying(true);
+    }
+  };
+
+  return (
+    <>
+      {/* 현재 곡 정보 */}
+      <div className={styles.songInfo}>
+        <span>✨ 아티스트 - 타이틀곡 ✨</span>
+      </div>
+
+      {/* 시간/분 타이머 */}
+      {isEditing ? (
+        <TimerPickerUI
+          hours={hours}
+          minutes={minutes}
+          seconds={seconds}
+          onChange={handleTimeChange} // (h, m, s) => setTotalSeconds(...)
+        />
+      ) : (
+        <div className={styles.timer}>
+          {hours.toString().padStart(2, '0')}:{minutes.toString().padStart(2, '0')}:
+          {seconds.toString().padStart(2, '0')}
+        </div>
+      )}
+
+      {/* 타이머 컨트롤 아이콘 버튼 */}
+      <div className={styles.timerControls}>
+        <Tooltip title="초기화" arrow>
+          <button
+            className={styles.iconButton}
+            aria-label="초기화"
+            onClick={resetTimer}
+            disabled={isPlaying}
+            data-tip
+            data-for="resetTip"
+          >
+            <RiResetRightLine size={ICON_SIZE} color={isPlaying ? '#c1c1c1cf' : 'white'} />
+          </button>
+        </Tooltip>
+
+        <Tooltip title="타이머 시작" arrow>
+          <button className={styles.iconButton} aria-label={isPlaying ? '일시정지' : '재생'} onClick={togglePlay}>
+            {isPlaying ? (
+              <CiPause1 size={ICON_SIZE} style={{ color: 'white' }} />
+            ) : (
+              <FiPlay size={ICON_SIZE} style={{ color: 'white' }} />
+            )}
+          </button>
+        </Tooltip>
+        <Tooltip title="알림" arrow>
+          <button className={styles.iconButton} aria-label="알림">
+            <MdAccessAlarm size={ICON_SIZE} style={{ color: 'white' }} />
+          </button>
+        </Tooltip>
+        <Tooltip title="최대치" arrow>
+          <button className={styles.iconButton} aria-label="최대치" onClick={maxTimer}>
+            <FaMaxcdn size={ICON_SIZE} style={{ color: 'white' }} />
+          </button>
+        </Tooltip>
+      </div>
+
+      {/* 설명 문구 */}
+      <div className={styles.popupGuide}>타이머를 설정하고, 유튜브에서 신나게 노래해보세요!</div>
+      {/* 토스트 메시지 */}
+      {showToast && <div className={styles.toast}>시간 설정 후 다시 눌러주세요</div>}
+    </>
+  );
 }
 ```
 
@@ -7652,54 +9532,112 @@ if (root) {
 ## File: popup/popup.css
 ```css
 body {
-  width: 300px;
+  width: 350px;
   height: 450px;
-  padding: 10px;
+  max-width: 360px;
+  margin: 0 auto;
+  background: #ffffff;
+  box-sizing: border-box;
+  padding: 0;
+}
+.popup-wrapper {
+  width: 100%;
+  height: 100%;
+  font-family: 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif;
+  box-sizing: border-box;
+  padding: 15px;
 }
 .popup-header {
   display: flex;
   align-items: center;
-  justify-content: space-between; /* 또는 button에 margin-left: auto */
+  justify-content: space-between;
+  padding: 8px 15px;
+  background: #f5f5f5;
+  font-size: 12px;
+  font-weight: bold;
+}
+.popup-header h2 {
+  padding: 0;
+  margin: 10px 0;
+  font-size: 15px;
 }
 .icon-button {
   background: transparent;
   border: none;
-  cursor: pointer;           /* 마우스 오버 시 포인터 */
-  outline: none;             /* 포커스 테두리 제거 (접근성 필요시 조정) */
-  display: inline-flex;      /* 아이콘 정렬에 유리 */
+  cursor: pointer; /* 마우스 오버 시 포인터 */
+  outline: none; /* 포커스 테두리 제거 (접근성 필요시 조정) */
+  display: inline-flex; /* 아이콘 정렬에 유리 */
   align-items: center;
   justify-content: center;
 }
-/* switch button */
-.switch {
-  position: relative;
-  display: inline-block;
-  width: 40px;
-  height: 22px;
-}
-.switch input { display: none; }
-.slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background-color: #ccc;
-  border-radius: 22px;
-  transition: .4s;
-}
-.slider:before {
-  position: absolute;
-  content: "";
-  height: 18px; width: 18px;
-  left: 2px; bottom: 2px;
-  background-color: white;
-  border-radius: 50%;
-  transition: .4s;
-}
+
 input:checked + .slider {
-  background-color: #2196F3;
+  background-color: #2196f3;
 }
 input:checked + .slider:before {
   transform: translateX(18px);
+}
+
+/* 토글 스위치 */
+.popup-tabs {
+  position: relative;
+  display: flex;
+  width: 200px;
+  height: 32px;
+  margin-left: auto;
+  margin-right: auto;
+  margin-top: 20px;
+  margin-bottom: 20px;
+  background: #f4f4f4;
+  border-radius: 5px;
+  box-shadow:
+    1px 1px 3px 1px rgba(0, 0, 0, 0.1),
+    inset 0 -2px 4px rgba(255, 255, 255, 0.6);
+  overflow: hidden;
+}
+
+.popup-tabs .slider {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 50%; /* 버튼 2개니 50% */
+  background: #fff0fa;
+  border-radius: 5px;
+  box-shadow:
+    0px 14px 8px rgba(235, 145, 175, 0.15),
+    inset 1px 0px 3px rgba(255, 255, 255, 0.8);
+  transition: transform 0.3s ease;
+  z-index: 0;
+}
+
+.popup-tabs .tab {
+  position: relative;
+  flex: 1;
+  z-index: 1;
+  background: transparent;
+  border: none;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  color: #444;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 5px;
+  transition: color 0.18s;
+}
+
+.popup-tabs .tab.active {
+  color: #222;
+  font-weight: bold;
+}
+
+.popup-tabs .tab:hover:not(.active) {
+  color: #eebbc3;
+}
+.tab-content {
+  margin-top: 12px; /* popup-tabs와 떨어지도록 여백 */
+  /* 필요하다면 높이 지정 및 overflow 조정 가능 */
 }
 ```
 
