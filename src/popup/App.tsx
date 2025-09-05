@@ -33,6 +33,11 @@ export function App() {
   const handleTimerPlayChange = (playing: boolean) => {
     setTimerPlaying(playing);
     setEnabled(playing);
+    if (!playing) {
+      chrome.storage.sync.set({ [STORAGE_KEYS.CONTENT_ENABLED]: false }, () => {
+        console.log('contentEnabled가 false로 변경됨');
+      });
+    }
   };
 
   useEffect(() => {
