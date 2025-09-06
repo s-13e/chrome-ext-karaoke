@@ -26,8 +26,5 @@ export function tryDetectVideoChange(videoId: string | null, trigger: () => void
  */
 export function extractVideoIdFromUrl(url: string): string | null {
   const match = url.match(/[?&]v=([^&]+)/);
-  console.log(
-    `[extractVideoIdFromUrl] url: ${url}, match: ${match}, videoId: ${match && match[1] !== undefined ? match[1] : null}`,
-  );
   return match && match[1] !== undefined ? match[1] : null;
 }

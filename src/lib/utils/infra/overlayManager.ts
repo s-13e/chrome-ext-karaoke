@@ -23,14 +23,11 @@ class OverlayManager {
 
   // 내부: 타입별 컨테이너 생성 - 필요시 외부 API 호출
   private createContainer(type: OverlayType): HTMLElement {
-    console.log(`[OverlayManager] createContainer called for type: ${type}`);
     let container: HTMLElement | null = null;
 
     if (type === 'lyrics') {
       container = injectLyricsOverlayRoot();
-      console.log('[OverlayManager] injectLyricsRoot called, returned:', container);
       if (!container) {
-        console.error('[OverlayManager] injectLyricsRoot 반환값 null');
         // 재시도 또는 기본 생성 시도 로직 추가 가능
         container = document.createElement('div');
         container.id = 'lyrics-cc-overlay';
@@ -53,9 +50,7 @@ class OverlayManager {
         lyricsOverlayRoot.appendChild(container);
       }
     } else {
-      // 확장성 고려 - 새로운 타입일 경우 기본 스타일 및 body append
       container = document.getElementById(`${type}-overlay-container`);
-      console.log(`[OverlayManager] container for type ${type} found:`, container);
       if (!container) {
         container = document.createElement('div');
         container.id = `${type}-overlay-container`;
