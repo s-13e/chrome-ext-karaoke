@@ -1,14 +1,18 @@
 import { isEnglishText } from '@lib/utils/lyrics/parsers/stringUtils';
 import { fetchLyricsByArtistAndTrack, LrcLibLyricsResult } from './lrclib';
 import { extractEnglishAliasFromArtists, fetchEnglishAliasForArtist, searchArtistByFreeText } from './musicBrainz';
-export async function fetchLyricsWithAliasFallback(artist: string, title: string): Promise<LrcLibLyricsResult> {
+export async function fetchLyricsWithAliasFallback(
+  artist: string,
+  title: string,
+  durationSeconds: number,
+): Promise<LrcLibLyricsResult> {
   const processedArtist = artist;
   const processedTitle = title;
 
   const areBothEnglish = isEnglishText(processedArtist) && isEnglishText(processedTitle);
 
   async function doubleLookup(a: string, t: string) {
-    const res = await fetchLyricsByArtistAndTrack(a, t);
+    const res = await fetchLyricsByArtistAndTrack(a, t, durationSeconds);
     return res ?? null;
   }
 

@@ -18,11 +18,16 @@ export interface SearchCandidate {
 
 const requestLimiter = new RequestLimiter(5); // 최대 동시 5개 요청 제한
 
-export async function fetchLyricsByArtistAndTrack(artist: string, title: string): Promise<LrcLibLyricsResult | null> {
+export async function fetchLyricsByArtistAndTrack(
+  artist: string,
+  title: string,
+  durationSeconds: number,
+): Promise<LrcLibLyricsResult | null> {
   async function searchWithParams(
     artistParam: string,
     titleParam: string,
     _attemptNumber: number,
+    durationSeconds: number,
   ): Promise<LrcLibLyricsResult | null> {
     const endpoint = `https://lrclib.net/api/search?artist_name=${encodeURIComponent(
       artistParam,
@@ -54,7 +59,10 @@ export async function fetchLyricsByArtistAndTrack(artist: string, title: string)
       }, timeoutMs);
     });
 
-    async function fetchLyricDetail(candidate: SearchCandidate): Promise<
+    async function fetchLyricDetail(
+      candidate: SearchCandidate,
+      durationSeconds: number,
+    ): Promise<
       | (LrcLibLyricsResult & {
           hasSynced: boolean;
           isStrictMatch: boolean;
@@ -62,7 +70,9 @@ export async function fetchLyricsByArtistAndTrack(artist: string, title: string)
       | null
     > {
       try {
-        const detailRes = await fetch(`https://lrclib.net/api/get/${candidate.id}`);
+        const detailRes = await fetch(
+          `https://lrclib.net/api/get/${candidate.id}?duration=${encodeURIComponent(durationSeconds)}`,
+        );
         if (!detailRes.ok) {
           console.warn(`Detail API response not OK for candidate id ${candidate.id}, status: ${detailRes.status}`);
           return null;
@@ -79,6 +89,11 @@ export async function fetchLyricsByArtistAndTrack(artist: string, title: string)
         if (!lyrics) {
           return null;
         }
+        /*  console.log(
+          '[LrcLib] API 받은 원본 lyrics:',
+          lyrics,
+          `candidate.id: ${candidate.id} 응답 duration: ${detail.duration}`,
+        ); */
 
         const candidateTitle = (detail.title ?? '').trim().toLowerCase();
         const isStrictMatch = candidateTitle === normalizedReqTitle;
@@ -115,10 +130,9 @@ export async function fetchLyricsByArtistAndTrack(artist: string, title: string)
         return null;
       }
     }
-
     // 요청 배치
     const resultsPromise = Promise.all(
-      limitedCandidates.map((candidate) => requestLimiter.enqueue(() => fetchLyricDetail(candidate))),
+      limitedCandidates.map((candidate) => requestLimiter.enqueue(() => fetchLyricDetail(candidate, durationSeconds))),
     );
 
     // 타임아웃 또는 모두 완료 중 먼저 도착하는 것을 선택
@@ -142,40 +156,72 @@ export async function fetchLyricsByArtistAndTrack(artist: string, title: string)
       return null;
     }
 
-    const strictSynced = validResults.find((res) => res.hasSynced && res.isStrictMatch);
+    const filteredByDuration = evaluateCandidatesByDuration(validResults, durationSeconds, 2);
+
+    if (!filteredByDuration.length && (fallbackSynced || fallbackPlain)) {
+      console.log('No valid results after duration filter, returning fallback');
+      return fallbackSynced || fallbackPlain;
+    }
+
+    if (!filteredByDuration.length) {
+      console.log('No results found after duration filter');
+      return null;
+    }
+
+    const strictSynced = filteredByDuration.find((res) => res.hasSynced && res.isStrictMatch);
     if (strictSynced) {
       console.log('Returning strict matched synced lyrics');
       return strictSynced;
     }
 
-    if (fallbackSynced) {
+    const fallbackSyncedCandidate = filteredByDuration.find((res) => res.hasSynced);
+    if (fallbackSyncedCandidate) {
       console.log('Returning fallback synced lyrics');
-      return fallbackSynced;
+      return fallbackSyncedCandidate;
     }
 
-    const strictPlain = validResults.find((res) => !res.hasSynced && res.isStrictMatch);
+    const strictPlain = filteredByDuration.find((res) => !res.hasSynced && res.isStrictMatch);
     if (strictPlain) {
       console.log('Returning strict matched plain lyrics');
       return strictPlain;
     }
 
-    if (fallbackPlain) {
+    const fallbackPlainCandidate = filteredByDuration.find((res) => !res.hasSynced);
+    if (fallbackPlainCandidate) {
       console.log('Returning fallback plain lyrics');
-      return fallbackPlain;
+      return fallbackPlainCandidate;
     }
 
     console.log('Returning first valid result as fallback');
-    return validResults[0] || null;
+    return filteredByDuration[0] || null;
   }
 
   // 1차 시도: 정상 아티스트-곡명 순서
-  const result1 = await searchWithParams(artist, title, 1);
+  const result1 = await searchWithParams(artist, title, 1, durationSeconds);
   if (result1 !== null) return result1;
 
   // 2차 시도: 곡명-아티스트 순서
   if (artist.toLowerCase() !== title.toLowerCase()) {
-    const result2 = await searchWithParams(title, artist, 2);
+    const result2 = await searchWithParams(title, artist, 2, durationSeconds);
     if (result2 !== null) return result2;
   }
   return null;
+}
+
+// validResults는 여러 후보 가사 리스트
+// videoDurationSec은 영상 길이(초) - collectMetadataAndLyrics에서 인자로 전달
+
+function evaluateCandidatesByDuration(
+  candidates: (LrcLibLyricsResult & {
+    hasSynced: boolean;
+    isStrictMatch: boolean;
+  })[],
+  videoDurationSec: number,
+  maxAllowedDiffSec = 3,
+) {
+  return candidates.filter((candidate) => {
+    if (!candidate.duration) return false; // duration 정보 없는 후보 제거
+    const diff = Math.abs(videoDurationSec - candidate.duration);
+    return diff <= maxAllowedDiffSec;
+  });
 }

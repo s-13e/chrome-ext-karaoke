@@ -65,9 +65,16 @@ export const toggleClass = (element: Element, className: string, force?: boolean
   return true;
 };
 
-export function isAdPlaying() {
-  const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR);
+export function isAdPlaying(): boolean {
+  const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR) as HTMLVideoElement | null;
   const adElement = document.querySelector(YOUTUBE_AD_SELECTOR);
 
-  return player != null && !!adElement;
+  if (!player || !adElement) return false;
+
+  // 광고 관련 플레이어 상태 체크
+  // readyState가 HAVE_CURRENT_DATA 이상이고 paused가 false면 재생 중인 상태
+  const isVideoPlaying = player.readyState >= 3 && !player.paused;
+
+  // 광고 광고판(광고 요소)이 DOM에 존재하고, 비디오가 재생 중이면 광고 중으로 간주
+  return isVideoPlaying && !!adElement;
 }

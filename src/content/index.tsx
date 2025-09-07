@@ -386,6 +386,7 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
       const meta = await fetchYouTubeVideoMeta(videoId, process.env.YOUTUBE_API_KEY!);
       if (!meta) throw new Error('메타 정보 없음');
       if (!isMusicVideo(meta)) throw new Error('음악 영상 아님');
+      const videoDurationSec = meta.durationSec ?? 0;
 
       // 아티스트, 타이틀 파싱(기존 처리 로직 사용)
       let parsed = extractArtistAndTitle(meta.title);
@@ -412,7 +413,7 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
 
       // 가사 캐시 혹은 서버에서 가사 fetch
       const lyricsResult = await getLyricsFromCacheOrFetch(artist, title, {
-        fetch: async () => fetchLyricsWithAliasFallback(artist, title),
+        fetch: async () => fetchLyricsWithAliasFallback(artist, title, videoDurationSec),
       });
       if (!lyricsResult) throw new Error('가사 없음');
 
@@ -432,8 +433,6 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
       chrome.runtime.sendMessage({ type: 'LYRICS_READY', length: parsedLyrics.length });
       onLyricsUpdated(parsedLyrics);
 
-      // 4) 영상 길이 대비 가사 길이 비교 후 싱크 오류 여부 판단
-      const videoDurationSec = meta.durationSec ?? 0;
       const effectiveLyricsDuration =
         lyricsDuration ?? (parsedLyrics.length > 0 ? (parsedLyrics[parsedLyrics.length - 1]?.time ?? 0) : 0);
       const durationDiff = videoDurationSec - effectiveLyricsDuration;
