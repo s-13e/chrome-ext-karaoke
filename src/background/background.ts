@@ -51,9 +51,12 @@ interface TickMessage {
   type: 'tick';
   totalSeconds: number;
 }
+interface GetTimerStatusMessage {
+  type: 'getTimerStatus';
+}
 
 // 확장 메시지 타입 유니온에 포함
-type TimerMessage = StartTimerMessage | StopTimerMessage | GetStatusMessage | TickMessage;
+type TimerMessage = StartTimerMessage | StopTimerMessage | GetStatusMessage | TickMessage | GetTimerStatusMessage;
 
 // 확장에서 쓰는 모든 메시지 타입 유니온
 export type ExtensionMessage =
@@ -236,5 +239,12 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendRespon
   } else if (msg.type === 'getStatus') {
     sendResponse({ totalSeconds, isPlaying });
   }
+
+  if (msg.type === 'getTimerStatus') {
+    // background 스크립트가 관리하는 현재 타이머 상태를 반환
+    sendResponse({ isPlaying, totalSeconds });
+    return true; // 비동기 응답 유지
+  }
+
   return true;
 });

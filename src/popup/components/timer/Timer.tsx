@@ -15,8 +15,8 @@ interface TimerProps {
 }
 export function Timer({ onPlayStateChange }: TimerProps) {
   const [totalSeconds, setTotalSeconds] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false); // 재생 중인지
-  const [isEditing, setIsEditing] = useState(true); // 재생 중일 때 style 변경
+  const [isPlaying, setIsPlaying] = useState(false); // 타이머가 실제로 동작 중인지 여부
+  const [isEditing, setIsEditing] = useState(true); // 타이머 시간이 설정(입력) 가능한 상태인지 여부.
   const [showToast, setShowToast] = useState(false);
 
   // totalSeconds를 시/분/초로 분리 계산

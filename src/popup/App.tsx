@@ -19,6 +19,8 @@ interface LanguageChangeMessage {
   language: string;
 }
 export function App() {
+  let lastChangeOrigin: 'user' | 'system' | null = null;
+
   const { t, i18n } = useTranslation();
   const { phase } = useLangLoader();
 
@@ -33,9 +35,11 @@ export function App() {
   const handleTimerPlayChange = (playing: boolean) => {
     setTimerPlaying(playing);
     setEnabled(playing);
+    lastChangeOrigin = 'user';
+    console.log('lastChangeOrigin set to', lastChangeOrigin);
     if (!playing) {
-      chrome.storage.sync.set({ [STORAGE_KEYS.CONTENT_ENABLED]: false }, () => {
-        console.log('contentEnabled가 false로 변경됨');
+      chrome.storage.sync.set({ [STORAGE_KEYS.CONTENT_ENABLED]: playing }, () => {
+        console.log(`contentEnabled가 ${playing}로 변경됨`);
       });
     }
   };
@@ -85,21 +89,6 @@ export function App() {
     );
 
   if (phase !== 'ready') return <LoadingOverlay />;
-
-  // 스위치 상태 변경 핸들러
-  // const handleToggle = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  //   const newValue = e.target.checked;
-  //   // setEnabled(newValue);
-
-  //   // 현재 활성 탭에 메시지 전송
-  //   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-  //     if (tabs[0]?.id)
-  //       chrome.tabs.sendMessage(tabs[0].id, {
-  //         type: MESSAGE_TYPES.TOGGLE_CONTENT,
-  //         enabled: newValue,
-  //       });
-  //   });
-  // };
 
   if (showSettings) {
     return <PopupSettingsPanel onBack={() => setShowSettings(false)} />;

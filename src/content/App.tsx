@@ -43,11 +43,6 @@ export function App() {
       console.log('Language changed to:', i18nInstance.language);
     };
 
-    // 1. 초기 상태 불러오기
-    chrome.storage.sync.get(STORAGE_KEYS.CONTENT_ENABLED, (result) => {
-      updateContent(result.contentEnabled ?? false);
-    });
-
     // 2. 메시지 리스너 등록
     const messageListener = (request: ContentScriptMessage) => {
       if (isToggleContentMessage(request)) {

@@ -44,10 +44,13 @@ class OverlayManager {
         container.style.height = '100%';
 
         const lyricsOverlayRoot = document.getElementById('lyrics-cc-overlay');
-        if (!lyricsOverlayRoot) {
-          throw new Error('[OverlayManager] Lyrics overlay root not found');
+        if (lyricsOverlayRoot) {
+          lyricsOverlayRoot.appendChild(container);
+          console.log('[OverlayManager] song-info container appended to lyrics overlay:', container);
+        } else {
+          console.warn('[OverlayManager] lyrics overlay root not found, appending song-info container to body');
+          document.body.appendChild(container);
         }
-        lyricsOverlayRoot.appendChild(container);
       }
     } else {
       container = document.getElementById(`${type}-overlay-container`);
@@ -73,10 +76,13 @@ class OverlayManager {
    */
   public createOverlayRoot(type: OverlayType): Root {
     if (this.overlays.has(type)) {
+      console.log(`[OverlayManager] ${type} overlay already initialized`);
+
       return this.overlays.get(type)!.root;
     }
 
     const container = this.createContainer(type);
+    console.log(`[OverlayManager] creating React root for ${type}`, container);
     const root = createRoot(container);
 
     this.overlays.set(type, { root, container });
@@ -95,8 +101,10 @@ class OverlayManager {
   /** 특정 타입 Overlay React Root에 렌더링 수행 */
   public renderOverlay(type: OverlayType, element: ReactNode): void {
     if (!this.overlays.has(type)) {
+      console.log(`[OverlayManager] overlay of type ${type} not initialized. Creating root now.`);
       this.createOverlayRoot(type);
     }
+    console.log(`[OverlayManager] rendering overlay of type ${type}`);
     this.overlays.get(type)?.root.render(element);
   }
 

@@ -18,7 +18,26 @@ export interface SearchCandidate {
 
 const requestLimiter = new RequestLimiter(5); // 최대 동시 5개 요청 제한
 
+// 메인 엔트리: 캐시 우선, 없을 때 get fallback
 export async function fetchLyricsByArtistAndTrack(
+  artist: string,
+  title: string,
+  durationSeconds: number,
+): Promise<LrcLibLyricsResult | null> {
+  // 1. 캐시 버전 endpoint 사용
+  const getCachedEndpoint = 'https://lrclib.net/api/get-cached';
+  const cachedResult = await fetchLyricsWithEndpoint(getCachedEndpoint, artist, title, durationSeconds);
+  if (cachedResult && cachedResult.lyrics) {
+    return cachedResult;
+  }
+
+  // 2. 캐시에 없으면 일반 get endpoint로 fallback
+  const getEndpoint = 'https://lrclib.net/api/get';
+  return await fetchLyricsWithEndpoint(getEndpoint, artist, title, durationSeconds);
+}
+
+export async function fetchLyricsWithEndpoint(
+  endpoint: string,
   artist: string,
   title: string,
   durationSeconds: number,
@@ -29,11 +48,11 @@ export async function fetchLyricsByArtistAndTrack(
     _attemptNumber: number,
     durationSeconds: number,
   ): Promise<LrcLibLyricsResult | null> {
-    const endpoint = `https://lrclib.net/api/search?artist_name=${encodeURIComponent(
+    const searchEndpoint = `https://lrclib.net/api/search?artist_name=${encodeURIComponent(
       artistParam,
     )}&track_name=${encodeURIComponent(titleParam)}`;
 
-    const searchRes = await fetch(endpoint);
+    const searchRes = await fetch(searchEndpoint);
     if (!searchRes.ok) {
       console.warn(`Search API response not OK, status: ${searchRes.status}`);
       return null;
@@ -70,9 +89,7 @@ export async function fetchLyricsByArtistAndTrack(
       | null
     > {
       try {
-        const detailRes = await fetch(
-          `https://lrclib.net/api/get/${candidate.id}?duration=${encodeURIComponent(durationSeconds)}`,
-        );
+        const detailRes = await fetch(`${endpoint}/${candidate.id}?duration=${encodeURIComponent(durationSeconds)}`);
         if (!detailRes.ok) {
           console.warn(`Detail API response not OK for candidate id ${candidate.id}, status: ${detailRes.status}`);
           return null;

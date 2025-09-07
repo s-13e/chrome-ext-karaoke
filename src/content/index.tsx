@@ -73,6 +73,10 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
   // 중복 가사 호출 방지
   let isCollecting = false;
 
+  let lastContentEnabledFalseTime = 0; // 마지막 false 처리 시각(ms)
+  const CLEANUP_DEBOUNCE_MS = 500; // 0.5초 딜레이
+  let lastChangeOrigin: 'user' | 'system' = 'system';
+
   // 가사 모드
   const getContentEnabled = () => contentEnabled;
   const uiManager = new UIResourceManager();
@@ -128,33 +132,15 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
    * 화면에 표시된 가사 렌더링을 초기 상태로 재실행하는 함수
    */
   function resetLyricsData() {
-    latestLyrics = [];
     console.log('[resetLyricsData] 가사 상태 초기화 완료');
+
+    latestLyrics = [];
+    overlayManager.setVisibility('songInfo', false);
 
     // 최신 상태 반영 위해 화면 재렌더링
     renderLyricsOverlay(latestLyrics);
   }
 
-  /**
-   * UI 관련해서 직접 관리하는 DOM/스타일 등 리소스를 삭제하고,
-   * 오버레이 React Root(가사, 노래정보)를 unmount 및 DOM에서 제거하는 함수
-   */
-  function cleanupOverlayUI() {
-    console.log('[cleanupOverlayUI] 실행');
-    uiManager.cleanup();
-    overlayManager.cleanupOverlay('lyrics');
-    overlayManager.cleanupOverlay('songInfo');
-  }
-
-  /**
-   * 가사 상태 초기화와 UI 오버레이 클린업을 한번에 실행하는 통합 클린업 함수.
-   * 기본적으로 대부분의 리소스 정리를 위해 호출됨
-   */
-  // function resetAllUI() {
-  //   console.log('[resetAllUI] 실행');
-  //   resetLyricsData();
-  //   cleanupOverlayUI();
-  // }
   const injectCSS = () => {
     const cssId = 'karaoke-styles';
     if (document.getElementById(cssId)) return Promise.resolve();
@@ -209,6 +195,7 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
 
   // 노래 정보 렌더링
   function renderSongInfo(title: string, artist: string) {
+    overlayManager.setVisibility('songInfo', true);
     overlayManager.renderOverlay('songInfo', <SongInfoOverlay title={title} artist={artist} lyricsSource="LRCLIB" />);
   }
 
@@ -349,21 +336,16 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
       console.log('[handleUrlChange] URL 동일, 새로고침 또는 동작 보장용 감지 실행');
 
       lastVideoId = null;
-      cleanupOverlayUI();
+      resetLyricsData();
       handleVideoDetectionGuarded();
       return;
     }
 
-    cleanupOverlayUI();
-    console.log('handleUrlChange 내부의 cleanupOverlayUI 실행!');
+    resetLyricsData();
     lastVideoId = null;
-    console.log(`lastUrl: ${lastUrl}, currentUrl: ${url}`);
-
     lastUrl = url;
-    console.log(`lastUrl: ${lastUrl}, currentUrl: ${url}`);
 
     const isWatchPage = checkIsWatchPage(url);
-
     console.log(`[URL Change] ${url}, isWatchPage: ${isWatchPage}`);
 
     if (isWatchPage) {
@@ -567,6 +549,19 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
       console.log('[SPA] 미니-일반 전환 중 감지 호출 스킵');
       return;
     }
+
+    chrome.runtime.sendMessage({ type: 'getTimerStatus' }, (response) => {
+      const isTimerPlaying = response.isPlaying ?? false;
+      chrome.storage.sync.set({ [STORAGE_KEYS.CONTENT_ENABLED]: isTimerPlaying }, () => {
+        // 이제 실질적으로 isPlaying 상태와 storage 상태 동기화 완료
+        contentEnabled = isTimerPlaying;
+        if (!contentEnabled) {
+          console.log('[Content] 콘텐츠 비활성 상태 - UI 렌더링 및 리스너 초기화 건너뜀');
+          return;
+        }
+      });
+    });
+
     // 영상 -> 영상, videoId가 있는 곳으로 url 변경된 상황
     if (videoIdChanged || (urlChanged && watchPageChanged)) {
       spaObserverShouldTriggerDetection = false;
@@ -687,12 +682,11 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
 
   // 감지 활성화 및 옵저버 등록 전담 함수
   const enableDetection = async () => {
-    console.log('[enableDetection] cleanupAllResources 실행');
+    console.log('[enableDetection] 실행');
     if (isDetectionActive) {
       console.log('[SKIP] 감지 시스템 이미 활성화됨');
       return;
     }
-    cleanupAllResources();
 
     const debouncedSpaObserverCallback = debounce(() => {
       const currentUrl = window.location.href;
@@ -719,7 +713,6 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
   // 감지 시스템 완전 비활성화
   const disableDetection = () => {
     console.log('[disableDetection] cleanupAllResources 실행');
-
     cleanupAllResources();
 
     if (detectionObserverManager.videoElementObserver) {
@@ -744,6 +737,7 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
   };
 
   function setupUIResources() {
+    cleanupAllResources();
     if (!overlayManager.isInitialized('lyrics')) {
       console.log('[setupUIResources] 오버레이 초기화 진행');
       overlayManager.createOverlayRoot('lyrics');
@@ -769,6 +763,23 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
     detectVideoWithRetry();
   }
 
+  function shouldCleanupNow(): boolean {
+    const now = Date.now();
+    const diff = now - lastContentEnabledFalseTime;
+    console.log(`[shouldCleanupNow] now=${now}, lastFalse=${lastContentEnabledFalseTime}, diff=${diff}ms`);
+    return diff > CLEANUP_DEBOUNCE_MS;
+  }
+
+  // 상태 변경 함수를 별도 구현
+  function setContentEnabled(status: boolean, origin: 'user' | 'system') {
+    contentEnabled = status;
+    lastChangeOrigin = origin;
+
+    if (!status) {
+      lastContentEnabledFalseTime = Date.now();
+    }
+  }
+
   // 앱 초기화. 맨 처음, 새로고침 할 경우.
   const initializeApp = async () => {
     console.log('content app initializeApp 시작');
@@ -776,30 +787,44 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
       await initializeI18n();
       await injectCSS();
 
-      chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED], (result) => {
-        contentEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
-        if (!contentEnabled) {
-          console.log('[Content] 콘텐츠 비활성 상태 - UI 렌더링 및 리스너 초기화 건너뜀');
-          return;
-        }
-        setupUIResources();
-        startDetectionWorkflow();
+      chrome.runtime.sendMessage({ type: 'getTimerStatus' }, (response) => {
+        const isTimerPlaying = response.isPlaying ?? false;
+        chrome.storage.sync.set({ [STORAGE_KEYS.CONTENT_ENABLED]: isTimerPlaying }, () => {
+          // 이제 실질적으로 isPlaying 상태와 storage 상태 동기화 완료
+          contentEnabled = isTimerPlaying;
+          if (!contentEnabled) {
+            console.log('[Content] 콘텐츠 비활성 상태 - UI 렌더링 및 리스너 초기화 건너뜀');
+            return;
+          }
+          setupUIResources();
+          startDetectionWorkflow();
+        });
       });
 
-      // 저장소 변경 감지 등록 - 활성화 상태 변하면 처리
+      // 온체인지 리스너
       chrome.storage.onChanged.addListener((changes, area) => {
         if (area === 'sync' && STORAGE_KEYS.CONTENT_ENABLED in changes) {
           const newValue = changes[STORAGE_KEYS.CONTENT_ENABLED]?.newValue;
-          console.log(`[storage.onChanged] contentEnabled 변경 감지: ${newValue}`);
-          contentEnabled = newValue;
-          if (contentEnabled) {
-            console.log('[storage.onChanged] 콘텐츠 활성화 - setupUIResources/startDetectionWorkflow 호출');
-            setupUIResources();
-            startDetectionWorkflow();
-          } else {
-            console.log('[storage.onChanged] 콘텐츠 비활성화 - 감지 시스템 비활성화 및 정리');
-            disableDetection();
-            cleanupAllResources();
+
+          // origin 정보는 changes 내에 없으니 lastChangeOrigin 사용
+          console.log(`contentEnabled 변경 감지: ${newValue}, origin: ${lastChangeOrigin}`);
+
+          setContentEnabled(newValue, lastChangeOrigin);
+
+          if (newValue === false) {
+            if (shouldCleanupNow()) {
+              disableDetection();
+              cleanupAllResources();
+            } else {
+              console.log('[storage.onChanged] 초기화 지연됨 - debounce 및 origin 조건');
+            }
+          } else if (newValue === true) {
+            if (shouldCleanupNow()) {
+              setupUIResources();
+              startDetectionWorkflow();
+            } else {
+              console.log('[storage.onChanged] 초기화 스킵 - 빈번한 토글 감지됨');
+            }
           }
         }
       });
