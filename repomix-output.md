@@ -130,7 +130,6 @@ lib/utils/dom/styleInjection.ts
 lib/utils/infra/adWatcher.ts
 lib/utils/infra/listenerManager.ts
 lib/utils/infra/overlayManager.ts
-lib/utils/infra/registerAllListeners.ts
 lib/utils/infra/singletonListener.ts
 lib/utils/infra/uiResourceManager.ts
 lib/utils/lyrics/detection/languageDetectorSimple.ts
@@ -207,17 +206,41 @@ export interface SearchCandidate {
 
 const requestLimiter = new RequestLimiter(5); // 최대 동시 5개 요청 제한
 
-export async function fetchLyricsByArtistAndTrack(artist: string, title: string): Promise<LrcLibLyricsResult | null> {
+// 메인 엔트리: 캐시 우선, 없을 때 get fallback
+export async function fetchLyricsByArtistAndTrack(
+  artist: string,
+  title: string,
+  durationSeconds: number,
+): Promise<LrcLibLyricsResult | null> {
+  // 1. 캐시 버전 endpoint 사용
+  const getCachedEndpoint = 'https://lrclib.net/api/get-cached';
+  const cachedResult = await fetchLyricsWithEndpoint(getCachedEndpoint, artist, title, durationSeconds);
+  if (cachedResult && cachedResult.lyrics) {
+    return cachedResult;
+  }
+
+  // 2. 캐시에 없으면 일반 get endpoint로 fallback
+  const getEndpoint = 'https://lrclib.net/api/get';
+  return await fetchLyricsWithEndpoint(getEndpoint, artist, title, durationSeconds);
+}
+
+export async function fetchLyricsWithEndpoint(
+  endpoint: string,
+  artist: string,
+  title: string,
+  durationSeconds: number,
+): Promise<LrcLibLyricsResult | null> {
   async function searchWithParams(
     artistParam: string,
     titleParam: string,
     _attemptNumber: number,
+    durationSeconds: number,
   ): Promise<LrcLibLyricsResult | null> {
-    const endpoint = `https://lrclib.net/api/search?artist_name=${encodeURIComponent(
+    const searchEndpoint = `https://lrclib.net/api/search?artist_name=${encodeURIComponent(
       artistParam,
     )}&track_name=${encodeURIComponent(titleParam)}`;
 
-    const searchRes = await fetch(endpoint);
+    const searchRes = await fetch(searchEndpoint);
     if (!searchRes.ok) {
       console.warn(`Search API response not OK, status: ${searchRes.status}`);
       return null;
@@ -243,7 +266,10 @@ export async function fetchLyricsByArtistAndTrack(artist: string, title: string)
       }, timeoutMs);
     });
 
-    async function fetchLyricDetail(candidate: SearchCandidate): Promise<
+    async function fetchLyricDetail(
+      candidate: SearchCandidate,
+      durationSeconds: number,
+    ): Promise<
       | (LrcLibLyricsResult & {
           hasSynced: boolean;
           isStrictMatch: boolean;
@@ -251,7 +277,7 @@ export async function fetchLyricsByArtistAndTrack(artist: string, title: string)
       | null
     > {
       try {
-        const detailRes = await fetch(`https://lrclib.net/api/get/${candidate.id}`);
+        const detailRes = await fetch(`${endpoint}/${candidate.id}?duration=${encodeURIComponent(durationSeconds)}`);
         if (!detailRes.ok) {
           console.warn(`Detail API response not OK for candidate id ${candidate.id}, status: ${detailRes.status}`);
           return null;
@@ -268,6 +294,11 @@ export async function fetchLyricsByArtistAndTrack(artist: string, title: string)
         if (!lyrics) {
           return null;
         }
+        /*  console.log(
+          '[LrcLib] API 받은 원본 lyrics:',
+          lyrics,
+          `candidate.id: ${candidate.id} 응답 duration: ${detail.duration}`,
+        ); */
 
         const candidateTitle = (detail.title ?? '').trim().toLowerCase();
         const isStrictMatch = candidateTitle === normalizedReqTitle;
@@ -304,10 +335,9 @@ export async function fetchLyricsByArtistAndTrack(artist: string, title: string)
         return null;
       }
     }
-
     // 요청 배치
     const resultsPromise = Promise.all(
-      limitedCandidates.map((candidate) => requestLimiter.enqueue(() => fetchLyricDetail(candidate))),
+      limitedCandidates.map((candidate) => requestLimiter.enqueue(() => fetchLyricDetail(candidate, durationSeconds))),
     );
 
     // 타임아웃 또는 모두 완료 중 먼저 도착하는 것을 선택
@@ -331,42 +361,74 @@ export async function fetchLyricsByArtistAndTrack(artist: string, title: string)
       return null;
     }
 
-    const strictSynced = validResults.find((res) => res.hasSynced && res.isStrictMatch);
+    const filteredByDuration = evaluateCandidatesByDuration(validResults, durationSeconds, 2);
+
+    if (!filteredByDuration.length && (fallbackSynced || fallbackPlain)) {
+      console.log('No valid results after duration filter, returning fallback');
+      return fallbackSynced || fallbackPlain;
+    }
+
+    if (!filteredByDuration.length) {
+      console.log('No results found after duration filter');
+      return null;
+    }
+
+    const strictSynced = filteredByDuration.find((res) => res.hasSynced && res.isStrictMatch);
     if (strictSynced) {
       console.log('Returning strict matched synced lyrics');
       return strictSynced;
     }
 
-    if (fallbackSynced) {
+    const fallbackSyncedCandidate = filteredByDuration.find((res) => res.hasSynced);
+    if (fallbackSyncedCandidate) {
       console.log('Returning fallback synced lyrics');
-      return fallbackSynced;
+      return fallbackSyncedCandidate;
     }
 
-    const strictPlain = validResults.find((res) => !res.hasSynced && res.isStrictMatch);
+    const strictPlain = filteredByDuration.find((res) => !res.hasSynced && res.isStrictMatch);
     if (strictPlain) {
       console.log('Returning strict matched plain lyrics');
       return strictPlain;
     }
 
-    if (fallbackPlain) {
+    const fallbackPlainCandidate = filteredByDuration.find((res) => !res.hasSynced);
+    if (fallbackPlainCandidate) {
       console.log('Returning fallback plain lyrics');
-      return fallbackPlain;
+      return fallbackPlainCandidate;
     }
 
     console.log('Returning first valid result as fallback');
-    return validResults[0] || null;
+    return filteredByDuration[0] || null;
   }
 
   // 1차 시도: 정상 아티스트-곡명 순서
-  const result1 = await searchWithParams(artist, title, 1);
+  const result1 = await searchWithParams(artist, title, 1, durationSeconds);
   if (result1 !== null) return result1;
 
   // 2차 시도: 곡명-아티스트 순서
   if (artist.toLowerCase() !== title.toLowerCase()) {
-    const result2 = await searchWithParams(title, artist, 2);
+    const result2 = await searchWithParams(title, artist, 2, durationSeconds);
     if (result2 !== null) return result2;
   }
   return null;
+}
+
+// validResults는 여러 후보 가사 리스트
+// videoDurationSec은 영상 길이(초) - collectMetadataAndLyrics에서 인자로 전달
+
+function evaluateCandidatesByDuration(
+  candidates: (LrcLibLyricsResult & {
+    hasSynced: boolean;
+    isStrictMatch: boolean;
+  })[],
+  videoDurationSec: number,
+  maxAllowedDiffSec = 3,
+) {
+  return candidates.filter((candidate) => {
+    if (!candidate.duration) return false; // duration 정보 없는 후보 제거
+    const diff = Math.abs(videoDurationSec - candidate.duration);
+    return diff <= maxAllowedDiffSec;
+  });
 }
 ```
 
@@ -375,14 +437,18 @@ export async function fetchLyricsByArtistAndTrack(artist: string, title: string)
 import { isEnglishText } from '@lib/utils/lyrics/parsers/stringUtils';
 import { fetchLyricsByArtistAndTrack, LrcLibLyricsResult } from './lrclib';
 import { extractEnglishAliasFromArtists, fetchEnglishAliasForArtist, searchArtistByFreeText } from './musicBrainz';
-export async function fetchLyricsWithAliasFallback(artist: string, title: string): Promise<LrcLibLyricsResult> {
+export async function fetchLyricsWithAliasFallback(
+  artist: string,
+  title: string,
+  durationSeconds: number,
+): Promise<LrcLibLyricsResult> {
   const processedArtist = artist;
   const processedTitle = title;
 
   const areBothEnglish = isEnglishText(processedArtist) && isEnglishText(processedTitle);
 
   async function doubleLookup(a: string, t: string) {
-    const res = await fetchLyricsByArtistAndTrack(a, t);
+    const res = await fetchLyricsByArtistAndTrack(a, t, durationSeconds);
     return res ?? null;
   }
 
@@ -733,9 +799,12 @@ interface TickMessage {
   type: 'tick';
   totalSeconds: number;
 }
+interface GetTimerStatusMessage {
+  type: 'getTimerStatus';
+}
 
 // 확장 메시지 타입 유니온에 포함
-type TimerMessage = StartTimerMessage | StopTimerMessage | GetStatusMessage | TickMessage;
+type TimerMessage = StartTimerMessage | StopTimerMessage | GetStatusMessage | TickMessage | GetTimerStatusMessage;
 
 // 확장에서 쓰는 모든 메시지 타입 유니온
 export type ExtensionMessage =
@@ -918,6 +987,13 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendRespon
   } else if (msg.type === 'getStatus') {
     sendResponse({ totalSeconds, isPlaying });
   }
+
+  if (msg.type === 'getTimerStatus') {
+    // background 스크립트가 관리하는 현재 타이머 상태를 반환
+    sendResponse({ isPlaying, totalSeconds });
+    return true; // 비동기 응답 유지
+  }
+
   return true;
 });
 ```
@@ -2703,11 +2779,6 @@ export function App() {
     const handleLanguageChange = () => {
       console.log('Language changed to:', i18nInstance.language);
     };
-
-    // 1. 초기 상태 불러오기
-    chrome.storage.sync.get(STORAGE_KEYS.CONTENT_ENABLED, (result) => {
-      updateContent(result.contentEnabled ?? false);
-    });
 
     // 2. 메시지 리스너 등록
     const messageListener = (request: ContentScriptMessage) => {
@@ -4706,6 +4777,10 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
   // 중복 가사 호출 방지
   let isCollecting = false;
 
+  let lastContentEnabledFalseTime = 0; // 마지막 false 처리 시각(ms)
+  const CLEANUP_DEBOUNCE_MS = 500; // 0.5초 딜레이
+  let lastChangeOrigin: 'user' | 'system' = 'system';
+
   // 가사 모드
   const getContentEnabled = () => contentEnabled;
   const uiManager = new UIResourceManager();
@@ -4761,33 +4836,34 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
    * 화면에 표시된 가사 렌더링을 초기 상태로 재실행하는 함수
    */
   function resetLyricsData() {
-    latestLyrics = [];
     console.log('[resetLyricsData] 가사 상태 초기화 완료');
+
+    latestLyrics = [];
+    overlayManager.setVisibility('songInfo', false);
 
     // 최신 상태 반영 위해 화면 재렌더링
     renderLyricsOverlay(latestLyrics);
   }
 
-  /**
-   * UI 관련해서 직접 관리하는 DOM/스타일 등 리소스를 삭제하고,
-   * 오버레이 React Root(가사, 노래정보)를 unmount 및 DOM에서 제거하는 함수
-   */
-  function cleanupOverlayUI() {
-    console.log('[cleanupOverlayUI] 실행');
-    uiManager.cleanup();
-    overlayManager.cleanupOverlay('lyrics');
-    overlayManager.cleanupOverlay('songInfo');
-  }
+  const injectCSS = () => {
+    const cssId = 'karaoke-styles';
+    if (document.getElementById(cssId)) return Promise.resolve();
 
-  /**
-   * 가사 상태 초기화와 UI 오버레이 클린업을 한번에 실행하는 통합 클린업 함수.
-   * 기본적으로 대부분의 리소스 정리를 위해 호출됨
-   */
-  // function resetAllUI() {
-  //   console.log('[resetAllUI] 실행');
-  //   resetLyricsData();
-  //   cleanupOverlayUI();
-  // }
+    return new Promise((resolve) => {
+      const link = document.createElement('link');
+      link.id = cssId;
+      link.rel = 'stylesheet';
+      link.href = chrome.runtime.getURL('content/style.css');
+
+      link.onload = () => {
+        resolve(null);
+      };
+      link.onerror = () => {
+        resolve(null); // 실패해도 바로 resolve
+      };
+      document.head.appendChild(link);
+    });
+  };
 
   // 가사 렌더링 함수
   async function renderLyricsOverlay(lyrics: Line[], offset = 0) {
@@ -4823,6 +4899,7 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
 
   // 노래 정보 렌더링
   function renderSongInfo(title: string, artist: string) {
+    overlayManager.setVisibility('songInfo', true);
     overlayManager.renderOverlay('songInfo', <SongInfoOverlay title={title} artist={artist} lyricsSource="LRCLIB" />);
   }
 
@@ -4870,11 +4947,12 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
           console.log('[content] GET_LATEST_LYRICS 요청 - 가사 수:', latestLyrics.length);
           sendResponse({ lyrics: latestLyrics });
           break;
-        case 'APPLY_OFFSET_LYRICS':
+        case 'APPLY_OFFSET_LYRICS': {
           const { offset, lyrics } = message.payload;
           console.log(`[content] APPLY_OFFSET_LYRICS 수신 → offset: ${offset}, 가사 길이: ${lyrics.length}`);
           onLyricsUpdated(lyrics);
           break;
+        }
       }
     });
   }
@@ -4942,7 +5020,6 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
     console.log('handleUrlChange가 실행됨.');
     const isMini = checkIfMiniPlayerActive();
     const currentVideoId = getCurrentVideoId();
-    console.log('currentVideoId:', currentVideoId, 'lastVideoId:', lastVideoId);
 
     // 영상 id가 같으면 cleanup 스킵
     if (currentVideoId && currentVideoId === lastVideoId) {
@@ -4962,21 +5039,16 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
       console.log('[handleUrlChange] URL 동일, 새로고침 또는 동작 보장용 감지 실행');
 
       lastVideoId = null;
-      cleanupOverlayUI();
+      resetLyricsData();
       handleVideoDetectionGuarded();
       return;
     }
 
-    cleanupOverlayUI();
-    console.log('handleUrlChange 내부의 cleanupOverlayUI 실행!');
+    resetLyricsData();
     lastVideoId = null;
-    console.log(`lastUrl: ${lastUrl}, currentUrl: ${url}`);
-
     lastUrl = url;
-    console.log(`lastUrl: ${lastUrl}, currentUrl: ${url}`);
 
     const isWatchPage = checkIsWatchPage(url);
-
     console.log(`[URL Change] ${url}, isWatchPage: ${isWatchPage}`);
 
     if (isWatchPage) {
@@ -4999,6 +5071,7 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
       const meta = await fetchYouTubeVideoMeta(videoId, process.env.YOUTUBE_API_KEY!);
       if (!meta) throw new Error('메타 정보 없음');
       if (!isMusicVideo(meta)) throw new Error('음악 영상 아님');
+      const videoDurationSec = meta.durationSec ?? 0;
 
       // 아티스트, 타이틀 파싱(기존 처리 로직 사용)
       let parsed = extractArtistAndTitle(meta.title);
@@ -5025,7 +5098,7 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
 
       // 가사 캐시 혹은 서버에서 가사 fetch
       const lyricsResult = await getLyricsFromCacheOrFetch(artist, title, {
-        fetch: async () => fetchLyricsWithAliasFallback(artist, title),
+        fetch: async () => fetchLyricsWithAliasFallback(artist, title, videoDurationSec),
       });
       if (!lyricsResult) throw new Error('가사 없음');
 
@@ -5045,8 +5118,6 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
       chrome.runtime.sendMessage({ type: 'LYRICS_READY', length: parsedLyrics.length });
       onLyricsUpdated(parsedLyrics);
 
-      // 4) 영상 길이 대비 가사 길이 비교 후 싱크 오류 여부 판단
-      const videoDurationSec = meta.durationSec ?? 0;
       const effectiveLyricsDuration =
         lyricsDuration ?? (parsedLyrics.length > 0 ? (parsedLyrics[parsedLyrics.length - 1]?.time ?? 0) : 0);
       const durationDiff = videoDurationSec - effectiveLyricsDuration;
@@ -5061,7 +5132,6 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
       renderSongInfo(title, artist);
 
       // 5) 광고 재생 시 가사 UI 숨김, 광고 종료 후 다시 렌더링
-
       let attempt = 0;
       while (isAdPlaying() && attempt < 30) {
         console.log('[fetchAnalyzeAndRenderLyrics] 광고 중. 가사 렌더 대기...');
@@ -5181,6 +5251,19 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
       console.log('[SPA] 미니-일반 전환 중 감지 호출 스킵');
       return;
     }
+
+    chrome.runtime.sendMessage({ type: 'getTimerStatus' }, (response) => {
+      const isTimerPlaying = response.isPlaying ?? false;
+      chrome.storage.sync.set({ [STORAGE_KEYS.CONTENT_ENABLED]: isTimerPlaying }, () => {
+        // 이제 실질적으로 isPlaying 상태와 storage 상태 동기화 완료
+        contentEnabled = isTimerPlaying;
+        if (!contentEnabled) {
+          console.log('[Content] 콘텐츠 비활성 상태 - UI 렌더링 및 리스너 초기화 건너뜀');
+          return;
+        }
+      });
+    });
+
     // 영상 -> 영상, videoId가 있는 곳으로 url 변경된 상황
     if (videoIdChanged || (urlChanged && watchPageChanged)) {
       spaObserverShouldTriggerDetection = false;
@@ -5191,23 +5274,6 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
       }, 5000);
     } else {
       console.log('[SPA] 영상 및 페이지 변동 없음, 감지 생략');
-    }
-  }
-
-  // 재시도 함수: 현재 시도 횟수, 최대 시도 횟수, 인터벌(ms)
-  function tryDetectionWithRetry(attempt: number, maxAttempts: number, interval: number) {
-    if (attempt >= maxAttempts) {
-      console.warn('[visibilitychange] 감지 재시도 최대횟수 도달, 종료');
-      return;
-    }
-
-    if (isReadyForDetection()) {
-      handleVideoDetectionGuarded();
-    } else {
-      // 준비 안 됐다면 interval ms 후 다시 시도
-      setTimeout(() => {
-        tryDetectionWithRetry(attempt + 1, maxAttempts, interval);
-      }, interval);
     }
   }
 
@@ -5318,19 +5384,17 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
 
   // 감지 활성화 및 옵저버 등록 전담 함수
   const enableDetection = async () => {
-    console.log('[enableDetection] cleanupAllResources 실행');
+    console.log('[enableDetection] 실행');
     if (isDetectionActive) {
       console.log('[SKIP] 감지 시스템 이미 활성화됨');
       return;
     }
-    cleanupAllResources();
 
     const debouncedSpaObserverCallback = debounce(() => {
       const currentUrl = window.location.href;
       if (currentUrl !== lastUrl) {
         if (spaObserverShouldTriggerDetection) {
           handleSpaUrlChange(currentUrl);
-          console.log(`lastUrl: ${lastUrl}, currentUrl: ${currentUrl}`);
           lastUrl = currentUrl;
           console.log(`lastUrl: ${lastUrl}, currentUrl: ${currentUrl}`);
         } else {
@@ -5350,7 +5414,6 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
   // 감지 시스템 완전 비활성화
   const disableDetection = () => {
     console.log('[disableDetection] cleanupAllResources 실행');
-
     cleanupAllResources();
 
     if (detectionObserverManager.videoElementObserver) {
@@ -5375,6 +5438,7 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
   };
 
   function setupUIResources() {
+    cleanupAllResources();
     if (!overlayManager.isInitialized('lyrics')) {
       console.log('[setupUIResources] 오버레이 초기화 진행');
       overlayManager.createOverlayRoot('lyrics');
@@ -5400,36 +5464,68 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
     detectVideoWithRetry();
   }
 
+  function shouldCleanupNow(): boolean {
+    const now = Date.now();
+    const diff = now - lastContentEnabledFalseTime;
+    console.log(`[shouldCleanupNow] now=${now}, lastFalse=${lastContentEnabledFalseTime}, diff=${diff}ms`);
+    return diff > CLEANUP_DEBOUNCE_MS;
+  }
+
+  // 상태 변경 함수를 별도 구현
+  function setContentEnabled(status: boolean, origin: 'user' | 'system') {
+    contentEnabled = status;
+    lastChangeOrigin = origin;
+
+    if (!status) {
+      lastContentEnabledFalseTime = Date.now();
+    }
+  }
+
   // 앱 초기화. 맨 처음, 새로고침 할 경우.
   const initializeApp = async () => {
     console.log('content app initializeApp 시작');
     try {
       await initializeI18n();
+      await injectCSS();
 
-      chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED], (result) => {
-        contentEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
-        if (!contentEnabled) {
-          console.log('[Content] 콘텐츠 비활성 상태 - UI 렌더링 및 리스너 초기화 건너뜀');
-          return;
-        }
-        setupUIResources();
-        startDetectionWorkflow();
+      chrome.runtime.sendMessage({ type: 'getTimerStatus' }, (response) => {
+        const isTimerPlaying = response.isPlaying ?? false;
+        chrome.storage.sync.set({ [STORAGE_KEYS.CONTENT_ENABLED]: isTimerPlaying }, () => {
+          // 이제 실질적으로 isPlaying 상태와 storage 상태 동기화 완료
+          contentEnabled = isTimerPlaying;
+          if (!contentEnabled) {
+            console.log('[Content] 콘텐츠 비활성 상태 - UI 렌더링 및 리스너 초기화 건너뜀');
+            return;
+          }
+          setupUIResources();
+          startDetectionWorkflow();
+        });
       });
 
-      // 저장소 변경 감지 등록 - 활성화 상태 변하면 처리
+      // 온체인지 리스너
       chrome.storage.onChanged.addListener((changes, area) => {
         if (area === 'sync' && STORAGE_KEYS.CONTENT_ENABLED in changes) {
           const newValue = changes[STORAGE_KEYS.CONTENT_ENABLED]?.newValue;
-          console.log(`[storage.onChanged] contentEnabled 변경 감지: ${newValue}`);
-          contentEnabled = newValue;
-          if (contentEnabled) {
-            console.log('[storage.onChanged] 콘텐츠 활성화 - setupUIResources/startDetectionWorkflow 호출');
-            setupUIResources();
-            startDetectionWorkflow();
-          } else {
-            console.log('[storage.onChanged] 콘텐츠 비활성화 - 감지 시스템 비활성화 및 정리');
-            disableDetection();
-            cleanupAllResources();
+
+          // origin 정보는 changes 내에 없으니 lastChangeOrigin 사용
+          console.log(`contentEnabled 변경 감지: ${newValue}, origin: ${lastChangeOrigin}`);
+
+          setContentEnabled(newValue, lastChangeOrigin);
+
+          if (newValue === false) {
+            if (shouldCleanupNow()) {
+              disableDetection();
+              cleanupAllResources();
+            } else {
+              console.log('[storage.onChanged] 초기화 지연됨 - debounce 및 origin 조건');
+            }
+          } else if (newValue === true) {
+            if (shouldCleanupNow()) {
+              setupUIResources();
+              startDetectionWorkflow();
+            } else {
+              console.log('[storage.onChanged] 초기화 스킵 - 빈번한 토글 감지됨');
+            }
           }
         }
       });
@@ -6319,7 +6415,7 @@ export function isWatchPage(url: string): boolean {
 ## File: lib/utils/dom/domUtils.ts
 ```typescript
 // src/lib/utils/domUtils.ts
-import { YOUTUBE_AD_SELECTOR, YOUTUBE_PLAYER_SELECTOR } from '@constants/youtubeSelectors';
+import { YOUTUBE_PLAYER_SELECTOR } from '@constants/youtubeSelectors';
 
 // 요소 대기 함수
 export const waitForElement = <T extends Element>(selector: string, timeout = 5000): Promise<T> => {
@@ -6385,11 +6481,46 @@ export const toggleClass = (element: Element, className: string, force?: boolean
   return true;
 };
 
-export function isAdPlaying() {
-  const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR);
-  const adElement = document.querySelector(YOUTUBE_AD_SELECTOR);
+export function isAdPlaying(): boolean {
+  // 주요 광고 표시 클래스
+  const PLAYER_AD_CLASS = 'ad-showing';
+  const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR) as HTMLElement | null;
 
-  return player != null && !!adElement;
+  // 광고 표시 영역, 광고 DOM, 오버레이 등 다양한 광고 상태 DOM
+  const adOverlay = document.querySelector('.ytp-ad-player-overlay, .ytp-ad-overlay-container, .ytp-ad-image-overlay');
+  const adContainer = document.querySelector('.video-ads, .ytp-ad-module, .ad-container');
+  const adText = document.querySelector('.ytp-ad-text');
+  const adSkip = document.querySelector('.ytp-ad-skip-button');
+  const adIndicator = document.querySelector('.ytp-ad-player-overlay');
+
+  // 광고 상태 클래스 우선 판별
+  const playerAdState = player && player.classList.contains(PLAYER_AD_CLASS);
+  // 개별 요소 로그 출력
+  if (playerAdState) {
+    console.log('[isAdPlaying] player에 ad-showing 클래스 감지됨');
+  }
+  if (adOverlay) {
+    console.log('[isAdPlaying] adOverlay 요소 감지됨:', adOverlay);
+  }
+  if (adContainer) {
+    console.log('[isAdPlaying] adContainer 요소 감지됨:', adContainer);
+  }
+  if (adText) {
+    console.log('[isAdPlaying] adText 요소 감지됨:', adText);
+  }
+  if (adSkip) {
+    console.log('[isAdPlaying] adSkip 요소 감지됨:', adSkip);
+  }
+  if (adIndicator) {
+    console.log('[isAdPlaying] adIndicator 요소 감지됨:', adIndicator);
+  }
+  // 광고 오버레이/컨테이너 중 하나라도 있으면 광고 중으로 판정
+  const domAdsExist = !!adOverlay || !!adContainer || !!adText || !!adSkip || !!adIndicator;
+  if (playerAdState || domAdsExist) {
+    console.log('[isAdPlaying] 광고 상태 감지됨');
+  }
+  // 광고 상태 포괄적 OR조건
+  return !!playerAdState || domAdsExist;
 }
 ```
 
@@ -6532,10 +6663,13 @@ class OverlayManager {
         container.style.height = '100%';
 
         const lyricsOverlayRoot = document.getElementById('lyrics-cc-overlay');
-        if (!lyricsOverlayRoot) {
-          throw new Error('[OverlayManager] Lyrics overlay root not found');
+        if (lyricsOverlayRoot) {
+          lyricsOverlayRoot.appendChild(container);
+          console.log('[OverlayManager] song-info container appended to lyrics overlay:', container);
+        } else {
+          console.warn('[OverlayManager] lyrics overlay root not found, appending song-info container to body');
+          document.body.appendChild(container);
         }
-        lyricsOverlayRoot.appendChild(container);
       }
     } else {
       container = document.getElementById(`${type}-overlay-container`);
@@ -6561,10 +6695,13 @@ class OverlayManager {
    */
   public createOverlayRoot(type: OverlayType): Root {
     if (this.overlays.has(type)) {
+      console.log(`[OverlayManager] ${type} overlay already initialized`);
+
       return this.overlays.get(type)!.root;
     }
 
     const container = this.createContainer(type);
+    console.log(`[OverlayManager] creating React root for ${type}`, container);
     const root = createRoot(container);
 
     this.overlays.set(type, { root, container });
@@ -6583,8 +6720,10 @@ class OverlayManager {
   /** 특정 타입 Overlay React Root에 렌더링 수행 */
   public renderOverlay(type: OverlayType, element: ReactNode): void {
     if (!this.overlays.has(type)) {
+      console.log(`[OverlayManager] overlay of type ${type} not initialized. Creating root now.`);
       this.createOverlayRoot(type);
     }
+    console.log(`[OverlayManager] rendering overlay of type ${type}`);
     this.overlays.get(type)?.root.render(element);
   }
 
@@ -6643,42 +6782,6 @@ class OverlayManager {
 export const overlayManager = OverlayManager.getInstance();
 ```
 
-## File: lib/utils/infra/registerAllListeners.ts
-```typescript
-import { listenerManager } from './listenerManager';
-import { STORAGE_KEYS } from '@constants/storageKeys';
-
-// 필요한 핸들러 함수도 이 파일에서 선언하거나 import
-export function registerAllListeners(setDetectionState: (enabled: boolean) => void) {
-  // 1. chrome.storage.onChanged 리스너
-  listenerManager.add(() => {
-    const handler = (
-      changes: { [key: string]: chrome.storage.StorageChange },
-      // areaName?: 'sync' | 'local' | 'managed' | 'session'
-    ) => {
-      const contentEnabledChange = changes[STORAGE_KEYS.CONTENT_ENABLED];
-      if (contentEnabledChange && typeof contentEnabledChange.newValue === 'boolean') {
-        setDetectionState(contentEnabledChange.newValue);
-      }
-    };
-    chrome.storage.onChanged.addListener(handler);
-    return () => chrome.storage.onChanged.removeListener(handler);
-  });
-
-  // 2. window resize 리스너
-  listenerManager.add(() => {
-    const onResize = (/*event: UIEvent*/) => {
-      // 예: 가사 UI 레이아웃 동기화 등
-      // updateLyricsContainerLayout();
-    };
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  });
-
-  // 3. 필요한 다른 리스너도 이곳에 추가
-}
-```
-
 ## File: lib/utils/infra/singletonListener.ts
 ```typescript
 // src/lib/utils/singletonListener.ts
@@ -6710,10 +6813,6 @@ export class UIResourceManager {
       if (el.parentNode) el.parentNode.removeChild(el);
     });
     this.elements = [];
-  }
-  // 추가: elements 수를 반환하는 메서드
-  public getRegisteredElementCount(): number {
-    return this.elements.length;
   }
 }
 ```
@@ -8053,6 +8152,8 @@ interface LanguageChangeMessage {
   language: string;
 }
 export function App() {
+  let lastChangeOrigin: 'user' | 'system' | null = null;
+
   const { t, i18n } = useTranslation();
   const { phase } = useLangLoader();
 
@@ -8067,9 +8168,11 @@ export function App() {
   const handleTimerPlayChange = (playing: boolean) => {
     setTimerPlaying(playing);
     setEnabled(playing);
+    lastChangeOrigin = 'user';
+    console.log('lastChangeOrigin set to', lastChangeOrigin);
     if (!playing) {
-      chrome.storage.sync.set({ [STORAGE_KEYS.CONTENT_ENABLED]: false }, () => {
-        console.log('contentEnabled가 false로 변경됨');
+      chrome.storage.sync.set({ [STORAGE_KEYS.CONTENT_ENABLED]: playing }, () => {
+        console.log(`contentEnabled가 ${playing}로 변경됨`);
       });
     }
   };
@@ -8119,21 +8222,6 @@ export function App() {
     );
 
   if (phase !== 'ready') return <LoadingOverlay />;
-
-  // 스위치 상태 변경 핸들러
-  // const handleToggle = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  //   const newValue = e.target.checked;
-  //   // setEnabled(newValue);
-
-  //   // 현재 활성 탭에 메시지 전송
-  //   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-  //     if (tabs[0]?.id)
-  //       chrome.tabs.sendMessage(tabs[0].id, {
-  //         type: MESSAGE_TYPES.TOGGLE_CONTENT,
-  //         enabled: newValue,
-  //       });
-  //   });
-  // };
 
   if (showSettings) {
     return <PopupSettingsPanel onBack={() => setShowSettings(false)} />;
@@ -9246,8 +9334,8 @@ interface TimerProps {
 }
 export function Timer({ onPlayStateChange }: TimerProps) {
   const [totalSeconds, setTotalSeconds] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false); // 재생 중인지
-  const [isEditing, setIsEditing] = useState(true); // 재생 중일 때 style 변경
+  const [isPlaying, setIsPlaying] = useState(false); // 타이머가 실제로 동작 중인지 여부
+  const [isEditing, setIsEditing] = useState(true); // 타이머 시간이 설정(입력) 가능한 상태인지 여부.
   const [showToast, setShowToast] = useState(false);
 
   // totalSeconds를 시/분/초로 분리 계산

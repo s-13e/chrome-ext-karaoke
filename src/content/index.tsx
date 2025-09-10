@@ -316,7 +316,6 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
     console.log('handleUrlChange가 실행됨.');
     const isMini = checkIfMiniPlayerActive();
     const currentVideoId = getCurrentVideoId();
-    console.log('currentVideoId:', currentVideoId, 'lastVideoId:', lastVideoId);
 
     // 영상 id가 같으면 cleanup 스킵
     if (currentVideoId && currentVideoId === lastVideoId) {
@@ -429,7 +428,6 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
       renderSongInfo(title, artist);
 
       // 5) 광고 재생 시 가사 UI 숨김, 광고 종료 후 다시 렌더링
-
       let attempt = 0;
       while (isAdPlaying() && attempt < 30) {
         console.log('[fetchAnalyzeAndRenderLyrics] 광고 중. 가사 렌더 대기...');
@@ -693,7 +691,6 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
       if (currentUrl !== lastUrl) {
         if (spaObserverShouldTriggerDetection) {
           handleSpaUrlChange(currentUrl);
-          console.log(`lastUrl: ${lastUrl}, currentUrl: ${currentUrl}`);
           lastUrl = currentUrl;
           console.log(`lastUrl: ${lastUrl}, currentUrl: ${currentUrl}`);
         } else {

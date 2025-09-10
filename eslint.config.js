@@ -30,7 +30,7 @@ module.exports = [
     rules: {
       'prefer-const': 'error',
       'import/no-default-export': 'error',
-      'prettier/prettier': 'error',
+      'prettier/prettier': ['error', { endOfLine: 'auto' }],
       'no-console': 'warn',
       'no-debugger': 'warn',
     },

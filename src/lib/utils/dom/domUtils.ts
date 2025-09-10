@@ -1,5 +1,5 @@
 // src/lib/utils/domUtils.ts
-import { YOUTUBE_AD_SELECTOR, YOUTUBE_PLAYER_SELECTOR } from '@constants/youtubeSelectors';
+import { YOUTUBE_PLAYER_SELECTOR } from '@constants/youtubeSelectors';
 
 // 요소 대기 함수
 export const waitForElement = <T extends Element>(selector: string, timeout = 5000): Promise<T> => {
@@ -66,15 +66,43 @@ export const toggleClass = (element: Element, className: string, force?: boolean
 };
 
 export function isAdPlaying(): boolean {
-  const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR) as HTMLVideoElement | null;
-  const adElement = document.querySelector(YOUTUBE_AD_SELECTOR);
+  // 주요 광고 표시 클래스
+  const PLAYER_AD_CLASS = 'ad-showing';
+  const player = document.querySelector(YOUTUBE_PLAYER_SELECTOR) as HTMLElement | null;
 
-  if (!player || !adElement) return false;
+  // 광고 표시 영역, 광고 DOM, 오버레이 등 다양한 광고 상태 DOM
+  const adOverlay = document.querySelector('.ytp-ad-player-overlay, .ytp-ad-overlay-container, .ytp-ad-image-overlay');
+  const adContainer = document.querySelector('.video-ads, .ytp-ad-module, .ad-container');
+  const adText = document.querySelector('.ytp-ad-text');
+  const adSkip = document.querySelector('.ytp-ad-skip-button');
+  const adIndicator = document.querySelector('.ytp-ad-player-overlay');
 
-  // 광고 관련 플레이어 상태 체크
-  // readyState가 HAVE_CURRENT_DATA 이상이고 paused가 false면 재생 중인 상태
-  const isVideoPlaying = player.readyState >= 3 && !player.paused;
-
-  // 광고 광고판(광고 요소)이 DOM에 존재하고, 비디오가 재생 중이면 광고 중으로 간주
-  return isVideoPlaying && !!adElement;
+  // 광고 상태 클래스 우선 판별
+  const playerAdState = player && player.classList.contains(PLAYER_AD_CLASS);
+  // 개별 요소 로그 출력
+  if (playerAdState) {
+    console.log('[isAdPlaying] player에 ad-showing 클래스 감지됨');
+  }
+  if (adOverlay) {
+    console.log('[isAdPlaying] adOverlay 요소 감지됨:', adOverlay);
+  }
+  if (adContainer) {
+    console.log('[isAdPlaying] adContainer 요소 감지됨:', adContainer);
+  }
+  if (adText) {
+    console.log('[isAdPlaying] adText 요소 감지됨:', adText);
+  }
+  if (adSkip) {
+    console.log('[isAdPlaying] adSkip 요소 감지됨:', adSkip);
+  }
+  if (adIndicator) {
+    console.log('[isAdPlaying] adIndicator 요소 감지됨:', adIndicator);
+  }
+  // 광고 오버레이/컨테이너 중 하나라도 있으면 광고 중으로 판정
+  const domAdsExist = !!adOverlay || !!adContainer || !!adText || !!adSkip || !!adIndicator;
+  if (playerAdState || domAdsExist) {
+    console.log('[isAdPlaying] 광고 상태 감지됨');
+  }
+  // 광고 상태 포괄적 OR조건
+  return !!playerAdState || domAdsExist;
 }
