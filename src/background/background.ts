@@ -178,7 +178,11 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendRespon
     const lyricsLength = Array.isArray(msg.lyrics) ? msg.lyrics.length : 0;
     console.log('[background] LYRICS_READY 수신 - 길이:', lyricsLength);
     // MainMenu, popup, 같은 탭의 다른 content 등 모든 컨텍스트로 전달
-    chrome.runtime.sendMessage(msg);
+    chrome.runtime.sendMessage(msg, () => {
+      if (chrome.runtime.lastError) {
+        // 에러 무시 - 수신자가 없을 수 있음
+      }
+    });
   }
 
   // --- GET_LATEST_LYRICS: MainMenu(또는 popup) → background → content ---
@@ -228,7 +232,11 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendRespon
         isPlaying = false;
       } else {
         totalSeconds--;
-        chrome.runtime.sendMessage({ type: 'tick', totalSeconds });
+        chrome.runtime.sendMessage({ type: 'tick', totalSeconds }, () => {
+          if (chrome.runtime.lastError) {
+            // 에러 무시 - 수신자가 없을 수 있음
+          }
+        });
       }
     }, 1000);
     sendResponse({ status: 'started' });

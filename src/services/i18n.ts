@@ -180,10 +180,17 @@ export const syncLanguage = async (newLang: SupportedLanguage) => {
     // Chrome API로 언어 변경 처리
     await chrome.storage.sync.set({ [STORAGE_KEYS.LANGUAGE]: newLang });
     document.documentElement.lang = newLang;
-    chrome.runtime.sendMessage({
-      type: MESSAGE_TYPES.LANGUAGE_CHANGED,
-      payload: newLang,
-    });
+    chrome.runtime.sendMessage(
+      {
+        type: MESSAGE_TYPES.LANGUAGE_CHANGED,
+        payload: newLang,
+      },
+      () => {
+        if (chrome.runtime.lastError) {
+          // 에러 무시 - 수신자가 없을 수 있음
+        }
+      },
+    );
   } catch (error) {
     console.error('Language sync failed:', error);
   }

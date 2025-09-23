@@ -41,10 +41,17 @@ export function App() {
       await syncLanguage(newLang);
 
       // 3. 다른 컨텍스트에 메시지 전송
-      chrome.runtime.sendMessage({
-        type: MESSAGE_TYPES.LANGUAGE_CHANGED,
-        language: newLang,
-      });
+      chrome.runtime.sendMessage(
+        {
+          type: MESSAGE_TYPES.LANGUAGE_CHANGED,
+          language: newLang,
+        },
+        () => {
+          if (chrome.runtime.lastError) {
+            // 에러 무시 - 수신자가 없을 수 있음
+          }
+        },
+      );
     } catch (error) {
       console.error('Language change failed:', error);
       setCurrentLang(i18n.language as SupportedLanguage); // 롤백

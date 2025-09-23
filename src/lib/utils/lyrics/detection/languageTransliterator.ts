@@ -1,14 +1,21 @@
 // src/lib/utils/lyrics/languageTransliterator.ts
 
 import { chineseRomanizer } from '../romanizers/chineseRomanizer';
-import { japaneseRomanizer } from '../romanizers/japaneseRomanizer';
+import { japaneseRomanizer, hasJapaneseCharacters } from '../romanizers/japaneseRomanizer';
 import { koreanRomanizer } from '../romanizers/koreanRomanizer';
 import type { ScriptSpan } from './languageSpanSplitter';
 
 // 변환 불필요 언어나 미지원 스크립트는 그대로 반환
 const transliterators: Record<string, (text: string) => Promise<string>> = {
   ko: async (text) => Promise.resolve(koreanRomanizer(text)),
-  ja: (text) => japaneseRomanizer(text),
+  ja: async (text) => {
+    // 이중 체크: languageSpanSplitter에서 'ja'로 분류되었지만 실제로 일본어 문자가 없으면 스킵
+    if (!hasJapaneseCharacters(text)) {
+      console.log('[languageTransliterator] Span labeled as "ja" but no Japanese characters found, skipping');
+      return text;
+    }
+    return japaneseRomanizer(text);
+  },
   zh: (text) => chineseRomanizer(text), // 여기에 병음 변환 연결
   th: async (text) => Promise.resolve(text),
   ar: async (text) => Promise.resolve(text),

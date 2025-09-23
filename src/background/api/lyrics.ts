@@ -10,6 +10,7 @@ export async function fetchLyricsWithAliasFallback(
   const processedTitle = title;
 
   const areBothEnglish = isEnglishText(processedArtist) && isEnglishText(processedTitle);
+  console.log(`Artist: ${processedArtist}, Title: ${processedTitle}`);
 
   async function doubleLookup(a: string, t: string) {
     const res = await fetchLyricsByArtistAndTrack(a, t, durationSeconds);

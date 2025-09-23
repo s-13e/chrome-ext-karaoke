@@ -5,7 +5,7 @@ const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
 
 module.exports = merge(common, {
   mode: 'production',
-  devtool: 'source-map',
+  devtool: false,
   optimization: {
     minimizer: [
       new CssMinimizerPlugin(),
@@ -14,10 +14,14 @@ module.exports = merge(common, {
           module: true,
           keep_classnames: true,
           keep_fnames: true,
+          compress: {
+            drop_console: true,
+          },
         },
       }),
     ],
     concatenateModules: true,
     minimize: true,
+    usedExports: true,
   },
 });

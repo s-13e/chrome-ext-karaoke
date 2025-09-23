@@ -25,11 +25,11 @@ export async function fetchLyricsByArtistAndTrack(
   durationSeconds: number,
 ): Promise<LrcLibLyricsResult | null> {
   // 1. 캐시 버전 endpoint 사용
-  const getCachedEndpoint = 'https://lrclib.net/api/get-cached';
+  /*   const getCachedEndpoint = 'https://lrclib.net/api/get-cached';
   const cachedResult = await fetchLyricsWithEndpoint(getCachedEndpoint, artist, title, durationSeconds);
   if (cachedResult && cachedResult.lyrics) {
     return cachedResult;
-  }
+  } */
 
   // 2. 캐시에 없으면 일반 get endpoint로 fallback
   const getEndpoint = 'https://lrclib.net/api/get';

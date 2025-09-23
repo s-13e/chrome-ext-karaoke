@@ -38,6 +38,7 @@ export const EXTRA_KEYWORDS = [
   'jtbc',
   'music bank',
   'inkigayo',
+  'Color Coded Lyrics',
   // 'live',
   'full cam',
   'clean ver.',

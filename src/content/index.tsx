@@ -16,6 +16,7 @@ import {
   cleanTopicName,
   extractArtistAndTitleCustom,
   preprocessArtistOrTitle,
+  stripEmojiAndBeforeColon,
 } from '@lib/utils/lyrics/parsers/stringUtils';
 import { listenerManager } from '@lib/utils/infra/listenerManager';
 import { withContentEnabled } from '@lib/utils/platform/contentGuard';
@@ -369,8 +370,11 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
       if (!isMusicVideo(meta)) throw new Error('음악 영상 아님');
       const videoDurationSec = meta.durationSec ?? 0;
 
+      // 제목 정제: 이모지 + 콜론 앞부분 제거
+      const cleanedTitle = stripEmojiAndBeforeColon(meta.title);
+
       // 아티스트, 타이틀 파싱(기존 처리 로직 사용)
-      let parsed = extractArtistAndTitle(meta.title);
+      let parsed = extractArtistAndTitle(cleanedTitle);
 
       if (!parsed) {
         const fallback = fallbackArtistAndTitle(meta);
@@ -411,7 +415,11 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
       const { lyrics, duration: lyricsDuration } = lyricsResult;
       const parsedLyrics: Line[] = typeof lyrics === 'string' ? parseLyrics(lyrics) : lyrics;
 
-      chrome.runtime.sendMessage({ type: 'LYRICS_READY', length: parsedLyrics.length });
+      chrome.runtime.sendMessage({ type: 'LYRICS_READY', length: parsedLyrics.length }, () => {
+        if (chrome.runtime.lastError) {
+          // 에러 무시 - 수신자가 없을 수 있음
+        }
+      });
       onLyricsUpdated(parsedLyrics);
 
       const effectiveLyricsDuration =

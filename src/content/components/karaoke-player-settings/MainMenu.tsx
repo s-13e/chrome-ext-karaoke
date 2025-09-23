@@ -1,16 +1,15 @@
 // 1차 메뉴
-
 import React, { useEffect, useRef, useState } from 'react';
-import { LyricsDisplayMenu } from './LyricsDisplayMenu';
-import { FontStyleMenu } from './FontStyleMenu';
-import { AdvancedSettingsMenu } from './AdvancedSettingsMenu';
-import { LyricsOffsetMenu } from './LyricsOffsetMenu';
 import { ArrowIcon } from '@components/icons/ArrowIcon';
 import styles from './MainMenu.module.css';
 import { IconFont } from '@components/icons/FontIcon';
 import { IconDisplay } from '@components/icons/DisplayIcon';
 import { IconLyricsSync } from '@components/icons/IconLyricsSync';
 import { Line } from '@lib/types/lyrics';
+import { LyricsOffsetMenu } from './LyricsOffsetMenu';
+import { LyricsDisplayMenu } from './LyricsDisplayMenu';
+import { FontStyleMenu } from './FontStyleMenu';
+import { AdvancedSettingsMenu } from './AdvancedSettingsMenu';
 
 interface Position {
   top: number;

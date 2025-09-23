@@ -72,7 +72,6 @@ export function isAdPlaying(): boolean {
 
   // 광고 표시 영역, 광고 DOM, 오버레이 등 다양한 광고 상태 DOM
   const adOverlay = document.querySelector('.ytp-ad-player-overlay, .ytp-ad-overlay-container, .ytp-ad-image-overlay');
-  const adContainer = document.querySelector('.video-ads, .ytp-ad-module, .ad-container');
   const adText = document.querySelector('.ytp-ad-text');
   const adSkip = document.querySelector('.ytp-ad-skip-button');
   const adIndicator = document.querySelector('.ytp-ad-player-overlay');
@@ -86,9 +85,6 @@ export function isAdPlaying(): boolean {
   if (adOverlay) {
     console.log('[isAdPlaying] adOverlay 요소 감지됨:', adOverlay);
   }
-  if (adContainer) {
-    console.log('[isAdPlaying] adContainer 요소 감지됨:', adContainer);
-  }
   if (adText) {
     console.log('[isAdPlaying] adText 요소 감지됨:', adText);
   }
@@ -99,7 +95,7 @@ export function isAdPlaying(): boolean {
     console.log('[isAdPlaying] adIndicator 요소 감지됨:', adIndicator);
   }
   // 광고 오버레이/컨테이너 중 하나라도 있으면 광고 중으로 판정
-  const domAdsExist = !!adOverlay || !!adContainer || !!adText || !!adSkip || !!adIndicator;
+  const domAdsExist = !!adOverlay || !!adText || !!adSkip || !!adIndicator;
   if (playerAdState || domAdsExist) {
     console.log('[isAdPlaying] 광고 상태 감지됨');
   }

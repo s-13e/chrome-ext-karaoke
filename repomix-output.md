@@ -125,6 +125,7 @@ lib/utils/common/requestLimiter.ts
 lib/utils/common/time.ts
 lib/utils/common/typeGuards.ts
 lib/utils/common/urlUtils.ts
+lib/utils/dom/cinemaMode.ts
 lib/utils/dom/domUtils.ts
 lib/utils/dom/styleInjection.ts
 lib/utils/infra/adWatcher.ts
@@ -2851,7 +2852,7 @@ interface AdvancedSettingsMenuProps {
   onBack: () => void;
 }
 
-export const AdvancedSettingsMenu: React.FC<AdvancedSettingsMenuProps> = ({ onBack }) => {
+const AdvancedSettingsMenu: React.FC<AdvancedSettingsMenuProps> = ({ onBack }) => {
   return (
     <div>
       <div className={styles.horizontalHeader}>
@@ -2862,6 +2863,7 @@ export const AdvancedSettingsMenu: React.FC<AdvancedSettingsMenuProps> = ({ onBa
     </div>
   );
 };
+export default AdvancedSettingsMenu;
 ```
 
 ## File: content/components/karaoke-player-settings/FontStyleMenu.tsx
@@ -2874,7 +2876,7 @@ interface FontStyleMenuProps {
   onBack: () => void;
 }
 
-export const FontStyleMenu: React.FC<FontStyleMenuProps> = ({ onBack }) => {
+const FontStyleMenu: React.FC<FontStyleMenuProps> = ({ onBack }) => {
   const [lyricsFontColorCurrent, setLyricsFontColorCurrent] = useState('#FFFFFF');
   const [lyricsFontColorPronunciation, setLyricsFontColorPronunciation] = useState('#FFFFFF');
 
@@ -2977,6 +2979,7 @@ export const FontStyleMenu: React.FC<FontStyleMenuProps> = ({ onBack }) => {
     </>
   );
 };
+export default FontStyleMenu;
 ```
 
 ## File: content/components/karaoke-player-settings/LyricsDisplayMenu.tsx
@@ -3010,7 +3013,7 @@ interface LyricsDisplayMenuProps {
   onBack: () => void;
 }
 
-export const LyricsDisplayMenu: React.FC<LyricsDisplayMenuProps> = ({ onBack }) => {
+const LyricsDisplayMenu: React.FC<LyricsDisplayMenuProps> = ({ onBack }) => {
   // 기본 토글 상태 (false = off)
   const [isRealtimeLyricsOn, setIsRealtimeLyricsOn] = useState(true);
   const [isAnnounceLyricsOn, setIsAnnounceLyricsOn] = useState(true);
@@ -3109,6 +3112,7 @@ export const LyricsDisplayMenu: React.FC<LyricsDisplayMenuProps> = ({ onBack }) 
     </>
   );
 };
+export default LyricsDisplayMenu;
 ```
 
 ## File: content/components/karaoke-player-settings/LyricsOffsetControl.tsx
@@ -3268,7 +3272,7 @@ interface LyricsOffsetMenuProps {
   currentTime?: number;
 }
 
-export const LyricsOffsetMenu: React.FC<LyricsOffsetMenuProps> = ({
+const LyricsOffsetMenu: React.FC<LyricsOffsetMenuProps> = ({
   originalLyrics, // baseLyrics가 전달됨
   offset: initialOffset,
   onBack,
@@ -3455,6 +3459,7 @@ export const LyricsOffsetMenu: React.FC<LyricsOffsetMenuProps> = ({
     </div>
   );
 };
+export default LyricsOffsetMenu;
 ```
 
 ## File: content/components/karaoke-player-settings/MainMenu.module.css
@@ -3744,18 +3749,18 @@ export const LyricsOffsetMenu: React.FC<LyricsOffsetMenuProps> = ({
 ## File: content/components/karaoke-player-settings/MainMenu.tsx
 ```typescript
 // 1차 메뉴
-
-import React, { useEffect, useRef, useState } from 'react';
-import { LyricsDisplayMenu } from './LyricsDisplayMenu';
-import { FontStyleMenu } from './FontStyleMenu';
-import { AdvancedSettingsMenu } from './AdvancedSettingsMenu';
-import { LyricsOffsetMenu } from './LyricsOffsetMenu';
+import React, { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import { ArrowIcon } from '@components/icons/ArrowIcon';
 import styles from './MainMenu.module.css';
 import { IconFont } from '@components/icons/FontIcon';
 import { IconDisplay } from '@components/icons/DisplayIcon';
 import { IconLyricsSync } from '@components/icons/IconLyricsSync';
 import { Line } from '@lib/types/lyrics';
+
+const LyricsDisplayMenu = lazy(() => import('./LyricsDisplayMenu'));
+const FontStyleMenu = lazy(() => import('./FontStyleMenu'));
+const AdvancedSettingsMenu = lazy(() => import('./AdvancedSettingsMenu'));
+const LyricsOffsetMenu = lazy(() => import('./LyricsOffsetMenu'));
 
 interface Position {
   top: number;
@@ -3883,23 +3888,25 @@ export const MainMenu: React.FC<MainMenuProps> = ({ visible, position, onClose, 
           </li>
         </ul>
       )}
-      {currentSubMenu === 'lyricsOffset' && (
-        <LyricsOffsetMenu
-          originalLyrics={baseLyrics} // 항상 원본을 전달
-          offset={offset} // 저장된 값 내려줌
-          onBack={() => setCurrentSubMenu(null)}
-          onOffsetChange={(newOffset, offsetLyrics) => {
-            if (lastOffset.current === newOffset) return; // 같은 값이면 무시
-            lastOffset.current = newOffset;
+      <Suspense fallback={null}>
+        {currentSubMenu === 'lyricsOffset' && (
+          <LyricsOffsetMenu
+            originalLyrics={baseLyrics} // 항상 원본을 전달
+            offset={offset} // 저장된 값 내려줌
+            onBack={() => setCurrentSubMenu(null)}
+            onOffsetChange={(newOffset, offsetLyrics) => {
+              if (lastOffset.current === newOffset) return; // 같은 값이면 무시
+              lastOffset.current = newOffset;
 
-            setOffset(newOffset); // ✅ offset state 반영
-            setOriginalLyrics(offsetLyrics); // dual/full 가사도 즉시 반영
-          }}
-        />
-      )}
-      {currentSubMenu === 'lyrics' && <LyricsDisplayMenu onBack={() => setCurrentSubMenu(null)} />}
-      {currentSubMenu === 'font' && <FontStyleMenu onBack={() => setCurrentSubMenu(null)} />}
-      {currentSubMenu === 'advanced' && <AdvancedSettingsMenu onBack={() => setCurrentSubMenu(null)} />}
+              setOffset(newOffset); // ✅ offset state 반영
+              setOriginalLyrics(offsetLyrics); // dual/full 가사도 즉시 반영
+            }}
+          />
+        )}
+        {currentSubMenu === 'lyrics' && <LyricsDisplayMenu onBack={() => setCurrentSubMenu(null)} />}
+        {currentSubMenu === 'font' && <FontStyleMenu onBack={() => setCurrentSubMenu(null)} />}
+        {currentSubMenu === 'advanced' && <AdvancedSettingsMenu onBack={() => setCurrentSubMenu(null)} />}
+      </Suspense>
     </div>
   );
 };
@@ -5721,6 +5728,8 @@ interface Window {
   ytPlayer?: YT.Player;
   __LYRICS_OVERLAY_INITED?: boolean;
 }
+
+declare var __webpack_public_path__: string;
 ```
 
 ## File: lib/types/i18next.d.ts
@@ -6409,6 +6418,52 @@ import { YOUTUBE_WATCH_PATH } from '@constants/youtubeSelectors';
  */
 export function isWatchPage(url: string): boolean {
   return url.includes(YOUTUBE_WATCH_PATH);
+}
+```
+
+## File: lib/utils/dom/cinemaMode.ts
+```typescript
+const STYLE_ID = 'custom-cinema-style';
+const MODE_CLASS = 'custom-cinema-mode';
+
+export function injectCinemaModeStyle() {
+  if (document.getElementById(STYLE_ID)) return;
+  const style = document.createElement('style');
+  style.id = STYLE_ID;
+  style.textContent = `
+    .${MODE_CLASS} #masthead-container {
+      background: #111 !important;
+      height: 100vh !important;
+    }
+    .${MODE_CLASS} .html5-video-player {
+      width: 80vw !important;
+      max-width: 100vw !important;
+      margin: 0 auto !important;
+      position: relative;
+      z-index: 1010;
+    }
+    .${MODE_CLASS} #columns {
+      background: #000 !important;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+export function enableCinemaMode() {
+  injectCinemaModeStyle();
+  document.body.classList.add(MODE_CLASS);
+}
+
+export function disableCinemaMode() {
+  document.body.classList.remove(MODE_CLASS);
+}
+
+export function setupCinemaScrollDisable(threshold = 80) {
+  window.addEventListener('scroll', () => {
+    if (document.body.classList.contains(MODE_CLASS) && window.scrollY > threshold) {
+      disableCinemaMode();
+    }
+  });
 }
 ```
 

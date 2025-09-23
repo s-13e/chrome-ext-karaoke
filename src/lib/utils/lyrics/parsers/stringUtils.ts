@@ -3,6 +3,7 @@
 import { EXTRA_KEYWORDS } from '@constants/keywords';
 
 const TRAILING_DELIMITERS_REGEX = /[\s\-/|]+$/;
+const emojiRegex = /\p{Extended_Pictographic}/u;
 
 // -----------------------------
 // Exported utility functions
@@ -118,6 +119,28 @@ export function preprocessArtistOrTitle(str: string): string {
   return s;
 }
 
+/**
+ * 제목에서 이모지+콜론(:) 패턴 있으면
+ * ":" 기준으로 앞부분 제거 후 뒷부분 반환
+ * 이모지 없거나 ":" 없으면 원본 반환
+ */
+export function stripEmojiAndBeforeColon(title: string): string {
+  if (!title) return '';
+
+  if (!hasEmoji(title)) {
+    return title.trim();
+  }
+
+  const colonIndex = title.indexOf(':');
+  if (colonIndex === -1) {
+    return title.trim();
+  }
+
+  // 콜론 기준 앞부분 제거, 뒷부분만 반환
+  const sliced = title.slice(colonIndex + 1);
+  return sliced.trim();
+}
+
 // -----------------------------
 // Internal helper functions (non-exported)
 // -----------------------------
@@ -188,7 +211,10 @@ function removeExtraInfo(str: string): string {
   }
   return result;
 }
-
+// 제목에서 아이콘(이모지) 존재 여부 확인
+function hasEmoji(text: string): boolean {
+  return emojiRegex.test(text);
+}
 // op, ed, ost, mv는 해당 단어만 삭제해 예를 들어 open the door -> en the door이 되지 않게끔
 function cleanMusicKeyword(str: string): string {
   return str
