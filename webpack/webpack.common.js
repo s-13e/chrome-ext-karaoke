@@ -133,7 +133,7 @@ module.exports = {
             return JSON.stringify(chromeFormat, null, 2);
           },
         },
-        { from: 'public/kuroshiro_dict', to: 'kuroshiro_dict' },
+        { from: 'node_modules/kuromoji/dict/', to: 'dict/' },
       ],
     }),
     new webpack.DefinePlugin({

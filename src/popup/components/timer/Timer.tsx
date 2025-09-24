@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import styles from './styles.modules.css';
 import { CiPause1 } from 'react-icons/ci';
-import { TimerPickerUI } from '@components/common/TimerPrickerUI';
-import { ExtensionMessage } from '@background/background';
 import { RiResetRightLine } from 'react-icons/ri';
 import { FiPlay } from 'react-icons/fi';
 import { MdAccessAlarm } from 'react-icons/md';
 import { FaMaxcdn } from 'react-icons/fa';
+import { TimerPickerUI } from '@components/common/TimerPrickerUI';
+import { ExtensionMessage } from '@background/background';
 import Tooltip from '@mui/material/Tooltip';
 
 const ICON_SIZE = 18;

@@ -47,7 +47,7 @@
         "assets/icons/move.svg",
         "assets/icons/music_note.png",
         "content/audioProcessor.js",
-        "kuroshiro_dict/*"
+        "dict/*"
       ],
       "matches": ["<all_urls>"]
     }

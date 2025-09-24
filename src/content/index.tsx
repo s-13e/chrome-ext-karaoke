@@ -30,7 +30,7 @@ import { clearLyricsCache, setToLyricsCache } from '@lib/utils/cache/lyricsCache
 import { normalizeLyricsQuery } from '@lib/utils/lyrics/meta/queryNormalizer';
 import { getLyricsFromCacheOrFetch } from '@lib/utils/lyrics/meta/getLyricsFromCacheOrFetch';
 import { fetchLyricsWithAliasFallback } from '@background/api/lyrics';
-import 'normalize.css';
+// normalize.css 제거 - content script에서 불필요 (YouTube 페이지에 스타일 충돌 방지)
 import { cleanupMediaElementSource } from '@lib/utils/audio/audio';
 import { checkIfMiniPlayerActive } from '@lib/utils/platform/playerUtils';
 import { isWatchPage as checkIsWatchPage } from '@lib/utils/common/urlUtils';
