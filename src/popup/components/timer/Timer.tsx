@@ -6,7 +6,6 @@ import { FiPlay } from 'react-icons/fi';
 import { MdAccessAlarm } from 'react-icons/md';
 import { FaMaxcdn } from 'react-icons/fa';
 import { TimerPickerUI } from '@components/common/TimerPrickerUI';
-import { ExtensionMessage } from '@background/background';
 import Tooltip from '@mui/material/Tooltip';
 
 const ICON_SIZE = 18;
@@ -36,27 +35,32 @@ export function Timer({ onPlayStateChange }: TimerProps) {
     setTotalSeconds(h * 3600 + m * 60 + s);
   };
 
-  // 타이머 작동 처리
+  // 타이머 상태를 실시간으로 업데이트
   useEffect(() => {
     if (!isPlaying) return;
 
-    if (totalSeconds <= 0) {
-      setIsPlaying(false);
-      setIsEditing(true);
-      return;
-    }
     const intervalId = setInterval(() => {
-      setTotalSeconds((prev) => prev - 1);
+      chrome.runtime.sendMessage({ type: 'getTimerState' }, (response) => {
+        if (response) {
+          setTotalSeconds(response.remainingSeconds);
+          if (!response.isActive) {
+            setIsPlaying(false);
+            setIsEditing(true);
+          }
+        }
+      });
     }, 1000);
 
     return () => clearInterval(intervalId);
-  }, [isPlaying, totalSeconds]);
+  }, [isPlaying]);
 
   // 초기화
   const resetTimer = () => {
-    setTotalSeconds(0);
-    setIsPlaying(false);
-    setIsEditing(true);
+    chrome.runtime.sendMessage({ type: 'stopTimer' }, () => {
+      setTotalSeconds(0);
+      setIsPlaying(false);
+      setIsEditing(true);
+    });
   };
 
   // 최대치 설정
@@ -75,24 +79,15 @@ export function Timer({ onPlayStateChange }: TimerProps) {
     }
   }, [showToast]);
 
+  // 초기 타이머 상태 로드
   useEffect(() => {
-    chrome.runtime.sendMessage({ type: 'getStatus' }, (response) => {
-      setTotalSeconds(response.totalSeconds);
-      setIsPlaying(response.isPlaying);
-      setIsEditing(!response.isPlaying);
-    });
-
-    const listener = (message: ExtensionMessage) => {
-      if (message.type === 'tick') {
-        setTotalSeconds(message.totalSeconds);
-        setIsEditing(false);
+    chrome.runtime.sendMessage({ type: 'getTimerState' }, (response) => {
+      if (response) {
+        setTotalSeconds(response.remainingSeconds);
+        setIsPlaying(response.isActive);
+        setIsEditing(!response.isActive);
       }
-    };
-
-    chrome.runtime.onMessage.addListener(listener);
-    return () => {
-      chrome.runtime.onMessage.removeListener(listener);
-    };
+    });
   }, []);
 
   // 재생 버튼 토글
@@ -102,11 +97,15 @@ export function Timer({ onPlayStateChange }: TimerProps) {
       return;
     }
     if (isPlaying) {
-      chrome.runtime.sendMessage({ type: 'stopTimer' });
-      setIsPlaying(false);
+      chrome.runtime.sendMessage({ type: 'stopTimer' }, () => {
+        setIsPlaying(false);
+        setIsEditing(true);
+      });
     } else {
-      chrome.runtime.sendMessage({ type: 'startTimer', totalSeconds });
-      setIsPlaying(true);
+      chrome.runtime.sendMessage({ type: 'startTimer', totalSeconds }, () => {
+        setIsPlaying(true);
+        setIsEditing(false);
+      });
     }
   };
 
