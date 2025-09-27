@@ -1,5 +1,6 @@
 import { Line } from '@lib/types/lyrics';
 import { RequestLimiter } from '@lib/utils/common/requestLimiter';
+import { LyricsError, LyricsErrorCode } from '@lib/types/lyricsError';
 
 export interface LrcLibLyricsResult {
   lyrics: string | Line[];
@@ -23,7 +24,7 @@ export async function fetchLyricsByArtistAndTrack(
   artist: string,
   title: string,
   durationSeconds: number,
-): Promise<LrcLibLyricsResult | null> {
+): Promise<LrcLibLyricsResult> {
   // 1. 캐시 버전 endpoint 사용
   /*   const getCachedEndpoint = 'https://lrclib.net/api/get-cached';
   const cachedResult = await fetchLyricsWithEndpoint(getCachedEndpoint, artist, title, durationSeconds);
@@ -31,9 +32,23 @@ export async function fetchLyricsByArtistAndTrack(
     return cachedResult;
   } */
 
+  if (!artist?.trim() || !title?.trim()) {
+    throw new LyricsError(LyricsErrorCode.ARTIST_TITLE_EXTRACT_FAILED, undefined, { artist, title });
+  }
+
+  if (durationSeconds <= 0) {
+    throw new LyricsError(LyricsErrorCode.INVALID_VIDEO_DURATION, undefined, { durationSeconds });
+  }
+
   // 2. 캐시에 없으면 일반 get endpoint로 fallback
   const getEndpoint = 'https://lrclib.net/api/get';
-  return await fetchLyricsWithEndpoint(getEndpoint, artist, title, durationSeconds);
+  const result = await fetchLyricsWithEndpoint(getEndpoint, artist, title, durationSeconds);
+
+  if (!result) {
+    throw new LyricsError(LyricsErrorCode.LRCLIB_NOT_FOUND, undefined, { artist, title, durationSeconds });
+  }
+
+  return result;
 }
 
 export async function fetchLyricsWithEndpoint(
@@ -52,13 +67,31 @@ export async function fetchLyricsWithEndpoint(
       artistParam,
     )}&track_name=${encodeURIComponent(titleParam)}`;
 
-    const searchRes = await fetch(searchEndpoint);
-    if (!searchRes.ok) {
-      console.warn(`Search API response not OK, status: ${searchRes.status}`);
-      return null;
+    let searchRes: Response;
+    try {
+      searchRes = await fetch(searchEndpoint);
+    } catch (error) {
+      throw LyricsError.fromNetworkError(error as Error, { endpoint: searchEndpoint });
     }
 
-    const searchData: SearchCandidate[] = await searchRes.json();
+    if (!searchRes.ok) {
+      console.warn(`Search API response not OK, status: ${searchRes.status}`);
+      throw LyricsError.fromHttpStatus(searchRes.status, { endpoint: searchEndpoint });
+    }
+
+    let searchData: SearchCandidate[];
+    try {
+      searchData = await searchRes.json();
+    } catch (error) {
+      throw new LyricsError(LyricsErrorCode.INVALID_RESPONSE, `Invalid JSON response: ${error}`, {
+        endpoint: searchEndpoint,
+      });
+    }
+
+    if (!Array.isArray(searchData) || searchData.length === 0) {
+      throw new LyricsError(LyricsErrorCode.EMPTY_SEARCH_RESULTS, undefined, { artistParam, titleParam });
+    }
+
     const limitedCandidates = searchData.slice(0, 10);
 
     const normalizedReqTitle = titleParam.trim().toLowerCase();
@@ -71,10 +104,10 @@ export async function fetchLyricsWithEndpoint(
     let timeoutId: ReturnType<typeof setTimeout> | undefined = undefined;
 
     // 타임아웃 Promise
-    const timeoutPromise = new Promise<null>((resolve) => {
+    const timeoutPromise = new Promise<null>((_, reject) => {
       timeoutId = setTimeout(() => {
         console.warn(`Timeout after ${timeoutMs} ms waiting for lyric details`);
-        resolve(null);
+        reject(new LyricsError(LyricsErrorCode.API_TIMEOUT, undefined, { timeoutMs, artistParam, titleParam }));
       }, timeoutMs);
     });
 
@@ -94,7 +127,8 @@ export async function fetchLyricsWithEndpoint(
           console.warn(`Detail API response not OK for candidate id ${candidate.id}, status: ${detailRes.status}`);
           return null;
         }
-        const detail = (await detailRes.json()) as {
+
+        let detail: {
           syncedLyrics?: string | Line[];
           plainLyrics?: string | Line[];
           duration?: number;
@@ -102,8 +136,23 @@ export async function fetchLyricsWithEndpoint(
           title?: string;
         };
 
+        try {
+          detail = await detailRes.json();
+        } catch (error) {
+          console.warn(`Invalid JSON response for candidate ${candidate.id}:`, error);
+          return null;
+        }
+
         const lyrics = detail.syncedLyrics || detail.plainLyrics;
         if (!lyrics) {
+          return null;
+        }
+
+        // 가사가 비어있는지 확인
+        if (typeof lyrics === 'string' && lyrics.trim().length === 0) {
+          return null;
+        }
+        if (Array.isArray(lyrics) && lyrics.length === 0) {
           return null;
         }
         /*  console.log(

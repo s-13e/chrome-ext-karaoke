@@ -1,6 +1,7 @@
 import { isEnglishText } from '@lib/utils/lyrics/parsers/stringUtils';
 import { fetchLyricsByArtistAndTrack, LrcLibLyricsResult } from './lrclib';
 import { extractEnglishAliasFromArtists, fetchEnglishAliasForArtist, searchArtistByFreeText } from './musicBrainz';
+import { LyricsError, LyricsErrorCode } from '@lib/types/lyricsError';
 export async function fetchLyricsWithAliasFallback(
   artist: string,
   title: string,
@@ -33,6 +34,10 @@ export async function fetchLyricsWithAliasFallback(
         }
       }
     } catch (e) {
+      if (e instanceof LyricsError) {
+        // LyricsError는 상위로 전파
+        throw e;
+      }
       console.warn('[fetchLyricsWithAliasFallback] 영어 alias 검색 실패:', e);
     }
 
@@ -52,16 +57,30 @@ export async function fetchLyricsWithAliasFallback(
         }
       }
     } catch (e) {
+      if (e instanceof LyricsError) {
+        // LyricsError는 상위로 전파
+        throw e;
+      }
       console.warn('[fetchLyricsWithAliasFallback] FreeText alias 검색 실패:', e);
     }
 
     // 모든 시도 실패 시 예외 던짐
-    throw new Error('LRCLIB에서 가사 정보를 찾을 수 없습니다! (영문 공식/별칭 모두 실패)');
+    throw new LyricsError(LyricsErrorCode.LRCLIB_NOT_FOUND, undefined, {
+      artist: processedArtist,
+      title: processedTitle,
+      language: 'english',
+      attemptedMethods: ['direct', 'englishAlias', 'freeTextAlias'],
+    });
   } else {
     // 비영어권: 한 번만 시도
     const result = await doubleLookup(processedArtist, processedTitle);
     if (result === null) {
-      throw new Error('LRCLIB에서 가사 정보를 찾을 수 없습니다! (비영어권)');
+      throw new LyricsError(LyricsErrorCode.LRCLIB_NOT_FOUND, undefined, {
+        artist: processedArtist,
+        title: processedTitle,
+        language: 'non-english',
+        attemptedMethods: ['direct'],
+      });
     }
     return result;
   }

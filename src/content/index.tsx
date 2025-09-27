@@ -30,6 +30,8 @@ import { clearLyricsCache, setToLyricsCache } from '@lib/utils/cache/lyricsCache
 import { normalizeLyricsQuery } from '@lib/utils/lyrics/meta/queryNormalizer';
 import { getLyricsFromCacheOrFetch } from '@lib/utils/lyrics/meta/getLyricsFromCacheOrFetch';
 import { fetchLyricsWithAliasFallback } from '@background/api/lyrics';
+import { LyricsError, LyricsErrorCode } from '@lib/types/lyricsError';
+import { LyricsErrorDisplay } from './components/lyrics/common/LyricsErrorDisplay';
 // normalize.css 제거 - content script에서 불필요 (YouTube 페이지에 스타일 충돌 방지)
 import { cleanupMediaElementSource } from '@lib/utils/audio/audio';
 import { checkIfMiniPlayerActive } from '@lib/utils/platform/playerUtils';
@@ -82,6 +84,7 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
   const getContentEnabled = () => contentEnabled;
   const uiManager = new UIResourceManager();
   const RETRY_DELAY = 300;
+  const API_RETRY_MAX_ATTEMPTS = 2; // API 타임아웃 시 최대 재시도 횟수
   const isMiniToFullTransitioning = false;
 
   function delay(ms: number): Promise<void> {
@@ -198,6 +201,56 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
   function renderSongInfo(title: string, artist: string) {
     overlayManager.setVisibility('songInfo', true);
     overlayManager.renderOverlay('songInfo', <SongInfoOverlay title={title} artist={artist} lyricsSource="LRCLIB" />);
+  }
+
+  function renderLyricsError(error: LyricsError) {
+    console.log(`[renderLyricsError] - 오류: ${error.code}`, error);
+
+    // 가사 오버레이 제거
+    overlayManager.cleanupOverlay('lyrics');
+
+    // 오류 UI 렌더링
+    overlayManager.renderOverlay(
+      'lyricsError',
+      <LyricsErrorDisplay
+        error={error}
+        onRetry={() => handleLyricsErrorRetry()}
+        onManualSearch={() => handleLyricsErrorManualSearch()}
+        onUploadLyrics={() => handleLyricsErrorUploadLyrics()}
+        onIgnore={() => handleLyricsErrorIgnore()}
+      />,
+    );
+  }
+
+  function handleLyricsErrorRetry() {
+    console.log('[handleLyricsErrorRetry] 가사 재시도');
+    overlayManager.cleanupOverlay('lyricsError');
+
+    // 현재 영상 다시 감지 및 가사 재시도
+    const videoData = detectYouTubeVideo();
+    if (videoData?.videoId) {
+      const videoElem = document.querySelector('video') as HTMLMediaElement;
+      if (videoElem) {
+        collectMetadataAndLyrics(videoData.videoId, videoElem);
+      }
+    }
+  }
+
+  function handleLyricsErrorManualSearch() {
+    console.log('[handleLyricsErrorManualSearch] 수동 검색 요청');
+    // TODO: 수동 검색 UI 구현
+    alert('수동 검색 기능은 추후 구현 예정입니다.');
+  }
+
+  function handleLyricsErrorUploadLyrics() {
+    console.log('[handleLyricsErrorUploadLyrics] 가사 업로드 요청');
+    // TODO: 가사 업로드 UI 구현
+    alert('가사 업로드 기능은 추후 구현 예정입니다.');
+  }
+
+  function handleLyricsErrorIgnore() {
+    console.log('[handleLyricsErrorIgnore] 가사 오류 무시');
+    overlayManager.cleanupOverlay('lyricsError');
   }
 
   // Storage 상태 관리 및 초기값 설정
@@ -355,13 +408,56 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
   };
   const handleUrlChangeGuarded = withContentEnabled(getContentEnabled, handleUrlChange);
 
-  // 1. 영상과 크게 무관한 메타데이터, 가사 정보를 확보하는 함수
+  // 1. 영상과 크게 무관한 메타데이터, 가사 정보를 확보하는 함수 (재시도 래퍼)
   async function collectMetadataAndLyrics(videoId: string, videoElem: HTMLMediaElement): Promise<boolean | null> {
+    for (let attempt = 1; attempt <= API_RETRY_MAX_ATTEMPTS + 1; attempt++) {
+      try {
+        const result = await collectMetadataAndLyricsCore(videoId, videoElem, attempt);
+        return result;
+      } catch (error) {
+        // API 타임아웃이고 아직 재시도 가능한 경우
+        if (
+          error instanceof LyricsError &&
+          error.code === LyricsErrorCode.API_TIMEOUT &&
+          attempt <= API_RETRY_MAX_ATTEMPTS
+        ) {
+          console.log(`[collectMetadataAndLyrics] API 타임아웃 발생, 재시도 ${attempt}/${API_RETRY_MAX_ATTEMPTS}`);
+          continue; // 바로 다음 시도
+        }
+
+        // 재시도 불가능하거나 다른 에러인 경우
+        console.error('[collectMetadataAndLyrics] 최종 실패:', error);
+
+        // 에러 UI 렌더링
+        if (error instanceof LyricsError) {
+          renderLyricsError(error);
+        } else {
+          const lyricsError = new LyricsError(
+            LyricsErrorCode.UNKNOWN_ERROR,
+            error instanceof Error ? error.message : String(error),
+          );
+          renderLyricsError(lyricsError);
+        }
+
+        return null;
+      }
+    }
+    return null;
+  }
+
+  // 1-1. 실제 메타데이터, 가사 정보를 확보하는 핵심 함수
+  async function collectMetadataAndLyricsCore(
+    videoId: string,
+    videoElem: HTMLMediaElement,
+    attempt: number = 1,
+  ): Promise<boolean | null> {
     if (isCollecting) {
       console.log('[Lyrics] 수집 중복 방지 중...');
       return null;
     }
     isCollecting = true;
+
+    console.log(`[collectMetadataAndLyrics] 시도 ${attempt}/${API_RETRY_MAX_ATTEMPTS + 1} - videoId: ${videoId}`);
 
     try {
       // 1) 메타데이터 및 기본 정보 수집
@@ -451,8 +547,20 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
       await analyzeAudioAndRender(videoElem, meta, lyricsDuration, parsedLyrics);
       return true;
     } catch (error) {
-      console.error('[fetchAnalyzeAndRenderLyrics] 에러:', error);
-      return null;
+      console.error(`[collectMetadataAndLyricsCore] 에러 (시도 ${attempt}):`, error);
+
+      // LyricsError 처리
+      if (error instanceof LyricsError) {
+        // 재시도 중인 경우 에러를 위로 전파 (렌더링하지 않음)
+        throw error;
+      } else {
+        // 일반 에러를 LyricsError로 변환하여 전파
+        const lyricsError = new LyricsError(
+          LyricsErrorCode.UNKNOWN_ERROR,
+          error instanceof Error ? error.message : String(error),
+        );
+        throw lyricsError;
+      }
     } finally {
       isCollecting = false;
     }

@@ -15,10 +15,12 @@ import { STORAGE_KEYS } from '@constants/storageKeys';
 import { MESSAGE_TYPES } from '@constants/messageTypes';
 import enTranslations from '@locales/en.json';
 import koTranslations from '@locales/ko.json';
+import jaTranslations from '@locales/ja.json';
 
 const resources = {
   en: { [I18N_NAMESPACE]: enTranslations },
   ko: { [I18N_NAMESPACE]: koTranslations },
+  ja: { [I18N_NAMESPACE]: jaTranslations },
 };
 
 // 1. 싱글톤 인스턴스 생성

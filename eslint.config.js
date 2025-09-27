@@ -140,7 +140,7 @@ module.exports = [
   // constants 폴더 전용 규칙 (UPPER_CASE 강제)
   {
     name: 'chrome-extension/constants-upper-case',
-    files: ['src/constants/**/*.ts', 'src/lib/types/**/*.ts'],
+    files: ['src/constants/**/*.ts'],
     plugins: { '@typescript-eslint': tseslint },
     languageOptions: {
       parser: tsParser,
@@ -155,6 +155,40 @@ module.exports = [
           selector: 'variable',
           modifiers: ['const'],
           format: ['UPPER_CASE'], // constants 폴더 내 모든 const는 UPPER_CASE
+        },
+      ],
+    },
+  },
+  // types 폴더 규칙 (지역 변수는 camelCase 허용)
+  {
+    name: 'chrome-extension/types-flexible',
+    files: ['src/lib/types/**/*.ts'],
+    plugins: { '@typescript-eslint': tseslint },
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        project: './tsconfig.json',
+      },
+    },
+    rules: {
+      '@typescript-eslint/naming-convention': [
+        'error',
+        // 모듈 레벨 const는 UPPER_CASE
+        {
+          selector: 'variable',
+          modifiers: ['const', 'exported'],
+          format: ['UPPER_CASE'],
+        },
+        // 함수 내부 지역 const는 camelCase 허용
+        {
+          selector: 'variable',
+          modifiers: ['const'],
+          format: ['camelCase', 'UPPER_CASE'],
+        },
+        // 타입 정의는 PascalCase
+        {
+          selector: 'typeLike',
+          format: ['PascalCase'],
         },
       ],
     },
