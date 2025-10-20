@@ -3,6 +3,7 @@ import { isEnglishText } from '@lib/utils/lyrics/parsers/stringUtils';
 // background/api/musicBrainz.ts
 const BASE_URL = 'https://musicbrainz.org/ws/2';
 const USER_AGENT = process.env.MUSICBRAINZ_USER_AGENT!;
+const RAILWAY_API_URL = process.env.RAILWAY_API_URL!;
 
 type Alias = {
   name: string;
@@ -29,6 +30,23 @@ export async function fetchEnglishAliasForArtist(artistName: string): Promise<st
     console.warn('[MusicBrainz] artistName is empty or falsy');
     return null;
   }
+
+  // 1. Railway 캐시 서버에서 조회 시도
+  // 대소문자 구분 없이 캐시 히트율을 높이기 위해 소문자로 정규화
+  const cacheKey = artistName.toLowerCase();
+
+  try {
+    const cacheRes = await fetch(`${RAILWAY_API_URL}/api/musicbrainz/alias/${encodeURIComponent(cacheKey)}`);
+    if (cacheRes.ok) {
+      const cachedData = await cacheRes.json();
+      console.log('[MusicBrainz] Railway 캐시 히트:', artistName, '→', cachedData.alias);
+      return cachedData.alias;
+    }
+  } catch (error) {
+    console.warn('[MusicBrainz] Railway 캐시 조회 실패, MusicBrainz API로 폴백:', error);
+  }
+
+  // 2. 캐시 없으면 MusicBrainz API 직접 호출
   const query = encodeURIComponent(artistName);
   const url = `${BASE_URL}/artist?query=artist:${query}&fmt=json&limit=3`;
 
@@ -57,7 +75,23 @@ export async function fetchEnglishAliasForArtist(artistName: string): Promise<st
       return null;
     }
 
-    return extractEnglishAliasFromArtists(data.artists);
+    const alias = extractEnglishAliasFromArtists(data.artists);
+
+    // 3. Railway 캐시 서버에 저장
+    if (alias) {
+      try {
+        await fetch(`${RAILWAY_API_URL}/api/musicbrainz/alias`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ artist: cacheKey, alias }),
+        });
+        console.log('[MusicBrainz] Railway 캐시 저장 완료:', artistName, '→', alias);
+      } catch (error) {
+        console.warn('[MusicBrainz] Railway 캐시 저장 실패:', error);
+      }
+    }
+
+    return alias;
   } catch (error) {
     console.error('[MusicBrainz] API 호출 중 오류 발생:', error);
     return null;

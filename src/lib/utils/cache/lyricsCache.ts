@@ -1,82 +1,36 @@
-import { LrcLibLyricsResult } from '@background/api/lrclib';
-
 // lib/utils/cache/lyricsCache.ts
-interface MemoryCacheItem<T = unknown> {
-  value: T;
-  expire: number;
-  etag?: string;
-}
-const MEMORY_CACHE: Record<string, MemoryCacheItem<LrcLibLyricsResult>> = {};
+// localStorage 캐시 제거 - Railway Redis 서버만 사용
+// 이 파일은 이제 사용되지 않으며, Railway API를 통한 캐시만 사용합니다.
 
-const DEFAULT_TTL = 6 * 60 * 60 * 1000; // 6시간
-
-export function getFromLyricsCache(key: string) {
-  // 1. localStorage 우선 체크
-  const ls = localStorage.getItem(key);
-  if (ls) {
-    try {
-      const obj = JSON.parse(ls);
-      if (obj.expire > Date.now()) {
-        console.log(`[LyricsCache] 캐시 히트 (localStorage): key=${key}`);
-        return obj.value;
-      } else {
-        localStorage.removeItem(key);
-        console.log(`[LyricsCache] 캐시 만료 (localStorage): key=${key}`);
-      }
-    } catch {
-      // 파싱 에러 등은 무시하고 계속 진행
-    }
-  }
-  // 2. in-memory fallback
-  const item = MEMORY_CACHE[key];
-  if (item) {
-    if (item.expire > Date.now()) {
-      console.log(`[LyricsCache] 캐시 히트 (memory): key=${key}`);
-      return item.value;
-    } else {
-      delete MEMORY_CACHE[key];
-      console.log(`[LyricsCache] 캐시 만료 (memory): key=${key}`);
-    }
-  }
-  // 3. 완전 miss
-  console.log(`[LyricsCache] 캐시 미스: key=${key}`);
+/**
+ * @deprecated localStorage 캐시는 더 이상 사용하지 않습니다.
+ * Railway Redis 서버의 캐시를 사용하세요.
+ * - LRCLib: fetchLyricsByArtistAndTrack() 내부에서 Railway API 사용
+ * - MusicBrainz: fetchEnglishAliasForArtist() 내부에서 Railway API 사용
+ * - YouTube: fetchYouTubeVideoMeta() 내부에서 Railway API 사용
+ */
+export function getFromLyricsCache(_key: string): null {
+  console.warn('[LyricsCache] localStorage 캐시는 더 이상 사용되지 않습니다. Railway Redis를 사용하세요.');
   return null;
 }
 
-export function setToLyricsCache<T>(
-  key: string,
-  value: T,
-  { ttl = DEFAULT_TTL, etag }: { ttl?: number; etag?: string } = {},
-) {
-  const expire = Date.now() + ttl;
-
-  // localStorage 동기화
-  try {
-    localStorage.setItem(key, JSON.stringify({ value, expire, etag }));
-    console.log(`[LyricsCache] 캐시 저장됨(localStorage): key=${key}, 만료=${ttl / 1000}s`);
-  } catch {
-    // localStorage 용량 초과 등 무시 (메모리 캐시만 보허)
-    console.warn(`[LyricsCache] localStorage 저장 실패: key=${key}`);
-  }
+/**
+ * @deprecated localStorage 캐시는 더 이상 사용하지 않습니다.
+ */
+export function setToLyricsCache<T>(_key: string, _value: T): void {
+  console.warn('[LyricsCache] localStorage 캐시는 더 이상 사용되지 않습니다. Railway Redis를 사용하세요.');
 }
 
-export function getETagForLyrics(key: string): string | undefined {
-  return MEMORY_CACHE[key]?.etag;
+/**
+ * @deprecated localStorage 캐시는 더 이상 사용하지 않습니다.
+ */
+export function getETagForLyrics(_key: string): undefined {
+  return undefined;
 }
 
-export function clearLyricsCache() {
-  // localStorage 내 캐시 키가 '::'를 포함하는 경우 모두 삭제
-  Object.keys(localStorage).forEach((key) => {
-    if (key.includes('::') || key.startsWith('videoMeta:')) {
-      localStorage.removeItem(key);
-      console.log(`[LyricsCache] localStorage 캐시 삭제: key=${key}`);
-    }
-  });
-
-  // 메모리 캐시 비우기
-  for (const key in MEMORY_CACHE) {
-    delete MEMORY_CACHE[key];
-  }
-
-  console.log('[LyricsCache] 전체 캐시 초기화 완료');
+/**
+ * @deprecated localStorage 캐시는 더 이상 사용하지 않습니다.
+ */
+export function clearLyricsCache(): void {
+  console.log('[LyricsCache] localStorage 캐시 정리 - 더 이상 사용되지 않음');
 }

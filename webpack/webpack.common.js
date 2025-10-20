@@ -137,6 +137,7 @@ module.exports = {
       ],
     }),
     new webpack.DefinePlugin({
+      'process.env.RAILWAY_API_URL': JSON.stringify(process.env.RAILWAY_API_URL),
       'process.env.YOUTUBE_API_KEY': JSON.stringify(process.env.YOUTUBE_API_KEY),
       'process.env.MUSICBRAINZ_USER_AGENT': JSON.stringify(process.env.MUSICBRAINZ_USER_AGENT),
     }),

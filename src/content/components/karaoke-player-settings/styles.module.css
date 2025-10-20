@@ -8,8 +8,8 @@
   align-items: center; /* 중앙 정렬 추가 */
   justify-content: center; /* 중앙 정렬 추가 */
   padding: 0;
-  height: 36px;   /* ⇐ 48px → 36px 권장, 유튜브 기본 컨트롤바 버튼 높이와 맞춰줌 */
-  width: 36px;    /* ⇐ 48px → 36px */
+  height: 36px; /* ⇐ 48px → 36px 권장, 유튜브 기본 컨트롤바 버튼 높이와 맞춰줌 */
+  width: 36px; /* ⇐ 48px → 36px */
   opacity: 0.8;
   transition: opacity 0.15s;
   position: relative; /* 툴팁 Absolute 위치에 필요하면 추가 */
@@ -39,7 +39,7 @@
 
 /* 클릭됐거나 메뉴 뜬 상태에서는 툴팁 숨김 */
 .musicNoteButton.clicked[data-tooltip]:after,
-.musicNoteButton[data-menu-visible="true"][data-tooltip]:after {
+.musicNoteButton[data-menu-visible='true'][data-tooltip]:after {
   display: none !important;
 }
 

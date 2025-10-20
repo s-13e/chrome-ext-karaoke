@@ -1,9 +1,11 @@
 // lib/utils/lyrics/getLyricsFromCacheOrFetch.ts
 
 import { LrcLibLyricsResult } from '@background/api/lrclib';
-import { normalizeLyricsQuery } from './queryNormalizer';
-import { getFromLyricsCache, setToLyricsCache } from '@lib/utils/cache/lyricsCache';
 
+/**
+ * 가사를 Railway Redis 캐시 또는 API에서 가져옵니다.
+ * localStorage 캐시는 제거되었으며, Railway API 내부에서 Redis 캐시를 처리합니다.
+ */
 export async function getLyricsFromCacheOrFetch(
   artist: string,
   title: string,
@@ -12,19 +14,11 @@ export async function getLyricsFromCacheOrFetch(
     fetch: (apiOpts: { etag?: string }) => Promise<LrcLibLyricsResult>;
   },
 ): Promise<LrcLibLyricsResult | undefined> {
-  const key = normalizeLyricsQuery(artist, title, { lang: options.lang });
+  console.log(`[LYRICS FETCH] ${artist} - ${title} 조회 시작`);
 
-  // 1. 캐시 시도
-  const cached = getFromLyricsCache(key);
-  if (cached) {
-    console.log('[LYRICS APPLY] 캐시사용:', cached);
-    return cached;
-  }
-  console.log('[LYRICS APPLY] 캐시없음, fetch진행');
-
-  // fetch
+  // Railway API 호출 (내부적으로 Redis 캐시 확인 후 LRCLib API 호출)
   const fetchResult = await options.fetch({});
-  setToLyricsCache(key, fetchResult);
 
+  console.log('[LYRICS FETCH] 가사 조회 완료');
   return fetchResult;
 }

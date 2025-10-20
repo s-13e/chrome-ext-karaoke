@@ -18,6 +18,14 @@ export interface SearchCandidate {
 }
 
 const requestLimiter = new RequestLimiter(5); // 최대 동시 5개 요청 제한
+const RAILWAY_API_URL = process.env.RAILWAY_API_URL!;
+
+/**
+ * Duration을 반올림하여 ±1초 오차 허용
+ */
+function normalizeDuration(duration: number): number {
+  return Math.round(duration);
+}
 
 // 메인 엔트리: 캐시 우선, 없을 때 get fallback
 export async function fetchLyricsByArtistAndTrack(
@@ -25,13 +33,6 @@ export async function fetchLyricsByArtistAndTrack(
   title: string,
   durationSeconds: number,
 ): Promise<LrcLibLyricsResult> {
-  // 1. 캐시 버전 endpoint 사용
-  /*   const getCachedEndpoint = 'https://lrclib.net/api/get-cached';
-  const cachedResult = await fetchLyricsWithEndpoint(getCachedEndpoint, artist, title, durationSeconds);
-  if (cachedResult && cachedResult.lyrics) {
-    return cachedResult;
-  } */
-
   if (!artist?.trim() || !title?.trim()) {
     throw new LyricsError(LyricsErrorCode.ARTIST_TITLE_EXTRACT_FAILED, undefined, { artist, title });
   }
@@ -40,12 +41,79 @@ export async function fetchLyricsByArtistAndTrack(
     throw new LyricsError(LyricsErrorCode.INVALID_VIDEO_DURATION, undefined, { durationSeconds });
   }
 
-  // 2. 캐시에 없으면 일반 get endpoint로 fallback
+  // Redis 캐시 키: 소문자 변환 + duration 반올림
+  // preprocessArtistOrTitle이 이미 공백/특수문자 정리 완료
+  const cacheKeyArtist = artist.toLowerCase();
+  const cacheKeyTitle = title.toLowerCase();
+  const cacheKeyDuration = normalizeDuration(durationSeconds);
+
+  console.log(`[LRCLib] Redis 캐시 키: "${cacheKeyArtist}" - "${cacheKeyTitle}" - ${cacheKeyDuration}s`);
+
+  // 1. Railway Redis 캐시에서 LRCLib ID 조회 시도
+  try {
+    const cacheRes = await fetch(
+      `${RAILWAY_API_URL}/api/lrclib/id?artist=${encodeURIComponent(cacheKeyArtist)}&title=${encodeURIComponent(
+        cacheKeyTitle,
+      )}&duration=${cacheKeyDuration}`,
+    );
+
+    if (cacheRes.ok) {
+      const cachedData = await cacheRes.json();
+      console.log('[LRCLib API] Railway 캐시 히트:', cachedData.id);
+
+      // ID로 가사 직접 조회
+      const lyricsRes = await fetch(`https://lrclib.net/api/get/${cachedData.id}`);
+      if (lyricsRes.ok) {
+        const lyricsData = await lyricsRes.json();
+        return {
+          lyrics: lyricsData.syncedLyrics || lyricsData.plainLyrics,
+          duration: lyricsData.duration,
+          artist: lyricsData.artistName,
+          title: lyricsData.trackName,
+          id: cachedData.id,
+        };
+      }
+    }
+  } catch (error) {
+    console.warn('[LRCLib API] Railway 캐시 조회 실패, 검색 API로 폴백:', error);
+  }
+
+  // 2. 캐시 미스 → LRCLib API 호출 (원본 값 사용, 대소문자 구분 없음)
   const getEndpoint = 'https://lrclib.net/api/get';
   const result = await fetchLyricsWithEndpoint(getEndpoint, artist, title, durationSeconds);
 
   if (!result) {
     throw new LyricsError(LyricsErrorCode.LRCLIB_NOT_FOUND, undefined, { artist, title, durationSeconds });
+  }
+
+  // 3. Railway Redis 캐시에 ID 저장 (LRCLib 응답값 사용 - 더 정확함)
+  console.log('[LRCLib API] 저장 조건 확인:', { id: result.id, artist: result.artist, title: result.title });
+  if (result.id && result.artist && result.title) {
+    try {
+      // LRCLib 응답의 정확한 아티스트/타이틀을 Redis 캐시 키로 저장
+      const cacheKeyLrcArtist = result.artist.toLowerCase();
+      const cacheKeyLrcTitle = result.title.toLowerCase();
+
+      await fetch(`${RAILWAY_API_URL}/api/lrclib/id`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          artist: cacheKeyLrcArtist,
+          title: cacheKeyLrcTitle,
+          duration: cacheKeyDuration,
+          lrclibId: result.id,
+        }),
+      });
+      console.log(
+        '[LRCLib API] Railway 캐시 저장 완료:',
+        result.id,
+        `(${cacheKeyLrcArtist} - ${cacheKeyLrcTitle} - ${cacheKeyDuration}s)`,
+      );
+    } catch (error) {
+      console.warn('[LRCLib API] Railway 캐시 저장 실패:', error);
+    }
+  } else {
+    console.warn('[LRCLib API] Railway 캐시 저장 스킵: id, artist, title 중 누락된 값 존재');
   }
 
   return result;
@@ -132,8 +200,8 @@ export async function fetchLyricsWithEndpoint(
           syncedLyrics?: string | Line[];
           plainLyrics?: string | Line[];
           duration?: number;
-          artist?: string;
-          title?: string;
+          artistName?: string;
+          trackName?: string;
         };
 
         try {
@@ -161,23 +229,23 @@ export async function fetchLyricsWithEndpoint(
           `candidate.id: ${candidate.id} 응답 duration: ${detail.duration}`,
         ); */
 
-        const candidateTitle = (detail.title ?? '').trim().toLowerCase();
+        const candidateTitle = (detail.trackName ?? '').trim().toLowerCase();
         const isStrictMatch = candidateTitle === normalizedReqTitle;
 
         if (detail.syncedLyrics && !isStrictMatch && !fallbackSynced) {
           fallbackSynced = {
             lyrics,
             duration: detail.duration,
-            artist: detail.artist,
-            title: detail.title,
+            artist: detail.artistName,
+            title: detail.trackName,
             id: candidate.id,
           };
         } else if (!detail.syncedLyrics && !fallbackPlain) {
           fallbackPlain = {
             lyrics,
             duration: detail.duration,
-            artist: detail.artist,
-            title: detail.title,
+            artist: detail.artistName,
+            title: detail.trackName,
             id: candidate.id,
           };
         }
@@ -185,8 +253,8 @@ export async function fetchLyricsWithEndpoint(
         return {
           lyrics,
           duration: detail.duration,
-          artist: detail.artist,
-          title: detail.title,
+          artist: detail.artistName,
+          title: detail.trackName,
           id: candidate.id,
           hasSynced: !!detail.syncedLyrics,
           isStrictMatch,

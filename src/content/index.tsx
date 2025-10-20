@@ -7,7 +7,7 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { detectYouTubeVideo, setupSPAObserver } from '@lib/youtube';
 import { debounce } from '@lib/utils/common/common';
 import { STORAGE_KEYS } from '@constants/storageKeys';
-import { fetchYouTubeVideoMeta } from '@background/api/youtube';
+import { fetchYouTubeVideoMeta, saveYouTubeMetaToCache } from '@background/api/youtube';
 import { isMusicVideo } from '@lib/utils/audio/musicDetection';
 import { UIResourceManager } from '@lib/utils/infra/uiResourceManager';
 import { YOUTUBE_MINI_PLAYER_CLASSES, YOUTUBE_MINI_PLAYER_CONTAINER_SELECTOR } from '@constants/youtubeSelectors';
@@ -26,8 +26,6 @@ import { isAdPlaying } from '@lib/utils/dom/domUtils';
 import { parseLyrics } from '@lib/utils/lyrics/parsers/lyricsParser';
 import { Line } from '@lib/types/lyrics';
 import { extractVideoIdFromUrl, tryDetectVideoChange } from '@lib/utils/platform/videoDetection';
-import { clearLyricsCache, setToLyricsCache } from '@lib/utils/cache/lyricsCache';
-import { normalizeLyricsQuery } from '@lib/utils/lyrics/meta/queryNormalizer';
 import { getLyricsFromCacheOrFetch } from '@lib/utils/lyrics/meta/getLyricsFromCacheOrFetch';
 import { fetchLyricsWithAliasFallback } from '@background/api/lyrics';
 import { LyricsError, LyricsErrorCode } from '@lib/types/lyricsError';
@@ -464,6 +462,10 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
       const meta = await fetchYouTubeVideoMeta(videoId, process.env.YOUTUBE_API_KEY!);
       if (!meta) throw new Error('메타 정보 없음');
       if (!isMusicVideo(meta)) throw new Error('음악 영상 아님');
+
+      // isMusicVideo() 통과했으므로 캐시에 저장
+      await saveYouTubeMetaToCache(videoId, meta);
+
       const videoDurationSec = meta.durationSec ?? 0;
 
       // 제목 정제: 이모지 + 콜론 앞부분 제거
@@ -489,23 +491,12 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
       const artist = preprocessArtistOrTitle(refined.artist);
       const title = preprocessArtistOrTitle(refined.title);
 
-      // 2) 가사 캐시 초기화 및 캐시 또는 서버에서 가사 조회
-      clearLyricsCache();
-
-      // 가사 캐시 혹은 서버에서 가사 fetch
+      // 2) 가사 캐시 또는 서버에서 가사 조회
+      // 캐시 계층: Railway Redis → LRCLib API (localStorage 캐시 제거됨)
       const lyricsResult = await getLyricsFromCacheOrFetch(artist, title, {
         fetch: async () => fetchLyricsWithAliasFallback(artist, title, videoDurationSec),
       });
       if (!lyricsResult) throw new Error('가사 없음');
-
-      // 캐시 저장
-      setToLyricsCache(normalizeLyricsQuery(artist, title, {}), {
-        lyrics: lyricsResult.lyrics,
-        duration: lyricsResult.duration,
-        artist: lyricsResult.artist,
-        title: lyricsResult.title,
-        id: lyricsResult.id,
-      });
 
       // 3) 가사 파싱 및 상태 업데이트 (UI 렌더링)
       const { lyrics, duration: lyricsDuration } = lyricsResult;
