@@ -2,6 +2,7 @@ import { Line } from '@lib/types/lyrics';
 import { RequestLimiter } from '@lib/utils/common/requestLimiter';
 import { LyricsError, LyricsErrorCode } from '@lib/types/lyricsError';
 import { searchSpotifyTrack } from './spotify';
+import { isEnglishText } from '@lib/utils/lyrics/parsers/stringUtils';
 
 export interface LrcLibLyricsResult {
   lyrics: string | Line[];
@@ -361,7 +362,36 @@ export async function fetchLyricsWithEndpoint(
     }
   }
 
-  // 3차 시도: freeText 검색 (q 파라미터) - 아티스트 + 타이틀로 검색
+  // 3차 시도: 비영어 타이틀이면 Spotify 우선, 영어면 freeText 우선
+  const isNonEnglishTitle = !isEnglishText(title);
+
+  if (isNonEnglishTitle) {
+    // 비영어 타이틀: Spotify 우선
+    try {
+      console.log('[Spotify] 비영어 타이틀 감지, Spotify 검색 시도');
+      const spotifyResult = await searchSpotifyTrack(artist, title);
+
+      if (spotifyResult) {
+        console.log(`[Spotify] 영문명 발견: ${spotifyResult.artist} - ${spotifyResult.name}`);
+
+        // Spotify에서 받은 영문명으로 LRCLib 재검색
+        try {
+          const retryResult = await searchWithParams(spotifyResult.artist, spotifyResult.name, 3, durationSeconds);
+          if (retryResult !== null) {
+            console.log(`[Spotify fallback] 성공: ${spotifyResult.artist} - ${spotifyResult.name}`);
+            return retryResult;
+          }
+        } catch (retryError) {
+          // 재검색 실패해도 무시
+          console.warn('[Spotify fallback] LRCLib 재검색 실패:', retryError);
+        }
+      }
+    } catch (error) {
+      console.warn('[Spotify] fallback 실패:', error);
+    }
+  }
+
+  // 4차 시도: freeText 검색 (q 파라미터) - 아티스트 + 타이틀로 검색
   try {
     const freeTextQuery = `${artist} ${title}`;
     console.log(`[LRCLib] freeText 검색 시도: "${freeTextQuery}"`);
@@ -416,28 +446,30 @@ export async function fetchLyricsWithEndpoint(
     console.warn('[LRCLib] freeText 검색 실패:', error);
   }
 
-  // 4차 시도: Spotify에서 영문 타이틀 조회 후 LRCLib 재검색
-  try {
-    console.log('[Spotify] fallback 시도');
-    const spotifyResult = await searchSpotifyTrack(artist, title);
+  // 5차 시도: 영어 타이틀이었는데 freeText도 실패한 경우 Spotify 시도
+  if (!isNonEnglishTitle) {
+    try {
+      console.log('[Spotify] 영어 타이틀이지만 freeText 실패, Spotify 검색 시도');
+      const spotifyResult = await searchSpotifyTrack(artist, title);
 
-    if (spotifyResult) {
-      console.log(`[Spotify] 영문명 발견: ${spotifyResult.artist} - ${spotifyResult.name}`);
+      if (spotifyResult) {
+        console.log(`[Spotify] 영문명 발견: ${spotifyResult.artist} - ${spotifyResult.name}`);
 
-      // Spotify에서 받은 영문명으로 LRCLib 재검색
-      try {
-        const retryResult = await searchWithParams(spotifyResult.artist, spotifyResult.name, 4, durationSeconds);
-        if (retryResult !== null) {
-          console.log(`[Spotify fallback] 성공: ${spotifyResult.artist} - ${spotifyResult.name}`);
-          return retryResult;
+        // Spotify에서 받은 영문명으로 LRCLib 재검색
+        try {
+          const retryResult = await searchWithParams(spotifyResult.artist, spotifyResult.name, 5, durationSeconds);
+          if (retryResult !== null) {
+            console.log(`[Spotify fallback] 성공: ${spotifyResult.artist} - ${spotifyResult.name}`);
+            return retryResult;
+          }
+        } catch (retryError) {
+          // 재검색 실패해도 무시
+          console.warn('[Spotify fallback] LRCLib 재검색 실패:', retryError);
         }
-      } catch (retryError) {
-        // 재검색 실패해도 무시
-        console.warn('[Spotify fallback] LRCLib 재검색 실패:', retryError);
       }
+    } catch (error) {
+      console.warn('[Spotify] fallback 실패:', error);
     }
-  } catch (error) {
-    console.warn('[Spotify] fallback 실패:', error);
   }
 
   return null;
