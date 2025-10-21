@@ -6,6 +6,7 @@ export async function fetchLyricsWithAliasFallback(
   artist: string,
   title: string,
   durationSeconds: number,
+  artistVariants?: string[],
 ): Promise<LrcLibLyricsResult> {
   const processedArtist = artist;
   const processedTitle = title;
@@ -14,16 +15,43 @@ export async function fetchLyricsWithAliasFallback(
   console.log(`Artist: ${processedArtist}, Title: ${processedTitle}`);
 
   async function doubleLookup(a: string, t: string) {
-    const res = await fetchLyricsByArtistAndTrack(a, t, durationSeconds);
-    return res ?? null;
+    try {
+      const res = await fetchLyricsByArtistAndTrack(a, t, durationSeconds);
+      return res ?? null;
+    } catch (error) {
+      // EMPTY_SEARCH_RESULTS나 NOT_FOUND 등은 정상적인 "가사 없음" 응답이므로 null 반환
+      if (error instanceof LyricsError && error.code === LyricsErrorCode.LRCLIB_NOT_FOUND) {
+        return null;
+      }
+      if (error instanceof LyricsError && error.code === LyricsErrorCode.EMPTY_SEARCH_RESULTS) {
+        return null;
+      }
+      // 네트워크 오류 등 다른 예외는 상위로 전파
+      throw error;
+    }
   }
 
   if (areBothEnglish) {
-    // 1차 시도
+    // 1차 시도: 원본 아티스트명 (variants[0], 영어)
     const firstResult = await doubleLookup(processedArtist, processedTitle);
     if (firstResult !== null) return firstResult;
 
-    // 2차 alias 시도 (실패해도 흐름 계속)
+    // 2차 시도: artistVariants가 있으면 나머지 variants 시도
+    if (artistVariants && artistVariants.length > 1) {
+      for (let i = 1; i < artistVariants.length; i++) {
+        const variant = artistVariants[i];
+        if (variant && variant !== processedArtist) {
+          console.log(`[Info] artistVariants[${i}] (${variant})로 가사 검색 시도`);
+          const variantResult = await doubleLookup(variant, processedTitle);
+          if (variantResult !== null) {
+            console.log(`[Info] artistVariants[${i}] (${variant})로 가사 검색 성공: ${variant} - ${processedTitle}`);
+            return variantResult;
+          }
+        }
+      }
+    }
+
+    // 3차 alias 시도 (실패해도 흐름 계속)
     try {
       const englishArtist = await fetchEnglishAliasForArtist(processedArtist);
       if (englishArtist && englishArtist !== processedArtist) {
@@ -41,7 +69,7 @@ export async function fetchLyricsWithAliasFallback(
       console.warn('[fetchLyricsWithAliasFallback] 영어 alias 검색 실패:', e);
     }
 
-    // 3차 freeText alias 시도 (실패해도 무시)
+    // 4차 freeText alias 시도 (실패해도 무시)
     try {
       const candidates = await searchArtistByFreeText(processedArtist);
       if (candidates && candidates.length > 0) {
@@ -69,19 +97,34 @@ export async function fetchLyricsWithAliasFallback(
       artist: processedArtist,
       title: processedTitle,
       language: 'english',
-      attemptedMethods: ['direct', 'englishAlias', 'freeTextAlias'],
+      attemptedMethods: ['direct', 'artistVariants', 'englishAlias', 'freeTextAlias'],
     });
   } else {
-    // 비영어권: 한 번만 시도
-    const result = await doubleLookup(processedArtist, processedTitle);
-    if (result === null) {
-      throw new LyricsError(LyricsErrorCode.LRCLIB_NOT_FOUND, undefined, {
-        artist: processedArtist,
-        title: processedTitle,
-        language: 'non-english',
-        attemptedMethods: ['direct'],
-      });
+    // 비영어권: 아티스트 variants 시도
+    // 1차 시도: 원본 아티스트명
+    const firstResult = await doubleLookup(processedArtist, processedTitle);
+    if (firstResult !== null) return firstResult;
+
+    // 2차 시도: artistVariants가 있으면 나머지 variants 시도
+    if (artistVariants && artistVariants.length > 1) {
+      for (let i = 1; i < artistVariants.length; i++) {
+        const variant = artistVariants[i];
+        if (variant && variant !== processedArtist) {
+          const variantResult = await doubleLookup(variant, processedTitle);
+          if (variantResult !== null) {
+            console.log(`[Info] artistVariants[${i}] (${variant})로 가사 검색 성공: ${variant} - ${processedTitle}`);
+            return variantResult;
+          }
+        }
+      }
     }
-    return result;
+
+    // 모든 시도 실패
+    throw new LyricsError(LyricsErrorCode.LRCLIB_NOT_FOUND, undefined, {
+      artist: processedArtist,
+      title: processedTitle,
+      language: 'non-english',
+      attemptedMethods: artistVariants && artistVariants.length > 1 ? ['direct', 'artistVariants'] : ['direct'],
+    });
   }
 }

@@ -1,6 +1,7 @@
 import { Line } from '@lib/types/lyrics';
 import { RequestLimiter } from '@lib/utils/common/requestLimiter';
 import { LyricsError, LyricsErrorCode } from '@lib/types/lyricsError';
+import { searchSpotifyTrack } from './spotify';
 
 export interface LrcLibLyricsResult {
   lyrics: string | Line[];
@@ -331,14 +332,114 @@ export async function fetchLyricsWithEndpoint(
   }
 
   // 1차 시도: 정상 아티스트-곡명 순서
-  const result1 = await searchWithParams(artist, title, 1, durationSeconds);
-  if (result1 !== null) return result1;
+  try {
+    const result1 = await searchWithParams(artist, title, 1, durationSeconds);
+    if (result1 !== null) return result1;
+  } catch (error) {
+    // EMPTY_SEARCH_RESULTS는 정상적인 "검색 결과 없음"이므로 계속 진행
+    if (error instanceof LyricsError && error.code === LyricsErrorCode.EMPTY_SEARCH_RESULTS) {
+      console.log('[LRCLib] 1차 시도 결과 없음, 2차 시도로 진행');
+    } else {
+      // 네트워크 오류 등 다른 예외는 상위로 전파
+      throw error;
+    }
+  }
 
   // 2차 시도: 곡명-아티스트 순서
   if (artist.toLowerCase() !== title.toLowerCase()) {
-    const result2 = await searchWithParams(title, artist, 2, durationSeconds);
-    if (result2 !== null) return result2;
+    try {
+      const result2 = await searchWithParams(title, artist, 2, durationSeconds);
+      if (result2 !== null) return result2;
+    } catch (error) {
+      // EMPTY_SEARCH_RESULTS는 정상적인 "검색 결과 없음"이므로 계속 진행
+      if (error instanceof LyricsError && error.code === LyricsErrorCode.EMPTY_SEARCH_RESULTS) {
+        console.log('[LRCLib] 2차 시도 결과 없음, freeText 시도로 진행');
+      } else {
+        // 네트워크 오류 등 다른 예외는 상위로 전파
+        throw error;
+      }
+    }
   }
+
+  // 3차 시도: freeText 검색 (q 파라미터) - 아티스트 + 타이틀로 검색
+  try {
+    const freeTextQuery = `${artist} ${title}`;
+    console.log(`[LRCLib] freeText 검색 시도: "${freeTextQuery}"`);
+    const freeTextEndpoint = `https://lrclib.net/api/search?q=${encodeURIComponent(freeTextQuery)}`;
+    const freeTextRes = await fetch(freeTextEndpoint);
+
+    if (freeTextRes.ok) {
+      const freeTextData: SearchCandidate[] = await freeTextRes.json();
+      if (Array.isArray(freeTextData) && freeTextData.length > 0) {
+        console.log(`[LRCLib] freeText 검색 결과: ${freeTextData.length}개 발견`);
+
+        // 검색 결과 중에서 가사 가져오기 (기존 로직 재사용)
+        const limitedCandidates = freeTextData.slice(0, 10);
+
+        for (const candidate of limitedCandidates) {
+          try {
+            const detailRes = await fetch(
+              `${endpoint}/${candidate.id}?duration=${encodeURIComponent(durationSeconds)}`,
+            );
+            if (!detailRes.ok) continue;
+
+            const detail: {
+              syncedLyrics?: string | Line[];
+              plainLyrics?: string | Line[];
+              duration?: number;
+              artistName?: string;
+              trackName?: string;
+            } = await detailRes.json();
+
+            const lyrics = detail.syncedLyrics || detail.plainLyrics;
+            if (!lyrics) continue;
+
+            // Duration 체크 (±2초)
+            if (detail.duration && Math.abs(durationSeconds - detail.duration) <= 2) {
+              console.log(`[LRCLib] freeText 검색 성공: ${detail.artistName} - ${detail.trackName}`);
+              return {
+                lyrics,
+                duration: detail.duration,
+                artist: detail.artistName,
+                title: detail.trackName,
+                id: candidate.id,
+              };
+            }
+          } catch (err) {
+            console.warn(`[LRCLib] freeText 결과 처리 실패 (id: ${candidate.id}):`, err);
+            continue;
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('[LRCLib] freeText 검색 실패:', error);
+  }
+
+  // 4차 시도: Spotify에서 영문 타이틀 조회 후 LRCLib 재검색
+  try {
+    console.log('[Spotify] fallback 시도');
+    const spotifyResult = await searchSpotifyTrack(artist, title);
+
+    if (spotifyResult) {
+      console.log(`[Spotify] 영문명 발견: ${spotifyResult.artist} - ${spotifyResult.name}`);
+
+      // Spotify에서 받은 영문명으로 LRCLib 재검색
+      try {
+        const retryResult = await searchWithParams(spotifyResult.artist, spotifyResult.name, 4, durationSeconds);
+        if (retryResult !== null) {
+          console.log(`[Spotify fallback] 성공: ${spotifyResult.artist} - ${spotifyResult.name}`);
+          return retryResult;
+        }
+      } catch (retryError) {
+        // 재검색 실패해도 무시
+        console.warn('[Spotify fallback] LRCLib 재검색 실패:', retryError);
+      }
+    }
+  } catch (error) {
+    console.warn('[Spotify] fallback 실패:', error);
+  }
+
   return null;
 }
 

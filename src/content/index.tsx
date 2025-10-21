@@ -494,7 +494,7 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
       // 2) 가사 캐시 또는 서버에서 가사 조회
       // 캐시 계층: Railway Redis → LRCLib API (localStorage 캐시 제거됨)
       const lyricsResult = await getLyricsFromCacheOrFetch(artist, title, {
-        fetch: async () => fetchLyricsWithAliasFallback(artist, title, videoDurationSec),
+        fetch: async () => fetchLyricsWithAliasFallback(artist, title, videoDurationSec, refined.artistVariants),
       });
       if (!lyricsResult) throw new Error('가사 없음');
 

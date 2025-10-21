@@ -37,8 +37,45 @@ export function cleanUp(str: string): string {
     .trim();
 }
 
+/**
+ * 괄호 안팎의 내용을 모두 추출 (영어 우선)
+ * 예: "윤하(YOUNHA)" → ["YOUNHA", "윤하"]
+ * 예: "YOUNHA(윤하)" → ["YOUNHA", "윤하"]
+ * @returns 배열의 0번은 항상 영어 (영어가 없으면 원본)
+ */
+function extractParenthesesVariants(str: string): string[] {
+  const variants: string[] = [];
+  const parenthesesPattern = /^(.+?)\s*\(([^)]+)\)\s*$/;
+  const match = str.match(parenthesesPattern);
+
+  if (match && match[1] && match[2]) {
+    const outside = match[1].trim();
+    const inside = match[2].trim();
+
+    // 영어를 0번 인덱스에 배치
+    if (isEnglishText(outside)) {
+      variants.push(outside);
+      if (inside) variants.push(inside);
+    } else if (isEnglishText(inside)) {
+      variants.push(inside);
+      if (outside) variants.push(outside);
+    } else {
+      // 둘 다 비영어면 순서대로
+      if (outside) variants.push(outside);
+      if (inside) variants.push(inside);
+    }
+  } else {
+    // 괄호가 없으면 원본만 반환
+    variants.push(str);
+  }
+
+  return variants;
+}
+
 // 실질적 실행
-export function extractArtistAndTitleCustom(rawTitle: string): { artist: string; title: string } | null {
+export function extractArtistAndTitleCustom(
+  rawTitle: string,
+): { artist: string; title: string; artistVariants?: string[] } | null {
   if (!rawTitle || typeof rawTitle !== 'string') return null;
 
   // 1. 기본 정돈 (괄호/대괄호 제거, 중복 공백 정리 등)
@@ -105,6 +142,23 @@ export function extractArtistAndTitleCustom(rawTitle: string): { artist: string;
   title = removeDatePattern(title);
 
   if (!artist || !title) return null;
+
+  // 7. 아티스트명 정제 전에 괄호 variants 추출
+  const rawArtist = artist; // 정제 전 원본 저장
+
+  // 8. 괄호가 있었다면 variants 추출 (정제 전 원본에서)
+  const artistVariants = extractParenthesesVariants(rawArtist);
+
+  // variants의 0번(영어)을 최종 artist로 사용하고, 나머지를 variants로 반환
+  if (artistVariants.length > 0 && artistVariants[0]) {
+    artist = preprocessArtistOrTitle(artistVariants[0]); // 0번(영어)을 정제
+    return {
+      artist,
+      title,
+      artistVariants: artistVariants.length > 1 ? artistVariants : undefined,
+    };
+  }
+
   artist = removeEmptyBrackets(removeExtraInfo(artist));
   return { artist, title };
 }
