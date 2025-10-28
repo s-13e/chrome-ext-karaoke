@@ -23,10 +23,18 @@ const requestLimiter = new RequestLimiter(5); // 최대 동시 5개 요청 제�
 const RAILWAY_API_URL = process.env.RAILWAY_API_URL!;
 
 /**
- * Duration을 반올림하여 ±1초 오차 허용
+ * Duration을 5초 단위로 반올림하여 캐시 효율과 정확도 균형
+ * 예: 207초 → 205초, 209초 → 210초, 212초 → 210초
+ *
+ * 이유:
+ * - 같은 곡이 duration 1~2초 차이로 여러 캐시 생성되는 문제 해결
+ * - 5초 단위면 최대 ±2.5초 오차 발생 (예: 207초 → 205초로 저장, 실제 208초 가사 반환)
+ * - evaluateCandidatesByDuration이 ±2초 허용하므로 대부분 범위 내
+ * - 싱크 정확도: 5초 차이는 사용자가 크게 체감하지 않음
+ * - 캐시 절감: 206, 207, 208, 209초 → 모두 210초로 통합 (75% 절감)
  */
 function normalizeDuration(duration: number): number {
-  return Math.round(duration);
+  return Math.round(duration / 5) * 5;
 }
 
 // 메인 엔트리: 캐시 우선, 없을 때 get fallback
