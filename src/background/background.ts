@@ -381,3 +381,56 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendRespon
 
   return true;
 });
+
+// ===== 확장 프로그램 설치/업데이트 시 content script 재주입 =====
+chrome.runtime.onInstalled.addListener(async (details) => {
+  if (details.reason === 'install') {
+    console.log('[Background] Extension installed');
+  } else if (details.reason === 'update') {
+    console.log('[Background] Extension updated, reinjecting content scripts to existing tabs...');
+
+    try {
+      // 모든 YouTube watch 페이지 탭 찾기
+      const tabs = await chrome.tabs.query({ url: 'https://www.youtube.com/watch*' });
+
+      console.log(`[Background] Found ${tabs.length} YouTube watch tabs`);
+
+      for (const tab of tabs) {
+        if (tab.id) {
+          try {
+            // 이미 주입되어 있는지 확인
+            const results = await chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              func: () => {
+                return (
+                  (window as typeof window & { __LYRICS_OVERLAY_INITED?: boolean }).__LYRICS_OVERLAY_INITED === true
+                );
+              },
+            });
+
+            const alreadyInjected = results && results[0] && results[0].result;
+
+            if (alreadyInjected) {
+              console.log(`[Background] Tab ${tab.id} already has content script, skipping reinject`);
+              continue;
+            }
+
+            // Content script 재주입
+            await chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              files: ['content/content.js'],
+            });
+            console.log(`[Background] Successfully reinjected content script to tab ${tab.id}`);
+          } catch (error) {
+            // 탭이 이미 닫혔거나 접근 권한이 없는 경우 무시
+            console.warn(`[Background] Failed to reinject to tab ${tab.id}:`, error);
+          }
+        }
+      }
+
+      console.log('[Background] Content script reinjection completed');
+    } catch (error) {
+      console.error('[Background] Error during content script reinjection:', error);
+    }
+  }
+});
