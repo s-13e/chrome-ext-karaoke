@@ -1,6 +1,5 @@
 // MusicNoteButton.tsx
-import React, { ReactNode, useRef } from 'react';
-import { useEffect } from 'react';
+import React, { ReactNode, useRef, useEffect, useCallback } from 'react';
 import styles from './styles.module.css';
 import ReactDOM from 'react-dom/client';
 
@@ -10,17 +9,47 @@ interface Props {
   menuVisible: boolean;
   onClick?: () => void;
 }
+
+/**
+ * YouTube 플레이어 컨트롤에 뮤직노트 버튼을 삽입하는 컴포넌트
+ * YouTube UI 업데이트에도 안정적으로 표시되도록 MutationObserver 활용
+ */
 export const MusicNoteButton: React.FC<Props> = ({ icon, contentEnabled, menuVisible, onClick }) => {
   const btnRef = useRef<HTMLButtonElement | null>(null);
   const iconRootRef = useRef<ReactDOM.Root | null>(null);
+  const observerRef = useRef<MutationObserver | null>(null);
+  const insertionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    const rightControls = document.querySelector('.ytp-right-controls');
-    if (!rightControls || !contentEnabled) return;
-    if (document.querySelector(`.${styles.musicNoteButton}`)) return;
+  /**
+   * 버튼 생성 및 DOM 삽입
+   */
+  const insertButton = useCallback(() => {
+    console.log('[MusicNoteButton] insertButton 호출됨');
 
-    const captionsBtn = rightControls.querySelector('.ytp-subtitles-button');
-    const settingsBtn = rightControls.querySelector('.ytp-settings-button');
+    // 이미 버튼이 존재하고 DOM에 연결되어 있으면 스킵
+    if (btnRef.current && document.contains(btnRef.current)) {
+      console.log('[MusicNoteButton] 버튼이 이미 존재함, 스킵');
+      return;
+    }
+
+    // YouTube 새 구조: .ytp-right-controls-right 우선 확인
+    const targetContainer: Element | null =
+      document.querySelector('.ytp-right-controls-right') || document.querySelector('.ytp-right-controls');
+
+    console.log('[MusicNoteButton] targetContainer:', targetContainer);
+
+    if (!targetContainer) {
+      console.warn('[MusicNoteButton] targetContainer를 찾을 수 없음');
+      return;
+    }
+
+    // 기존 버튼 제거 (중복 방지)
+    const existingBtn = document.querySelector('.ytp-music-note-button');
+    if (existingBtn) {
+      existingBtn.remove();
+    }
+
+    // 버튼 생성
     const btn = document.createElement('button');
     btnRef.current = btn;
 
@@ -29,9 +58,14 @@ export const MusicNoteButton: React.FC<Props> = ({ icon, contentEnabled, menuVis
     btn.setAttribute('data-tooltip', '노트');
     btn.tabIndex = 0;
 
+    // 아이콘 렌더링
+    if (iconRootRef.current) {
+      iconRootRef.current.unmount();
+    }
     iconRootRef.current = ReactDOM.createRoot(btn);
     iconRootRef.current.render(icon);
 
+    // 클릭 이벤트
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       onClick?.();
@@ -44,33 +78,135 @@ export const MusicNoteButton: React.FC<Props> = ({ icon, contentEnabled, menuVis
         btn.classList.remove('clicked');
       }
     };
-
     document.body.addEventListener('click', handleBodyClick);
 
-    // 버튼 위치 지정
-    if (captionsBtn) {
-      captionsBtn.after(btn);
-    } else if (settingsBtn) {
-      settingsBtn.after(btn);
-    } else {
-      rightControls.appendChild(btn);
+    // 버튼 삽입: targetContainer 맨 앞에 추가
+    targetContainer.insertBefore(btn, targetContainer.firstChild);
+    console.log('[MusicNoteButton] 버튼 삽입 완료:', btn);
+  }, [icon, onClick]);
+
+  /**
+   * YouTube UI 변경 감지 및 버튼 재삽입
+   */
+  const setupMutationObserver = useCallback(() => {
+    if (observerRef.current) {
+      observerRef.current.disconnect();
     }
+
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.type === 'childList') {
+          // YouTube 새 구조 또는 기존 구조 확인
+          const rightControlsRight = document.querySelector('.ytp-right-controls-right');
+          const rightControls = document.querySelector('.ytp-right-controls');
+          const hasContainer = rightControlsRight || rightControls;
+
+          // 버튼이 DOM에서 제거되었거나 존재하지 않으면 재삽입
+          if (hasContainer && (!btnRef.current || !document.contains(btnRef.current))) {
+            // 디바운스를 위해 기존 타이머 클리어
+            if (insertionTimeoutRef.current) {
+              clearTimeout(insertionTimeoutRef.current);
+            }
+
+            // 200ms 후 재삽입 (빠른 연속 변경 방지)
+            insertionTimeoutRef.current = setTimeout(() => {
+              insertButton();
+            }, 200);
+          }
+        }
+      }
+    });
+
+    // YouTube 플레이어 전체를 관찰
+    const playerContainer = document.querySelector('#movie_player');
+    if (playerContainer) {
+      observer.observe(playerContainer, {
+        childList: true,
+        subtree: true,
+      });
+      observerRef.current = observer;
+    }
+  }, [insertButton]);
+
+  /**
+   * contentEnabled 변경 시 버튼 삽입/제거
+   */
+  useEffect(() => {
+    console.log('[MusicNoteButton] useEffect 실행 - contentEnabled:', contentEnabled);
+
+    if (!contentEnabled) {
+      console.log('[MusicNoteButton] contentEnabled=false, 버튼 제거');
+      // 버튼 제거
+      if (btnRef.current) {
+        btnRef.current.remove();
+        btnRef.current = null;
+      }
+
+      // 아이콘 루트 언마운트
+      if (iconRootRef.current) {
+        iconRootRef.current.unmount();
+        iconRootRef.current = null;
+      }
+
+      // 옵저버 중단
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+        observerRef.current = null;
+      }
+
+      return;
+    }
+
+    // contentEnabled=true일 때 버튼 삽입 및 옵저버 설정
+    console.log('[MusicNoteButton] contentEnabled=true, 버튼 삽입 시도');
+    // 초기 삽입
+    insertButton();
+
+    // MutationObserver 설정 (YouTube UI 변경 감지)
+    setupMutationObserver();
 
     // Cleanup
     return () => {
-      iconRootRef.current?.unmount();
-      btn.remove();
-      document.body.removeEventListener('click', handleBodyClick);
-    };
-  }, [icon, contentEnabled, onClick]);
+      if (insertionTimeoutRef.current) {
+        clearTimeout(insertionTimeoutRef.current);
+      }
 
-  // menuVisible 상태에 따라 클래스와 data 속성 조절
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+        observerRef.current = null;
+      }
+
+      if (iconRootRef.current) {
+        iconRootRef.current.unmount();
+        iconRootRef.current = null;
+      }
+
+      if (btnRef.current) {
+        btnRef.current.remove();
+        btnRef.current = null;
+      }
+    };
+  }, [contentEnabled, insertButton, setupMutationObserver]);
+
+  /**
+   * menuVisible 상태에 따라 버튼 스타일 업데이트
+   */
   useEffect(() => {
     const btn = btnRef.current;
     if (!btn) return;
+
     btn.classList.toggle('clicked', menuVisible);
     btn.setAttribute('data-menu-visible', menuVisible ? 'true' : 'false');
   }, [menuVisible]);
+
+  /**
+   * icon prop 변경 시 아이콘 재렌더링
+   */
+  useEffect(() => {
+    if (iconRootRef.current && btnRef.current && document.contains(btnRef.current)) {
+      iconRootRef.current.render(icon);
+    }
+  }, [icon]);
 
   return null;
 };

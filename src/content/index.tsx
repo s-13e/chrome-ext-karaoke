@@ -37,6 +37,10 @@ import { isWatchPage as checkIsWatchPage } from '@lib/utils/common/urlUtils';
 import { hasUrlChanged } from '@lib/utils/platform/navigation';
 import { SongInfoOverlay } from './components/song-info/SongInfoOverlay';
 import { overlayManager } from '@lib/utils/infra/overlayManager';
+import { MusicNoteButton } from './components/karaoke-player-settings/MusicNoteButton';
+import { RiMusicAiLine } from 'react-icons/ri';
+import musicNoteStyles from './components/karaoke-player-settings/styles.module.css';
+import ReactDOM from 'react-dom/client';
 
 (() => {
   // 새로고침 시 contentscript 내 중복 실행 방지
@@ -77,6 +81,9 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
   let lastContentEnabledFalseTime = 0; // 마지막 false 처리 시각(ms)
   const CLEANUP_DEBOUNCE_MS = 500; // 0.5초 딜레이
   let lastChangeOrigin: 'user' | 'system' = 'system';
+
+  // MusicNoteButton 전용 React Root
+  let musicNoteButtonRoot: ReactDOM.Root | null = null;
 
   // 가사 모드
   const getContentEnabled = () => contentEnabled;
@@ -162,6 +169,57 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
       document.head.appendChild(link);
     });
   };
+
+  // MusicNoteButton 렌더링 함수 (확장 로드 시 한 번만 실행)
+  function renderMusicNoteButton() {
+    console.log('[renderMusicNoteButton] 버튼 렌더링 시작');
+
+    if (musicNoteButtonRoot) {
+      console.log('[renderMusicNoteButton] 이미 렌더링됨, 스킵');
+      return;
+    }
+
+    // MusicNoteButton 전용 컨테이너 생성
+    let buttonContainer = document.getElementById('music-note-button-container');
+    if (!buttonContainer) {
+      buttonContainer = document.createElement('div');
+      buttonContainer.id = 'music-note-button-container';
+      buttonContainer.style.position = 'fixed';
+      buttonContainer.style.zIndex = '9999';
+      buttonContainer.style.pointerEvents = 'none'; // 컨테이너는 클릭 차단 안 함
+      document.body.appendChild(buttonContainer);
+      console.log('[renderMusicNoteButton] 컨테이너 생성 완료');
+    }
+
+    // React Root 생성 및 렌더링
+    musicNoteButtonRoot = ReactDOM.createRoot(buttonContainer);
+    musicNoteButtonRoot.render(
+      <MusicNoteButton
+        icon={<RiMusicAiLine className={musicNoteStyles.icon} size={24} color="white" />}
+        contentEnabled={true} // 항상 true
+        menuVisible={false}
+        onClick={() => {
+          console.log('[MusicNoteButton] 클릭됨 - 카라오케 모드는 아직 구현되지 않음');
+        }}
+      />,
+    );
+
+    console.log('[renderMusicNoteButton] 렌더링 완료');
+  }
+
+  // MusicNoteButton 정리 함수 (확장 언로드 시 사용 - 현재는 미사용)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  function cleanupMusicNoteButton() {
+    if (musicNoteButtonRoot) {
+      musicNoteButtonRoot.unmount();
+      musicNoteButtonRoot = null;
+    }
+
+    const buttonContainer = document.getElementById('music-note-button-container');
+    if (buttonContainer) {
+      buttonContainer.remove();
+    }
+  }
 
   // 가사 렌더링 함수
   async function renderLyricsOverlay(lyrics: Line[], offset = 0) {
@@ -890,6 +948,9 @@ import { overlayManager } from '@lib/utils/infra/overlayManager';
     try {
       await initializeI18n();
       await injectCSS();
+
+      // MusicNoteButton은 확장 로드 시 무조건 렌더링
+      renderMusicNoteButton();
 
       chrome.runtime.sendMessage({ type: 'getTimerStatus' }, (response) => {
         const isTimerPlaying = response.isPlaying ?? false;
