@@ -41,6 +41,7 @@ import { MusicNoteButton } from './components/karaoke-player-settings/MusicNoteB
 import { RiMusicAiLine } from 'react-icons/ri';
 import musicNoteStyles from './components/karaoke-player-settings/styles.module.css';
 import ReactDOM from 'react-dom/client';
+import { KaraokeModeContainer } from './components/karaoke-mode';
 
 (() => {
   // 새로고침 시 contentscript 내 중복 실행 방지
@@ -84,6 +85,10 @@ import ReactDOM from 'react-dom/client';
 
   // MusicNoteButton 전용 React Root
   let musicNoteButtonRoot: ReactDOM.Root | null = null;
+
+  // KaraokeModeContainer 전용 React Root 및 상태
+  let karaokeModeRoot: ReactDOM.Root | null = null;
+  let isKaraokeModeVisible = false;
 
   // 가사 모드
   const getContentEnabled = () => contentEnabled;
@@ -170,6 +175,54 @@ import ReactDOM from 'react-dom/client';
     });
   };
 
+  // 가라오케 모드 토글 함수
+  function toggleKaraokeMode() {
+    isKaraokeModeVisible = !isKaraokeModeVisible;
+    console.log(`[toggleKaraokeMode] 가라오케 모드 ${isKaraokeModeVisible ? '활성화' : '비활성화'}`);
+
+    // KaraokeModeContainer 렌더링
+    renderKaraokeModeContainer();
+
+    // MusicNoteButton의 menuVisible 상태를 DOM으로 직접 업데이트 (재렌더링 방지)
+    const musicNoteBtn = document.querySelector('.ytp-music-note-button') as HTMLButtonElement;
+    if (musicNoteBtn) {
+      musicNoteBtn.classList.toggle('clicked', isKaraokeModeVisible);
+      musicNoteBtn.setAttribute('data-menu-visible', isKaraokeModeVisible ? 'true' : 'false');
+    }
+  }
+
+  // KaraokeModeContainer 렌더링 함수
+  // 가라오케 모드 컨테이너 렌더링
+  function renderKaraokeModeContainer() {
+    // 기존 컨테이너 찾기 또는 생성
+    let karaokeContainer = document.getElementById('karaoke-mode-container');
+
+    if (!karaokeContainer) {
+      karaokeContainer = document.createElement('div');
+      karaokeContainer.id = 'karaoke-mode-container';
+
+      // fixed 포지셔닝으로 변경 - YouTube 툴바 아래에 전체 화면을 덮음
+      karaokeContainer.style.position = 'fixed';
+      karaokeContainer.style.top = '56px'; // YouTube 툴바 높이
+      karaokeContainer.style.left = '0';
+      karaokeContainer.style.right = '0';
+      karaokeContainer.style.bottom = '0';
+      karaokeContainer.style.pointerEvents = 'none'; // 기본적으로 클릭 이벤트 통과
+      karaokeContainer.style.zIndex = '2001'; // YouTube UI보다 위
+
+      // body에 추가 (YouTube 페이지 전체를 덮음)
+      document.body.appendChild(karaokeContainer);
+    }
+
+    // React Root 생성 또는 재사용
+    if (!karaokeModeRoot) {
+      karaokeModeRoot = ReactDOM.createRoot(karaokeContainer);
+    }
+
+    // KaraokeModeContainer 렌더링 (visible 상태에 따라 표시/숨김)
+    karaokeModeRoot.render(<KaraokeModeContainer visible={isKaraokeModeVisible} />);
+  }
+
   // MusicNoteButton 렌더링 함수 (확장 로드 시 한 번만 실행)
   function renderMusicNoteButton() {
     console.log('[renderMusicNoteButton] 버튼 렌더링 시작');
@@ -197,10 +250,8 @@ import ReactDOM from 'react-dom/client';
       <MusicNoteButton
         icon={<RiMusicAiLine className={musicNoteStyles.icon} size={24} color="white" />}
         contentEnabled={true} // 항상 true
-        menuVisible={false}
-        onClick={() => {
-          console.log('[MusicNoteButton] 클릭됨 - 카라오케 모드는 아직 구현되지 않음');
-        }}
+        menuVisible={isKaraokeModeVisible}
+        onClick={toggleKaraokeMode}
       />,
     );
 
@@ -949,8 +1000,33 @@ import ReactDOM from 'react-dom/client';
       await initializeI18n();
       await injectCSS();
 
-      // MusicNoteButton은 확장 로드 시 무조건 렌더링
-      renderMusicNoteButton();
+      // YouTube 페이지 로드 대기 후 MusicNoteButton 렌더링
+      const waitForYouTubePlayer = async () => {
+        let attempts = 0;
+        const maxAttempts = 20;
+
+        while (attempts < maxAttempts) {
+          const playerControls =
+            document.querySelector('.ytp-right-controls-right') || document.querySelector('.ytp-right-controls');
+
+          if (playerControls) {
+            console.log('[initializeApp] YouTube 플레이어 컨트롤 발견, MusicNoteButton 렌더링');
+            renderMusicNoteButton();
+            break;
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          attempts++;
+        }
+
+        if (attempts >= maxAttempts) {
+          // YouTube 플레이어 컨트롤을 찾을 수 없는 경우 경고
+          console.warn('[initializeApp] YouTube 플레이어 컨트롤을 찾을 수 없음');
+        }
+      };
+
+      // 비동기로 버튼 렌더링 시도
+      waitForYouTubePlayer();
 
       chrome.runtime.sendMessage({ type: 'getTimerStatus' }, (response) => {
         const isTimerPlaying = response.isPlaying ?? false;

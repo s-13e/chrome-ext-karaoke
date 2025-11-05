@@ -24,19 +24,14 @@ export const MusicNoteButton: React.FC<Props> = ({ icon, contentEnabled, menuVis
    * 버튼 생성 및 DOM 삽입
    */
   const insertButton = useCallback(() => {
-    console.log('[MusicNoteButton] insertButton 호출됨');
-
     // 이미 버튼이 존재하고 DOM에 연결되어 있으면 스킵
     if (btnRef.current && document.contains(btnRef.current)) {
-      console.log('[MusicNoteButton] 버튼이 이미 존재함, 스킵');
       return;
     }
 
     // YouTube 새 구조: .ytp-right-controls-right 우선 확인
     const targetContainer: Element | null =
       document.querySelector('.ytp-right-controls-right') || document.querySelector('.ytp-right-controls');
-
-    console.log('[MusicNoteButton] targetContainer:', targetContainer);
 
     if (!targetContainer) {
       console.warn('[MusicNoteButton] targetContainer를 찾을 수 없음');
@@ -60,7 +55,12 @@ export const MusicNoteButton: React.FC<Props> = ({ icon, contentEnabled, menuVis
 
     // 아이콘 렌더링
     if (iconRootRef.current) {
-      iconRootRef.current.unmount();
+      // 비동기로 unmount 처리하여 React 렌더링 사이클 충돌 방지
+      const oldRoot = iconRootRef.current;
+      iconRootRef.current = null;
+      setTimeout(() => {
+        oldRoot.unmount();
+      }, 0);
     }
     iconRootRef.current = ReactDOM.createRoot(btn);
     iconRootRef.current.render(icon);
@@ -82,7 +82,6 @@ export const MusicNoteButton: React.FC<Props> = ({ icon, contentEnabled, menuVis
 
     // 버튼 삽입: targetContainer 맨 앞에 추가
     targetContainer.insertBefore(btn, targetContainer.firstChild);
-    console.log('[MusicNoteButton] 버튼 삽입 완료:', btn);
   }, [icon, onClick]);
 
   /**
@@ -132,20 +131,20 @@ export const MusicNoteButton: React.FC<Props> = ({ icon, contentEnabled, menuVis
    * contentEnabled 변경 시 버튼 삽입/제거
    */
   useEffect(() => {
-    console.log('[MusicNoteButton] useEffect 실행 - contentEnabled:', contentEnabled);
-
     if (!contentEnabled) {
-      console.log('[MusicNoteButton] contentEnabled=false, 버튼 제거');
       // 버튼 제거
       if (btnRef.current) {
         btnRef.current.remove();
         btnRef.current = null;
       }
 
-      // 아이콘 루트 언마운트
+      // 아이콘 루트 언마운트 (비동기 처리)
       if (iconRootRef.current) {
-        iconRootRef.current.unmount();
+        const oldRoot = iconRootRef.current;
         iconRootRef.current = null;
+        setTimeout(() => {
+          oldRoot.unmount();
+        }, 0);
       }
 
       // 옵저버 중단
@@ -158,7 +157,6 @@ export const MusicNoteButton: React.FC<Props> = ({ icon, contentEnabled, menuVis
     }
 
     // contentEnabled=true일 때 버튼 삽입 및 옵저버 설정
-    console.log('[MusicNoteButton] contentEnabled=true, 버튼 삽입 시도');
     // 초기 삽입
     insertButton();
 
@@ -177,8 +175,11 @@ export const MusicNoteButton: React.FC<Props> = ({ icon, contentEnabled, menuVis
       }
 
       if (iconRootRef.current) {
-        iconRootRef.current.unmount();
+        const oldRoot = iconRootRef.current;
         iconRootRef.current = null;
+        setTimeout(() => {
+          oldRoot.unmount();
+        }, 0);
       }
 
       if (btnRef.current) {
