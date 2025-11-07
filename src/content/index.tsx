@@ -248,17 +248,20 @@ import { KaraokeModeContainer } from './components/karaoke-mode';
 
   // 가라오케 모드 토글 함수
   async function toggleKaraokeMode() {
-    // 확장 활성화 상태 확인 (올바른 키와 storage 사용)
-    const result = await chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED]);
-    const isExtensionEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
+    // 가라오케 모드를 켜려고 할 때만 확장 활성화 상태 확인
+    if (!isKaraokeModeVisible) {
+      const result = await chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED]);
+      const isExtensionEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
 
-    if (!isExtensionEnabled) {
-      // 확장이 비활성화되어 있으면 토스트 메시지 표시 후 차단
-      showToast('확장 프로그램을 먼저 활성화해주세요 (우측 상단 확장 아이콘 클릭)');
-      console.log('[toggleKaraokeMode] 확장 비활성화 상태 - 가라오케 모드 진입 차단');
-      return;
+      if (!isExtensionEnabled) {
+        // 확장이 비활성화되어 있으면 토스트 메시지 표시 후 차단
+        showToast('확장 프로그램을 먼저 활성화해주세요 (우측 상단 확장 아이콘 클릭)');
+        console.log('[toggleKaraokeMode] 확장 비활성화 상태 - 가라오케 모드 진입 차단');
+        return;
+      }
     }
 
+    // 가라오케 모드 토글 (끄는 것은 확장 활성화 여부와 무관)
     isKaraokeModeVisible = !isKaraokeModeVisible;
     console.log(`[toggleKaraokeMode] 가라오케 모드 ${isKaraokeModeVisible ? '활성화' : '비활성화'}`);
 
@@ -851,17 +854,11 @@ import { KaraokeModeContainer } from './components/karaoke-mode';
       return;
     }
 
-    chrome.runtime.sendMessage({ type: 'getTimerStatus' }, (response) => {
-      const isTimerPlaying = response.isPlaying ?? false;
-      chrome.storage.sync.set({ [STORAGE_KEYS.CONTENT_ENABLED]: isTimerPlaying }, () => {
-        // 이제 실질적으로 isPlaying 상태와 storage 상태 동기화 완료
-        contentEnabled = isTimerPlaying;
-        if (!contentEnabled) {
-          console.log('[Content] 콘텐츠 비활성 상태 - UI 렌더링 및 리스너 초기화 건너뜀');
-          return;
-        }
-      });
-    });
+    // contentEnabled 상태는 chrome.storage.sync에서 관리됨
+    if (!contentEnabled) {
+      console.log('[Content] 콘텐츠 비활성 상태 - UI 렌더링 및 리스너 초기화 건너뜀');
+      return;
+    }
 
     // 영상 -> 영상, videoId가 있는 곳으로 url 변경된 상황
     if (videoIdChanged || (urlChanged && watchPageChanged)) {
@@ -1115,19 +1112,17 @@ import { KaraokeModeContainer } from './components/karaoke-mode';
       // 비동기로 버튼 렌더링 시도
       waitForYouTubePlayer();
 
-      chrome.runtime.sendMessage({ type: 'getTimerStatus' }, (response) => {
-        const isTimerPlaying = response.isPlaying ?? false;
-        chrome.storage.sync.set({ [STORAGE_KEYS.CONTENT_ENABLED]: isTimerPlaying }, () => {
-          // 이제 실질적으로 isPlaying 상태와 storage 상태 동기화 완료
-          contentEnabled = isTimerPlaying;
-          if (!contentEnabled) {
-            console.log('[Content] 콘텐츠 비활성 상태 - UI 렌더링 및 리스너 초기화 건너뜀');
-            return;
-          }
-          setupUIResources();
-          startDetectionWorkflow();
-        });
-      });
+      // contentEnabled 상태를 chrome.storage.sync에서 읽어옴
+      const result = await chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED]);
+      contentEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
+      console.log(`[initializeApp] contentEnabled 초기값: ${contentEnabled}`);
+
+      if (!contentEnabled) {
+        console.log('[Content] 콘텐츠 비활성 상태 - UI 렌더링 및 리스너 초기화 건너뜀');
+      } else {
+        setupUIResources();
+        startDetectionWorkflow();
+      }
 
       // 온체인지 리스너
       chrome.storage.onChanged.addListener((changes, area) => {

@@ -9,90 +9,6 @@ import { Line } from '@lib/types/lyrics';
 const activeTabs = new Set<number>();
 let lastInjectedUrl = '';
 
-// 타이머 상태 관리
-interface TimerState {
-  startTime?: number; // 타이머 시작 시각 (Date.now())
-  duration: number; // 총 지속 시간 (초)
-  isActive: boolean;
-}
-
-const timerState: TimerState = {
-  duration: 0,
-  isActive: false,
-};
-
-let badgeUpdateInterval: ReturnType<typeof setInterval> | null = null;
-
-// ===== 타이머 배지 관리 =====
-function updateBadge() {
-  const currentTime = Date.now();
-
-  if (timerState.isActive && timerState.startTime) {
-    const elapsedSeconds = Math.floor((currentTime - timerState.startTime) / 1000);
-    const remainingSeconds = Math.max(0, timerState.duration - elapsedSeconds);
-
-    if (remainingSeconds <= 0) {
-      // 타이머 완료
-      timerState.isActive = false;
-      timerState.startTime = undefined;
-      chrome.action.setBadgeText({ text: '✓' });
-      chrome.action.setBadgeBackgroundColor({ color: '#28a745' });
-
-      // 배지 업데이트 중지
-      if (badgeUpdateInterval) {
-        clearInterval(badgeUpdateInterval);
-        badgeUpdateInterval = null;
-      }
-
-      // 3초 후 배지 초기화
-      setTimeout(() => {
-        chrome.action.setBadgeText({ text: '' });
-      }, 3000);
-
-      return;
-    }
-
-    // 남은 시간을 hh:mm 형태로 표시
-    const hours = Math.floor(remainingSeconds / 3600);
-    const minutes = Math.floor((remainingSeconds % 3600) / 60);
-    const badgeText = hours > 0 ? `${hours}:${minutes.toString().padStart(2, '0')}` : `${minutes}m`;
-
-    // 남은 시간에 따른 배지 색상 변경
-    let badgeColor: string;
-    if (remainingSeconds < 60) {
-      badgeColor = '#dc3545'; // 빨간색 - 1분 미만 (긴급)
-    } else if (remainingSeconds < 300) {
-      badgeColor = '#fd7e14'; // 주황색 - 5분 미만 (주의)
-    } else {
-      badgeColor = '#007bff'; // 파란색 - 일반 상태 (여유)
-    }
-
-    chrome.action.setBadgeText({ text: badgeText });
-    chrome.action.setBadgeBackgroundColor({ color: badgeColor });
-    chrome.action.setBadgeTextColor({ color: '#ffffff' });
-  } else {
-    // 타이머 비활성 상태
-    chrome.action.setBadgeText({ text: '' });
-  }
-}
-
-function startBadgeUpdate() {
-  if (badgeUpdateInterval) {
-    clearInterval(badgeUpdateInterval);
-  }
-
-  updateBadge(); // 즉시 업데이트
-  badgeUpdateInterval = setInterval(updateBadge, 1000);
-}
-
-function stopBadgeUpdate() {
-  if (badgeUpdateInterval) {
-    clearInterval(badgeUpdateInterval);
-    badgeUpdateInterval = null;
-  }
-  updateBadge(); // 마지막 상태 반영
-}
-
 // ===== 타입 정의 =====
 interface GetLatestLyricsResponse {
   lyrics: Line[];
@@ -117,46 +33,11 @@ interface ApplyOffsetLyricsMessage {
   offset?: number;
 }
 
-interface StartTimerMessage {
-  type: 'startTimer';
-  totalSeconds: number;
-}
-
-interface StopTimerMessage {
-  type: 'stopTimer';
-}
-
-interface GetStatusMessage {
-  type: 'getStatus';
-}
-
-interface GetTimerStateMessage {
-  type: 'getTimerState';
-}
-
-interface GetTimerStatusMessage {
-  type: 'getTimerStatus';
-}
-
-interface TickMessage {
-  type: 'tick';
-  totalSeconds: number;
-}
-
-type TimerMessage =
-  | StartTimerMessage
-  | StopTimerMessage
-  | GetStatusMessage
-  | GetTimerStateMessage
-  | GetTimerStatusMessage
-  | TickMessage;
-
 export type ExtensionMessage =
   | LyricsReadyMessage
   | GetLatestLyricsMessage
   | SetOffsetMessage
-  | ApplyOffsetLyricsMessage
-  | TimerMessage;
+  | ApplyOffsetLyricsMessage;
 
 // ===== Chrome 확장 이벤트 리스너 =====
 
@@ -314,68 +195,6 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendRespon
           console.log('[background] APPLY_OFFSET_LYRICS content로 전송 성공');
         }
       });
-    });
-  }
-
-  // 타이머 시작
-  if (msg.type === 'startTimer') {
-    timerState.startTime = Date.now();
-    timerState.duration = msg.totalSeconds;
-    timerState.isActive = true;
-
-    startBadgeUpdate();
-
-    console.log('[background] 타이머 시작:', { duration: msg.totalSeconds, startTime: timerState.startTime });
-    sendResponse({ status: 'started' });
-  }
-
-  // 타이머 정지
-  if (msg.type === 'stopTimer') {
-    timerState.isActive = false;
-    timerState.startTime = undefined;
-
-    stopBadgeUpdate();
-
-    console.log('[background] 타이머 정지');
-    sendResponse({ status: 'stopped' });
-  }
-
-  // 타이머 상태 조회
-  if (msg.type === 'getTimerState') {
-    const currentTime = Date.now();
-    let remainingSeconds = 0;
-
-    if (timerState.isActive && timerState.startTime) {
-      const elapsedSeconds = Math.floor((currentTime - timerState.startTime) / 1000);
-      remainingSeconds = Math.max(0, timerState.duration - elapsedSeconds);
-
-      if (remainingSeconds <= 0) {
-        timerState.isActive = false;
-        timerState.startTime = undefined;
-      }
-    }
-
-    sendResponse({
-      isActive: timerState.isActive,
-      remainingSeconds,
-      totalDuration: timerState.duration,
-    });
-    return true;
-  }
-
-  // 레거시 상태 조회 (하위 호환성)
-  if (msg.type === 'getStatus') {
-    const currentTime = Date.now();
-    let remainingSeconds = 0;
-
-    if (timerState.isActive && timerState.startTime) {
-      const elapsedSeconds = Math.floor((currentTime - timerState.startTime) / 1000);
-      remainingSeconds = Math.max(0, timerState.duration - elapsedSeconds);
-    }
-
-    sendResponse({
-      totalSeconds: remainingSeconds,
-      isPlaying: timerState.isActive,
     });
   }
 
