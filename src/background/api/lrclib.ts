@@ -69,19 +69,29 @@ export async function fetchLyricsByArtistAndTrack(
 
     if (cacheRes.ok) {
       const cachedData = await cacheRes.json();
-      console.log('[LRCLib API] Railway 캐시 히트:', cachedData.id);
+      console.log('[LRCLib API] Railway 캐시 응답:', cachedData);
 
-      // ID로 가사 직접 조회
-      const lyricsRes = await fetch(`https://lrclib.net/api/get/${cachedData.id}`);
-      if (lyricsRes.ok) {
-        const lyricsData = await lyricsRes.json();
-        return {
-          lyrics: lyricsData.syncedLyrics || lyricsData.plainLyrics,
-          duration: lyricsData.duration,
-          artist: lyricsData.artistName,
-          title: lyricsData.trackName,
-          id: cachedData.id,
-        };
+      // Railway API 응답 구조: {cached: true, data: {lrclibId: number}}
+      const lrclibId = cachedData?.data?.lrclibId || cachedData?.id;
+
+      // ID 유효성 검증
+      if (lrclibId && typeof lrclibId === 'number' && lrclibId > 0) {
+        console.log('[LRCLib API] Railway 캐시 히트 - ID:', lrclibId);
+
+        // ID로 가사 직접 조회
+        const lyricsRes = await fetch(`https://lrclib.net/api/get/${lrclibId}`);
+        if (lyricsRes.ok) {
+          const lyricsData = await lyricsRes.json();
+          return {
+            lyrics: lyricsData.syncedLyrics || lyricsData.plainLyrics,
+            duration: lyricsData.duration,
+            artist: lyricsData.artistName,
+            title: lyricsData.trackName,
+            id: String(lrclibId),
+          };
+        }
+      } else {
+        console.warn('[LRCLib API] Railway 캐시에 유효한 ID 없음, 검색 API로 폴백', { cachedData, lrclibId });
       }
     }
   } catch (error) {
@@ -97,14 +107,21 @@ export async function fetchLyricsByArtistAndTrack(
   }
 
   // 3. Railway Redis 캐시에 ID 저장 (LRCLib 응답값 사용 - 더 정확함)
+  // 유효한 데이터만 캐싱 (빈 객체, null, undefined 방지)
   console.log('[LRCLib API] 저장 조건 확인:', { id: result.id, artist: result.artist, title: result.title });
-  if (result.id && result.artist && result.title) {
+
+  // ID는 반드시 유효한 숫자여야 함
+  const isValidId = typeof result.id === 'number' && result.id > 0;
+  const hasArtist = result.artist && result.artist.trim().length > 0;
+  const hasTitle = result.title && result.title.trim().length > 0;
+
+  if (isValidId && hasArtist && hasTitle && result.artist && result.title) {
     try {
       // LRCLib 응답의 정확한 아티스트/타이틀을 Redis 캐시 키로 저장
       const cacheKeyLrcArtist = result.artist.toLowerCase();
       const cacheKeyLrcTitle = result.title.toLowerCase();
 
-      await fetch(`${RAILWAY_API_URL}/api/lrclib/id`, {
+      const saveResponse = await fetch(`${RAILWAY_API_URL}/api/lrclib/id`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -114,16 +131,28 @@ export async function fetchLyricsByArtistAndTrack(
           lrclibId: result.id,
         }),
       });
-      console.log(
-        '[LRCLib API] Railway 캐시 저장 완료:',
-        result.id,
-        `(${cacheKeyLrcArtist} - ${cacheKeyLrcTitle} - ${cacheKeyDuration}s)`,
-      );
+
+      if (!saveResponse.ok) {
+        console.warn('[LRCLib API] Railway 캐시 저장 실패 - HTTP', saveResponse.status);
+      } else {
+        console.log(
+          '[LRCLib API] Railway 캐시 저장 완료:',
+          result.id,
+          `(${cacheKeyLrcArtist} - ${cacheKeyLrcTitle} - ${cacheKeyDuration}s)`,
+        );
+      }
     } catch (error) {
       console.warn('[LRCLib API] Railway 캐시 저장 실패:', error);
     }
   } else {
-    console.warn('[LRCLib API] Railway 캐시 저장 스킵: id, artist, title 중 누락된 값 존재');
+    console.warn('[LRCLib API] Railway 캐시 저장 스킵: 유효하지 않은 데이터', {
+      isValidId,
+      hasArtist,
+      hasTitle,
+      id: result.id,
+      artist: result.artist,
+      title: result.title,
+    });
   }
 
   return result;
