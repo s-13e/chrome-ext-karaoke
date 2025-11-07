@@ -53,5 +53,12 @@
   "extLyricsActionShowWithoutSync": "동기화 없이 표시",
   "extLyricsActionContinueWithoutCache": "캐시 없이 계속",
   "extLyricsErrorCode": "오류 코드",
-  "extLyricsDetailsToggle": "자세한 정보"
+  "extLyricsDetailsToggle": "자세한 정보",
+  "extKaraokeLoopSection": "구간반복",
+  "extKaraokeSkipIntro": "간주점프",
+  "extKaraokeAutoSkip": "자동점프",
+  "extKaraokeRestartSong": "노래처음으로",
+  "extKaraokeSyncSettings": "싱크셋",
+  "extKaraokePrevLyric": "이전",
+  "extKaraokeNextLyric": "다음"
 }

@@ -3,15 +3,17 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { BottomContainer } from './BottomContainer';
+import { Line } from '@lib/types/lyrics';
 
 interface BottomContainerPortalProps {
   visible: boolean;
+  lyrics: Line[];
 }
 
 /**
  * 하단 컨테이너를 #primary-inner의 첫 번째 자식으로 portal 렌더링
  */
-export const BottomContainerPortal: React.FC<BottomContainerPortalProps> = ({ visible }) => {
+export const BottomContainerPortal: React.FC<BottomContainerPortalProps> = ({ visible, lyrics }) => {
   const [targetElement, setTargetElement] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -63,5 +65,5 @@ export const BottomContainerPortal: React.FC<BottomContainerPortalProps> = ({ vi
     return null;
   }
 
-  return createPortal(<BottomContainer />, targetElement);
+  return createPortal(<BottomContainer lyrics={lyrics} />, targetElement);
 };

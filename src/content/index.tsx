@@ -175,8 +175,90 @@ import { KaraokeModeContainer } from './components/karaoke-mode';
     });
   };
 
+  /**
+   * 토스트 애니메이션 CSS 추가
+   */
+  function addToastStyles() {
+    if (document.getElementById('karaoke-toast-styles')) return;
+
+    const style = document.createElement('style');
+    style.id = 'karaoke-toast-styles';
+    style.textContent = `
+      @keyframes karaokeToastFadeIn {
+        from {
+          opacity: 0;
+          transform: translate(-50%, -10px);
+        }
+        to {
+          opacity: 1;
+          transform: translate(-50%, 0);
+        }
+      }
+
+      @keyframes karaokeToastFadeOut {
+        from {
+          opacity: 1;
+          transform: translate(-50%, 0);
+        }
+        to {
+          opacity: 0;
+          transform: translate(-50%, -10px);
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  /**
+   * 토스트 메시지 표시
+   */
+  function showToast(message: string, duration: number = 5000) {
+    addToastStyles();
+
+    const toast = document.createElement('div');
+    toast.textContent = message;
+    toast.style.cssText = `
+      position: fixed;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: rgba(0, 0, 0, 0.9);
+      color: #ffffff;
+      padding: 16px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      z-index: 10000;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      pointer-events: none;
+      animation: karaokeToastFadeIn 0.3s ease;
+    `;
+
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+      toast.style.animation = 'karaokeToastFadeOut 0.3s ease';
+      setTimeout(() => {
+        if (toast.parentNode) {
+          document.body.removeChild(toast);
+        }
+      }, 300);
+    }, duration);
+  }
+
   // 가라오케 모드 토글 함수
-  function toggleKaraokeMode() {
+  async function toggleKaraokeMode() {
+    // 확장 활성화 상태 확인 (올바른 키와 storage 사용)
+    const result = await chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED]);
+    const isExtensionEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
+
+    if (!isExtensionEnabled) {
+      // 확장이 비활성화되어 있으면 토스트 메시지 표시 후 차단
+      showToast('확장 프로그램을 먼저 활성화해주세요 (우측 상단 확장 아이콘 클릭)');
+      console.log('[toggleKaraokeMode] 확장 비활성화 상태 - 가라오케 모드 진입 차단');
+      return;
+    }
+
     isKaraokeModeVisible = !isKaraokeModeVisible;
     console.log(`[toggleKaraokeMode] 가라오케 모드 ${isKaraokeModeVisible ? '활성화' : '비활성화'}`);
 
@@ -220,7 +302,7 @@ import { KaraokeModeContainer } from './components/karaoke-mode';
     }
 
     // KaraokeModeContainer 렌더링 (visible 상태에 따라 표시/숨김)
-    karaokeModeRoot.render(<KaraokeModeContainer visible={isKaraokeModeVisible} />);
+    karaokeModeRoot.render(<KaraokeModeContainer visible={isKaraokeModeVisible} lyrics={latestLyrics} />);
   }
 
   // MusicNoteButton 렌더링 함수 (확장 로드 시 한 번만 실행)
@@ -466,6 +548,11 @@ import { KaraokeModeContainer } from './components/karaoke-mode';
     console.log('[Lyrics] 가사 상태 업데이트 완료');
 
     renderLyricsOverlay(latestLyrics);
+
+    // KaraokeModeContainer도 업데이트 (가사가 변경되면 BottomContainer에 전달)
+    if (isKaraokeModeVisible) {
+      renderKaraokeModeContainer();
+    }
   }
 
   function isLyricsOverlayMounted(): boolean {

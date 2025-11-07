@@ -53,5 +53,12 @@
   "extLyricsActionShowWithoutSync": "Show Without Sync",
   "extLyricsActionContinueWithoutCache": "Continue Without Cache",
   "extLyricsErrorCode": "Error Code",
-  "extLyricsDetailsToggle": "Details"
+  "extLyricsDetailsToggle": "Details",
+  "extKaraokeLoopSection": "A-B Repeat",
+  "extKaraokeSkipIntro": "Skip Intro",
+  "extKaraokeAutoSkip": "Auto Skip",
+  "extKaraokeRestartSong": "Restart",
+  "extKaraokeSyncSettings": "Sync",
+  "extKaraokePrevLyric": "Prev",
+  "extKaraokeNextLyric": "Next"
 }

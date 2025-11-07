@@ -37,11 +37,10 @@ export function App() {
     setEnabled(playing);
     lastChangeOrigin = 'user';
     console.log('lastChangeOrigin set to', lastChangeOrigin);
-    if (!playing) {
-      chrome.storage.sync.set({ [STORAGE_KEYS.CONTENT_ENABLED]: playing }, () => {
-        console.log(`contentEnabled가 ${playing}로 변경됨`);
-      });
-    }
+    // playing 상태 변경 시 항상 chrome.storage.sync에 저장
+    chrome.storage.sync.set({ [STORAGE_KEYS.CONTENT_ENABLED]: playing }, () => {
+      console.log(`contentEnabled가 ${playing}로 변경됨`);
+    });
   };
 
   useEffect(() => {

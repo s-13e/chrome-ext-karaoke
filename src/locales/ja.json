@@ -53,5 +53,12 @@
   "extLyricsActionShowWithoutSync": "同期なしで表示",
   "extLyricsActionContinueWithoutCache": "キャッシュなしで続行",
   "extLyricsErrorCode": "エラーコード",
-  "extLyricsDetailsToggle": "詳細"
+  "extLyricsDetailsToggle": "詳細",
+  "extKaraokeLoopSection": "A-Bリピート",
+  "extKaraokeSkipIntro": "イントロスキップ",
+  "extKaraokeAutoSkip": "自動スキップ",
+  "extKaraokeRestartSong": "最初から",
+  "extKaraokeSyncSettings": "同期調整",
+  "extKaraokePrevLyric": "前へ",
+  "extKaraokeNextLyric": "次へ"
 }
