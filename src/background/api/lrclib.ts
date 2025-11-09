@@ -22,6 +22,30 @@ export interface SearchCandidate {
 const requestLimiter = new RequestLimiter(5); // 최대 동시 5개 요청 제한
 const RAILWAY_API_URL = process.env.RAILWAY_API_URL!;
 
+// API 타임아웃 설정
+const CACHE_TIMEOUT_MS = 5000; // Railway 캐시: 5초 (Railway 응답 대기)
+const LRCLIB_TIMEOUT_MS = 10000; // LRCLib API: 10초 (충분한 시간)
+
+/**
+ * AbortController를 사용한 타임아웃 fetch 유틸리티
+ */
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
+  }
+}
+
 /**
  * Duration을 5초 단위로 반올림하여 캐시 효율과 정확도 균형
  * 예: 207초 → 205초, 209초 → 210초, 212초 → 210초
@@ -59,12 +83,14 @@ export async function fetchLyricsByArtistAndTrack(
 
   console.log(`[LRCLib] Redis 캐시 키: "${cacheKeyArtist}" - "${cacheKeyTitle}" - ${cacheKeyDuration}s`);
 
-  // 1. Railway Redis 캐시에서 LRCLib ID 조회 시도
+  // 1. Railway Redis 캐시에서 LRCLib ID 조회 시도 (2초 타임아웃, 빠르게 실패)
   try {
-    const cacheRes = await fetch(
+    const cacheRes = await fetchWithTimeout(
       `${RAILWAY_API_URL}/api/lrclib/id?artist=${encodeURIComponent(cacheKeyArtist)}&title=${encodeURIComponent(
         cacheKeyTitle,
       )}&duration=${cacheKeyDuration}`,
+      {},
+      CACHE_TIMEOUT_MS,
     );
 
     if (cacheRes.ok) {
@@ -78,8 +104,8 @@ export async function fetchLyricsByArtistAndTrack(
       if (lrclibId && typeof lrclibId === 'number' && lrclibId > 0) {
         console.log('[LRCLib API] Railway 캐시 히트 - ID:', lrclibId);
 
-        // ID로 가사 직접 조회
-        const lyricsRes = await fetch(`https://lrclib.net/api/get/${lrclibId}`);
+        // ID로 가사 직접 조회 (10초 타임아웃)
+        const lyricsRes = await fetchWithTimeout(`https://lrclib.net/api/get/${lrclibId}`, {}, LRCLIB_TIMEOUT_MS);
         if (lyricsRes.ok) {
           const lyricsData = await lyricsRes.json();
           return {
@@ -93,9 +119,13 @@ export async function fetchLyricsByArtistAndTrack(
       } else {
         console.warn('[LRCLib API] Railway 캐시에 유효한 ID 없음, 검색 API로 폴백', { cachedData, lrclibId });
       }
+    } else {
+      console.warn('[LRCLib API] Railway 캐시 응답 실패 - HTTP', cacheRes.status);
     }
   } catch (error) {
-    console.warn('[LRCLib API] Railway 캐시 조회 실패, 검색 API로 폴백:', error);
+    // AbortError는 타임아웃, 나머지는 네트워크 에러
+    const errorType = (error as Error).name === 'AbortError' ? '타임아웃' : '네트워크 에러';
+    console.warn(`[LRCLib API] Railway 캐시 조회 실패 (${errorType}), 검색 API로 폴백:`, error);
   }
 
   // 2. 캐시 미스 → LRCLib API 호출 (원본 값 사용, 대소문자 구분 없음)
@@ -116,12 +146,14 @@ export async function fetchLyricsByArtistAndTrack(
   const hasTitle = result.title && result.title.trim().length > 0;
 
   if (isValidId && hasArtist && hasTitle && result.artist && result.title) {
-    try {
-      // LRCLib 응답의 정확한 아티스트/타이틀을 Redis 캐시 키로 저장
-      const cacheKeyLrcArtist = result.artist.toLowerCase();
-      const cacheKeyLrcTitle = result.title.toLowerCase();
+    // Non-blocking cache save: 백그라운드에서 저장, 실패해도 무시
+    const cacheKeyLrcArtist = result.artist.toLowerCase();
+    const cacheKeyLrcTitle = result.title.toLowerCase();
 
-      const saveResponse = await fetch(`${RAILWAY_API_URL}/api/lrclib/id`, {
+    // Promise를 await 없이 실행 (fire-and-forget)
+    fetchWithTimeout(
+      `${RAILWAY_API_URL}/api/lrclib/id`,
+      {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -130,20 +162,24 @@ export async function fetchLyricsByArtistAndTrack(
           duration: cacheKeyDuration,
           lrclibId: result.id,
         }),
+      },
+      CACHE_TIMEOUT_MS,
+    )
+      .then((saveResponse) => {
+        if (!saveResponse.ok) {
+          console.warn('[LRCLib API] Railway 캐시 저장 실패 - HTTP', saveResponse.status);
+        } else {
+          console.log(
+            '[LRCLib API] Railway 캐시 저장 완료:',
+            result.id,
+            `(${cacheKeyLrcArtist} - ${cacheKeyLrcTitle} - ${cacheKeyDuration}s)`,
+          );
+        }
+      })
+      .catch((error) => {
+        const errorType = (error as Error).name === 'AbortError' ? '타임아웃' : '네트워크 에러';
+        console.warn(`[LRCLib API] Railway 캐시 저장 실패 (${errorType}):`, error);
       });
-
-      if (!saveResponse.ok) {
-        console.warn('[LRCLib API] Railway 캐시 저장 실패 - HTTP', saveResponse.status);
-      } else {
-        console.log(
-          '[LRCLib API] Railway 캐시 저장 완료:',
-          result.id,
-          `(${cacheKeyLrcArtist} - ${cacheKeyLrcTitle} - ${cacheKeyDuration}s)`,
-        );
-      }
-    } catch (error) {
-      console.warn('[LRCLib API] Railway 캐시 저장 실패:', error);
-    }
   } else {
     console.warn('[LRCLib API] Railway 캐시 저장 스킵: 유효하지 않은 데이터', {
       isValidId,
@@ -176,7 +212,7 @@ export async function fetchLyricsWithEndpoint(
 
     let searchRes: Response;
     try {
-      searchRes = await fetch(searchEndpoint);
+      searchRes = await fetchWithTimeout(searchEndpoint, {}, LRCLIB_TIMEOUT_MS);
     } catch (error) {
       throw LyricsError.fromNetworkError(error as Error, { endpoint: searchEndpoint });
     }
@@ -206,16 +242,21 @@ export async function fetchLyricsWithEndpoint(
     let fallbackSynced: LrcLibLyricsResult | null = null;
     let fallbackPlain: LrcLibLyricsResult | null = null;
 
-    // 타임아웃을 구현하기 위한 Promise
-    const timeoutMs = 7000; // 7초 타임아웃
+    // 타임아웃을 구현하기 위한 Promise (10초)
     let timeoutId: ReturnType<typeof setTimeout> | undefined = undefined;
 
     // 타임아웃 Promise
     const timeoutPromise = new Promise<null>((_, reject) => {
       timeoutId = setTimeout(() => {
-        console.warn(`Timeout after ${timeoutMs} ms waiting for lyric details`);
-        reject(new LyricsError(LyricsErrorCode.API_TIMEOUT, undefined, { timeoutMs, artistParam, titleParam }));
-      }, timeoutMs);
+        console.warn(`Timeout after ${LRCLIB_TIMEOUT_MS} ms waiting for lyric details`);
+        reject(
+          new LyricsError(LyricsErrorCode.API_TIMEOUT, undefined, {
+            timeoutMs: LRCLIB_TIMEOUT_MS,
+            artistParam,
+            titleParam,
+          }),
+        );
+      }, LRCLIB_TIMEOUT_MS);
     });
 
     async function fetchLyricDetail(
@@ -229,7 +270,11 @@ export async function fetchLyricsWithEndpoint(
       | null
     > {
       try {
-        const detailRes = await fetch(`${endpoint}/${candidate.id}?duration=${encodeURIComponent(durationSeconds)}`);
+        const detailRes = await fetchWithTimeout(
+          `${endpoint}/${candidate.id}?duration=${encodeURIComponent(durationSeconds)}`,
+          {},
+          LRCLIB_TIMEOUT_MS,
+        );
         if (!detailRes.ok) {
           console.warn(`Detail API response not OK for candidate id ${candidate.id}, status: ${detailRes.status}`);
           return null;
@@ -433,7 +478,7 @@ export async function fetchLyricsWithEndpoint(
     const freeTextQuery = `${artist} ${title}`;
     console.log(`[LRCLib] freeText 검색 시도: "${freeTextQuery}"`);
     const freeTextEndpoint = `https://lrclib.net/api/search?q=${encodeURIComponent(freeTextQuery)}`;
-    const freeTextRes = await fetch(freeTextEndpoint);
+    const freeTextRes = await fetchWithTimeout(freeTextEndpoint, {}, LRCLIB_TIMEOUT_MS);
 
     if (freeTextRes.ok) {
       const freeTextData: SearchCandidate[] = await freeTextRes.json();
@@ -445,8 +490,10 @@ export async function fetchLyricsWithEndpoint(
 
         for (const candidate of limitedCandidates) {
           try {
-            const detailRes = await fetch(
+            const detailRes = await fetchWithTimeout(
               `${endpoint}/${candidate.id}?duration=${encodeURIComponent(durationSeconds)}`,
+              {},
+              LRCLIB_TIMEOUT_MS,
             );
             if (!detailRes.ok) continue;
 

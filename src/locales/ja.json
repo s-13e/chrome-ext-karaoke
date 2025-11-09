@@ -60,5 +60,11 @@
   "extKaraokeRestartSong": "最初から",
   "extKaraokeSyncSettings": "同期調整",
   "extKaraokePrevLyric": "前へ",
-  "extKaraokeNextLyric": "次へ"
+  "extKaraokeNextLyric": "次へ",
+  "extAutoDisableTitle": "自動一時停止",
+  "extAutoDisableMessage": "最近の音楽動画{{count}}件連続で検出されなかったため、歌詞機能が一時停止されました。音楽動画を再生すると自動的に再開されます。",
+  "extAutoDisableCount": "連続非音楽: {{current}}/{{threshold}}",
+  "extAutoDisableToast": "音楽動画検出、歌詞表示再開",
+  "extAutoDisableNotificationTitle": "歌詞機能一時停止",
+  "extAutoDisableNotificationMessage": "最近音楽動画を{{count}}件連続で視聴していないため、歌詞機能が一時停止されました。音楽動画を視聴すると自動的に再開されます。"
 }

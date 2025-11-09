@@ -60,5 +60,11 @@
   "extKaraokeRestartSong": "노래처음으로",
   "extKaraokeSyncSettings": "싱크셋",
   "extKaraokePrevLyric": "이전",
-  "extKaraokeNextLyric": "다음"
+  "extKaraokeNextLyric": "다음",
+  "extAutoDisableTitle": "자동 일시 중지",
+  "extAutoDisableMessage": "최근 음악 영상 {{count}}개 연속 미감지로 가사 기능이 일시 중지되었습니다. 음악 영상 재생 시 자동으로 재개됩니다.",
+  "extAutoDisableCount": "연속 비음악: {{current}}/{{threshold}}",
+  "extAutoDisableToast": "음악 영상 감지, 가사 표시 재개",
+  "extAutoDisableNotificationTitle": "가사 기능 일시 중지",
+  "extAutoDisableNotificationMessage": "최근 음악 영상을 {{count}}개 연속으로 시청하지 않아 가사 기능이 일시 중지되었습니다. 음악 영상 시청 시 자동으로 재개됩니다."
 }

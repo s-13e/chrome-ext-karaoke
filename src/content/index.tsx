@@ -42,6 +42,15 @@ import { RiMusicAiLine } from 'react-icons/ri';
 import musicNoteStyles from './components/karaoke-player-settings/styles.module.css';
 import ReactDOM from 'react-dom/client';
 import { KaraokeModeContainer } from './components/karaoke-mode';
+import {
+  incrementNonMusicCount,
+  resetNonMusicCount,
+  enableAutoDisable,
+  disableAutoDisable,
+  shouldAutoDisable,
+} from '@lib/utils/storage/autoDisableStorage';
+import { Toast } from './components/common/Toast';
+import { AutoDisableNotification } from './components/common/AutoDisableNotification';
 
 (() => {
   // 새로고침 시 contentscript 내 중복 실행 방지
@@ -89,6 +98,10 @@ import { KaraokeModeContainer } from './components/karaoke-mode';
   // KaraokeModeContainer 전용 React Root 및 상태
   let karaokeModeRoot: ReactDOM.Root | null = null;
   let isKaraokeModeVisible = false;
+
+  // 토스트/알림 전용 React Root
+  let toastRoot: ReactDOM.Root | null = null;
+  let notificationRoot: ReactDOM.Root | null = null;
 
   // 가사 모드
   const getContentEnabled = () => contentEnabled;
@@ -355,6 +368,71 @@ import { KaraokeModeContainer } from './components/karaoke-mode';
     if (buttonContainer) {
       buttonContainer.remove();
     }
+  }
+
+  // 재활성화 토스트 표시
+  function showReactivationToast() {
+    console.log('[AutoDisable] 재활성화 토스트 표시');
+
+    let toastContainer = document.getElementById('auto-disable-toast-container');
+    if (!toastContainer) {
+      toastContainer = document.createElement('div');
+      toastContainer.id = 'auto-disable-toast-container';
+      document.body.appendChild(toastContainer);
+    }
+
+    if (!toastRoot) {
+      toastRoot = ReactDOM.createRoot(toastContainer);
+    }
+
+    const message = `🎵 ${i18nInstance.t('extAutoDisableToast')}`;
+
+    toastRoot.render(
+      <Toast
+        message={message}
+        duration={3000}
+        onClose={() => {
+          if (toastRoot) {
+            toastRoot.unmount();
+            toastRoot = null;
+          }
+          toastContainer?.remove();
+        }}
+      />,
+    );
+  }
+
+  // 자동 비활성화 알림 표시
+  function showAutoDisableNotification(threshold: number) {
+    console.log('[AutoDisable] 자동 비활성화 알림 표시');
+
+    let notificationContainer = document.getElementById('auto-disable-notification-container');
+    if (!notificationContainer) {
+      notificationContainer = document.createElement('div');
+      notificationContainer.id = 'auto-disable-notification-container';
+      document.body.appendChild(notificationContainer);
+    }
+
+    if (!notificationRoot) {
+      notificationRoot = ReactDOM.createRoot(notificationContainer);
+    }
+
+    const title = i18nInstance.t('extAutoDisableNotificationTitle');
+    const message = i18nInstance.t('extAutoDisableNotificationMessage', { count: threshold });
+
+    notificationRoot.render(
+      <AutoDisableNotification
+        title={title}
+        message={message}
+        onClose={() => {
+          if (notificationRoot) {
+            notificationRoot.unmount();
+            notificationRoot = null;
+          }
+          notificationContainer?.remove();
+        }}
+      />,
+    );
   }
 
   // 가사 렌더링 함수
@@ -660,7 +738,34 @@ import { KaraokeModeContainer } from './components/karaoke-mode';
       // 1) 메타데이터 및 기본 정보 수집
       const meta = await fetchYouTubeVideoMeta(videoId, process.env.YOUTUBE_API_KEY!);
       if (!meta) throw new Error('메타 정보 없음');
-      if (!isMusicVideo(meta)) throw new Error('음악 영상 아님');
+
+      const isMusic = isMusicVideo(meta);
+
+      // 자동 비활성화 로직: 음악 여부에 따라 카운트 업데이트
+      if (isMusic) {
+        console.log('[AutoDisable] 음악 영상 감지 - 카운트 리셋');
+        const state = await resetNonMusicCount();
+
+        // 자동 비활성화 상태였다면 재활성화 처리
+        if (state.autoDisabled && state.autoDisabledReason === 'consecutive_non_music') {
+          console.log('[AutoDisable] 자동 비활성화 상태였으나 음악 영상 감지 → 재활성화');
+          await disableAutoDisable();
+          showReactivationToast();
+        }
+      } else {
+        console.log('[AutoDisable] 비음악 영상 감지 - 카운트 증가');
+        const state = await incrementNonMusicCount();
+        console.log(`[AutoDisable] 연속 비음악 카운트: ${state.consecutiveNonMusicCount}/${state.threshold}`);
+
+        // 임계값 도달 시 자동 비활성화
+        if (await shouldAutoDisable()) {
+          console.log('[AutoDisable] 임계값 도달 - 자동 비활성화 활성화');
+          await enableAutoDisable('consecutive_non_music');
+          showAutoDisableNotification(state.threshold);
+        }
+
+        throw new Error('음악 영상 아님');
+      }
 
       // isMusicVideo() 통과했으므로 캐시에 저장
       await saveYouTubeMetaToCache(videoId, meta);

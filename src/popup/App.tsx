@@ -10,6 +10,8 @@ import { STORAGE_KEYS } from '@constants/storageKeys';
 import { PopupSettingsPanel } from './components/settings/PopupSettingsPanel';
 import './popup.css';
 import { IoSettingsOutline } from 'react-icons/io5';
+import { getAutoDisableState, disableAutoDisable, enableAutoDisable } from '@lib/utils/storage/autoDisableStorage';
+import { AutoDisableState } from '@lib/types/autoDisable';
 
 interface LanguageChangeMessage {
   type: typeof MESSAGE_TYPES.LANGUAGE_CHANGED;
@@ -22,11 +24,41 @@ export function App() {
 
   const [enabled, setEnabled] = useChromeStorage(STORAGE_KEYS.CONTENT_ENABLED, false);
   const [showSettings, setShowSettings] = useState(false);
+  const [autoDisableState, setAutoDisableState] = useState<AutoDisableState | null>(null);
+
+  // 자동 비활성화 상태 로드
+  useEffect(() => {
+    const loadAutoDisableState = async () => {
+      const state = await getAutoDisableState();
+      setAutoDisableState(state);
+    };
+    loadAutoDisableState();
+
+    // Storage 변경 감지
+    const handleStorageChange = (changes: Record<string, chrome.storage.StorageChange>) => {
+      if (changes.autoDisableState) {
+        setAutoDisableState(changes.autoDisableState.newValue);
+      }
+    };
+
+    chrome.storage.local.onChanged.addListener(handleStorageChange);
+    return () => {
+      chrome.storage.local.onChanged.removeListener(handleStorageChange);
+    };
+  }, []);
 
   // 스위치 상태 변경 핸들러
   const handleToggle = async (e: ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.checked;
     setEnabled(newValue);
+
+    // 사용자가 수동으로 끈 경우 자동 비활성화 사유 업데이트
+    if (!newValue) {
+      await enableAutoDisable('manual');
+    } else {
+      // 사용자가 수동으로 켠 경우 자동 비활성화 해제
+      await disableAutoDisable();
+    }
 
     // 현재 활성 탭에 메시지 전송 (content script가 없을 수 있으므로 에러 무시)
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -114,6 +146,30 @@ export function App() {
           <span className="slider"></span>
         </label>
       </div>
+
+      {/* 자동 비활성화 상태 표시 */}
+      {autoDisableState?.autoDisabled && autoDisableState.autoDisabledReason === 'consecutive_non_music' && (
+        <div
+          style={{
+            marginTop: '12px',
+            padding: '10px',
+            backgroundColor: '#f0f0f0',
+            borderRadius: '6px',
+            fontSize: '13px',
+            color: '#555',
+            lineHeight: '1.5',
+          }}
+        >
+          <div style={{ fontWeight: 600, marginBottom: '4px' }}>💤 {t('extAutoDisableTitle')}</div>
+          <div>{t('extAutoDisableMessage', { count: autoDisableState.threshold })}</div>
+          <div style={{ marginTop: '8px', fontSize: '12px', opacity: 0.8 }}>
+            {t('extAutoDisableCount', {
+              current: autoDisableState.consecutiveNonMusicCount,
+              threshold: autoDisableState.threshold,
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

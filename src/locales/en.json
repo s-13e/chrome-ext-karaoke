@@ -60,5 +60,11 @@
   "extKaraokeRestartSong": "Restart",
   "extKaraokeSyncSettings": "Sync",
   "extKaraokePrevLyric": "Prev",
-  "extKaraokeNextLyric": "Next"
+  "extKaraokeNextLyric": "Next",
+  "extAutoDisableTitle": "Auto Paused",
+  "extAutoDisableMessage": "Lyrics feature has been paused due to {{count}} consecutive non-music videos. It will automatically resume when you play a music video.",
+  "extAutoDisableCount": "Consecutive non-music: {{current}}/{{threshold}}",
+  "extAutoDisableToast": "Music video detected, lyrics resumed",
+  "extAutoDisableNotificationTitle": "Lyrics Feature Paused",
+  "extAutoDisableNotificationMessage": "The lyrics feature has been paused because you haven't watched {{count}} consecutive music videos. It will automatically resume when you watch a music video."
 }
