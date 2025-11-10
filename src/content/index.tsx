@@ -107,6 +107,10 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
   // 광고 상태 추적 및 모니터링 cleanup 함수
   let stopLyricsAdMonitoring: (() => void) | null = null;
 
+  // song-info 자동 숨김 (영상 재생 시간 기준)
+  let songInfoVideoTimeListener: (() => void) | null = null;
+  const SONG_INFO_HIDE_AT_VIDEO_TIME = 8; // 영상 8초 시점에 숨김
+
   // 가사 모드
   const getContentEnabled = () => contentEnabled;
   const uiManager = new UIResourceManager();
@@ -167,6 +171,9 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
 
     // 광고 모니터링 중지
     stopLyricsAdMonitoringIfNeeded();
+
+    // song-info 자동 숨김 리스너 제거
+    removeSongInfoVideoTimeListener();
 
     latestLyrics = [];
     overlayManager.setVisibility('songInfo', false);
@@ -474,10 +481,36 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
     }
   }
 
+  /**
+   * song-info 자동 숨김 리스너 제거
+   */
+  function removeSongInfoVideoTimeListener() {
+    const videoElem = document.querySelector('video');
+    if (videoElem && songInfoVideoTimeListener) {
+      videoElem.removeEventListener('timeupdate', songInfoVideoTimeListener);
+      songInfoVideoTimeListener = null;
+    }
+  }
+
   // 노래 정보 렌더링
   function renderSongInfo(title: string, artist: string) {
+    // 기존 리스너 제거
+    removeSongInfoVideoTimeListener();
+
     overlayManager.setVisibility('songInfo', true);
     overlayManager.renderOverlay('songInfo', <SongInfoOverlay title={title} artist={artist} lyricsSource="LRCLIB" />);
+
+    // 영상 재생 시간 기준으로 자동 숨김 (광고 시간 제외)
+    const videoElem = document.querySelector('video');
+    if (videoElem) {
+      songInfoVideoTimeListener = () => {
+        if (videoElem.currentTime >= SONG_INFO_HIDE_AT_VIDEO_TIME) {
+          overlayManager.setVisibility('songInfo', false);
+          removeSongInfoVideoTimeListener();
+        }
+      };
+      videoElem.addEventListener('timeupdate', songInfoVideoTimeListener);
+    }
   }
 
   function renderLyricsError(error: LyricsError) {
