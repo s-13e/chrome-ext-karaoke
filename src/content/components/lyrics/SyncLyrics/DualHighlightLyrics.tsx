@@ -28,14 +28,30 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
   const currentTime = useCurrentTime();
   const adjustedTime = currentTime - (offset ?? 0);
 
-  const { top, bottom } = getDisplayLines(shiftedLyrics, adjustedTime);
+  const { top, bottom, topIndex, bottomIndex } = getDisplayLines(shiftedLyrics, adjustedTime);
 
   // 발음 변환
   const lyricTexts = useMemo(() => shiftedLyrics.map((line) => line.text), [shiftedLyrics]);
   const pronList = usePronunciations(lyricTexts);
 
-  const topPron = top ? pronList[shiftedLyrics.findIndex((l) => l.text === top)] : '';
-  const bottomPron = bottom ? pronList[shiftedLyrics.findIndex((l) => l.text === bottom)] : '';
+  const topPron = topIndex >= 0 ? pronList[topIndex] : '';
+  const bottomPron = bottomIndex >= 0 ? pronList[bottomIndex] : '';
+
+  // 원본 lyrics에서 top/bottom의 실제 인덱스 찾기 (텍스트 + 시간으로 매칭)
+  const topIndexInOriginal = useMemo(() => {
+    if (topIndex < 0) return -1;
+    const shiftedLine = shiftedLyrics[topIndex];
+    if (!shiftedLine) return -1;
+    // 같은 텍스트가 여러 개 있을 수 있으므로 시간도 비교 (shift 고려)
+    return lyrics.findIndex((l) => l.text === shiftedLine.text && Math.abs(l.time - shiftedLine.time) < 4);
+  }, [topIndex, shiftedLyrics, lyrics]);
+
+  const bottomIndexInOriginal = useMemo(() => {
+    if (bottomIndex < 0) return -1;
+    const shiftedLine = shiftedLyrics[bottomIndex];
+    if (!shiftedLine) return -1;
+    return lyrics.findIndex((l) => l.text === shiftedLine.text && Math.abs(l.time - shiftedLine.time) < 4);
+  }, [bottomIndex, shiftedLyrics, lyrics]);
 
   // 원본 타임 라인 기준 (하이라이트는 shift 안 된 원본 타이밍 사용)
   const highlightIndex = useMemo(() => {
@@ -50,7 +66,7 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
         showText={showRealtimeLyrics}
         showPron={showPronunciationLyrics}
         fontColor={
-          lyrics.findIndex((l) => l.text === top) <= highlightIndex
+          topIndexInOriginal >= 0 && topIndexInOriginal <= highlightIndex
             ? 'blue' // 하이라이트 색상
             : fontColor
         }
@@ -61,7 +77,7 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
         pron={bottomPron}
         showText={showRealtimeLyrics}
         showPron={showPronunciationLyrics}
-        fontColor={lyrics.findIndex((l) => l.text === bottom) <= highlightIndex ? 'blue' : fontColor}
+        fontColor={bottomIndexInOriginal >= 0 && bottomIndexInOriginal <= highlightIndex ? 'blue' : fontColor}
         pronunciationColor={pronunciationColor}
       />
     </div>

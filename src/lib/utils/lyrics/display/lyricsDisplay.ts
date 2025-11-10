@@ -6,11 +6,13 @@ export interface DisplayIndices {
   bottom: string;
   highlightTop: boolean;
   highlightBottom: boolean;
+  topIndex: number; // shiftedLyrics에서의 인덱스
+  bottomIndex: number; // shiftedLyrics에서의 인덱스
 }
 
 export function getDisplayLines(lines: Line[], currentTime: number): DisplayIndices {
   if (lines.length === 0) {
-    return { top: '', bottom: '', highlightTop: false, highlightBottom: false };
+    return { top: '', bottom: '', highlightTop: false, highlightBottom: false, topIndex: -1, bottomIndex: -1 };
   }
 
   let activeIndex = -1;
@@ -36,7 +38,7 @@ export function getDisplayLines(lines: Line[], currentTime: number): DisplayIndi
     const firstLine = lines[0];
     if (firstLine && currentTime < firstLine.time) {
       // 첫 타임스탬프 전: 아무 자막도 출력하지 않음
-      return { top: '', bottom: '', highlightTop: false, highlightBottom: false };
+      return { top: '', bottom: '', highlightTop: false, highlightBottom: false, topIndex: -1, bottomIndex: -1 };
     }
     activeIndex = lines.length - 1; // 곡이 끝난 뒤, 마지막 가사 유지
   }
@@ -52,5 +54,7 @@ export function getDisplayLines(lines: Line[], currentTime: number): DisplayIndi
     bottom: bottomIdx >= 0 ? (lines[bottomIdx]?.text ?? '') : '',
     highlightTop: !isEven, // 홀수 번째 줄이면 top 강조
     highlightBottom: isEven, // 짝수 번째 줄이면 bottom 강조
+    topIndex: topIdx,
+    bottomIndex: bottomIdx,
   };
 }
