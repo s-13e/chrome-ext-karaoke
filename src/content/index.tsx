@@ -23,6 +23,7 @@ import { withContentEnabled } from '@lib/utils/platform/contentGuard';
 import { DualHighlightLyrics } from './components/lyrics/SyncLyrics/DualHighlightLyrics';
 import { FullLyrics } from './components/lyrics/FullLyrics/FullLyrics';
 import { isAdPlaying } from '@lib/utils/dom/domUtils';
+import { startLyricsAdMonitoring } from '@lib/utils/infra/adWatcher';
 import { parseLyrics } from '@lib/utils/lyrics/parsers/lyricsParser';
 import { Line } from '@lib/types/lyrics';
 import { extractVideoIdFromUrl, tryDetectVideoChange } from '@lib/utils/platform/videoDetection';
@@ -103,6 +104,9 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
   let toastRoot: ReactDOM.Root | null = null;
   let notificationRoot: ReactDOM.Root | null = null;
 
+  // 광고 상태 추적 및 모니터링 cleanup 함수
+  let stopLyricsAdMonitoring: (() => void) | null = null;
+
   // 가사 모드
   const getContentEnabled = () => contentEnabled;
   const uiManager = new UIResourceManager();
@@ -160,6 +164,9 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
    */
   function resetLyricsData() {
     console.log('[resetLyricsData] 가사 상태 초기화 완료');
+
+    // 광고 모니터링 중지
+    stopLyricsAdMonitoringIfNeeded();
 
     latestLyrics = [];
     overlayManager.setVisibility('songInfo', false);
@@ -633,6 +640,40 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
     // KaraokeModeContainer도 업데이트 (가사가 변경되면 BottomContainer에 전달)
     if (isKaraokeModeVisible) {
       renderKaraokeModeContainer();
+    }
+
+    // 광고 모니터링 시작: 가사가 렌더링된 후 광고 상태를 지속적으로 체크
+    startLyricsAdMonitoringIfNeeded();
+  }
+
+  /**
+   * 광고 모니터링을 시작 (중복 방지)
+   */
+  function startLyricsAdMonitoringIfNeeded() {
+    // 이미 모니터링 중이면 중복 실행 방지
+    if (stopLyricsAdMonitoring) {
+      return;
+    }
+
+    stopLyricsAdMonitoring = startLyricsAdMonitoring(
+      // 광고 시작 시: 가사 오버레이 숨김
+      () => {
+        overlayManager.setVisibility('lyrics', false);
+      },
+      // 광고 종료 시: 가사 오버레이 표시
+      () => {
+        overlayManager.setVisibility('lyrics', true);
+      },
+    );
+  }
+
+  /**
+   * 광고 모니터링 중지
+   */
+  function stopLyricsAdMonitoringIfNeeded() {
+    if (stopLyricsAdMonitoring) {
+      stopLyricsAdMonitoring();
+      stopLyricsAdMonitoring = null;
     }
   }
 
