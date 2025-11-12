@@ -25,6 +25,9 @@
 - Kuroshiro by Hexen Qi (MIT License, https://github.com/hexenq/kuroshiro/blob/master/LICENSE)
 - kuroshiro-analyzer-kuromoji by Hexen Qi (MIT License, https://github.com/hexenq/kuroshiro-analyzer-kuromoji/blob/master/LICENSE)
 - pinyin by hotoo (MIT License, https://hotoo.mit-license.org/)
+- @dehoist/romanize-thai by dehoist (MPL-2.0 License, https://www.npmjs.com/package/@dehoist/romanize-thai)
+- arabic-transliterate by Vyshantha (ISC License, https://github.com/Vyshantha/arabic-transliterate/blob/master/LICENSE)
+- @indic-transliteration/sanscript by indic-transliteration (MIT License, https://github.com/indic-transliteration/sanscript.js/blob/master/LICENSE)
 - p-limit by sindresorhus (MIT License, https://github.com/sindresorhus/p-limit/blob/main/license)
 
 - @emotion/react, @emotion/styled by Emotion Team (MIT License, https://emotion.sh/docs/introduction)

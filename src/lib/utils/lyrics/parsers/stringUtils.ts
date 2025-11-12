@@ -32,6 +32,7 @@ export function cleanTopicName(name: string): string {
  */
 export function cleanUp(str: string): string {
   return str
+    .replace(/[「」『』]/g, ' ') // 일본어 쌍따옴표를 공백으로 변환
     .replace(/\[.*?\]/g, '') // 대괄호 제거
     .replace(/\\s{2,}/g, ' ') // 이중 공백 정리
     .trim();
@@ -78,11 +79,22 @@ export function extractArtistAndTitleCustom(
 ): { artist: string; title: string; artistVariants?: string[] } | null {
   if (!rawTitle || typeof rawTitle !== 'string') return null;
 
+  // 0. 일본어 쌍따옴표 패턴 우선 처리 (cleanUp 전에)
+  // 예: "YOASOBI「アイドル」 Official Music Video" → artist: "YOASOBI", title: "アイドル"
+  const japaneseQuotePattern = /^(.+?)[「『]([^」』]+)[」』]/;
+  const japaneseQuoteMatch = rawTitle.match(japaneseQuotePattern);
+  if (japaneseQuoteMatch && japaneseQuoteMatch[1] && japaneseQuoteMatch[2]) {
+    return {
+      artist: japaneseQuoteMatch[1].trim(),
+      title: japaneseQuoteMatch[2].trim(),
+    };
+  }
+
   // 1. 기본 정돈 (괄호/대괄호 제거, 중복 공백 정리 등)
   const cleaned = cleanUp(rawTitle);
 
   // 2. 쌍따옴표 등으로 감싼 부분 우선 파싱 예: Artist "Title"
-  const quotePattern = /^(.+?)\s+(?:'|“|”|‘|’|")([^'“”‘’"]+)(?:'|“|”|‘|’)?(?:\s|$)/;
+  const quotePattern = /^(.+?)\s+(?:'|"|"|'|'|")([^'""''"]+)(?:'|"|"|'|')?(?:\s|$)/;
   const quoteMatch = cleaned.match(quotePattern);
 
   let artist = '';

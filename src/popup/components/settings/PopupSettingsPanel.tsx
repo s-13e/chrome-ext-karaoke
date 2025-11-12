@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Contact } from './Contact';
 import { LanguageSettings } from './LanguageSettings';
 import { LyricsSettings } from './LyricsSettings';
+import { RomanizationSettings } from './RomanizationSettings';
 import { LicenseInfo } from './License/LicenseInfo';
 import { OpenSourceLicenseList } from './License/OpenSourceLicenseList';
 import { ExtensionLicense } from './License/ExtensionLicense';
@@ -18,7 +19,8 @@ export type ComponentKey =
   | 'openSourceList'
   | 'extensionLicense'
   | 'language'
-  | 'lyricsSettings';
+  | 'lyricsSettings'
+  | 'romanization';
 
 interface PopupSettingsPanelProps {
   onBack: () => void;
@@ -43,6 +45,7 @@ export const PopupSettingsPanel: React.FC<PopupSettingsPanelProps> = ({ onBack }
     license: t('extLicense'),
     language: t('extLanguage'),
     lyricsSettings: t('extLyrics'),
+    romanization: t('extRomanization', '로마자 변환'),
     openSourceList: t('extOpenSourceList'),
     extensionLicense: t(''),
   };
@@ -52,6 +55,7 @@ export const PopupSettingsPanel: React.FC<PopupSettingsPanelProps> = ({ onBack }
   else if (activeComponent === 'contact') ContentComponent = Contact;
   else if (activeComponent === 'language') ContentComponent = LanguageSettings;
   else if (activeComponent === 'lyricsSettings') ContentComponent = LyricsSettings;
+  else if (activeComponent === 'romanization') ContentComponent = RomanizationSettings;
   else if (activeComponent === 'license') ContentComponent = LicenseInfo;
   else if (activeComponent === 'openSourceList') ContentComponent = OpenSourceLicenseList;
   else if (activeComponent === 'extensionLicense') ContentComponent = ExtensionLicense;
@@ -86,12 +90,20 @@ export const PopupSettingsPanel: React.FC<PopupSettingsPanelProps> = ({ onBack }
 function MainMenu({ onNavigate }: MainMenuProps) {
   const { t } = useTranslation();
 
+  const handleResetOnboarding = async () => {
+    await chrome.storage.sync.remove('hasCompletedLanguageOnboarding');
+    alert('온보딩이 초기화되었습니다. Popup을 닫고 다시 열어주세요.');
+  };
+
   return (
     <div className={styles.settingsContent}>
       <div className={styles.sectionGroup}>
         <div className={styles.sectionLabel}>{t('extPersonalSettings')}</div>
         <button className={styles.settingsButton} onClick={() => onNavigate('lyricsSettings')}>
           {t('extLyrics')}
+        </button>
+        <button className={styles.settingsButton} onClick={() => onNavigate('romanization')}>
+          {t('extRomanization', '로마자 변환')}
         </button>
         <button className={styles.settingsButton} onClick={() => onNavigate('language')}>
           {t('extLanguage')}
@@ -101,6 +113,9 @@ function MainMenu({ onNavigate }: MainMenuProps) {
       <div className={styles.sectionGroup}>
         <div className={styles.sectionLabel}>{t('extGeneralSettings')}</div>
         <button className={styles.settingsButton}>캐시 초기화</button>
+        <button className={styles.settingsButton} onClick={handleResetOnboarding}>
+          🔧 온보딩 초기화 (테스트용)
+        </button>
         <button className={styles.settingsButton} onClick={() => onNavigate('faq')}>
           {t('extFAQ')}
         </button>

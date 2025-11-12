@@ -8,6 +8,7 @@ import { ErrorFallback } from '@components/common/ErrorFallback';
 import { LoadingOverlay } from '@components/common/LoadingOverlay';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 import { PopupSettingsPanel } from './components/settings/PopupSettingsPanel';
+import { LanguagePreferenceOnboarding } from './components/onboarding/LanguagePreferenceOnboarding';
 import './popup.css';
 import { IoSettingsOutline } from 'react-icons/io5';
 import { getAutoDisableState, disableAutoDisable, enableAutoDisable } from '@lib/utils/storage/autoDisableStorage';
@@ -24,7 +25,18 @@ export function App() {
 
   const [enabled, setEnabled] = useChromeStorage(STORAGE_KEYS.CONTENT_ENABLED, false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [autoDisableState, setAutoDisableState] = useState<AutoDisableState | null>(null);
+
+  // 온보딩 완료 여부 확인
+  useEffect(() => {
+    const checkOnboardingStatus = async () => {
+      const result = await chrome.storage.sync.get('hasCompletedLanguageOnboarding');
+      const hasCompleted = result.hasCompletedLanguageOnboarding || false;
+      setShowOnboarding(!hasCompleted);
+    };
+    checkOnboardingStatus();
+  }, []);
 
   // 자동 비활성화 상태 로드
   useEffect(() => {
@@ -127,6 +139,11 @@ export function App() {
   }
 
   if (phase !== 'ready') return <LoadingOverlay />;
+
+  // 온보딩 화면 표시
+  if (showOnboarding) {
+    return <LanguagePreferenceOnboarding onComplete={() => setShowOnboarding(false)} />;
+  }
 
   if (showSettings) {
     return <PopupSettingsPanel onBack={() => setShowSettings(false)} />;

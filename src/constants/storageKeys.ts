@@ -2,4 +2,7 @@ export const STORAGE_KEYS = {
   CONTENT_ENABLED: 'contentEnabled',
   LANGUAGE: 'language',
   LAST_VIDEO_ID: 'lastVideoId',
+  PREFERRED_ROMANIZATION_LANGUAGES: 'preferredRomanizationLanguages',
+  HAS_COMPLETED_LANGUAGE_ONBOARDING: 'hasCompletedLanguageOnboarding',
+  LOADED_ROMANIZER_LIBRARIES: 'loadedRomanizerLibraries',
 } as const;

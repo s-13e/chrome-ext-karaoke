@@ -3,18 +3,43 @@
 import { chineseRomanizer } from '../romanizers/chineseRomanizer';
 import { japaneseRomanizer } from '../romanizers/japaneseRomanizer';
 import { koreanRomanizer } from '../romanizers/koreanRomanizer';
+import { universalRomanizer } from '../romanizers/universalRomanizer';
+import { thaiRomanizer } from '../romanizers/thaiRomanizer';
+import { arabicRomanizer } from '../romanizers/arabicRomanizer';
+import { hindiRomanizer } from '../romanizers/hindiRomanizer';
 import type { ScriptSpan } from './languageSpanSplitter';
 
-// 변환 불필요 언어나 미지원 스크립트는 그대로 반환
+/**
+ * Language code to romanization function mapping
+ *
+ * Supported languages:
+ * - ko: Korean (dedicated library: @daun_jung/korean-romanizer)
+ * - ja: Japanese (dedicated library: kuroshiro)
+ * - zh: Chinese Mandarin (dedicated library: pinyin)
+ * - th: Thai (dedicated library: @dehoist/romanize-thai - RTGS)
+ * - ar: Arabic (dedicated library: arabic-transliterate - IJMES)
+ * - hi: Hindi (dedicated library: @indic-transliteration/sanscript - IAST)
+ * - el: Greek (직접 구현 매핑 테이블)
+ * - ka: Georgian (직접 구현 매핑 테이블)
+ * - he: Hebrew (직접 구현 매핑 테이블)
+ * - hy: Armenian (직접 구현 매핑 테이블)
+ */
 const transliterators: Record<string, (text: string) => Promise<string>> = {
+  // Category A: Dedicated libraries (high accuracy)
   ko: async (text) => Promise.resolve(koreanRomanizer(text)),
   ja: async (text) => japaneseRomanizer(text),
-  zh: (text) => chineseRomanizer(text), // 여기에 병음 변환 연결
-  th: async (text) => Promise.resolve(text),
-  ar: async (text) => Promise.resolve(text),
-  he: async (text) => Promise.resolve(text),
-  deva: async (text) => Promise.resolve(text),
-  cyrl: async (text) => Promise.resolve(text),
+  zh: (text) => chineseRomanizer(text),
+  th: async (text) => Promise.resolve(thaiRomanizer(text)), // Thai RTGS
+  ar: async (text) => Promise.resolve(arabicRomanizer(text)), // Arabic IJMES
+  hi: async (text) => Promise.resolve(hindiRomanizer(text)), // Hindi IAST
+
+  // Category B: 직접 구현 매핑 테이블 (high accuracy)
+  el: async (text) => Promise.resolve(universalRomanizer(text)), // Greek
+  he: async (text) => Promise.resolve(universalRomanizer(text)), // Hebrew
+  ka: async (text) => Promise.resolve(universalRomanizer(text)), // Georgian
+  hy: async (text) => Promise.resolve(universalRomanizer(text)), // Armenian
+
+  // Fallback
   other: async (text) => Promise.resolve(text),
 };
 

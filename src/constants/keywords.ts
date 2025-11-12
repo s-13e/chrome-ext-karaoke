@@ -1,4 +1,4 @@
-export const SPECIAL_MUSIC_KEYWORDS = ['ed', 'op', 'mv', 'ost'];
+export const SPECIAL_MUSIC_KEYWORDS = ['ed', 'op', 'mv', 'ost', 'inst'];
 export const INTRO_OUTRO_KEYWORDS = ['mv', 'remix', 'stage', 'full cam', '직캠', 'fan cam', 'stage mix', '최초 공개'];
 export const MUSIC_KEYWORDS = [
   // 영어

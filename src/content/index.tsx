@@ -370,20 +370,6 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
     console.log('[renderMusicNoteButton] 렌더링 완료');
   }
 
-  // MusicNoteButton 정리 함수 (확장 언로드 시 사용 - 현재는 미사용)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  function cleanupMusicNoteButton() {
-    if (musicNoteButtonRoot) {
-      musicNoteButtonRoot.unmount();
-      musicNoteButtonRoot = null;
-    }
-
-    const buttonContainer = document.getElementById('music-note-button-container');
-    if (buttonContainer) {
-      buttonContainer.remove();
-    }
-  }
-
   // 재활성화 토스트 표시
   function showReactivationToast() {
     console.log('[AutoDisable] 재활성화 토스트 표시');
@@ -848,10 +834,20 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
 
       // 제목 정제: 이모지 + 콜론 앞부분 제거
       const cleanedTitle = stripEmojiAndBeforeColon(meta.title);
+      console.log('[TITLE PARSE] 원본 타이틀:', meta.title);
+      console.log('[TITLE PARSE] 정제된 타이틀:', cleanedTitle);
 
-      // 아티스트, 타이틀 파싱(기존 처리 로직 사용)
+      // 1차: get-artist-title 라이브러리
       let parsed = extractArtistAndTitle(cleanedTitle);
+      console.log('[TITLE PARSE] 1차(라이브러리) 결과:', parsed);
 
+      // 2차: 커스텀 파서 (일본어 쌍따옴표 등 특수 패턴)
+      if (!parsed) {
+        parsed = extractArtistAndTitleCustom(cleanedTitle);
+        console.log('[TITLE PARSE] 2차(커스텀) 결과:', parsed);
+      }
+
+      // 3차: fallback (채널명 사용 - 타이틀에 artist 정보가 없는 경우)
       if (!parsed) {
         const fallback = fallbackArtistAndTitle(meta);
         if (!fallback) throw new Error('곡명/아티스트 파싱 실패');
@@ -859,20 +855,19 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
         fallback.title = cleanTopicName(fallback.title);
         fallback.artist = cleanTopicName(fallback.artist);
         parsed = fallback;
+        console.log('[TITLE PARSE] 3차(fallback) 결과:', parsed);
       }
 
-      const refined = extractArtistAndTitleCustom(`${parsed.artist} - ${parsed.title}`);
-      if (!refined) {
-        throw new Error('정제된 곡명/아티스트 파싱 실패');
-      }
-
-      const artist = preprocessArtistOrTitle(refined.artist);
-      const title = preprocessArtistOrTitle(refined.title);
+      const artist = preprocessArtistOrTitle(parsed.artist);
+      const title = preprocessArtistOrTitle(parsed.title);
+      const artistVariants: string[] | undefined =
+        'artistVariants' in parsed ? (parsed.artistVariants as string[] | undefined) : undefined;
+      console.log('[TITLE PARSE] 최종 - artist:', artist, ', title:', title);
 
       // 2) 가사 캐시 또는 서버에서 가사 조회
       // 캐시 계층: Railway Redis → LRCLib API (localStorage 캐시 제거됨)
       const lyricsResult = await getLyricsFromCacheOrFetch(artist, title, {
-        fetch: async () => fetchLyricsWithAliasFallback(artist, title, videoDurationSec, refined.artistVariants),
+        fetch: async () => fetchLyricsWithAliasFallback(artist, title, videoDurationSec, artistVariants),
       });
       if (!lyricsResult) throw new Error('가사 없음');
 

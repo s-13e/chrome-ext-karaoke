@@ -24,7 +24,7 @@ const RAILWAY_API_URL = process.env.RAILWAY_API_URL!;
 
 // API 타임아웃 설정
 const CACHE_TIMEOUT_MS = 5000; // Railway 캐시: 5초 (Railway 응답 대기)
-const LRCLIB_TIMEOUT_MS = 10000; // LRCLib API: 10초 (충분한 시간)
+const LRCLIB_TIMEOUT_MS = 20000; // LRCLib API: 20초 (네트워크 지연 고려)
 
 /**
  * AbortController를 사용한 타임아웃 fetch 유틸리티
@@ -75,9 +75,24 @@ export async function fetchLyricsByArtistAndTrack(
     throw new LyricsError(LyricsErrorCode.INVALID_VIDEO_DURATION, undefined, { durationSeconds });
   }
 
+  // 0. 먼저 Railway 캐시에서 아티스트 영문 alias 확인 (빠른 캐시 조회만)
+  // 비영어 아티스트명이면 영문명으로 변환된 캐시가 있을 수 있음
+  let effectiveArtist = artist;
+  try {
+    const { fetchEnglishAliasFromCache } = await import('./musicBrainz');
+    const cachedAlias = await fetchEnglishAliasFromCache(artist);
+    if (cachedAlias) {
+      console.log(`[LRCLib] 아티스트 alias 캐시 히트: "${artist}" → "${cachedAlias}"`);
+      effectiveArtist = cachedAlias;
+    }
+  } catch (error) {
+    // alias 조회 실패해도 원본 아티스트명으로 계속 진행
+    console.warn('[LRCLib] alias 캐시 조회 실패, 원본 아티스트명 사용:', error);
+  }
+
   // Redis 캐시 키: 소문자 변환 + duration 반올림
   // preprocessArtistOrTitle이 이미 공백/특수문자 정리 완료
-  const cacheKeyArtist = artist.toLowerCase();
+  const cacheKeyArtist = effectiveArtist.toLowerCase();
   const cacheKeyTitle = title.toLowerCase();
   const cacheKeyDuration = normalizeDuration(durationSeconds);
 
@@ -242,23 +257,6 @@ export async function fetchLyricsWithEndpoint(
     let fallbackSynced: LrcLibLyricsResult | null = null;
     let fallbackPlain: LrcLibLyricsResult | null = null;
 
-    // 타임아웃을 구현하기 위한 Promise (10초)
-    let timeoutId: ReturnType<typeof setTimeout> | undefined = undefined;
-
-    // 타임아웃 Promise
-    const timeoutPromise = new Promise<null>((_, reject) => {
-      timeoutId = setTimeout(() => {
-        console.warn(`Timeout after ${LRCLIB_TIMEOUT_MS} ms waiting for lyric details`);
-        reject(
-          new LyricsError(LyricsErrorCode.API_TIMEOUT, undefined, {
-            timeoutMs: LRCLIB_TIMEOUT_MS,
-            artistParam,
-            titleParam,
-          }),
-        );
-      }, LRCLIB_TIMEOUT_MS);
-    });
-
     async function fetchLyricDetail(
       candidate: SearchCandidate,
       durationSeconds: number,
@@ -348,22 +346,16 @@ export async function fetchLyricsWithEndpoint(
         return null;
       }
     }
-    // 요청 배치
-    const resultsPromise = Promise.all(
+    // 요청 배치 - 각 fetch는 개별적으로 LRCLIB_TIMEOUT_MS 타임아웃을 가짐
+    const results = await Promise.all(
       limitedCandidates.map((candidate) => requestLimiter.enqueue(() => fetchLyricDetail(candidate, durationSeconds))),
     );
 
-    // 타임아웃 또는 모두 완료 중 먼저 도착하는 것을 선택
-    const results = (await Promise.race([resultsPromise, timeoutPromise])) || [];
-    clearTimeout(timeoutId);
-
-    // 타임아웃시에도 결과가 부분적으로 나올 수 있으니 validResults 구성
-    const validResults = Array.isArray(results)
-      ? (results.filter((res) => res !== null) as (LrcLibLyricsResult & {
-          hasSynced: boolean;
-          isStrictMatch: boolean;
-        })[])
-      : [];
+    // validResults 구성
+    const validResults = results.filter((res) => res !== null) as (LrcLibLyricsResult & {
+      hasSynced: boolean;
+      isStrictMatch: boolean;
+    })[];
 
     if (!validResults.length && (fallbackSynced || fallbackPlain)) {
       console.log('No valid results, returning fallback');

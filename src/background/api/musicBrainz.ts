@@ -22,6 +22,32 @@ type MusicBrainzResponse = {
 };
 
 /**
+ * Railway 캐시에서만 아티스트 alias 조회 (API 호출 없이 빠른 조회)
+ * LRCLib 캐시 조회 전에 사용하여 캐시 히트율 향상
+ */
+export async function fetchEnglishAliasFromCache(artistName: string): Promise<string | null> {
+  if (!artistName) {
+    return null;
+  }
+
+  const cacheKey = artistName.toLowerCase();
+
+  try {
+    const cacheRes = await fetch(`${RAILWAY_API_URL}/api/musicbrainz/alias/${encodeURIComponent(cacheKey)}`, {
+      signal: AbortSignal.timeout(2000), // 2초 타임아웃
+    });
+    if (cacheRes.ok) {
+      const cachedData = await cacheRes.json();
+      return cachedData.alias;
+    }
+  } catch {
+    // 캐시 조회 실패는 무시 (타임아웃 포함)
+  }
+
+  return null;
+}
+
+/**
  * MusicBrainz API 호출 시 반드시 User-Agent 헤더를 포함해야 함
  * 아티스트명에 대한 영문명(alias) 자동 추출 함수
  */
@@ -32,18 +58,10 @@ export async function fetchEnglishAliasForArtist(artistName: string): Promise<st
   }
 
   // 1. Railway 캐시 서버에서 조회 시도
-  // 대소문자 구분 없이 캐시 히트율을 높이기 위해 소문자로 정규화
-  const cacheKey = artistName.toLowerCase();
-
-  try {
-    const cacheRes = await fetch(`${RAILWAY_API_URL}/api/musicbrainz/alias/${encodeURIComponent(cacheKey)}`);
-    if (cacheRes.ok) {
-      const cachedData = await cacheRes.json();
-      console.log('[MusicBrainz] Railway 캐시 히트:', artistName, '→', cachedData.alias);
-      return cachedData.alias;
-    }
-  } catch (error) {
-    console.warn('[MusicBrainz] Railway 캐시 조회 실패, MusicBrainz API로 폴백:', error);
+  const cachedAlias = await fetchEnglishAliasFromCache(artistName);
+  if (cachedAlias) {
+    console.log('[MusicBrainz] Railway 캐시 히트:', artistName, '→', cachedAlias);
+    return cachedAlias;
   }
 
   // 2. 캐시 없으면 MusicBrainz API 직접 호출
@@ -79,6 +97,7 @@ export async function fetchEnglishAliasForArtist(artistName: string): Promise<st
 
     // 3. Railway 캐시 서버에 저장
     if (alias) {
+      const cacheKey = artistName.toLowerCase();
       try {
         await fetch(`${RAILWAY_API_URL}/api/musicbrainz/alias`, {
           method: 'POST',

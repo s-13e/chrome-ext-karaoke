@@ -245,6 +245,11 @@ module.exports = [
   {
     name: 'chrome-extension/jest',
     files: ['**/*.test.ts', '**/*.test.tsx'],
+    languageOptions: {
+      globals: {
+        ...globals.jest,
+      },
+    },
     rules: {
       '@typescript-eslint/no-unused-expressions': 'off',
     },
