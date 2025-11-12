@@ -26,7 +26,7 @@ export async function fetchYouTubeVideoMeta(
 ): Promise<YouTubeVideoMetaFullValue | null> {
   // 1. Railway 캐시 서버에서 조회 시도
   try {
-    const cacheRes = await fetch(`${RAILWAY_API_URL}/api/youtube/${videoId}/meta`);
+    const cacheRes = await fetch(`${RAILWAY_API_URL}/api/v1/youtube/${videoId}/meta`);
     if (cacheRes.ok) {
       const cachedData: YouTubeVideoMetaCacheValue = await cacheRes.json();
       console.log('[YouTube API] Railway 캐시 히트:', videoId);
@@ -86,7 +86,7 @@ export async function saveYouTubeMetaToCache(videoId: string, meta: YouTubeVideo
   };
 
   try {
-    await fetch(`${RAILWAY_API_URL}/api/youtube/${videoId}/meta`, {
+    await fetch(`${RAILWAY_API_URL}/api/v1/youtube/${videoId}/meta`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(minimalCache),

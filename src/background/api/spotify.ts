@@ -27,7 +27,7 @@ async function cacheArtistNameMapping(originalArtist: string, englishArtist: str
       return;
     }
 
-    await fetch(`${RAILWAY_API_URL}/api/musicbrainz/alias`, {
+    await fetch(`${RAILWAY_API_URL}/api/v1/musicbrainz/alias`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -57,7 +57,7 @@ async function addToReverseMapping(englishArtist: string, variant: string): Prom
       return;
     }
 
-    await fetch(`${RAILWAY_API_URL}/api/musicbrainz/reverse`, {
+    await fetch(`${RAILWAY_API_URL}/api/v1/musicbrainz/reverse`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -82,7 +82,7 @@ export async function searchSpotifyTrack(artist: string, title: string): Promise
   try {
     console.log(`[Spotify] 검색 시도: "${artist}" - "${title}"`);
 
-    const response = await fetch(`${RAILWAY_API_URL}/api/spotify/search`, {
+    const response = await fetch(`${RAILWAY_API_URL}/api/v1/spotify/search`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

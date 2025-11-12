@@ -33,7 +33,7 @@ export async function fetchEnglishAliasFromCache(artistName: string): Promise<st
   const cacheKey = artistName.toLowerCase();
 
   try {
-    const cacheRes = await fetch(`${RAILWAY_API_URL}/api/musicbrainz/alias/${encodeURIComponent(cacheKey)}`, {
+    const cacheRes = await fetch(`${RAILWAY_API_URL}/api/v1/musicbrainz/alias/${encodeURIComponent(cacheKey)}`, {
       signal: AbortSignal.timeout(2000), // 2초 타임아웃
     });
     if (cacheRes.ok) {
@@ -99,7 +99,7 @@ export async function fetchEnglishAliasForArtist(artistName: string): Promise<st
     if (alias) {
       const cacheKey = artistName.toLowerCase();
       try {
-        await fetch(`${RAILWAY_API_URL}/api/musicbrainz/alias`, {
+        await fetch(`${RAILWAY_API_URL}/api/v1/musicbrainz/alias`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ artist: cacheKey, alias }),

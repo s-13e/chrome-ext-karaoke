@@ -101,7 +101,7 @@ export async function fetchLyricsByArtistAndTrack(
   // 1. Railway Redis 캐시에서 LRCLib ID 조회 시도 (2초 타임아웃, 빠르게 실패)
   try {
     const cacheRes = await fetchWithTimeout(
-      `${RAILWAY_API_URL}/api/lrclib/id?artist=${encodeURIComponent(cacheKeyArtist)}&title=${encodeURIComponent(
+      `${RAILWAY_API_URL}/api/v1/lrclib/id?artist=${encodeURIComponent(cacheKeyArtist)}&title=${encodeURIComponent(
         cacheKeyTitle,
       )}&duration=${cacheKeyDuration}`,
       {},
@@ -167,7 +167,7 @@ export async function fetchLyricsByArtistAndTrack(
 
     // Promise를 await 없이 실행 (fire-and-forget)
     fetchWithTimeout(
-      `${RAILWAY_API_URL}/api/lrclib/id`,
+      `${RAILWAY_API_URL}/api/v1/lrclib/id`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

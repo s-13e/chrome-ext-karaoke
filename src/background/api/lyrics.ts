@@ -27,7 +27,7 @@ async function cacheArtistVariantsToReverse(successfulArtist: string, artistVari
 
     try {
       // Forward 매핑: variant → successful
-      await fetch(`${RAILWAY_API_URL}/api/musicbrainz/alias`, {
+      await fetch(`${RAILWAY_API_URL}/api/v1/musicbrainz/alias`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -37,7 +37,7 @@ async function cacheArtistVariantsToReverse(successfulArtist: string, artistVari
       });
 
       // Reverse 매핑: successful → variants에 variant 추가
-      await fetch(`${RAILWAY_API_URL}/api/musicbrainz/reverse`, {
+      await fetch(`${RAILWAY_API_URL}/api/v1/musicbrainz/reverse`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
