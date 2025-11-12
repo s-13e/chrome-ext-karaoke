@@ -3,7 +3,7 @@ import { isEnglishText } from '@lib/utils/lyrics/parsers/stringUtils';
 // background/api/musicBrainz.ts
 const BASE_URL = 'https://musicbrainz.org/ws/2';
 const USER_AGENT = process.env.MUSICBRAINZ_USER_AGENT!;
-const RAILWAY_API_URL = process.env.RAILWAY_API_URL!;
+const API_SERVER_URL = process.env.API_SERVER_URL!;
 
 type Alias = {
   name: string;
@@ -22,7 +22,7 @@ type MusicBrainzResponse = {
 };
 
 /**
- * Railway 캐시에서만 아티스트 alias 조회 (API 호출 없이 빠른 조회)
+ * API 서버 캐시에서만 아티스트 alias 조회 (API 호출 없이 빠른 조회)
  * LRCLib 캐시 조회 전에 사용하여 캐시 히트율 향상
  */
 export async function fetchEnglishAliasFromCache(artistName: string): Promise<string | null> {
@@ -33,7 +33,7 @@ export async function fetchEnglishAliasFromCache(artistName: string): Promise<st
   const cacheKey = artistName.toLowerCase();
 
   try {
-    const cacheRes = await fetch(`${RAILWAY_API_URL}/api/v1/musicbrainz/alias/${encodeURIComponent(cacheKey)}`, {
+    const cacheRes = await fetch(`${API_SERVER_URL}/api/v1/musicbrainz/alias/${encodeURIComponent(cacheKey)}`, {
       signal: AbortSignal.timeout(2000), // 2초 타임아웃
     });
     if (cacheRes.ok) {
@@ -57,10 +57,10 @@ export async function fetchEnglishAliasForArtist(artistName: string): Promise<st
     return null;
   }
 
-  // 1. Railway 캐시 서버에서 조회 시도
+  // 1. API 서버 캐시에서 조회 시도
   const cachedAlias = await fetchEnglishAliasFromCache(artistName);
   if (cachedAlias) {
-    console.log('[MusicBrainz] Railway 캐시 히트:', artistName, '→', cachedAlias);
+    console.log('[MusicBrainz] 캐시 히트:', artistName, '→', cachedAlias);
     return cachedAlias;
   }
 
@@ -95,18 +95,18 @@ export async function fetchEnglishAliasForArtist(artistName: string): Promise<st
 
     const alias = extractEnglishAliasFromArtists(data.artists);
 
-    // 3. Railway 캐시 서버에 저장
+    // 3. API 서버 캐시에 저장
     if (alias) {
       const cacheKey = artistName.toLowerCase();
       try {
-        await fetch(`${RAILWAY_API_URL}/api/v1/musicbrainz/alias`, {
+        await fetch(`${API_SERVER_URL}/api/v1/musicbrainz/alias`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ artist: cacheKey, alias }),
         });
-        console.log('[MusicBrainz] Railway 캐시 저장 완료:', artistName, '→', alias);
+        console.log('[MusicBrainz] 캐시 저장 완료:', artistName, '→', alias);
       } catch (error) {
-        console.warn('[MusicBrainz] Railway 캐시 저장 실패:', error);
+        console.warn('[MusicBrainz] 캐시 저장 실패:', error);
       }
     }
 

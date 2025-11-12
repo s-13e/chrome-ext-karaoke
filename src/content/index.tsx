@@ -865,7 +865,7 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
       console.log('[TITLE PARSE] 최종 - artist:', artist, ', title:', title);
 
       // 2) 가사 캐시 또는 서버에서 가사 조회
-      // 캐시 계층: Railway Redis → LRCLib API (localStorage 캐시 제거됨)
+      // 캐시 계층: API 서버 Redis → LRCLib API (localStorage 캐시 제거됨)
       const lyricsResult = await getLyricsFromCacheOrFetch(artist, title, {
         fetch: async () => fetchLyricsWithAliasFallback(artist, title, videoDurationSec, artistVariants),
       });

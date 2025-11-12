@@ -1,9 +1,9 @@
 /**
  * Spotify API 통합
- * Railway API 서버를 통해 Spotify에서 곡 메타데이터 조회
+ * API 서버를 통해 Spotify에서 곡 메타데이터 조회
  */
 
-const RAILWAY_API_URL = 'https://karaoke-api-server-production.up.railway.app';
+const API_SERVER_URL = process.env.API_SERVER_URL!;
 
 export interface SpotifyTrackResult {
   name: string; // 영문 트랙명
@@ -27,7 +27,7 @@ async function cacheArtistNameMapping(originalArtist: string, englishArtist: str
       return;
     }
 
-    await fetch(`${RAILWAY_API_URL}/api/v1/musicbrainz/alias`, {
+    await fetch(`${API_SERVER_URL}/api/v1/musicbrainz/alias`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -57,7 +57,7 @@ async function addToReverseMapping(englishArtist: string, variant: string): Prom
       return;
     }
 
-    await fetch(`${RAILWAY_API_URL}/api/v1/musicbrainz/reverse`, {
+    await fetch(`${API_SERVER_URL}/api/v1/musicbrainz/reverse`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -82,7 +82,7 @@ export async function searchSpotifyTrack(artist: string, title: string): Promise
   try {
     console.log(`[Spotify] 검색 시도: "${artist}" - "${title}"`);
 
-    const response = await fetch(`${RAILWAY_API_URL}/api/v1/spotify/search`, {
+    const response = await fetch(`${API_SERVER_URL}/api/v1/spotify/search`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -3,7 +3,7 @@ import { fetchLyricsByArtistAndTrack, LrcLibLyricsResult } from './lrclib';
 import { extractEnglishAliasFromArtists, fetchEnglishAliasForArtist, searchArtistByFreeText } from './musicBrainz';
 import { LyricsError, LyricsErrorCode } from '@lib/types/lyricsError';
 
-const RAILWAY_API_URL = process.env.RAILWAY_API_URL!;
+const API_SERVER_URL = process.env.API_SERVER_URL!;
 
 /**
  * artistVariants에서 성공한 아티스트를 기준으로 나머지 variants를 reverse 캐시에 저장
@@ -27,7 +27,7 @@ async function cacheArtistVariantsToReverse(successfulArtist: string, artistVari
 
     try {
       // Forward 매핑: variant → successful
-      await fetch(`${RAILWAY_API_URL}/api/v1/musicbrainz/alias`, {
+      await fetch(`${API_SERVER_URL}/api/v1/musicbrainz/alias`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -37,7 +37,7 @@ async function cacheArtistVariantsToReverse(successfulArtist: string, artistVari
       });
 
       // Reverse 매핑: successful → variants에 variant 추가
-      await fetch(`${RAILWAY_API_URL}/api/v1/musicbrainz/reverse`, {
+      await fetch(`${API_SERVER_URL}/api/v1/musicbrainz/reverse`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

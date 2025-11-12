@@ -17,19 +17,19 @@ export interface YouTubeVideoMetaFullValue {
   durationSec: number;
 }
 
-const RAILWAY_API_URL = process.env.RAILWAY_API_URL!;
+const API_SERVER_URL = process.env.API_SERVER_URL!;
 
 // background/api/youtube.ts
 export async function fetchYouTubeVideoMeta(
   videoId: string,
   apiKey: string,
 ): Promise<YouTubeVideoMetaFullValue | null> {
-  // 1. Railway 캐시 서버에서 조회 시도
+  // 1. API 서버 캐시에서 조회 시도
   try {
-    const cacheRes = await fetch(`${RAILWAY_API_URL}/api/v1/youtube/${videoId}/meta`);
+    const cacheRes = await fetch(`${API_SERVER_URL}/api/v1/youtube/${videoId}/meta`);
     if (cacheRes.ok) {
       const cachedData: YouTubeVideoMetaCacheValue = await cacheRes.json();
-      console.log('[YouTube API] Railway 캐시 히트:', videoId);
+      console.log('[YouTube API] 캐시 히트:', videoId);
 
       // 캐시된 최소 데이터를 전체 형식으로 변환
       // (이미 isMusicVideo() 통과한 데이터이므로 음악 영상 확정)
@@ -43,7 +43,7 @@ export async function fetchYouTubeVideoMeta(
       };
     }
   } catch (error) {
-    console.warn('[YouTube API] Railway 캐시 조회 실패, YouTube API로 폴백:', error);
+    console.warn('[YouTube API] 캐시 조회 실패, YouTube API로 폴백:', error);
   }
 
   // 2. 캐시 없으면 YouTube API 직접 호출
@@ -75,7 +75,7 @@ export async function fetchYouTubeVideoMeta(
 }
 
 /**
- * YouTube 메타데이터를 Railway 캐시에 저장
+ * YouTube 메타데이터를 API 서버 캐시에 저장
  * (isMusicVideo() 통과 후에만 호출해야 함)
  */
 export async function saveYouTubeMetaToCache(videoId: string, meta: YouTubeVideoMetaFullValue): Promise<void> {
@@ -86,13 +86,13 @@ export async function saveYouTubeMetaToCache(videoId: string, meta: YouTubeVideo
   };
 
   try {
-    await fetch(`${RAILWAY_API_URL}/api/v1/youtube/${videoId}/meta`, {
+    await fetch(`${API_SERVER_URL}/api/v1/youtube/${videoId}/meta`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(minimalCache),
     });
-    console.log('[YouTube API] Railway 캐시 저장 완료:', videoId);
+    console.log('[YouTube API] 캐시 저장 완료:', videoId);
   } catch (error) {
-    console.warn('[YouTube API] Railway 캐시 저장 실패:', error);
+    console.warn('[YouTube API] 캐시 저장 실패:', error);
   }
 }
