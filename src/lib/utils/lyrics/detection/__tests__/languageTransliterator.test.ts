@@ -124,6 +124,7 @@ describe('languageTransliterator integration', () => {
       expect(result).toBeTruthy();
       expect(result).toMatch(/[a-zA-Z\s]/);
       // Should not contain any original non-Latin characters
+      // eslint-disable-next-line no-misleading-character-class
       expect(result).not.toMatch(/[안녕Γειαสวัสดี]/);
     });
   });
@@ -151,7 +152,7 @@ describe('languageTransliterator integration', () => {
 
   describe('Real-world lyrics examples', () => {
     it('should romanize Greek song lyrics', async () => {
-      const lyrics = 'Σ\'αγαπώ';
+      const lyrics = "Σ'αγαπώ";
       const spans = splitIntoLangGroups(lyrics);
       const result = await transliterateAndMerge(spans);
       expect(result).toBeTruthy();
