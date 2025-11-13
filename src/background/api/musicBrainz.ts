@@ -36,12 +36,23 @@ export async function fetchEnglishAliasFromCache(artistName: string): Promise<st
     const cacheRes = await fetch(`${API_SERVER_URL}/api/v1/musicbrainz/alias/${encodeURIComponent(cacheKey)}`, {
       signal: AbortSignal.timeout(2000), // 2초 타임아웃
     });
+
+    console.log('[MusicBrainz] 캐시 응답 상태:', cacheRes.status, 'for', artistName);
+
     if (cacheRes.ok) {
       const cachedData = await cacheRes.json();
-      return cachedData.alias;
+      console.log('[MusicBrainz] 캐시 응답 데이터:', cachedData);
+
+      if (cachedData.alias) {
+        console.log('[MusicBrainz] alias 캐시 히트:', artistName, '→', cachedData.alias);
+        return cachedData.alias;
+      } else {
+        console.warn('[MusicBrainz] 응답에 alias 필드 없음:', cachedData);
+        return null;
+      }
     }
-  } catch {
-    // 캐시 조회 실패는 무시 (타임아웃 포함)
+  } catch (error) {
+    console.warn('[MusicBrainz] 캐시 조회 실패:', artistName, error);
   }
 
   return null;
