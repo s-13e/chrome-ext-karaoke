@@ -28,8 +28,8 @@ export const SidebarContainer: React.FC = () => {
         <button className={styles.sidebarButton} onClick={() => handleMenuClick('인기 차트')}>
           인기 차트
         </button>
-        <button className={styles.sidebarButton} onClick={() => handleMenuClick('싱크차트2')}>
-          싱크차트2
+        <button className={styles.sidebarButton} onClick={() => handleMenuClick('인기 차트')}>
+          무반주 녹음
         </button>
         <button className={styles.sidebarButton} onClick={() => handleMenuClick('나의 노래 스타일 분석')}>
           나의 노래

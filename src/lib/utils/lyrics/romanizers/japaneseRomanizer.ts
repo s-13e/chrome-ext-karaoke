@@ -14,17 +14,13 @@ async function ensureKuroshiroInitialized(): Promise<InstanceType<typeof Kuroshi
   }
   initializationPromise = (async () => {
     try {
-      console.log('[japaneseRomanizer] Initializing Kuroshiro with local dictionary...');
-
       // 표준 사전 경로 사용 (kuromoji 공식 권장)
       const dictPath = chrome.runtime.getURL('dict/');
-      console.log('Using standard dictPath for analyzer:', dictPath);
 
       const analyzer = new KuromojiAnalyzer({ dictPath });
       const instance = new Kuroshiro();
       await instance.init(analyzer);
       kuroshiroInstance = instance;
-      console.log('[japaneseRomanizer] Kuroshiro initialized successfully with local dictionary');
     } catch (e) {
       console.error('KuromojiAnalyzer/Kuroshiro init error:', e);
       throw e;
@@ -46,7 +42,6 @@ export async function japaneseRomanizer(text: string): Promise<string> {
       mode: 'spaced',
     });
 
-    console.log('[japaneseRomanizer] Conversion successful:', text, '->', result);
     return result;
   } catch (err) {
     console.error('Kuroshiro convert error:', err);

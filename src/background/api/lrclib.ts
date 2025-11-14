@@ -1,8 +1,6 @@
 import { Line } from '@lib/types/lyrics';
 import { RequestLimiter } from '@lib/utils/common/requestLimiter';
 import { LyricsError, LyricsErrorCode } from '@lib/types/lyricsError';
-import { searchSpotifyTrack } from './spotify';
-import { isEnglishText } from '@lib/utils/lyrics/parsers/stringUtils';
 
 export interface LrcLibLyricsResult {
   lyrics: string | Line[];
@@ -66,6 +64,7 @@ export async function fetchLyricsByArtistAndTrack(
   artist: string,
   title: string,
   durationSeconds: number,
+  videoId?: string, // YouTube videoId (optional, 최고속 캐시용)
 ): Promise<LrcLibLyricsResult> {
   if (!artist?.trim() || !title?.trim()) {
     throw new LyricsError(LyricsErrorCode.ARTIST_TITLE_EXTRACT_FAILED, undefined, { artist, title });
@@ -75,7 +74,45 @@ export async function fetchLyricsByArtistAndTrack(
     throw new LyricsError(LyricsErrorCode.INVALID_VIDEO_DURATION, undefined, { durationSeconds });
   }
 
-  // 0. 먼저 API 서버 캐시에서 아티스트 영문 alias 확인 (빠른 캐시 조회만)
+  // 0. [최우선] YouTube videoId → LRCLib ID 직접 매핑 캐시 확인 (가장 빠른 경로)
+  if (videoId) {
+    try {
+      console.log(`[LRCLib] YouTube videoId 캐시 확인: ${videoId}`);
+      const ytCacheRes = await fetchWithTimeout(
+        `${API_SERVER_URL}/api/v1/youtube/lrclib/${encodeURIComponent(videoId)}`,
+        {},
+        CACHE_TIMEOUT_MS,
+      );
+
+      if (ytCacheRes.ok) {
+        const ytCachedData = await ytCacheRes.json();
+        const lrclibId = ytCachedData?.lrclibId;
+
+        if (lrclibId && typeof lrclibId === 'number' && lrclibId > 0) {
+          console.log(`[LRCLib] YouTube videoId 캐시 히트: ${videoId} → LRCLib ID ${lrclibId}`);
+
+          // LRCLib ID로 가사 직접 조회
+          const lyricsRes = await fetchWithTimeout(`https://lrclib.net/api/get/${lrclibId}`, {}, LRCLIB_TIMEOUT_MS);
+          if (lyricsRes.ok) {
+            const lyricsData = await lyricsRes.json();
+            console.log(`[LRCLib] YouTube videoId 캐시로 가사 로드 완료 (가장 빠른 경로)`);
+            return {
+              lyrics: lyricsData.syncedLyrics || lyricsData.plainLyrics,
+              duration: lyricsData.duration,
+              artist: lyricsData.artistName,
+              title: lyricsData.trackName,
+              id: String(lrclibId),
+            };
+          }
+        }
+      }
+    } catch (error) {
+      // YouTube videoId 캐시 실패해도 다음 단계로 진행
+      console.warn('[LRCLib] YouTube videoId 캐시 조회 실패, 다음 단계로 진행:', error);
+    }
+  }
+
+  // 1. 아티스트 영문 alias 확인 (빠른 캐시 조회만)
   // 비영어 아티스트명이면 영문명으로 변환된 캐시가 있을 수 있음
   let effectiveArtist = artist;
   try {
@@ -96,7 +133,11 @@ export async function fetchLyricsByArtistAndTrack(
   const cacheKeyTitle = title.toLowerCase();
   const cacheKeyDuration = normalizeDuration(durationSeconds);
 
-  console.log(`[LRCLib] Redis 캐시 키: "${cacheKeyArtist}" - "${cacheKeyTitle}" - ${cacheKeyDuration}s`);
+  console.log(`[LRCLib] 🔍 가사 검색 시작`);
+  console.log(
+    `[LRCLib]   Artist: "${effectiveArtist}" (원본: "${artist}"), Title: "${title}, Duration: ${cacheKeyDuration}s"`,
+  );
+  console.log(`[LRCLib]   Redis 캐시 키: "${cacheKeyArtist}" - "${cacheKeyTitle}" - ${cacheKeyDuration}s`);
 
   // 1. API 서버 Redis 캐시에서 LRCLib ID 조회 시도 (2초 타임아웃, 빠르게 실패)
   try {
@@ -123,13 +164,45 @@ export async function fetchLyricsByArtistAndTrack(
         const lyricsRes = await fetchWithTimeout(`https://lrclib.net/api/get/${lrclibId}`, {}, LRCLIB_TIMEOUT_MS);
         if (lyricsRes.ok) {
           const lyricsData = await lyricsRes.json();
-          return {
+          const result = {
             lyrics: lyricsData.syncedLyrics || lyricsData.plainLyrics,
             duration: lyricsData.duration,
             artist: lyricsData.artistName,
             title: lyricsData.trackName,
             id: String(lrclibId),
           };
+
+          // 캐시 히트 시에도 videoId 매핑 저장 (fire-and-forget)
+          if (videoId && lyricsData.artistName && lyricsData.trackName) {
+            console.log('[LRCLib API] 캐시 히트 - YouTube-LRCLib 매핑 저장 시도:', videoId, '→', lrclibId);
+            fetchWithTimeout(
+              `${API_SERVER_URL}/api/v1/youtube/lrclib`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  videoId,
+                  lrclibId,
+                  artist: lyricsData.artistName,
+                  title: lyricsData.trackName,
+                }),
+              },
+              CACHE_TIMEOUT_MS,
+            )
+              .then((saveResponse) => {
+                if (!saveResponse.ok) {
+                  console.warn('[LRCLib API] YouTube-LRCLib 매핑 저장 실패 - HTTP', saveResponse.status);
+                } else {
+                  console.log('[LRCLib API] YouTube-LRCLib 매핑 저장 완료:', videoId, '→', lrclibId);
+                }
+              })
+              .catch((error) => {
+                const errorType = (error as Error).name === 'AbortError' ? '타임아웃' : '네트워크 에러';
+                console.warn(`[LRCLib API] YouTube-LRCLib 매핑 저장 실패 (${errorType}):`, error);
+              });
+          }
+
+          return result;
         }
       } else {
         console.warn('[LRCLib API] 캐시에 유효한 ID 없음, 검색 API로 폴백', { cachedData, lrclibId });
@@ -153,19 +226,41 @@ export async function fetchLyricsByArtistAndTrack(
 
   // 3. API 서버 Redis 캐시에 ID 저장 (LRCLib 응답값 사용 - 더 정확함)
   // 유효한 데이터만 캐싱 (빈 객체, null, undefined 방지)
-  console.log('[LRCLib API] 저장 조건 확인:', { id: result.id, artist: result.artist, title: result.title });
+  console.log('[LRCLib API] 저장 조건 확인:', {
+    id: result.id,
+    idType: typeof result.id,
+    artist: result.artist,
+    title: result.title,
+    duration: result.duration,
+    videoId,
+  });
 
-  // ID는 반드시 유효한 숫자여야 함
-  const isValidId = typeof result.id === 'number' && result.id > 0;
+  // ID는 반드시 유효한 숫자(또는 숫자 문자열)여야 함
+  const numericId = typeof result.id === 'string' ? parseInt(result.id, 10) : result.id;
+  const isValidId = typeof numericId === 'number' && numericId > 0 && !isNaN(numericId);
   const hasArtist = result.artist && result.artist.trim().length > 0;
   const hasTitle = result.title && result.title.trim().length > 0;
 
-  if (isValidId && hasArtist && hasTitle && result.artist && result.title) {
+  // Duration 검증: 영상 길이와 10초 이내 차이만 허용
+  const hasValidDuration = result.duration !== undefined && typeof result.duration === 'number';
+  const durationDiff = hasValidDuration ? Math.abs(durationSeconds - result.duration!) : Infinity;
+  const isDurationValid = durationDiff <= 10;
+
+  console.log('[LRCLib API] 검증 결과:', {
+    isValidId,
+    hasArtist,
+    hasTitle,
+    isDurationValid,
+    durationDiff: durationDiff === Infinity ? 'N/A' : `${durationDiff.toFixed(1)}s`,
+    numericId,
+  });
+
+  if (isValidId && hasArtist && hasTitle && isDurationValid && result.artist && result.title) {
     // Non-blocking cache save: 백그라운드에서 저장, 실패해도 무시
     const cacheKeyLrcArtist = result.artist.toLowerCase();
     const cacheKeyLrcTitle = result.title.toLowerCase();
 
-    // Promise를 await 없이 실행 (fire-and-forget)
+    // 1. artist+title+duration → lrclibId 캐시 저장 (fire-and-forget)
     fetchWithTimeout(
       `${API_SERVER_URL}/api/v1/lrclib/id`,
       {
@@ -175,7 +270,7 @@ export async function fetchLyricsByArtistAndTrack(
           artist: cacheKeyLrcArtist,
           title: cacheKeyLrcTitle,
           duration: cacheKeyDuration,
-          lrclibId: result.id,
+          lrclibId: numericId,
         }),
       },
       CACHE_TIMEOUT_MS,
@@ -186,7 +281,7 @@ export async function fetchLyricsByArtistAndTrack(
         } else {
           console.log(
             '[LRCLib API] 캐시 저장 완료:',
-            result.id,
+            numericId,
             `(${cacheKeyLrcArtist} - ${cacheKeyLrcTitle} - ${cacheKeyDuration}s)`,
           );
         }
@@ -195,14 +290,47 @@ export async function fetchLyricsByArtistAndTrack(
         const errorType = (error as Error).name === 'AbortError' ? '타임아웃' : '네트워크 에러';
         console.warn(`[LRCLib API] 캐시 저장 실패 (${errorType}):`, error);
       });
+
+    // 2. YouTube videoId → lrclibId 직접 매핑 캐시 저장 (가장 빠른 경로, fire-and-forget)
+    if (videoId) {
+      console.log('[LRCLib API] YouTube-LRCLib 매핑 저장 시도:', videoId, '→', numericId);
+      fetchWithTimeout(
+        `${API_SERVER_URL}/api/v1/youtube/lrclib`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            videoId,
+            lrclibId: numericId,
+            artist: result.artist,
+            title: result.title,
+          }),
+        },
+        CACHE_TIMEOUT_MS,
+      )
+        .then((saveResponse) => {
+          if (!saveResponse.ok) {
+            console.warn('[LRCLib API] YouTube-LRCLib 매핑 저장 실패 - HTTP', saveResponse.status);
+          } else {
+            console.log('[LRCLib API] YouTube-LRCLib 매핑 저장 완료:', videoId, '→', numericId);
+          }
+        })
+        .catch((error) => {
+          const errorType = (error as Error).name === 'AbortError' ? '타임아웃' : '네트워크 에러';
+          console.warn(`[LRCLib API] YouTube-LRCLib 매핑 저장 실패 (${errorType}):`, error);
+        });
+    }
   } else {
     console.warn('[LRCLib API] 캐시 저장 스킵: 유효하지 않은 데이터', {
       isValidId,
       hasArtist,
       hasTitle,
+      isDurationValid,
+      durationDiff: durationDiff === Infinity ? 'N/A' : `${durationDiff.toFixed(1)}s`,
       id: result.id,
       artist: result.artist,
       title: result.title,
+      duration: result.duration,
     });
   }
 
@@ -221,6 +349,11 @@ export async function fetchLyricsWithEndpoint(
     _attemptNumber: number,
     durationSeconds: number,
   ): Promise<LrcLibLyricsResult | null> {
+    console.log(`[LRCLib API] 📡 LRCLib API 직접 호출`);
+    console.log(`[LRCLib API]   Artist: "${artistParam}"`);
+    console.log(`[LRCLib API]   Title: "${titleParam}"`);
+    console.log(`[LRCLib API]   Duration: ${durationSeconds}s`);
+
     const searchEndpoint = `https://lrclib.net/api/search?artist_name=${encodeURIComponent(
       artistParam,
     )}&track_name=${encodeURIComponent(titleParam)}`;
@@ -368,9 +501,20 @@ export async function fetchLyricsWithEndpoint(
 
     const filteredByDuration = evaluateCandidatesByDuration(validResults, durationSeconds, 2);
 
-    if (!filteredByDuration.length && (fallbackSynced || fallbackPlain)) {
-      console.log('No valid results after duration filter, returning fallback');
-      return fallbackSynced || fallbackPlain;
+    if (!filteredByDuration.length) {
+      // fallback도 duration 검증 수행 (기준: 2초 이하만 허용)
+      const fallbackToUse = (fallbackSynced || fallbackPlain) as LrcLibLyricsResult | null;
+      if (fallbackToUse && typeof fallbackToUse.duration === 'number') {
+        const diff = Math.abs(durationSeconds - fallbackToUse.duration);
+        if (diff <= 2) {
+          console.log(`No valid results after duration filter, returning fallback (diff: ${diff.toFixed(1)}s)`);
+          return fallbackToUse;
+        } else {
+          console.warn(
+            `Fallback duration mismatch (${diff.toFixed(1)}s > 2s), rejecting: "${fallbackToUse.artist} - ${fallbackToUse.title}" (${fallbackToUse.duration}s vs ${durationSeconds}s)`,
+          );
+        }
+      }
     }
 
     if (!filteredByDuration.length) {
@@ -437,12 +581,14 @@ export async function fetchLyricsWithEndpoint(
   }
 
   // 3차 시도: 비영어 타이틀이면 Spotify 우선, 영어면 freeText 우선
+  const { isEnglishText } = await import('@lib/utils/lyrics/parsers/stringUtils');
   const isNonEnglishTitle = !isEnglishText(title);
 
   if (isNonEnglishTitle) {
     // 비영어 타이틀: Spotify 우선
     try {
       console.log('[Spotify] 비영어 타이틀 감지, Spotify 검색 시도');
+      const { searchSpotifyTrack } = await import('./spotify');
       const spotifyResult = await searchSpotifyTrack(artist, title);
 
       if (spotifyResult) {
@@ -526,6 +672,7 @@ export async function fetchLyricsWithEndpoint(
   if (!isNonEnglishTitle) {
     try {
       console.log('[Spotify] 영어 타이틀이지만 freeText 실패, Spotify 검색 시도');
+      const { searchSpotifyTrack } = await import('./spotify');
       const spotifyResult = await searchSpotifyTrack(artist, title);
 
       if (spotifyResult) {
@@ -548,6 +695,7 @@ export async function fetchLyricsWithEndpoint(
     }
   }
 
+  // 모든 LRCLib 검색 실패
   return null;
 }
 

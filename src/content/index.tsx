@@ -30,6 +30,7 @@ import { extractVideoIdFromUrl, tryDetectVideoChange } from '@lib/utils/platform
 import { getLyricsFromCacheOrFetch } from '@lib/utils/lyrics/meta/getLyricsFromCacheOrFetch';
 import { fetchLyricsWithAliasFallback } from '@background/api/lyrics';
 import { LyricsError, LyricsErrorCode } from '@lib/types/lyricsError';
+import { LrcLibLyricsResult } from '@background/api/lrclib';
 import { LyricsErrorDisplay } from './components/lyrics/common/LyricsErrorDisplay';
 // normalize.css 제거 - content script에서 불필요 (YouTube 페이지에 스타일 충돌 방지)
 import { cleanupMediaElementSource } from '@lib/utils/audio/audio';
@@ -795,8 +796,11 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
     console.log(`[collectMetadataAndLyrics] 시도 ${attempt}/${API_RETRY_MAX_ATTEMPTS + 1} - videoId: ${videoId}`);
 
     try {
+      // 🚀 Prefetch 전략: 가사 로드를 광고 여부와 무관하게 시작 (백그라운드)
+      const metaPromise = fetchYouTubeVideoMeta(videoId, process.env.YOUTUBE_API_KEY!);
+
       // 1) 메타데이터 및 기본 정보 수집
-      const meta = await fetchYouTubeVideoMeta(videoId, process.env.YOUTUBE_API_KEY!);
+      const meta = await metaPromise;
       if (!meta) throw new Error('메타 정보 없음');
 
       const isMusic = isMusicVideo(meta);
@@ -832,60 +836,144 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
 
       const videoDurationSec = meta.durationSec ?? 0;
 
-      // 제목 정제: 이모지 + 콜론 앞부분 제거
-      const cleanedTitle = stripEmojiAndBeforeColon(meta.title);
-      console.log('[TITLE PARSE] 원본 타이틀:', meta.title);
-      console.log('[TITLE PARSE] 정제된 타이틀:', cleanedTitle);
+      // 0) [최우선] YouTube videoId → LRCLib ID 직접 캐시 확인 (title 파싱 생략 가능)
+      console.log('[LRCLib] YouTube videoId 캐시 우선 확인:', videoId);
+      let lyricsResult: LrcLibLyricsResult | undefined;
 
-      // 1차: get-artist-title 라이브러리
-      let parsed = extractArtistAndTitle(cleanedTitle);
-      console.log('[TITLE PARSE] 1차(라이브러리) 결과:', parsed);
+      try {
+        const ytCacheRes = await fetch(
+          `${process.env.API_SERVER_URL}/api/v1/youtube/lrclib/${encodeURIComponent(videoId)}`,
+          { signal: AbortSignal.timeout(5000) },
+        );
 
-      // 2차: 커스텀 파서 (일본어 쌍따옴표 등 특수 패턴)
-      if (!parsed) {
-        parsed = extractArtistAndTitleCustom(cleanedTitle);
-        console.log('[TITLE PARSE] 2차(커스텀) 결과:', parsed);
+        console.log('[LRCLib] YouTube-LRCLib 캐시 응답 상태:', ytCacheRes.status);
+
+        if (ytCacheRes.ok) {
+          const ytCachedData = await ytCacheRes.json();
+          console.log('[LRCLib] YouTube-LRCLib 캐시 응답 데이터:', ytCachedData);
+          const lrclibId = ytCachedData?.lrclibId;
+
+          if (lrclibId && typeof lrclibId === 'number' && lrclibId > 0) {
+            console.log(`[LRCLib] YouTube videoId 캐시 히트: ${videoId} → LRCLib ID ${lrclibId} (title 파싱 생략)`);
+
+            // LRCLib ID로 가사 직접 조회
+            const lyricsRes = await fetch(`https://lrclib.net/api/get/${lrclibId}`, {
+              signal: AbortSignal.timeout(20000),
+            });
+
+            if (lyricsRes.ok) {
+              const lyricsData = await lyricsRes.json();
+              lyricsResult = {
+                lyrics: lyricsData.syncedLyrics || lyricsData.plainLyrics,
+                duration: lyricsData.duration,
+                artist: lyricsData.artistName,
+                title: lyricsData.trackName,
+                id: String(lrclibId),
+              };
+              console.log(
+                `[LRCLib] YouTube videoId 캐시로 가사 로드 완료 (최고속 경로): ${lyricsData.artistName} - ${lyricsData.trackName}`,
+              );
+            } else {
+              console.warn('[LRCLib] LRCLib ID로 가사 조회 실패 - HTTP', lyricsRes.status);
+            }
+          } else {
+            console.warn('[LRCLib] YouTube-LRCLib 캐시에 유효한 ID 없음:', ytCachedData);
+          }
+        } else {
+          console.log('[LRCLib] YouTube-LRCLib 캐시 미스 (HTTP', ytCacheRes.status, '), title 파싱 진행');
+        }
+      } catch (error) {
+        console.warn('[LRCLib] YouTube videoId 캐시 조회 실패, title 파싱 진행:', error);
       }
 
-      // 3차: fallback (채널명 사용 - 타이틀에 artist 정보가 없는 경우)
-      if (!parsed) {
-        const fallback = fallbackArtistAndTitle(meta);
-        if (!fallback) throw new Error('곡명/아티스트 파싱 실패');
+      // 🚀 Prefetch: 가사 로딩을 Promise로 시작 (광고 여부와 무관)
+      const lyricsPromise = (async (): Promise<{
+        lyricsResult: LrcLibLyricsResult;
+        parsedLyrics: Line[];
+        effectiveLyricsDuration: number;
+      }> => {
+        let result = lyricsResult; // 이미 videoId 캐시 히트했으면 사용
 
-        fallback.title = cleanTopicName(fallback.title);
-        fallback.artist = cleanTopicName(fallback.artist);
-        parsed = fallback;
-        console.log('[TITLE PARSE] 3차(fallback) 결과:', parsed);
+        // 1) YouTube videoId 캐시 미스인 경우에만 title 파싱 수행
+        if (!result) {
+          // 제목 정제: 이모지 + 콜론 앞부분 제거
+          const cleanedTitle = stripEmojiAndBeforeColon(meta.title);
+          console.log('[TITLE PARSE] 원본 타이틀:', meta.title);
+          console.log('[TITLE PARSE] 정제된 타이틀:', cleanedTitle);
+
+          // 1차: get-artist-title 라이브러리
+          let parsed = extractArtistAndTitle(cleanedTitle);
+          console.log('[TITLE PARSE] 1차(라이브러리) 결과:', parsed);
+
+          // 2차: 커스텀 파서 (일본어 쌍따옴표 등 특수 패턴)
+          if (!parsed) {
+            parsed = extractArtistAndTitleCustom(cleanedTitle);
+            console.log('[TITLE PARSE] 2차(커스텀) 결과:', parsed);
+          }
+
+          // 3차: fallback (채널명 사용 - 타이틀에 artist 정보가 없는 경우)
+          if (!parsed) {
+            const fallback = fallbackArtistAndTitle(meta);
+            if (!fallback) throw new Error('곡명/아티스트 파싱 실패');
+
+            fallback.title = cleanTopicName(fallback.title);
+            fallback.artist = cleanTopicName(fallback.artist);
+            parsed = fallback;
+            console.log('[TITLE PARSE] 3차(fallback) 결과:', parsed);
+          }
+
+          const artist = preprocessArtistOrTitle(parsed.artist);
+          const title = preprocessArtistOrTitle(parsed.title);
+          const artistVariants: string[] | undefined =
+            'artistVariants' in parsed ? (parsed.artistVariants as string[] | undefined) : undefined;
+          console.log('[TITLE PARSE] 최종 - artist:', artist, ', title:', title);
+
+          // 2) 가사 캐시 또는 서버에서 가사 조회
+          result = await getLyricsFromCacheOrFetch(artist, title, {
+            fetch: async () => fetchLyricsWithAliasFallback(artist, title, videoDurationSec, artistVariants, videoId),
+          });
+        }
+
+        if (!result) throw new Error('가사 없음');
+
+        // 3) 가사 파싱
+        const { lyrics, duration: lyricsDuration } = result;
+        const parsedLyrics: Line[] = typeof lyrics === 'string' ? parseLyrics(lyrics) : lyrics;
+        const effectiveLyricsDuration =
+          lyricsDuration ?? (parsedLyrics.length > 0 ? (parsedLyrics[parsedLyrics.length - 1]?.time ?? 0) : 0);
+
+        console.log('[Lyrics] 가사 로딩 완료, 광고 종료 대기 중...');
+        return { lyricsResult: result, parsedLyrics, effectiveLyricsDuration };
+      })();
+
+      // 🚀 1단계: 가사 로딩 완료 대기
+      const lyricsData = await lyricsPromise;
+      console.log('[Lyrics] 가사 로딩 완료, 광고 종료 대기 시작');
+
+      // 🚀 2단계: 광고 종료 대기 (가사 준비 후에만 수행)
+      let adWaitAttempt = 0;
+      while (isAdPlaying() && adWaitAttempt < 30) {
+        console.log('[Lyrics] 광고 재생 중, 대기... (' + (adWaitAttempt + 1) + '/30)');
+        await delay(500);
+        adWaitAttempt++;
+      }
+      if (adWaitAttempt >= 30) {
+        throw new Error('광고 대기 시간 초과');
+      }
+      if (adWaitAttempt > 0) {
+        console.log('[Lyrics] 광고 종료 확인');
       }
 
-      const artist = preprocessArtistOrTitle(parsed.artist);
-      const title = preprocessArtistOrTitle(parsed.title);
-      const artistVariants: string[] | undefined =
-        'artistVariants' in parsed ? (parsed.artistVariants as string[] | undefined) : undefined;
-      console.log('[TITLE PARSE] 최종 - artist:', artist, ', title:', title);
-
-      // 2) 가사 캐시 또는 서버에서 가사 조회
-      // 캐시 계층: API 서버 Redis → LRCLib API (localStorage 캐시 제거됨)
-      const lyricsResult = await getLyricsFromCacheOrFetch(artist, title, {
-        fetch: async () => fetchLyricsWithAliasFallback(artist, title, videoDurationSec, artistVariants),
-      });
-      if (!lyricsResult) throw new Error('가사 없음');
-
-      // 3) 가사 파싱 및 상태 업데이트 (UI 렌더링)
-      const { lyrics, duration: lyricsDuration } = lyricsResult;
-      const parsedLyrics: Line[] = typeof lyrics === 'string' ? parseLyrics(lyrics) : lyrics;
+      // 4) 가사 준비 완료, 상태 업데이트 및 UI 렌더링
+      const { lyricsResult: finalLyricsResult, parsedLyrics, effectiveLyricsDuration } = lyricsData;
 
       chrome.runtime.sendMessage({ type: 'LYRICS_READY', length: parsedLyrics.length }, () => {
         if (chrome.runtime.lastError) {
           // 에러 무시 - 수신자가 없을 수 있음
         }
       });
-      onLyricsUpdated(parsedLyrics);
 
-      const effectiveLyricsDuration =
-        lyricsDuration ?? (parsedLyrics.length > 0 ? (parsedLyrics[parsedLyrics.length - 1]?.time ?? 0) : 0);
       const durationDiff = videoDurationSec - effectiveLyricsDuration;
-
       if (durationDiff > 0 && durationDiff < 4) {
         console.log('싱크 오류 가능성 있음, 추가 분석 진행');
       } else {
@@ -893,22 +981,12 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
           `영상 길이 (${videoDurationSec}s)와 가사 길이 (${effectiveLyricsDuration}s) 차이: ${durationDiff}s`,
         );
       }
-      renderSongInfo(title, artist);
 
-      // 5) 광고 재생 시 가사 UI 숨김, 광고 종료 후 다시 렌더링
-      let attempt = 0;
-      while (isAdPlaying() && attempt < 30) {
-        console.log('[fetchAnalyzeAndRenderLyrics] 광고 중. 가사 렌더 대기...');
-        await delay(500); // 최대 15초 대기
-        attempt++;
-      }
-      if (attempt >= 30) {
-        console.warn('[Lyrics] 광고 대기 초과, 렌더링 스킵');
-        return null;
-      }
+      renderSongInfo(finalLyricsResult.title || 'Unknown', finalLyricsResult.artist || 'Unknown');
 
-      // 6) 광고 중이 아니면 영상 분석 및 가사 렌더링 진행
-      await analyzeAudioAndRender(videoElem, meta, lyricsDuration, parsedLyrics);
+      // 5) 광고 종료 후 즉시 가사 렌더링
+      onLyricsUpdated(parsedLyrics);
+      await analyzeAudioAndRender(videoElem, meta, effectiveLyricsDuration, parsedLyrics);
       return true;
     } catch (error) {
       console.error(`[collectMetadataAndLyricsCore] 에러 (시도 ${attempt}):`, error);
@@ -937,11 +1015,6 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
     _lyricsDuration: number | undefined,
     parsedLyrics: Line[],
   ) {
-    if (isAdPlaying()) {
-      console.warn('[analyzeAudioAndRender] 광고 중 분석 스킵');
-      return;
-    }
-
     // 중복 audio source 연결 방지 및 안전한 초기화
     cleanupMediaElementSource(videoElem);
 
@@ -1049,14 +1122,11 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
 
   function isReadyForDetection() {
     const player = document.querySelector('video');
-    const adPlaying = isAdPlaying();
 
-    // readyState 2 이상 체크(HAVE_CURRENT_DATA), 광고 안 재생 중인지 명확히 체크
-    const ready = player && player.readyState >= 2 && !adPlaying;
+    // readyState 2 이상 체크(HAVE_CURRENT_DATA)
+    // 광고 체크 제거: 광고 중이어도 가사 fetch는 진행하고, fetch 완료 후 광고 종료를 대기함
+    const ready = player && player.readyState >= 2;
 
-    console.log(
-      `[isReadyForDetection] player: ${!!player}, readyState: ${player?.readyState}, adPlaying: ${adPlaying}, ready: ${ready}`,
-    );
     return ready;
   }
 

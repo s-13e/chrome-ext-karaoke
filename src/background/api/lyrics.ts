@@ -57,6 +57,7 @@ export async function fetchLyricsWithAliasFallback(
   title: string,
   durationSeconds: number,
   artistVariants?: string[],
+  videoId?: string, // YouTube videoId (optional, 최고속 캐시용)
 ): Promise<LrcLibLyricsResult> {
   const processedArtist = artist;
   const processedTitle = title;
@@ -66,7 +67,8 @@ export async function fetchLyricsWithAliasFallback(
 
   async function doubleLookup(a: string, t: string) {
     try {
-      const res = await fetchLyricsByArtistAndTrack(a, t, durationSeconds);
+      // videoId는 첫 번째 시도에만 전달 (이후 fallback은 다른 아티스트명이므로 videoId 무효)
+      const res = await fetchLyricsByArtistAndTrack(a, t, durationSeconds, a === processedArtist ? videoId : undefined);
       return res ?? null;
     } catch (error) {
       // EMPTY_SEARCH_RESULTS나 NOT_FOUND 등은 정상적인 "가사 없음" 응답이므로 null 반환
@@ -156,28 +158,82 @@ export async function fetchLyricsWithAliasFallback(
       attemptedMethods: ['direct', 'artistVariants', 'englishAlias', 'freeTextAlias'],
     });
   } else {
-    // 비영어권: 아티스트 variants 시도
-    // 1차 시도: 원본 아티스트명
+    // 비영어권: MusicBrainz alias 우선 → LRCLib 검색
+    // 주의: lrclib.ts에서 이미 alias 캐시를 조회하므로, 여기서는 API만 호출
+
+    // 1단계: 원본 아티스트명으로 LRCLib 직접 시도
+    // (lrclib.ts 내부에서 alias 캐시 조회 완료: あいみょん → aimyon)
     const firstResult = await doubleLookup(processedArtist, processedTitle);
     if (firstResult !== null) {
-      // 성공 시 variants 양방향 캐싱
       await cacheArtistVariantsToReverse(processedArtist, artistVariants || []);
       return firstResult;
     }
 
-    // 2차 시도: artistVariants가 있으면 나머지 variants 시도
+    // 2단계: artistVariants 시도
     if (artistVariants && artistVariants.length > 1) {
       for (let i = 1; i < artistVariants.length; i++) {
         const variant = artistVariants[i];
         if (variant && variant !== processedArtist) {
           const variantResult = await doubleLookup(variant, processedTitle);
           if (variantResult !== null) {
-            console.log(`[Info] artistVariants[${i}] (${variant})로 가사 검색 성공: ${variant} - ${processedTitle}`);
-            // 성공 시 variants 양방향 캐싱 (성공한 variant 기준)
+            console.log(`[Lyrics] artistVariants[${i}] (${variant})로 가사 발견: ${variant} - ${processedTitle}`);
             await cacheArtistVariantsToReverse(variant, artistVariants);
             return variantResult;
           }
         }
+      }
+    }
+
+    // 3단계: MusicBrainz API로 영문 alias 조회 (캐시 미스인 경우만)
+    let englishArtist: string | null = null;
+    try {
+      englishArtist = await fetchEnglishAliasForArtist(processedArtist);
+      if (englishArtist && englishArtist !== processedArtist) {
+        console.log(`[Lyrics] MusicBrainz 영문명 발견: ${englishArtist}`);
+        const mbLyricsResult = await doubleLookup(englishArtist, processedTitle);
+        if (mbLyricsResult !== null) {
+          console.log(`[Lyrics] MusicBrainz 영문명으로 가사 발견: ${englishArtist} - ${processedTitle}`);
+          return mbLyricsResult;
+        }
+      }
+    } catch (error) {
+      console.warn('[Lyrics] MusicBrainz API 실패:', error);
+    }
+
+    // 4단계: MusicBrainz FreeText 검색
+    try {
+      const candidates = await searchArtistByFreeText(processedArtist);
+      if (candidates && candidates.length > 0) {
+        const extractedAlias = extractEnglishAliasFromArtists(candidates);
+        if (extractedAlias && extractedAlias !== processedArtist && extractedAlias !== englishArtist) {
+          const freeTextResult = await doubleLookup(extractedAlias, processedTitle);
+          if (freeTextResult !== null) {
+            console.log(`[Lyrics] FreeText 영문명으로 가사 발견: ${extractedAlias} - ${processedTitle}`);
+            return freeTextResult;
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('[Lyrics] FreeText 검색 실패:', error);
+    }
+
+    // 5단계: Spotify (영문 아티스트 확보 후에만)
+    // 주의: 비영어 아티스트+타이틀로 직접 검색 시 잘못된 결과 반환 위험
+    if (englishArtist && englishArtist !== processedArtist) {
+      try {
+        const { searchSpotifyTrack } = await import('./spotify');
+        console.log(`[Lyrics] Spotify 검색: "${englishArtist}" - "${processedTitle}"`);
+        const spotifyResult = await searchSpotifyTrack(englishArtist, processedTitle);
+        if (spotifyResult) {
+          console.log(`[Lyrics] Spotify 결과: ${spotifyResult.artist} - ${spotifyResult.name}`);
+          const spotifyLyricsResult = await doubleLookup(spotifyResult.artist, spotifyResult.name);
+          if (spotifyLyricsResult !== null) {
+            console.log(`[Lyrics] Spotify 영문명으로 가사 발견: ${spotifyResult.artist} - ${spotifyResult.name}`);
+            return spotifyLyricsResult;
+          }
+        }
+      } catch (error) {
+        console.warn('[Lyrics] Spotify 검색 실패:', error);
       }
     }
 
@@ -186,7 +242,7 @@ export async function fetchLyricsWithAliasFallback(
       artist: processedArtist,
       title: processedTitle,
       language: 'non-english',
-      attemptedMethods: artistVariants && artistVariants.length > 1 ? ['direct', 'artistVariants'] : ['direct'],
+      attemptedMethods: ['direct', 'artistVariants', 'musicbrainz', 'freeText', 'spotify'],
     });
   }
 }

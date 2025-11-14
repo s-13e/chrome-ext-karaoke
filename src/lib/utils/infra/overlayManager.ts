@@ -34,7 +34,6 @@ class OverlayManager {
         document.body.appendChild(container);
         console.warn('[OverlayManager] fallback: 기본 overlay container 생성');
       }
-      console.log('[OverlayManager] lyrics container connected to DOM?', document.body.contains(container));
     } else if (type === 'songInfo') {
       container = document.getElementById('song-info-overlay-container');
       if (!container) {
@@ -46,7 +45,6 @@ class OverlayManager {
         const lyricsOverlayRoot = document.getElementById('lyrics-cc-overlay');
         if (lyricsOverlayRoot) {
           lyricsOverlayRoot.appendChild(container);
-          console.log('[OverlayManager] song-info container appended to lyrics overlay:', container);
         } else {
           console.warn('[OverlayManager] lyrics overlay root not found, appending song-info container to body');
           document.body.appendChild(container);
@@ -59,14 +57,11 @@ class OverlayManager {
         container.id = `${type}-overlay-container`;
 
         document.body.appendChild(container);
-        console.log(`[OverlayManager] created and appended container for type ${type}`);
       }
-      console.log(`[OverlayManager] container connected to DOM?`, document.body.contains(container));
     }
 
     // 가시성 보장
     container.style.visibility = 'visible';
-    console.log(`[OverlayManager] returning container for type ${type}:`, container);
     return container;
   }
 
@@ -76,13 +71,10 @@ class OverlayManager {
    */
   public createOverlayRoot(type: OverlayType): Root {
     if (this.overlays.has(type)) {
-      console.log(`[OverlayManager] ${type} overlay already initialized`);
-
       return this.overlays.get(type)!.root;
     }
 
     const container = this.createContainer(type);
-    console.log(`[OverlayManager] creating React root for ${type}`, container);
     const root = createRoot(container);
 
     this.overlays.set(type, { root, container });
@@ -101,10 +93,8 @@ class OverlayManager {
   /** 특정 타입 Overlay React Root에 렌더링 수행 */
   public renderOverlay(type: OverlayType, element: ReactNode): void {
     if (!this.overlays.has(type)) {
-      console.log(`[OverlayManager] overlay of type ${type} not initialized. Creating root now.`);
       this.createOverlayRoot(type);
     }
-    console.log(`[OverlayManager] rendering overlay of type ${type}`);
     this.overlays.get(type)?.root.render(element);
   }
 

@@ -77,19 +77,35 @@ export async function fetchYouTubeVideoMeta(
 /**
  * YouTube 메타데이터를 API 서버 캐시에 저장
  * (isMusicVideo() 통과 후에만 호출해야 함)
+ * 캐시가 이미 존재하면 저장하지 않음 (중복 저장 방지)
  */
 export async function saveYouTubeMetaToCache(videoId: string, meta: YouTubeVideoMetaFullValue): Promise<void> {
-  const minimalCache: YouTubeVideoMetaCacheValue = {
-    videoId,
-    title: meta.title,
-    durationSec: meta.durationSec,
-  };
-
   try {
+    // 캐시 존재 여부 확인 (빠른 GET 요청)
+    const checkRes = await fetch(`${API_SERVER_URL}/api/v1/youtube/${videoId}/meta`, {
+      signal: AbortSignal.timeout(2000),
+    });
+
+    if (checkRes.ok) {
+      const cachedData = await checkRes.json();
+      if (cachedData?.cached) {
+        console.log('[YouTube API] 캐시 이미 존재, 저장 스킵:', videoId);
+        return;
+      }
+    }
+
+    // 캐시가 없을 때만 저장
+    const minimalCache: YouTubeVideoMetaCacheValue = {
+      videoId,
+      title: meta.title,
+      durationSec: meta.durationSec,
+    };
+
     await fetch(`${API_SERVER_URL}/api/v1/youtube/${videoId}/meta`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(minimalCache),
+      signal: AbortSignal.timeout(5000),
     });
     console.log('[YouTube API] 캐시 저장 완료:', videoId);
   } catch (error) {
