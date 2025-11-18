@@ -1,6 +1,5 @@
 import { isEnglishText } from '@lib/utils/lyrics/parsers/stringUtils';
 import { fetchLyricsByArtistAndTrack, LrcLibLyricsResult } from './lrclib';
-import { extractEnglishAliasFromArtists, fetchEnglishAliasForArtist, searchArtistByFreeText } from './musicBrainz';
 import { LyricsError, LyricsErrorCode } from '@lib/types/lyricsError';
 
 const API_SERVER_URL = process.env.API_SERVER_URL!;
@@ -109,53 +108,15 @@ export async function fetchLyricsWithAliasFallback(
       }
     }
 
-    // 3차 alias 시도 (실패해도 흐름 계속)
-    try {
-      const englishArtist = await fetchEnglishAliasForArtist(processedArtist);
-      if (englishArtist && englishArtist !== processedArtist) {
-        const aliasResult = await doubleLookup(englishArtist, processedTitle);
-        if (aliasResult !== null) {
-          console.log(`[Info] 영어 alias (${englishArtist})로 가사 검색 성공: ${englishArtist} - ${processedTitle}`);
-          return aliasResult;
-        }
-      }
-    } catch (e) {
-      if (e instanceof LyricsError) {
-        // LyricsError는 상위로 전파
-        throw e;
-      }
-      console.warn('[fetchLyricsWithAliasFallback] 영어 alias 검색 실패:', e);
-    }
-
-    // 4차 freeText alias 시도 (실패해도 무시)
-    try {
-      const candidates = await searchArtistByFreeText(processedArtist);
-      if (candidates && candidates.length > 0) {
-        const extractedAlias = extractEnglishAliasFromArtists(candidates);
-        if (extractedAlias && extractedAlias !== processedArtist) {
-          const freeTextResult = await doubleLookup(extractedAlias, processedTitle);
-          if (freeTextResult !== null) {
-            console.log(
-              `[Info] FreeText 검색에서 영어 alias (${extractedAlias})로 가사 검색 성공: ${extractedAlias} - ${processedTitle}`,
-            );
-            return freeTextResult;
-          }
-        }
-      }
-    } catch (e) {
-      if (e instanceof LyricsError) {
-        // LyricsError는 상위로 전파
-        throw e;
-      }
-      console.warn('[fetchLyricsWithAliasFallback] FreeText alias 검색 실패:', e);
-    }
+    // 3차 시도: lrclib.ts에서 모든 검색 시도 (LRCLib FreeText, MusicBrainz FreeText 포함)
+    // 추가 시도 없음 - lrclib.ts가 모든 fallback 처리
 
     // 모든 시도 실패 시 예외 던짐
     throw new LyricsError(LyricsErrorCode.LRCLIB_NOT_FOUND, undefined, {
       artist: processedArtist,
       title: processedTitle,
       language: 'english',
-      attemptedMethods: ['direct', 'artistVariants', 'englishAlias', 'freeTextAlias'],
+      attemptedMethods: ['direct', 'artistVariants', 'freeTextAlias'],
     });
   } else {
     // 비영어권: MusicBrainz alias 우선 → LRCLib 검색
@@ -184,65 +145,15 @@ export async function fetchLyricsWithAliasFallback(
       }
     }
 
-    // 3단계: MusicBrainz API로 영문 alias 조회 (캐시 미스인 경우만)
-    let englishArtist: string | null = null;
-    try {
-      englishArtist = await fetchEnglishAliasForArtist(processedArtist);
-      if (englishArtist && englishArtist !== processedArtist) {
-        console.log(`[Lyrics] MusicBrainz 영문명 발견: ${englishArtist}`);
-        const mbLyricsResult = await doubleLookup(englishArtist, processedTitle);
-        if (mbLyricsResult !== null) {
-          console.log(`[Lyrics] MusicBrainz 영문명으로 가사 발견: ${englishArtist} - ${processedTitle}`);
-          return mbLyricsResult;
-        }
-      }
-    } catch (error) {
-      console.warn('[Lyrics] MusicBrainz API 실패:', error);
-    }
-
-    // 4단계: MusicBrainz FreeText 검색
-    try {
-      const candidates = await searchArtistByFreeText(processedArtist);
-      if (candidates && candidates.length > 0) {
-        const extractedAlias = extractEnglishAliasFromArtists(candidates);
-        if (extractedAlias && extractedAlias !== processedArtist && extractedAlias !== englishArtist) {
-          const freeTextResult = await doubleLookup(extractedAlias, processedTitle);
-          if (freeTextResult !== null) {
-            console.log(`[Lyrics] FreeText 영문명으로 가사 발견: ${extractedAlias} - ${processedTitle}`);
-            return freeTextResult;
-          }
-        }
-      }
-    } catch (error) {
-      console.warn('[Lyrics] FreeText 검색 실패:', error);
-    }
-
-    // 5단계: Spotify (영문 아티스트 확보 후에만)
-    // 주의: 비영어 아티스트+타이틀로 직접 검색 시 잘못된 결과 반환 위험
-    if (englishArtist && englishArtist !== processedArtist) {
-      try {
-        const { searchSpotifyTrack } = await import('./spotify');
-        console.log(`[Lyrics] Spotify 검색: "${englishArtist}" - "${processedTitle}"`);
-        const spotifyResult = await searchSpotifyTrack(englishArtist, processedTitle);
-        if (spotifyResult) {
-          console.log(`[Lyrics] Spotify 결과: ${spotifyResult.artist} - ${spotifyResult.name}`);
-          const spotifyLyricsResult = await doubleLookup(spotifyResult.artist, spotifyResult.name);
-          if (spotifyLyricsResult !== null) {
-            console.log(`[Lyrics] Spotify 영문명으로 가사 발견: ${spotifyResult.artist} - ${spotifyResult.name}`);
-            return spotifyLyricsResult;
-          }
-        }
-      } catch (error) {
-        console.warn('[Lyrics] Spotify 검색 실패:', error);
-      }
-    }
+    // 3단계: lrclib.ts에서 모든 검색 시도 (Spotify, LRCLib FreeText, MusicBrainz FreeText 포함)
+    // 추가 시도 없음 - lrclib.ts가 모든 fallback 처리
 
     // 모든 시도 실패
     throw new LyricsError(LyricsErrorCode.LRCLIB_NOT_FOUND, undefined, {
       artist: processedArtist,
       title: processedTitle,
       language: 'non-english',
-      attemptedMethods: ['direct', 'artistVariants', 'musicbrainz', 'freeText', 'spotify'],
+      attemptedMethods: ['direct', 'artistVariants', 'freeText'],
     });
   }
 }

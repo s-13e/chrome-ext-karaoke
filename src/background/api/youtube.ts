@@ -17,40 +17,27 @@ export interface YouTubeVideoMetaFullValue {
   durationSec: number;
 }
 
-const API_SERVER_URL = process.env.API_SERVER_URL!;
-
 // background/api/youtube.ts
 export async function fetchYouTubeVideoMeta(
   videoId: string,
   apiKey: string,
 ): Promise<YouTubeVideoMetaFullValue | null> {
-  // 1. API 서버 캐시에서 조회 시도
-  try {
-    const cacheRes = await fetch(`${API_SERVER_URL}/api/v1/youtube/${videoId}/meta`);
-    if (cacheRes.ok) {
-      const cachedData: YouTubeVideoMetaCacheValue = await cacheRes.json();
-      console.log('[YouTube API] 캐시 히트:', videoId);
+  // YouTube API 직접 호출 (캐시 제거: Chrome Extension 환경에서 타임아웃 미작동)
+  const ytApiStartTime = performance.now();
+  console.log('[YouTube API] 직접 호출 시작:', videoId);
 
-      // 캐시된 최소 데이터를 전체 형식으로 변환
-      // (이미 isMusicVideo() 통과한 데이터이므로 음악 영상 확정)
-      return {
-        categoryId: '10', // 음악 카테고리 (캐시된 영상은 이미 음악으로 확정됨)
-        title: cachedData.title,
-        description: '',
-        tags: [],
-        channelTitle: '',
-        durationSec: cachedData.durationSec,
-      };
-    }
-  } catch (error) {
-    console.warn('[YouTube API] 캐시 조회 실패, YouTube API로 폴백:', error);
-  }
-
-  // 2. 캐시 없으면 YouTube API 직접 호출
-  const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${apiKey}`;
+  // 필요한 필드만 요청하여 JSON 크기 최소화 (응답 속도 향상)
+  const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${apiKey}&fields=items(id,snippet(categoryId,title,description,tags,channelTitle),contentDetails/duration)`;
   const res = await fetch(url);
 
+  console.log(
+    `[YouTube API] 직접 호출 완료 (${(performance.now() - ytApiStartTime).toFixed(0)}ms, 상태: ${res.status})`,
+  );
+
+  const jsonStartTime = performance.now();
   const data = await res.json();
+  console.log(`[Performance] YouTube API JSON 파싱 완료 (${(performance.now() - jsonStartTime).toFixed(0)}ms)`);
+
   if (data.items && data.items.length > 0) {
     const snippet = data.items[0].snippet;
     const contentDetails = data.items[0].contentDetails;
@@ -68,47 +55,12 @@ export async function fetchYouTubeVideoMeta(
       channelTitle: snippet.channelTitle,
       durationSec,
     };
+    console.log(`[YouTube API] ✅ 메타데이터 조회 성공 (총 ${(performance.now() - ytApiStartTime).toFixed(0)}ms)`);
 
     return fullResult;
   }
+  console.log('[YouTube API] ❌ 메타데이터 없음');
   return null;
 }
 
-/**
- * YouTube 메타데이터를 API 서버 캐시에 저장
- * (isMusicVideo() 통과 후에만 호출해야 함)
- * 캐시가 이미 존재하면 저장하지 않음 (중복 저장 방지)
- */
-export async function saveYouTubeMetaToCache(videoId: string, meta: YouTubeVideoMetaFullValue): Promise<void> {
-  try {
-    // 캐시 존재 여부 확인 (빠른 GET 요청)
-    const checkRes = await fetch(`${API_SERVER_URL}/api/v1/youtube/${videoId}/meta`, {
-      signal: AbortSignal.timeout(2000),
-    });
-
-    if (checkRes.ok) {
-      const cachedData = await checkRes.json();
-      if (cachedData?.cached) {
-        console.log('[YouTube API] 캐시 이미 존재, 저장 스킵:', videoId);
-        return;
-      }
-    }
-
-    // 캐시가 없을 때만 저장
-    const minimalCache: YouTubeVideoMetaCacheValue = {
-      videoId,
-      title: meta.title,
-      durationSec: meta.durationSec,
-    };
-
-    await fetch(`${API_SERVER_URL}/api/v1/youtube/${videoId}/meta`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(minimalCache),
-      signal: AbortSignal.timeout(5000),
-    });
-    console.log('[YouTube API] 캐시 저장 완료:', videoId);
-  } catch (error) {
-    console.warn('[YouTube API] 캐시 저장 실패:', error);
-  }
-}
+// saveYouTubeMetaToCache 함수 제거 (캐시 미사용)
