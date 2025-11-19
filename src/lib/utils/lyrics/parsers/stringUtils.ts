@@ -13,6 +13,39 @@ const emojiRegex = /\p{Extended_Pictographic}/u;
 export function isEnglishText(text: string): boolean {
   return /^[A-Za-z\s\-'/]+$/.test(text); // 슬래시(/)도 허용
 }
+
+/**
+ * 문자열을 Title Case로 변환 (각 단어의 첫 글자를 대문자로)
+ * 특수 케이스:
+ * - 이미 모두 대문자인 단어는 그대로 유지 (예: "BTS", "ABBA")
+ * - 소문자나 Mixed case는 Title Case로 변환 (예: "aimyon" → "Aimyon")
+ *
+ * @example
+ * toTitleCase("aimyon") → "Aimyon"
+ * toTitleCase("rick astley") → "Rick Astley"
+ * toTitleCase("BTS") → "BTS" (유지)
+ * toTitleCase("ABBA") → "ABBA" (유지)
+ */
+export function toTitleCase(str: string): string {
+  if (!str) return str;
+
+  return str
+    .split(' ')
+    .map((word) => {
+      if (word.length === 0) return word;
+
+      // 단어가 2글자 이상이고 모두 대문자인 경우 그대로 유지
+      // 예: "BTS", "ABBA", "USA"
+      if (word.length >= 2 && word === word.toUpperCase()) {
+        return word;
+      }
+
+      // 그 외의 경우 Title Case로 변환
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(' ');
+}
+
 // &를 and로 대체
 
 // 유튜브 DATA API를 통해 나온 음악 타이틀에서 Topic을 제거함

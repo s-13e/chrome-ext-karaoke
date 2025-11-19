@@ -30,10 +30,8 @@ export async function fetchEnglishAliasFromCache(artistName: string): Promise<st
     return null;
   }
 
-  const cacheKey = artistName.toLowerCase();
-
   try {
-    const cacheRes = await fetch(`${API_SERVER_URL}/api/v1/musicbrainz/alias/${encodeURIComponent(cacheKey)}`, {
+    const cacheRes = await fetch(`${API_SERVER_URL}/api/v1/musicbrainz/alias/${encodeURIComponent(artistName)}`, {
       signal: AbortSignal.timeout(2000), // 2초 타임아웃
     });
 
@@ -108,12 +106,11 @@ export async function fetchEnglishAliasForArtist(artistName: string): Promise<st
 
     // 3. API 서버 캐시에 저장
     if (alias) {
-      const cacheKey = artistName.toLowerCase();
       try {
         await fetch(`${API_SERVER_URL}/api/v1/musicbrainz/alias`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ artist: cacheKey, alias }),
+          body: JSON.stringify({ artist: artistName, alias }),
         });
         console.log('[MusicBrainz] 캐시 저장 완료:', artistName, '→', alias);
       } catch (error) {

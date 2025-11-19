@@ -23,6 +23,59 @@ const CACHE_TIMEOUT_MS = 5000; // API 서버 캐시: 5초 (서버 응답 대기)
 const LRCLIB_TIMEOUT_MS = 20000; // LRCLib API: 20초 (네트워크 지연 고려)
 
 /**
+ * YouTube videoId로 LRCLib ID 캐시 조회 (독립 함수)
+ */
+export async function fetchYouTubeLRCLibCache(videoId: string): Promise<{ lrclibId: number } | null> {
+  try {
+    const ytCacheRes = await fetchWithTimeout(
+      `${API_SERVER_URL}/api/v1/youtube/lrclib/${encodeURIComponent(videoId)}`,
+      {},
+      CACHE_TIMEOUT_MS,
+    );
+
+    if (ytCacheRes.ok) {
+      const ytCachedData = await ytCacheRes.json();
+      const lrclibId = ytCachedData?.data?.lrclibId ?? ytCachedData?.lrclibId;
+
+      if (lrclibId && (typeof lrclibId === 'number' || typeof lrclibId === 'string')) {
+        const numericId = typeof lrclibId === 'string' ? parseInt(lrclibId, 10) : lrclibId;
+        if (numericId > 0 && !isNaN(numericId)) {
+          return { lrclibId: numericId };
+        }
+      }
+    }
+    return null;
+  } catch (error) {
+    console.warn('[fetchYouTubeLRCLibCache] 조회 실패:', error);
+    return null;
+  }
+}
+
+/**
+ * LRCLib ID로 가사 직접 조회 (독립 함수)
+ */
+export async function fetchLyricsById(lrclibId: number): Promise<LrcLibLyricsResult | null> {
+  try {
+    const lyricsRes = await fetchWithTimeout(`https://lrclib.net/api/get/${lrclibId}`, {}, LRCLIB_TIMEOUT_MS);
+
+    if (lyricsRes.ok) {
+      const lyricsData = await lyricsRes.json();
+      return {
+        lyrics: lyricsData.syncedLyrics || lyricsData.plainLyrics,
+        duration: lyricsData.duration,
+        artist: lyricsData.artistName,
+        title: lyricsData.trackName,
+        id: String(lrclibId),
+      };
+    }
+    return null;
+  } catch (error) {
+    console.warn('[fetchLyricsById] 조회 실패:', error);
+    return null;
+  }
+}
+
+/**
  * AbortController를 사용한 타임아웃 fetch 유틸리티
  */
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number): Promise<Response> {
@@ -119,7 +172,7 @@ export async function fetchLyricsByArtistAndTrack(
   let effectiveArtist = artist;
 
   // 영어 텍스트 체크 - 이미 영문이면 alias 조회 스킵 (2초 타임아웃 방지)
-  const { isEnglishText } = await import('@lib/utils/lyrics/parsers/stringUtils');
+  const { isEnglishText, toTitleCase } = await import('@lib/utils/lyrics/parsers/stringUtils');
   const isArtistEnglish = isEnglishText(artist);
 
   if (!isArtistEnglish) {
@@ -140,6 +193,13 @@ export async function fetchLyricsByArtistAndTrack(
     }
   } else {
     console.log(`[LRCLib] 아티스트가 이미 영문이므로 alias 조회 스킵: "${artist}"`);
+    // 영어인 경우 Title Case로 자동 변환 (대소문자 정규화)
+    // 예: "aimyon" → "Aimyon", "rick astley" → "Rick Astley"
+    const titleCased = toTitleCase(artist);
+    if (titleCased !== artist) {
+      console.log(`[LRCLib] 영문 아티스트명 Title Case 변환: "${artist}" → "${titleCased}"`);
+      effectiveArtist = titleCased;
+    }
   }
 
   // Redis 캐시 키: 소문자 변환 + duration 반올림
