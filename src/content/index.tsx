@@ -837,17 +837,18 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
       const videoDurationSec = meta.durationSec ?? 0;
 
       // 🚀 최적화: YouTube-LRCLib 캐시 조회를 Title 파싱과 병렬 처리
-      // 병렬 처리 전 모듈 사전 로드 (import 지연 방지)
-      const { fetchYouTubeLRCLibCache } = await import('@background/api/lrclib');
-
       const parallelStartTime = performance.now();
 
       const [ytLrclibCacheResult, titleParseResult] = await Promise.all([
-        // YouTube-LRCLib 캐시 조회 (videoId만으로 가사 ID 직접 조회)
+        // YouTube-LRCLib 캐시 조회 (Background Script를 통한 API 프록시)
         (async () => {
           try {
             const cacheStartTime = performance.now();
-            const result = await fetchYouTubeLRCLibCache(videoId);
+            const response = await chrome.runtime.sendMessage({
+              type: 'FETCH_YOUTUBE_LRCLIB_CACHE',
+              videoId,
+            });
+            const result = response?.success ? response.data : null;
             console.log(
               `[Performance] YouTube-LRCLib 캐시 조회 완료 (${(performance.now() - cacheStartTime).toFixed(0)}ms, 상태: ${result ? '200' : '404'})`,
             );
@@ -915,8 +916,11 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
         console.log('[LRCLib] Title 파싱 생략, 캐시된 ID로 직접 가사 조회');
 
         const lyricsSearchStartTime = performance.now();
-        const { fetchLyricsById } = await import('@background/api/lrclib');
-        const result = await fetchLyricsById(ytLrclibCacheResult.lrclibId);
+        const response = await chrome.runtime.sendMessage({
+          type: 'FETCH_LYRICS_BY_ID',
+          lrclibId: ytLrclibCacheResult.lrclibId,
+        });
+        const result = response?.success ? response.data : null;
         console.log(`[Performance] 가사 검색 완료 (${(performance.now() - lyricsSearchStartTime).toFixed(0)}ms)`);
 
         if (!result) throw new Error('가사 없음');

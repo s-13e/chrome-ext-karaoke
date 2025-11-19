@@ -33,11 +33,23 @@ interface ApplyOffsetLyricsMessage {
   offset?: number;
 }
 
+interface FetchYouTubeLRCLibCacheMessage {
+  type: 'FETCH_YOUTUBE_LRCLIB_CACHE';
+  videoId: string;
+}
+
+interface FetchLyricsByIdMessage {
+  type: 'FETCH_LYRICS_BY_ID';
+  lrclibId: number;
+}
+
 export type ExtensionMessage =
   | LyricsReadyMessage
   | GetLatestLyricsMessage
   | SetOffsetMessage
-  | ApplyOffsetLyricsMessage;
+  | ApplyOffsetLyricsMessage
+  | FetchYouTubeLRCLibCacheMessage
+  | FetchLyricsByIdMessage;
 
 // ===== Chrome 확장 이벤트 리스너 =====
 
@@ -196,6 +208,44 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendRespon
         }
       });
     });
+  }
+
+  // YouTube-LRCLib 캐시 조회 (API 프록시)
+  if (msg.type === 'FETCH_YOUTUBE_LRCLIB_CACHE') {
+    console.log('[background] FETCH_YOUTUBE_LRCLIB_CACHE 요청 수신 - videoId:', msg.videoId);
+
+    (async () => {
+      try {
+        const { fetchYouTubeLRCLibCache } = await import('./api/lrclib');
+        const result = await fetchYouTubeLRCLibCache(msg.videoId);
+        console.log('[background] FETCH_YOUTUBE_LRCLIB_CACHE 응답:', result);
+        sendResponse({ success: true, data: result });
+      } catch (error) {
+        console.error('[background] FETCH_YOUTUBE_LRCLIB_CACHE 실패:', error);
+        sendResponse({ success: false, error: String(error) });
+      }
+    })();
+
+    return true; // 비동기 응답
+  }
+
+  // LRCLib ID로 가사 조회 (API 프록시)
+  if (msg.type === 'FETCH_LYRICS_BY_ID') {
+    console.log('[background] FETCH_LYRICS_BY_ID 요청 수신 - lrclibId:', msg.lrclibId);
+
+    (async () => {
+      try {
+        const { fetchLyricsById } = await import('./api/lrclib');
+        const result = await fetchLyricsById(msg.lrclibId);
+        console.log('[background] FETCH_LYRICS_BY_ID 응답:', result ? '성공' : '실패');
+        sendResponse({ success: true, data: result });
+      } catch (error) {
+        console.error('[background] FETCH_LYRICS_BY_ID 실패:', error);
+        sendResponse({ success: false, error: String(error) });
+      }
+    })();
+
+    return true; // 비동기 응답
   }
 
   return true;
