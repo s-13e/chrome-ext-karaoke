@@ -43,13 +43,19 @@ interface FetchLyricsByIdMessage {
   lrclibId: number;
 }
 
+interface FetchYouTubeLyricsMessage {
+  type: 'FETCH_YOUTUBE_LYRICS';
+  videoId: string;
+}
+
 export type ExtensionMessage =
   | LyricsReadyMessage
   | GetLatestLyricsMessage
   | SetOffsetMessage
   | ApplyOffsetLyricsMessage
   | FetchYouTubeLRCLibCacheMessage
-  | FetchLyricsByIdMessage;
+  | FetchLyricsByIdMessage
+  | FetchYouTubeLyricsMessage;
 
 // ===== Chrome 확장 이벤트 리스너 =====
 
@@ -241,6 +247,25 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendRespon
         sendResponse({ success: true, data: result });
       } catch (error) {
         console.error('[background] FETCH_LYRICS_BY_ID 실패:', error);
+        sendResponse({ success: false, error: String(error) });
+      }
+    })();
+
+    return true; // 비동기 응답
+  }
+
+  // YouTube videoId로 가사 직접 조회 (통합 엔드포인트)
+  if (msg.type === 'FETCH_YOUTUBE_LYRICS') {
+    console.log('[background] FETCH_YOUTUBE_LYRICS 요청 수신 - videoId:', msg.videoId);
+
+    (async () => {
+      try {
+        const { fetchYouTubeLyrics } = await import('./api/lrclib');
+        const result = await fetchYouTubeLyrics(msg.videoId);
+        console.log('[background] FETCH_YOUTUBE_LYRICS 응답:', result ? '성공' : '실패');
+        sendResponse({ success: true, data: result });
+      } catch (error) {
+        console.error('[background] FETCH_YOUTUBE_LYRICS 실패:', error);
         sendResponse({ success: false, error: String(error) });
       }
     })();

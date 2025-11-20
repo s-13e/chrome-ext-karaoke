@@ -52,25 +52,109 @@ export async function fetchYouTubeLRCLibCache(videoId: string): Promise<{ lrclib
 }
 
 /**
- * LRCLib ID로 가사 직접 조회 (독립 함수)
+ * YouTube videoId로 가사 직접 조회 (통합 엔드포인트, 최고속)
+ * - videoId → lrclibId → 가사를 서버 내부에서 한 번에 처리
+ * - 네트워크 왕복 1회로 단축
+ */
+export async function fetchYouTubeLyrics(videoId: string): Promise<LrcLibLyricsResult | null> {
+  try {
+    console.log(`[fetchYouTubeLyrics] 통합 엔드포인트 호출: ${videoId}`);
+
+    const response = await fetchWithTimeout(
+      `${API_SERVER_URL}/api/v1/youtube/lyrics/${encodeURIComponent(videoId)}`,
+      {},
+      CACHE_TIMEOUT_MS,
+    );
+
+    if (response.ok) {
+      const responseData = await response.json();
+      const data = responseData?.data;
+
+      if (!data) {
+        console.error('[fetchYouTubeLyrics] 응답 데이터 없음');
+        return null;
+      }
+
+      const result = {
+        lyrics: data.syncedLyrics || data.plainLyrics,
+        duration: data.duration,
+        artist: data.artistName,
+        title: data.trackName,
+        id: String(data.lrclibId),
+      };
+
+      if (!result.lyrics) {
+        console.error('[fetchYouTubeLyrics] 가사 데이터 없음');
+        return null;
+      }
+
+      console.log(`[fetchYouTubeLyrics] ✅ 가사 조회 성공 (길이: ${result.lyrics.length}자)`);
+      return result;
+    }
+
+    if (response.status === 404) {
+      console.log('[fetchYouTubeLyrics] videoId 매핑 없음 (캐시 미스)');
+      return null;
+    }
+
+    console.warn(`[fetchYouTubeLyrics] API 응답 실패: ${response.status}`);
+    return null;
+  } catch (error) {
+    console.error('[fetchYouTubeLyrics] 조회 실패:', error);
+    return null;
+  }
+}
+
+/**
+ * LRCLib ID로 가사 조회 (API 서버 프록시 사용)
  */
 export async function fetchLyricsById(lrclibId: number): Promise<LrcLibLyricsResult | null> {
   try {
-    const lyricsRes = await fetchWithTimeout(`https://lrclib.net/api/get/${lrclibId}`, {}, LRCLIB_TIMEOUT_MS);
+    console.log(`[fetchLyricsById] API 서버 호출 시작: ${lrclibId}`);
+
+    // API 서버를 통한 프록시 호출 (캐싱 + 빠른 응답)
+    const lyricsRes = await fetchWithTimeout(
+      `${API_SERVER_URL}/api/v1/lrclib/lyrics/${lrclibId}`,
+      {},
+      CACHE_TIMEOUT_MS,
+    );
+
+    console.log(`[fetchLyricsById] API 응답 상태: ${lyricsRes.status}`);
 
     if (lyricsRes.ok) {
       const lyricsData = await lyricsRes.json();
-      return {
-        lyrics: lyricsData.syncedLyrics || lyricsData.plainLyrics,
-        duration: lyricsData.duration,
-        artist: lyricsData.artistName,
-        title: lyricsData.trackName,
+      console.log('[fetchLyricsById] 원본 응답:', JSON.stringify(lyricsData).substring(0, 200));
+
+      const data = lyricsData?.data || lyricsData;
+      console.log('[fetchLyricsById] 파싱된 data:', {
+        hasSyncedLyrics: !!data.syncedLyrics,
+        hasPlainLyrics: !!data.plainLyrics,
+        duration: data.duration,
+        artistName: data.artistName,
+        trackName: data.trackName,
+      });
+
+      const result = {
+        lyrics: data.syncedLyrics || data.plainLyrics,
+        duration: data.duration,
+        artist: data.artistName,
+        title: data.trackName,
         id: String(lrclibId),
       };
+
+      if (!result.lyrics) {
+        console.error('[fetchLyricsById] ❌ 가사 데이터 없음!');
+        return null;
+      }
+
+      console.log(`[fetchLyricsById] ✅ 가사 조회 성공 (길이: ${result.lyrics.length}자)`);
+      return result;
     }
+
+    console.warn(`[fetchLyricsById] API 응답 실패: ${lyricsRes.status}`);
     return null;
   } catch (error) {
-    console.warn('[fetchLyricsById] 조회 실패:', error);
+    console.error('[fetchLyricsById] 조회 실패:', error);
     return null;
   }
 }

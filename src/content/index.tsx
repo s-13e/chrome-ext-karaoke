@@ -1,4 +1,5 @@
 // ./index.tsx
+
 import { App } from './App';
 import { i18nInstance, initializeI18n } from '@services/i18n';
 import { ErrorFallback } from '@components/common/ErrorFallback';
@@ -796,6 +797,42 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
     const startTime = performance.now();
     console.log(`[collectMetadataAndLyrics] 시도 ${attempt}/${API_RETRY_MAX_ATTEMPTS + 1} - videoId: ${videoId}`);
 
+    // 🎵 "가사 준비 중..." 오버레이 표시 (무음 처리는 즉시 실행 코드에서 이미 완료됨)
+    const player =
+      (document.querySelector('video') as HTMLVideoElement)?.closest('ytd-watch-flexy')?.querySelector('video') ||
+      document.querySelector('video');
+
+    let loadingOverlay: HTMLElement | null = null;
+
+    if (player) {
+      console.log('[AutoRewind] 가사 로딩 오버레이 표시');
+
+      // "가사 준비 중..." 오버레이 생성
+      loadingOverlay = document.createElement('div');
+      loadingOverlay.id = 'lyrics-loading-overlay';
+      loadingOverlay.style.cssText = `
+        position: absolute;
+        top: 60%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 20px 40px;
+        border-radius: 8px;
+        font-size: 18px;
+        font-weight: bold;
+        z-index: 9999;
+        pointer-events: none;
+      `;
+      loadingOverlay.textContent = '🎵 가사 준비 중...';
+
+      const playerContainer = player.parentElement;
+      if (playerContainer) {
+        playerContainer.style.position = 'relative';
+        playerContainer.appendChild(loadingOverlay);
+      }
+    }
+
     try {
       // 🚀 Prefetch 전략: 가사 로드를 광고 여부와 무관하게 시작 (백그라운드)
       const metaStartTime = performance.now();
@@ -807,6 +844,17 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
       if (!meta) throw new Error('메타 정보 없음');
 
       const isMusic = isMusicVideo(meta);
+
+      // 음악 영상이 아니면 무음 해제 및 오버레이 제거
+      if (!isMusic) {
+        console.log('[AutoRewind] 음악 영상 아님, 무음 해제 및 오버레이 제거');
+        if (player) {
+          player.muted = false;
+        }
+        if (loadingOverlay && loadingOverlay.parentElement) {
+          loadingOverlay.remove();
+        }
+      }
 
       // 자동 비활성화 로직: 음악 여부에 따라 카운트 업데이트
       if (isMusic) {
@@ -913,12 +961,12 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
         console.log(
           `[LRCLib] YouTube-LRCLib 캐시 히트! videoId: ${videoId} → lrclibId: ${ytLrclibCacheResult.lrclibId}`,
         );
-        console.log('[LRCLib] Title 파싱 생략, 캐시된 ID로 직접 가사 조회');
+        console.log('[LRCLib] 통합 엔드포인트로 가사 직접 조회 (최고속)');
 
         const lyricsSearchStartTime = performance.now();
         const response = await chrome.runtime.sendMessage({
-          type: 'FETCH_LYRICS_BY_ID',
-          lrclibId: ytLrclibCacheResult.lrclibId,
+          type: 'FETCH_YOUTUBE_LYRICS',
+          videoId: videoId,
         });
         const result = response?.success ? response.data : null;
         console.log(`[Performance] 가사 검색 완료 (${(performance.now() - lyricsSearchStartTime).toFixed(0)}ms)`);
@@ -979,6 +1027,39 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
           // 에러 무시 - 수신자가 없을 수 있음
         }
       });
+
+      // 🔄 Auto-Rewind: 첫 가사를 놓쳤다면 영상 처음으로 되감기
+      if (parsedLyrics.length > 0 && parsedLyrics[0] && player) {
+        const firstLyricTime = parsedLyrics[0].time;
+
+        if (typeof firstLyricTime === 'number') {
+          const currentTime = player.currentTime;
+          const rewindDistance = currentTime - firstLyricTime;
+
+          // 가사를 받은 시점이 첫 가사 타임스탬프 이후라면 무조건 0초로 되감기
+          if (rewindDistance > 0.5) {
+            console.log(`[AutoRewind] 첫 가사 놓침 감지 (${rewindDistance.toFixed(1)}초), 0초로 되감기 실행`);
+            console.log(
+              `[AutoRewind] 현재 시간: ${currentTime.toFixed(1)}초 → 첫 가사: ${firstLyricTime.toFixed(1)}초`,
+            );
+
+            // 영상 처음(0초)으로 이동
+            player.currentTime = 0;
+
+            console.log(`[AutoRewind] 되감기 완료: 영상 처음(0초)으로 이동`);
+          } else {
+            console.log(`[AutoRewind] 첫 가사 놓치지 않음 (여유: ${Math.abs(rewindDistance).toFixed(1)}초)`);
+          }
+
+          // 모든 경우에 무음 해제 및 오버레이 제거
+          player.muted = false;
+          if (loadingOverlay && loadingOverlay.parentElement) {
+            loadingOverlay.remove();
+            loadingOverlay = null;
+          }
+          console.log(`[AutoRewind] 무음 해제 및 오버레이 제거 완료`);
+        }
+      }
 
       const durationDiff = videoDurationSec - effectiveLyricsDuration;
       if (durationDiff > 0 && durationDiff < 4) {
