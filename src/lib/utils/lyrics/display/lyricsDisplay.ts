@@ -43,7 +43,20 @@ export function getDisplayLines(lines: Line[], currentTime: number): DisplayIndi
     activeIndex = lines.length - 1; // 곡이 끝난 뒤, 마지막 가사 유지
   }
 
-  // 위치는 교대로: 0번째는 bottom, 1번째는 top, 2번째는 bottom, 3번째는 top ...
+  // ✨ 첫 가사는 항상 윗줄에 표시 (카운트다운 오버레이 위치를 위함)
+  if (activeIndex === 0) {
+    return {
+      top: lines[0]?.text ?? '',
+      bottom: '',
+      highlightTop: true,
+      highlightBottom: false,
+      topIndex: 0,
+      bottomIndex: -1,
+    };
+  }
+
+  // 위치는 교대로: 1번째는 top, 2번째는 bottom, 3번째는 top, 4번째는 bottom ...
+  // (0번째는 위에서 처리했으므로 1부터 시작)
   const isEven = activeIndex % 2 === 0;
 
   const topIdx = isEven ? activeIndex - 1 : activeIndex;

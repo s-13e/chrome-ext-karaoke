@@ -268,14 +268,22 @@ function removeFeaturingParentheses(str: string): string {
   return str.trim();
 }
 // 키워드 정제, 부가정보 제거
-function removeExtraInfo(str: string): string {
+export function removeExtraInfo(str: string): string {
   const extraKeywords = EXTRA_KEYWORDS.slice().sort((a, b) => b.length - a.length); // 긴 키워드 우선
   let result = str;
+
+  // 0. 괄호 안에 EXTRA_KEYWORDS만 있는 경우 괄호 전체 제거
+  // 예: "Blue Valentine (Inst.)" → "Blue Valentine"
+  for (const kw of extraKeywords) {
+    const escapedKw = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const parenRegex = new RegExp(`\\s*\\(\\s*${escapedKw}\\s*\\)`, 'gi');
+    result = result.replace(parenRegex, '').trim();
+  }
 
   // 1. 괄호 안 피처링 정보(ft., feat, featuring)만 제거
   result = removeFeaturingParentheses(result);
 
-  // 1. 복합 키워드(공백/특수문자 포함) 전체 제거
+  // 2. 복합 키워드(공백/특수문자 포함) 전체 제거
   for (const kw of extraKeywords) {
     const escapedKw = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     // 키워드가 특수문자 포함 가능하므로 escape 처리
@@ -283,7 +291,7 @@ function removeExtraInfo(str: string): string {
     result = result.replace(regex, '').trim();
   }
 
-  // 2. 구분자(-, /, |) 기준 분할 후, 끝부분 부가 키워드 포함 파트 제거
+  // 3. 구분자(-, /, |) 기준 분할 후, 끝부분 부가 키워드 포함 파트 제거
   const parts = result.split(/\s[-/|]\s/);
   while (
     parts.length > 1 &&
@@ -292,10 +300,10 @@ function removeExtraInfo(str: string): string {
     parts.pop();
   }
 
-  // 3. 조합한 결과 문자열로 재설정
+  // 4. 조합한 결과 문자열로 재설정
   result = parts.join(' - ');
 
-  // 4. 반복적으로 문자열 끝에 부가 키워드 남아있는지 검사해서 제거
+  // 5. 반복적으로 문자열 끝에 부가 키워드 남아있는지 검사해서 제거
   let found = true;
   while (found) {
     found = false;

@@ -17,6 +17,7 @@ import {
   cleanTopicName,
   extractArtistAndTitleCustom,
   preprocessArtistOrTitle,
+  removeExtraInfo,
   stripEmojiAndBeforeColon,
 } from '@lib/utils/lyrics/parsers/stringUtils';
 import { listenerManager } from '@lib/utils/infra/listenerManager';
@@ -932,6 +933,9 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
 
             fallback.title = cleanTopicName(fallback.title);
             fallback.artist = cleanTopicName(fallback.artist);
+            // Fallback 파싱 결과는 removeExtraInfo가 적용되지 않았으므로 여기서 적용
+            fallback.title = removeExtraInfo(fallback.title);
+            fallback.artist = removeExtraInfo(fallback.artist);
             parsed = fallback;
             console.log('[TITLE PARSE] 3차(fallback) 결과:', parsed);
           }
