@@ -22,14 +22,26 @@ export function fallbackArtistAndTitle(meta: {
   if (!title) return null;
 
   // 2. 아티스트 추정 우선순위:
-  //    (1) YouTube 제공 artist 필드 > (2) 설명문에서 탐색 > (3) 채널명 > (4) 기타
+  //    (1) YouTube 제공 artist 필드 > (2) Topic 채널 > (3) 설명문에서 탐색 > (4) 일반 채널명
 
   // (1) meta.artist가 있으면(YouTube Music/자동 생성 영상)
   if (meta.artist && meta.artist.trim() && meta.artist.trim().toLowerCase() !== title.toLowerCase()) {
     return { artist: meta.artist.trim(), title };
   }
 
-  // (2) description에서 by/작곡/노래/歌/MUSIC BY/Performer/Produced by 등 패턴 찾기
+  // (2) Topic 채널인 경우 채널명을 아티스트로 신뢰
+  // YouTube Music의 자동 생성 아티스트 채널: "Artist Name - Topic" 형식
+  if (meta.channelTitle) {
+    const topicMatch = meta.channelTitle.match(/^(.+?)\s*-\s*Topic$/i);
+    if (topicMatch && topicMatch[1]) {
+      const artistName = topicMatch[1].trim();
+      if (artistName.toLowerCase() !== title.toLowerCase()) {
+        return { artist: artistName, title };
+      }
+    }
+  }
+
+  // (3) description에서 by/작곡/노래/歌/MUSIC BY/Performer/Produced by 등 패턴 찾기
   if (meta.description) {
     const artistMatch = meta.description.match(/^\s*•?\s*Artist\s*:\s*(.+)$/im);
     const songMatch = meta.description.match(/^\s*•?\s*Song\s*[♫:]?\s*(.+)$/im);
@@ -57,7 +69,9 @@ export function fallbackArtistAndTitle(meta: {
     //   }
     // }
   }
-  // (3) 채널명이 아티스트명일 확률이 높음. (ex, "aimyon" 등)
+
+  // (4) 일반 채널명 사용 (Topic 채널보다 우선순위 낮음)
+  // 주의: 회사 계정이거나 타이틀에 아티스트가 중복될 수 있어서 마지막 우선순위
   if (meta.channelTitle && meta.channelTitle.trim().toLowerCase() !== title.toLowerCase()) {
     return { artist: meta.channelTitle.trim(), title };
   }

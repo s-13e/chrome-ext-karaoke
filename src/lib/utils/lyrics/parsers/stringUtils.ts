@@ -171,16 +171,6 @@ export function extractArtistAndTitleCustom(
     }
   }
 
-  // 5. 추가 패턴: 아티스트와 곡명이 모두 영문/숫자/공백으로만 구성된 경우
-  if (!artist || !title) {
-    // 대문자로 시작하는 두 단어 이상이면 첫 단어를 아티스트, 나머지를 곡명으로 추정
-    const match = cleaned.match(/^([A-Za-z0-9]+|[^A-Za-z0-9\s]+)\s+(.+)$/);
-    if (match) {
-      artist = match[1]?.trim() ?? '';
-      title = match[2]?.trim() ?? '';
-    }
-  }
-
   // 6. 곡명에서 부가정보 추가 제거
   title = removeExtraInfo(title);
   title = removeTrailingHashtags(title);

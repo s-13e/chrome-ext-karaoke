@@ -175,4 +175,41 @@ describe('languageTransliterator integration', () => {
       expect(result).toMatch(/[a-zA-Z]/);
     });
   });
+
+  describe('Japanese kanji detection with context', () => {
+    it('should detect kanji as Japanese when hiragana is present in the same line', () => {
+      const text = '駄目だめ'; // 한자 + 히라가나
+      const spans = splitIntoLangGroups(text);
+      expect(spans.some((span) => span.lang === 'ja')).toBe(true);
+      expect(spans.some((span) => span.lang === 'zh')).toBe(false);
+    });
+
+    it('should detect kanji as Japanese when context indicates Japanese (via parameter)', () => {
+      const text = '駄目駄目駄目'; // 순수 한자만
+      const spans = splitIntoLangGroups(text, true); // hasJapaneseContext = true
+      expect(spans.every((span) => span.lang === 'ja')).toBe(true);
+      expect(spans.some((span) => span.lang === 'zh')).toBe(false);
+    });
+
+    it('should detect kanji as Chinese when no Japanese context', () => {
+      const text = '你好世界'; // 중국어 한자
+      const spans = splitIntoLangGroups(text, false); // hasJapaneseContext = false
+      expect(spans.every((span) => span.lang === 'zh')).toBe(true);
+      expect(spans.some((span) => span.lang === 'ja')).toBe(false);
+    });
+
+    it('should prioritize line-level kana over context parameter', () => {
+      const text = '駄目だめ'; // 한자 + 히라가나
+      const spans = splitIntoLangGroups(text, false); // hasJapaneseContext = false (무시됨)
+      // 현재 줄에 히라가나가 있으므로 일본어로 처리
+      expect(spans.some((span) => span.lang === 'ja')).toBe(true);
+    });
+
+    it('should handle mixed Japanese kanji and kana with context', () => {
+      const text = '駄目もう無理'; // 한자 + 히라가나 혼합
+      const spans = splitIntoLangGroups(text, true);
+      expect(spans.filter((span) => span.lang === 'ja').length).toBeGreaterThan(0);
+      expect(spans.some((span) => span.lang === 'zh')).toBe(false);
+    });
+  });
 });

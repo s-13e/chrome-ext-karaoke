@@ -38,11 +38,15 @@ function detectLanguage(char: string): string {
 /**
  * 텍스트를 언어별로 스팬으로 분리 (가사 한 줄 단위로 일본어/중국어 판단)
  * @param text 분리 대상 문자열
- */ export function splitIntoLangGroups(text: string): ScriptSpan[] {
+ * @param hasJapaneseContext 전체 가사에서 일본어 가나 존재 여부 (선택적, 한자 판별 정확도 향상)
+ */ export function splitIntoLangGroups(text: string, hasJapaneseContext?: boolean): ScriptSpan[] {
   if (!text) return [];
 
   // 전체 텍스트에서 일본어 가나 문자 존재 여부 미리 확인
   const hasJapaneseKanaInLine = [...text].some((char) => isJapaneseKana(char));
+
+  // 한자 판별: 우선순위는 현재 줄의 가나 > 전체 가사의 가나 컨텍스트
+  const shouldTreatKanjiAsJapanese = hasJapaneseKanaInLine || hasJapaneseContext === true;
 
   const spans: ScriptSpan[] = [];
   let buffer = '';
@@ -51,9 +55,9 @@ function detectLanguage(char: string): string {
   for (const char of text) {
     let lang = detectLanguage(char);
 
-    // 한자 처리: 같은 줄에 일본어 가나가 있으면 일본어로 처리
+    // 한자 처리: 현재 줄 또는 전체 가사에 일본어 가나가 있으면 일본어로 처리
     if (lang === 'kanji') {
-      lang = hasJapaneseKanaInLine ? 'ja' : 'zh';
+      lang = shouldTreatKanjiAsJapanese ? 'ja' : 'zh';
     }
 
     if (currentLang === null) {

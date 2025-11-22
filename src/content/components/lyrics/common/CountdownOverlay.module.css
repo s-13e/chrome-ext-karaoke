@@ -1,0 +1,44 @@
+/**
+ * 가라오케 카운트다운 오버레이 스타일
+ * 첫 가사 왼쪽 위에 큰 글씨로 표시
+ */
+.countdownOverlay {
+  position: absolute;
+  top: -120px; /* 가사 윗줄 기준 위쪽으로 배치 */
+  left: 0;
+  transform: translateX(0);
+
+  font-size: 180px; /* 가사보다 훨씬 크게 */
+  font-weight: bold;
+  font-family: 'Arial Black', 'Arial', sans-serif;
+  line-height: 1;
+
+  text-shadow:
+    -3px -3px 0 rgba(0, 0, 0, 0.9),
+    3px -3px 0 rgba(0, 0, 0, 0.9),
+    -3px 3px 0 rgba(0, 0, 0, 0.9),
+    3px 3px 0 rgba(0, 0, 0, 0.9),
+    0 0 30px rgba(0, 0, 0, 0.8);
+
+  z-index: 9999;
+  pointer-events: none;
+  user-select: none;
+
+  /* 카운트다운 애니메이션 (페이드인 효과) */
+  animation: countdownPulse 0.5s ease-in-out;
+}
+
+@keyframes countdownPulse {
+  0% {
+    opacity: 0;
+    transform: translateX(0) scale(0.5);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(0) scale(1.1);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}

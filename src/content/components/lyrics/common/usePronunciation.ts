@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { splitIntoLangGroups } from '@lib/utils/lyrics/detection/languageSpanSplitter';
 import { transliterateAndMerge } from '@lib/utils/lyrics/detection/languageTransliterator';
 
+// 일본어 가나 문자 체크 함수 (languageSpanSplitter.ts와 동일)
+const isJapaneseKana = (c: string) => /[\u3040-\u309F\u30A0-\u30FF]/.test(c);
+
 // 여러 줄의 가사를 한 번에 변환
 export function usePronunciations(lines: string[]) {
   const [list, setList] = useState<string[]>(() => Array(lines.length).fill(''));
@@ -12,6 +15,13 @@ export function usePronunciations(lines: string[]) {
     async function processInBatches(batchSize = 10) {
       const results: string[] = Array(lines.length).fill('');
 
+      // 전체 가사에서 일본어 가나 존재 여부 확인 (한자 판별 정확도 향상)
+      const hasJapaneseInAllLyrics = lines.some((line) => [...line].some((char) => isJapaneseKana(char)));
+
+      if (hasJapaneseInAllLyrics) {
+        console.log('[usePronunciations] 전체 가사에서 일본어 가나 감지 → 한자를 일본어로 처리');
+      }
+
       for (let start = 0; start < lines.length; start += batchSize) {
         const end = Math.min(start + batchSize, lines.length);
         const batch = lines.slice(start, end);
@@ -21,7 +31,7 @@ export function usePronunciations(lines: string[]) {
           batch.map(async (text) => {
             if (!text) return '';
             try {
-              const spans = splitIntoLangGroups(text);
+              const spans = splitIntoLangGroups(text, hasJapaneseInAllLyrics);
               return await transliterateAndMerge(spans);
             } catch (err) {
               console.error('[usePronunciations] 변환 오류:', err);

@@ -5,6 +5,7 @@ import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/display/lyricsOffset';
 import { usePronunciations } from '../common/usePronunciation';
 import { Line } from '@lib/types/lyrics';
 import { LyricLine } from '../common/LyricLine';
+import { CountdownOverlay } from '../common/CountdownOverlay';
 import styles from './styles.module.css';
 
 interface DualHighlightLyricsProps {
@@ -58,8 +59,18 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
     return lyrics.findLastIndex((line) => adjustedTime >= line.time);
   }, [lyrics, adjustedTime]);
 
+  // 첫 가사 시작 시간 (카운트다운 표시용)
+  const firstLyricTime = useMemo(() => {
+    return lyrics.length > 0 && lyrics[0] ? lyrics[0].time : null;
+  }, [lyrics]);
+
   return (
     <div className={styles.dualHighlightSubtitle} style={{ color: fontColor }}>
+      {/* 카운트다운 오버레이 (첫 가사에만 표시) */}
+      {firstLyricTime !== null && (
+        <CountdownOverlay startTime={firstLyricTime} currentTime={adjustedTime} fontColor="#ffcc00" />
+      )}
+
       <LyricLine
         text={top}
         pron={topPron}

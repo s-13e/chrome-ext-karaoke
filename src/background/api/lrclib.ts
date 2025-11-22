@@ -1,5 +1,6 @@
 import { Line } from '@lib/types/lyrics';
 import { LyricsError, LyricsErrorCode } from '@lib/types/lyricsError';
+import { isRomanizedLyrics } from '@lib/utils/lyrics/validators/romanizationDetector';
 
 export interface LrcLibLyricsResult {
   lyrics: string | Line[];
@@ -544,9 +545,9 @@ export async function fetchLyricsWithEndpoint(
       console.log(
         `[LRCLib API] ✅ JSON 파싱 완료 (소요: ${(performance.now() - startTime).toFixed(0)}ms, 후보: ${searchData.length}개)`,
       );
-      console.log(`[LRCLib API] 📦 검색 API 응답 상세 (처음 3개):`);
+      console.log(`[LRCLib API] 📦 검색 API 응답 상세 (처음 5개):`);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (searchData.slice(0, 3) as any[]).forEach((item: any, idx: number) => {
+      (searchData.slice(0, 5) as any[]).forEach((item: any, idx: number) => {
         console.log(`  후보 ${idx + 1}:`, {
           id: item.id,
           trackName: item.trackName,
@@ -614,6 +615,12 @@ export async function fetchLyricsWithEndpoint(
       // Duration이 2초 초과 차이나면 스킵
       if (durationDiff > 2) {
         console.log(`[LRCLib API] ⚠️ 후보 ${index + 1}: Duration 차이 초과, 스킵`);
+        continue;
+      }
+
+      // 🚫 로마자 표기 가사 필터링
+      if (isRomanizedLyrics(lyrics)) {
+        console.log(`[LRCLib API] ⚠️ 후보 ${index + 1}: 로마자 표기 가사, 스킵`);
         continue;
       }
 
@@ -745,23 +752,76 @@ export async function fetchLyricsWithEndpoint(
         // Search API 응답에서 직접 가사 추출 (Detail API 호출 제거)
         const limitedCandidates = lrclibFreeTextData.slice(0, 10);
 
+        // Duration 우선순위별 후보 저장
+        let exactMatch: (typeof limitedCandidates)[0] | null = null;
+        let closeMatch: (typeof limitedCandidates)[0] | null = null;
+
         for (const candidate of limitedCandidates) {
           const lyrics = candidate.syncedLyrics || candidate.plainLyrics;
           if (!lyrics) continue;
 
-          // Duration 체크 (±2초)
-          if (candidate.duration && Math.abs(durationSeconds - candidate.duration) <= 2) {
+          // 🚫 로마자 표기 가사 필터링
+          if (isRomanizedLyrics(lyrics)) {
             console.log(
-              `[LRCLib Search] ✅ 4차 시도 성공 (LRCLib FreeText): ${candidate.artistName} - ${candidate.trackName}`,
+              `[LRCLib FreeText] ⚠️ 후보 스킵 (로마자 표기): ${candidate.artistName} - ${candidate.trackName}`,
             );
-            return {
-              lyrics,
-              duration: candidate.duration,
-              artist: candidate.artistName,
-              title: candidate.trackName,
-              id: candidate.id,
-            };
+            continue;
           }
+
+          // 🔍 타이틀 매칭 검증 (FreeText 검색은 관련 없는 곡도 반환할 수 있음)
+          const candidateTitle = (candidate.trackName ?? '').trim().toLowerCase();
+          const searchTitle = title.trim().toLowerCase();
+          const titleMatch =
+            candidateTitle.includes(searchTitle) ||
+            searchTitle.includes(candidateTitle) ||
+            candidateTitle === searchTitle;
+
+          if (!titleMatch) {
+            console.log(`[LRCLib FreeText] ⚠️ 후보 스킵 (타이틀 불일치): "${candidate.trackName}" vs "${title}"`);
+            continue;
+          }
+
+          // Duration 체크 - 우선순위: 정확히 일치 > ±1초 > ±2초
+          if (candidate.duration) {
+            const durationDiff = Math.abs(durationSeconds - candidate.duration);
+
+            if (durationDiff === 0) {
+              // 정확히 일치하는 경우 즉시 반환
+              console.log(
+                `[LRCLib Search] ✅ 4차 시도 성공 (LRCLib FreeText, 정확히 일치): ${candidate.artistName} - ${candidate.trackName}`,
+              );
+              return {
+                lyrics,
+                duration: candidate.duration,
+                artist: candidate.artistName,
+                title: candidate.trackName,
+                id: candidate.id,
+              };
+            } else if (durationDiff <= 1 && !exactMatch) {
+              // ±1초 이내 (정확한 일치 다음 우선순위)
+              exactMatch = candidate;
+            } else if (durationDiff <= 2 && !closeMatch) {
+              // ±2초 이내 (가장 낮은 우선순위)
+              closeMatch = candidate;
+            }
+          }
+        }
+
+        // 정확히 일치하는 항목이 없으면 우선순위에 따라 반환
+        const selectedCandidate = exactMatch || closeMatch;
+        if (selectedCandidate) {
+          const lyrics = selectedCandidate.syncedLyrics || selectedCandidate.plainLyrics;
+          const durationDiff = Math.abs(durationSeconds - selectedCandidate.duration);
+          console.log(
+            `[LRCLib Search] ✅ 4차 시도 성공 (LRCLib FreeText, ±${durationDiff}초): ${selectedCandidate.artistName} - ${selectedCandidate.trackName}`,
+          );
+          return {
+            lyrics,
+            duration: selectedCandidate.duration,
+            artist: selectedCandidate.artistName,
+            title: selectedCandidate.trackName,
+            id: selectedCandidate.id,
+          };
         }
       }
     }
