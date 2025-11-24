@@ -23,6 +23,7 @@ import {
 import { listenerManager } from '@lib/utils/infra/listenerManager';
 import { withContentEnabled } from '@lib/utils/platform/contentGuard';
 import { DualHighlightLyrics } from './components/lyrics/SyncLyrics/DualHighlightLyrics';
+import { SingleLineLyrics } from './components/lyrics/SingleLineLyrics/SingleLineLyrics';
 import { FullLyrics } from './components/lyrics/FullLyrics/FullLyrics';
 import { isAdPlaying } from '@lib/utils/dom/domUtils';
 import { startLyricsAdMonitoring } from '@lib/utils/infra/adWatcher';
@@ -85,7 +86,7 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
   let showRealtimeLyrics = true; // 현재 가사 ui 보이게
   let showPronunciationLyrics = true;
 
-  let lyricsMode: 'sync' | 'full' = 'sync';
+  let lyricsMode: 'sync' | 'single' | 'full' = 'sync';
 
   // let analyzeLyricsAfterAd: (() => Promise<void>) | null = null;
 
@@ -464,6 +465,18 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
           showPronunciationLyrics={showPronunciationLyrics}
         />,
       );
+    } else if (lyricsMode === 'single') {
+      overlayManager.renderOverlay(
+        'lyrics',
+        <SingleLineLyrics
+          lyrics={lyrics}
+          offset={offset}
+          fontColor={lyricsFontColorCurrent}
+          pronunciationColor={lyricsFontColorPronunciation}
+          showRealtimeLyrics={showRealtimeLyrics}
+          showPronunciationLyrics={showPronunciationLyrics}
+        />,
+      );
     } else {
       console.log('[renderLyricsOverlay] else 문으로 overlay cleanup 실행');
       overlayManager.cleanupOverlay('lyrics');
@@ -570,7 +583,7 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
           if (typeof items.announceLyrics === 'boolean') {
             showPronunciationLyrics = items.announceLyrics;
           }
-          if (['sync', 'full'].includes(items.lyricsMode)) {
+          if (['sync', 'single', 'full'].includes(items.lyricsMode)) {
             lyricsMode = items.lyricsMode;
           }
 
@@ -635,7 +648,7 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
       }
       if ('lyricsMode' in changes) {
         const m = changes.lyricsMode.newValue;
-        if (m === 'sync' || m === 'full') {
+        if (m === 'sync' || m === 'single' || m === 'full') {
           lyricsMode = m;
           needRerender = true;
         }

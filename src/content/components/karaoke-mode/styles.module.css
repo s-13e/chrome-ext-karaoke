@@ -130,6 +130,14 @@
   transform: translateX(-50%);
 }
 
+/* 오른쪽 버튼 그룹 (가사 디스플레이 설정) */
+.buttonGroupRight {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-left: auto;
+}
+
 .bottomButton {
   padding: 12px 20px;
   background-color: transparent;
@@ -204,6 +212,192 @@
   filter: drop-shadow(0 0 8px #ffeb3b) drop-shadow(0 0 12px #ffeb3b);
 }
 
+/* 오프셋 조정 모달 오버레이 */
+.offsetModalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  pointer-events: auto;
+}
+
+/* 오프셋 조정 모달 컨테이너 */
+.offsetModalContainer {
+  background-color: rgba(40, 40, 40, 0.95);
+  border-radius: 12px;
+  padding: 24px;
+  min-width: 500px;
+  max-width: 600px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+/* 모달 헤더 */
+.offsetModalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.offsetModalTitle {
+  font-size: 20px;
+  font-weight: bold;
+  color: #ffffff;
+  margin: 0;
+}
+
+.closeButton {
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.closeButton:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* 모달 콘텐츠 */
+.offsetModalContent {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* 오프셋 컨트롤 섹션 */
+.offsetControlSection {
+  padding: 12px 16px;
+  position: relative;
+}
+
+.offsetLabel {
+  display: block;
+  color: #ffffff;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+/* 오프셋 슬라이더 */
+.offsetSlider {
+  width: 100%;
+  margin-top: 35px;
+  margin-bottom: 5px;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, #666 0%, #666 50%, #999 50%, #999 100%);
+  outline: none;
+}
+
+.offsetSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.offsetSlider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* 슬라이더 눈금 */
+.sliderTicks {
+  position: relative;
+  width: 100%;
+  height: 28px;
+}
+
+.tickLabel {
+  position: absolute;
+  top: 8px;
+  color: #bbb;
+  font-size: 13px;
+}
+
+/* 오프셋 값 버튼 (썸 위치에 고정) */
+.offsetValueButton {
+  position: absolute;
+  top: -45px;
+  transform: translateX(-50%);
+  background: #fff;
+  color: #666;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
+  border: none;
+  border-radius: 8px;
+  padding: 3px 8px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 13px;
+  z-index: 2;
+  transition: background 0.1s;
+}
+
+.offsetValueButton:hover {
+  background: #f0f0f0;
+}
+
+/* 적용 버튼 */
+.applyButton {
+  margin-top: 16px;
+  padding: 12px 24px;
+  background-color: #1e88e5;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+}
+
+.applyButton:hover {
+  background-color: #1976d2;
+}
+
+/* 가사 미리보기 섹션 */
+.offsetPreviewSection {
+  padding: 20px;
+  background-color: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 설명 텍스트 */
+.offsetDescription {
+  padding: 12px 16px;
+  color: #ccc;
+  font-size: 14px;
+  margin: 0;
+  text-align: center;
+}
+
 /* 반응형 디자인 */
 @media (max-width: 1024px) {
   .sidebarContainer {
@@ -212,6 +406,10 @@
 
   .bottomContainer {
     right: 200px;
+  }
+
+  .offsetModalContainer {
+    min-width: 400px;
   }
 }
 
@@ -227,5 +425,10 @@
   .bottomButton {
     padding: 8px 12px;
     font-size: 12px;
+  }
+
+  .offsetModalContainer {
+    min-width: 90%;
+    padding: 16px;
   }
 }
