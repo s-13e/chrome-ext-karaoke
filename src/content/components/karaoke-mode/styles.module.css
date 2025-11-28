@@ -54,7 +54,7 @@
   top: 30px;
   right: 0;
   width: 250px;
-  height: 100%;
+  height: calc(100% - 110px); /* 30px (top) + 80px (bottom bar) = 110px */
   background-color: rgba(40, 40, 40, 0.95);
   z-index: 10;
   overflow-y: auto;

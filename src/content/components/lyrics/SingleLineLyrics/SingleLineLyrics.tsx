@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Line } from '@lib/types/lyrics';
 import { useCurrentTime } from '@hooks/useCurrentTime';
 import { usePronunciations } from '../common/usePronunciation';
@@ -39,6 +39,31 @@ export const SingleLineLyrics: React.FC<SingleLineLyricsProps> = ({
   const currentTime = externalCurrentTime !== undefined ? externalCurrentTime : internalCurrentTime;
   const adjustedTime = currentTime - offset;
 
+  // 아카펠라 녹음 카운트다운 상태
+  const [acapellaCountdownStart, setAcapellaCountdownStart] = useState<number | null>(null);
+
+  // 아카펠라 녹음 카운트다운 이벤트 수신
+  useEffect(() => {
+    const handleCountdownStart = (event: Event) => {
+      const customEvent = event as CustomEvent<{ startTime: number; currentTime: number }>;
+      console.log('[SingleLineLyrics] 아카펠라 카운트다운 시작:', customEvent.detail);
+      setAcapellaCountdownStart(customEvent.detail.startTime);
+    };
+
+    const handleCountdownEnd = () => {
+      console.log('[SingleLineLyrics] 아카펠라 카운트다운 종료');
+      setAcapellaCountdownStart(null);
+    };
+
+    window.addEventListener('acapella-countdown-start', handleCountdownStart);
+    window.addEventListener('acapella-countdown-end', handleCountdownEnd);
+
+    return () => {
+      window.removeEventListener('acapella-countdown-start', handleCountdownStart);
+      window.removeEventListener('acapella-countdown-end', handleCountdownEnd);
+    };
+  }, []);
+
   // 현재 가사 인덱스 찾기
   const currentIndex = useMemo(() => {
     return shiftedLyrics.findLastIndex((line) => adjustedTime >= line.time);
@@ -70,9 +95,12 @@ export const SingleLineLyrics: React.FC<SingleLineLyricsProps> = ({
 
   return (
     <div className={styles.singleLineSubtitle} style={{ color: fontColor }}>
-      {/* 카운트다운 오버레이 (첫 가사에만 표시) */}
-      {firstLyricTime !== null && (
+      {/* 카운트다운 오버레이 (첫 가사 또는 아카펠라 녹음) */}
+      {firstLyricTime !== null && !acapellaCountdownStart && (
         <CountdownOverlay startTime={firstLyricTime} currentTime={adjustedTime} fontColor="#ffcc00" />
+      )}
+      {acapellaCountdownStart !== null && (
+        <CountdownOverlay startTime={acapellaCountdownStart} currentTime={currentTime} fontColor="#FFEB3B" />
       )}
 
       <LyricLine

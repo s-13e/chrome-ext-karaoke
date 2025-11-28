@@ -16,11 +16,19 @@ import { MESSAGE_TYPES } from '@constants/messageTypes';
 import enTranslations from '@locales/en.json';
 import koTranslations from '@locales/ko.json';
 import jaTranslations from '@locales/ja.json';
+import zhCNTranslations from '@locales/zh-CN.json';
+import zhTWTranslations from '@locales/zh-TW.json';
+import esTranslations from '@locales/es.json';
+import ptTranslations from '@locales/pt.json';
 
 const resources = {
   en: { [I18N_NAMESPACE]: enTranslations },
   ko: { [I18N_NAMESPACE]: koTranslations },
   ja: { [I18N_NAMESPACE]: jaTranslations },
+  'zh-CN': { [I18N_NAMESPACE]: zhCNTranslations },
+  'zh-TW': { [I18N_NAMESPACE]: zhTWTranslations },
+  es: { [I18N_NAMESPACE]: esTranslations },
+  pt: { [I18N_NAMESPACE]: ptTranslations },
 };
 
 // 1. 싱글톤 인스턴스 생성

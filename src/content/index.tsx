@@ -56,6 +56,7 @@ import {
 } from '@lib/utils/storage/autoDisableStorage';
 import { Toast } from './components/common/Toast';
 import { AutoDisableNotification } from './components/common/AutoDisableNotification';
+import i18next from 'i18next';
 
 (() => {
   // 새로고침 시 contentscript 내 중복 실행 방지
@@ -64,6 +65,27 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
     return;
   }
   window.__LYRICS_OVERLAY_INITED = true;
+
+  // Extension context invalidation 감지 및 자동 페이지 새로고침
+  // 개발 중 확장 재로드 시 content script가 무효화되는 문제 해결
+  function isExtensionContextValid(): boolean {
+    try {
+      // chrome.runtime.id 접근 시 context가 무효화되면 에러 발생
+      return !!chrome.runtime?.id;
+    } catch {
+      return false;
+    }
+  }
+
+  function checkExtensionContext() {
+    if (!isExtensionContextValid()) {
+      console.warn('[Extension] Context invalidated - reloading page...');
+      window.location.reload();
+    }
+  }
+
+  // 5초마다 context 유효성 확인 (개발 모드용)
+  setInterval(checkExtensionContext, 5000);
 
   // --- 플래그 및 관리 객체 ---
   let isDetectionActive = false; // 감지 시스템 활성화 여부
@@ -103,6 +125,9 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
   // KaraokeModeContainer 전용 React Root 및 상태
   let karaokeModeRoot: ReactDOM.Root | null = null;
   let isKaraokeModeVisible = false;
+
+  // 아카펠라 녹음 상태 추적
+  let currentRecordingState: string = 'idle';
 
   // 토스트/알림 전용 React Root
   let toastRoot: ReactDOM.Root | null = null;
@@ -277,6 +302,12 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
     }, duration);
   }
 
+  // 아카펠라 녹음 상태 추적 이벤트 리스너
+  window.addEventListener('acapella-recording-state-change', (event: Event) => {
+    const customEvent = event as CustomEvent<{ recordingState: string; recordedAudioUrl: string | null }>;
+    currentRecordingState = customEvent.detail.recordingState;
+  });
+
   // 가라오케 모드 토글 함수
   async function toggleKaraokeMode() {
     // 가라오케 모드를 켜려고 할 때만 확장 활성화 상태 확인
@@ -289,6 +320,26 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
         showToast('확장 프로그램을 먼저 활성화해주세요 (우측 상단 확장 아이콘 클릭)');
         console.log('[toggleKaraokeMode] 확장 비활성화 상태 - 가라오케 모드 진입 차단');
         return;
+      }
+    } else {
+      // 가라오케 모드를 끄려고 할 때 녹음 중이면 확인
+      if (currentRecordingState === 'recording' || currentRecordingState === 'paused') {
+        // 녹음 중이면 자동 일시정지
+        if (currentRecordingState === 'recording') {
+          window.dispatchEvent(new CustomEvent('acapella-pause-recording'));
+        }
+
+        const userChoice = window.confirm(i18next.t('extAcapellaSaveAndLeaveConfirm'));
+
+        if (userChoice) {
+          // 확인 클릭: 저장 요청 이벤트 발생
+          window.dispatchEvent(new CustomEvent('acapella-save-and-close'));
+          // 저장 완료까지 대기 (간단한 딜레이)
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        } else {
+          // 취소 클릭: 저장하지 않고 나가기
+          window.dispatchEvent(new CustomEvent('acapella-discard-and-close'));
+        }
       }
     }
 

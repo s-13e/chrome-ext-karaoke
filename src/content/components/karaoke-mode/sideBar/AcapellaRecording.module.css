@@ -1,0 +1,426 @@
+/* AcapellaRecording.module.css */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #1a1a1a;
+  color: #ffffff;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  gap: 12px;
+}
+
+.backButton {
+  background: none;
+  border: none;
+  color: #ffffff;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.backButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 24px;
+  text-align: center;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* 스크롤바 스타일 */
+.content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.content::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* 상태별 스타일 */
+.initialState,
+.checkingState,
+.readyState,
+.countdownState,
+.recordingState,
+.recordedState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  margin: auto 0;
+}
+
+.deviceCheckState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+}
+
+/* 오디오 기기 확인 화면 */
+.deviceCheckState {
+  align-items: stretch;
+  max-width: 400px;
+  margin: 0 auto;
+  padding-top: 20px;
+}
+
+.subtitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 8px 0;
+  text-align: center;
+}
+
+.deviceStatus {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.statusSuccess,
+.statusWarning {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-direction: column;
+  text-align: center;
+}
+
+.statusSuccess span,
+.statusWarning span {
+  font-size: 16px;
+  font-weight: 500;
+  color: #ffffff;
+}
+
+.warningText {
+  font-size: 14px;
+  color: #ff9800;
+  margin: 8px 0 0 0;
+  line-height: 1.4;
+}
+
+.deviceSelector,
+.deviceList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.deviceLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e0e0e0;
+  margin-bottom: 4px;
+}
+
+.deviceSelect {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.deviceSelect:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.deviceSelect:focus {
+  outline: none;
+  border-color: #2196f3;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* 드롭다운 옵션 스타일 */
+.deviceSelect option {
+  background: #2a2a2a;
+  color: #ffffff;
+  padding: 8px;
+}
+
+.deviceItems {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.deviceItem {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #bdbdbd;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.description {
+  font-size: 16px;
+  line-height: 1.5;
+  color: #e0e0e0;
+  margin: 0;
+}
+
+.hint {
+  font-size: 14px;
+  color: #bdbdbd;
+  margin: 0;
+}
+
+/* 버튼 스타일 */
+.primaryButton {
+  background: #2196f3;
+  color: #ffffff;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.primaryButton:hover {
+  background: #1976d2;
+}
+
+.secondaryButton {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.secondaryButton:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.recordButton {
+  background: #f44336;
+  color: #ffffff;
+  border: none;
+  padding: 16px 32px;
+  border-radius: 50px;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
+}
+
+.recordButton:hover {
+  background: #d32f2f;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(244, 67, 54, 0.4);
+}
+
+.stopButton {
+  background: #757575;
+  color: #ffffff;
+  border: none;
+  padding: 16px 32px;
+  border-radius: 50px;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stopButton:hover {
+  background: #616161;
+}
+
+/* 녹음 중 인디케이터 */
+.recordingIndicator {
+  position: relative;
+}
+
+.pulse {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.1);
+  }
+}
+
+.recordingText {
+  font-size: 20px;
+  font-weight: 600;
+  color: #f44336;
+  margin: 0;
+}
+
+.timer {
+  font-size: 32px;
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
+  color: #ffffff;
+  margin: 8px 0;
+}
+
+/* 액션 버튼 그룹 */
+.actionButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 280px;
+  margin-top: 16px;
+}
+
+/* 오디오 레벨 바 */
+.audioLevelContainer {
+  width: 200px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 12px 0;
+}
+
+.audioLevelBar {
+  height: 100%;
+  background: linear-gradient(90deg, #4caf50, #8bc34a);
+  transition: width 0.05s ease-out;
+  border-radius: 4px;
+}
+
+/* 아이콘 버튼 그룹 (수평 배치) */
+.iconButtons {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.iconButton {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  padding: 12px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;
+  min-height: 56px;
+}
+
+.iconButton:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
+}
+
+.iconButton:active {
+  transform: scale(0.95);
+}
+
+/* 카운트다운 상태 스타일 */
+.countdownState {
+  position: relative;
+  min-height: 200px;
+}
+
+.countdownText {
+  font-size: 20px;
+  font-weight: 600;
+  color: #ffeb3b;
+  margin: 16px 0 8px;
+}
+
+/* 테스트/개발용 버튼 스타일 */
+.testSection {
+  padding: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.testButton {
+  width: 100%;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.testButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+}

@@ -6,33 +6,33 @@
 // 히브리어 → 로마자 매핑 테이블
 const hebrewToRomanMap: Record<string, string> = {
   // 자음 (22개 기본 문자)
-  'א': 'a', // Alef
-  'ב': 'b', // Bet
-  'ג': 'g', // Gimel
-  'ד': 'd', // Dalet
-  'ה': 'h', // He
-  'ו': 'v', // Vav
-  'ז': 'z', // Zayin
-  'ח': 'h', // Het
-  'ט': 't', // Tet
-  'י': 'y', // Yod
-  'כ': 'k', // Kaf
-  'ך': 'k', // Kaf final
-  'ל': 'l', // Lamed
-  'מ': 'm', // Mem
-  'ם': 'm', // Mem final
-  'נ': 'n', // Nun
-  'ן': 'n', // Nun final
-  'ס': 's', // Samekh
-  'ע': 'a', // Ayin
-  'פ': 'p', // Pe
-  'ף': 'p', // Pe final
-  'צ': 'ts', // Tsadi
-  'ץ': 'ts', // Tsadi final
-  'ק': 'k', // Qof
-  'ר': 'r', // Resh
-  'ש': 'sh', // Shin
-  'ת': 't', // Tav
+  א: 'a', // Alef
+  ב: 'b', // Bet
+  ג: 'g', // Gimel
+  ד: 'd', // Dalet
+  ה: 'h', // He
+  ו: 'v', // Vav
+  ז: 'z', // Zayin
+  ח: 'h', // Het
+  ט: 't', // Tet
+  י: 'y', // Yod
+  כ: 'k', // Kaf
+  ך: 'k', // Kaf final
+  ל: 'l', // Lamed
+  מ: 'm', // Mem
+  ם: 'm', // Mem final
+  נ: 'n', // Nun
+  ן: 'n', // Nun final
+  ס: 's', // Samekh
+  ע: 'a', // Ayin
+  פ: 'p', // Pe
+  ף: 'p', // Pe final
+  צ: 'ts', // Tsadi
+  ץ: 'ts', // Tsadi final
+  ק: 'k', // Qof
+  ר: 'r', // Resh
+  ש: 'sh', // Shin
+  ת: 't', // Tav
 
   // 모음 기호 (니쿠드 - Nikud)
   'ָ': 'a', // Kamatz

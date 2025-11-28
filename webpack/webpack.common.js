@@ -13,23 +13,12 @@ const entryPoints = {
   background: './src/background/background.ts',
   popup: './src/popup/index.tsx',
   options: './src/options/index.tsx',
-  audioProcessor: './src/lib/utils/audio/audioProcessor.ts',
 };
 
 module.exports = {
   entry: entryPoints,
   output: {
-    filename: (pathData) => {
-      // entry 이름
-      const name = pathData.chunk.name;
-
-      // audioProcessor entry는 content 하위에 넣기
-      if (name === 'audioProcessor') {
-        return 'content/audioProcessor.js';
-      }
-      // 그 외 일반 entry는 기존 패턴
-      return `${name}/${name}.js`;
-    },
+    filename: '[name]/[name].js',
     path: path.resolve(__dirname, '../dist'),
     clean: false,
     publicPath: '',

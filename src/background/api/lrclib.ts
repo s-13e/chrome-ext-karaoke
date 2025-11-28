@@ -7,8 +7,20 @@ export interface LrcLibLyricsResult {
   duration?: number;
   artist?: string;
   title?: string;
-  id?: string;
+  id?: string | number;
   etag?: string;
+}
+
+/**
+ * LRCLib Search API 응답 항목 타입
+ */
+interface LrcLibSearchResultItem {
+  id: number;
+  trackName: string;
+  artistName: string;
+  duration: number;
+  syncedLyrics?: string | null;
+  plainLyrics?: string | null;
 }
 
 const API_SERVER_URL = process.env.API_SERVER_URL!;
@@ -538,16 +550,14 @@ export async function fetchLyricsWithEndpoint(
     }
 
     console.log(`[LRCLib API] ⏱️ JSON 파싱 시작 (${(performance.now() - startTime).toFixed(0)}ms)`);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let searchData: any[];
+    let searchData: LrcLibSearchResultItem[];
     try {
       searchData = await searchRes.json();
       console.log(
         `[LRCLib API] ✅ JSON 파싱 완료 (소요: ${(performance.now() - startTime).toFixed(0)}ms, 후보: ${searchData.length}개)`,
       );
       console.log(`[LRCLib API] 📦 검색 API 응답 상세 (처음 5개):`);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (searchData.slice(0, 5) as any[]).forEach((item: any, idx: number) => {
+      searchData.slice(0, 5).forEach((item: LrcLibSearchResultItem, idx: number) => {
         console.log(`  후보 ${idx + 1}:`, {
           id: item.id,
           trackName: item.trackName,
@@ -586,8 +596,7 @@ export async function fetchLyricsWithEndpoint(
     let perfectMatch: LrcLibLyricsResult | null = null;
     let fallbackSynced: LrcLibLyricsResult | null = null;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    for (const [index, candidate] of (limitedCandidates as any[]).entries()) {
+    for (const [index, candidate] of limitedCandidates.entries()) {
       // Search API 응답에서 직접 가사 데이터 추출
       const lyrics = candidate.syncedLyrics;
       if (!lyrics) {
@@ -744,8 +753,7 @@ export async function fetchLyricsWithEndpoint(
     const lrclibFreeTextRes = await fetchWithTimeout(lrclibFreeTextEndpoint, {}, LRCLIB_TIMEOUT_MS);
 
     if (lrclibFreeTextRes.ok) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const lrclibFreeTextData: any[] = await lrclibFreeTextRes.json();
+      const lrclibFreeTextData: LrcLibSearchResultItem[] = await lrclibFreeTextRes.json();
       if (Array.isArray(lrclibFreeTextData) && lrclibFreeTextData.length > 0) {
         console.log(`[LRCLib FreeText] 통합 검색 결과: ${lrclibFreeTextData.length}개 발견`);
 
@@ -791,7 +799,7 @@ export async function fetchLyricsWithEndpoint(
                 `[LRCLib Search] ✅ 4차 시도 성공 (LRCLib FreeText, 정확히 일치): ${candidate.artistName} - ${candidate.trackName}`,
               );
               return {
-                lyrics,
+                lyrics: lyrics || '',
                 duration: candidate.duration,
                 artist: candidate.artistName,
                 title: candidate.trackName,
@@ -816,7 +824,7 @@ export async function fetchLyricsWithEndpoint(
             `[LRCLib Search] ✅ 4차 시도 성공 (LRCLib FreeText, ±${durationDiff}초): ${selectedCandidate.artistName} - ${selectedCandidate.trackName}`,
           );
           return {
-            lyrics,
+            lyrics: lyrics || '',
             duration: selectedCandidate.duration,
             artist: selectedCandidate.artistName,
             title: selectedCandidate.trackName,

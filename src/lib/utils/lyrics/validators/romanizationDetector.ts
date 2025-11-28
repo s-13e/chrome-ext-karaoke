@@ -143,5 +143,7 @@ export function testRomanizationDetector(): void {
 }
 
 // 전역에 노출 (브라우저 콘솔에서 접근 가능)
-// Content script는 항상 브라우저 환경이므로 조건 체크 없이 바로 노출
-(window as Window & { testRomanizationDetector?: () => void }).testRomanizationDetector = testRomanizationDetector;
+// Service Worker 환경에서는 window가 없으므로 조건 체크
+if (typeof window !== 'undefined') {
+  (window as Window & { testRomanizationDetector?: () => void }).testRomanizationDetector = testRomanizationDetector;
+}

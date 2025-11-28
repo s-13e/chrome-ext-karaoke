@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useCurrentTime } from '@hooks/useCurrentTime';
 import { getDisplayLines } from '@lib/utils/lyrics/display/lyricsDisplay';
 import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/display/lyricsOffset';
@@ -28,6 +28,31 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
   const shiftedLyrics = useMemo(() => shiftFirstLyricEarlier(lyrics, 3), [lyrics]);
   const currentTime = useCurrentTime();
   const adjustedTime = currentTime - (offset ?? 0);
+
+  // 아카펠라 녹음 카운트다운 상태
+  const [acapellaCountdownStart, setAcapellaCountdownStart] = useState<number | null>(null);
+
+  // 아카펠라 녹음 카운트다운 이벤트 수신
+  useEffect(() => {
+    const handleCountdownStart = (event: Event) => {
+      const customEvent = event as CustomEvent<{ startTime: number; currentTime: number }>;
+      console.log('[DualHighlightLyrics] 아카펠라 카운트다운 시작:', customEvent.detail);
+      setAcapellaCountdownStart(customEvent.detail.startTime);
+    };
+
+    const handleCountdownEnd = () => {
+      console.log('[DualHighlightLyrics] 아카펠라 카운트다운 종료');
+      setAcapellaCountdownStart(null);
+    };
+
+    window.addEventListener('acapella-countdown-start', handleCountdownStart);
+    window.addEventListener('acapella-countdown-end', handleCountdownEnd);
+
+    return () => {
+      window.removeEventListener('acapella-countdown-start', handleCountdownStart);
+      window.removeEventListener('acapella-countdown-end', handleCountdownEnd);
+    };
+  }, []);
 
   const { top, bottom, topIndex, bottomIndex } = getDisplayLines(shiftedLyrics, adjustedTime);
 
@@ -66,9 +91,12 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
 
   return (
     <div className={styles.dualHighlightSubtitle} style={{ color: fontColor }}>
-      {/* 카운트다운 오버레이 (첫 가사에만 표시) */}
-      {firstLyricTime !== null && (
+      {/* 카운트다운 오버레이 (첫 가사 또는 아카펠라 녹음) */}
+      {firstLyricTime !== null && !acapellaCountdownStart && (
         <CountdownOverlay startTime={firstLyricTime} currentTime={adjustedTime} fontColor="#ffcc00" />
+      )}
+      {acapellaCountdownStart !== null && (
+        <CountdownOverlay startTime={acapellaCountdownStart} currentTime={currentTime} fontColor="#FFEB3B" />
       )}
 
       <LyricLine

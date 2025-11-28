@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { MdArrowBackIosNew } from 'react-icons/md';
 
 // ----------------------------------------------------
 // 타입 정의
@@ -120,8 +121,8 @@ export const ReservationSidebar: React.FC = () => {
   // 2. 검색 화면 (별도의 tsx 전환을 simulate)
   return (
     <div className="reservation-sidebar search-view">
-      <button className="back-button" onClick={() => setViewState('default')}>
-        ← 뒤로가기
+      <button className="back-button" onClick={() => setViewState('default')} aria-label="뒤로가기">
+        <MdArrowBackIosNew />
       </button>
 
       <h3 className="search-title">노래 검색 (MR 자동)</h3>

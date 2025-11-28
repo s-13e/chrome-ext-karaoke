@@ -124,7 +124,7 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
   return (
     <>
       <HeaderContainer />
-      <SidebarContainer />
+      <SidebarContainer lyrics={lyrics} />
       <BottomContainer lyrics={lyrics} />
     </>
   );

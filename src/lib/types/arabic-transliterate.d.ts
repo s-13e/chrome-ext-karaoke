@@ -5,11 +5,7 @@ declare module 'arabic-transliterate' {
    * @param direction - 변환 방향 ('arabic2latin' | 'latin2arabic')
    * @param language - 언어 ('Arabic' | 'Persian' | 'OttomanTurkish' | 'ModernTurkish')
    */
-  function arabictransliterate(
-    input: string,
-    direction?: 'arabic2latin' | 'latin2arabic',
-    language?: string,
-  ): string;
+  function arabictransliterate(input: string, direction?: 'arabic2latin' | 'latin2arabic', language?: string): string;
 
   export default arabictransliterate;
 }

@@ -5,4 +5,6 @@ export const STORAGE_KEYS = {
   PREFERRED_ROMANIZATION_LANGUAGES: 'preferredRomanizationLanguages',
   HAS_COMPLETED_LANGUAGE_ONBOARDING: 'hasCompletedLanguageOnboarding',
   LOADED_ROMANIZER_LIBRARIES: 'loadedRomanizerLibraries',
+  ACAPELLA_LEGAL_AGREEMENT_ACCEPTED: 'acapellaLegalAgreementAccepted',
+  ACAPELLA_RECORDINGS_LIST: 'acapellaRecordingsList',
 } as const;

@@ -33,7 +33,7 @@ npm run lint && npm run format && npm test && npm run build
 - **Manifest V3** Chrome extension with service worker background script
 - **Content Script Injection**: Runs on `https://www.youtube.com/watch*` pages
 - **Cross-context Communication**: Background ↔ Content ↔ Popup messaging via Chrome APIs
-- **Webpack Multi-entry**: Separate bundles for content, background, popup, options, and audioProcessor
+- **Webpack Multi-entry**: Separate bundles for content, background, popup, and options
 
 ### Core Systems
 
@@ -45,8 +45,6 @@ npm run lint && npm run format && npm test && npm run build
 
 **Audio Analysis**:
 
-- Real-time audio processing via Web Audio API and AudioWorklet
-- Voice Activity Detection (VAD) for karaoke features
 - Ad detection to pause lyrics during YouTube ads
 
 **State Management**:
@@ -67,7 +65,7 @@ npm run lint && npm run format && npm test && npm run build
 **Core Logic**:
 
 - `src/lib/utils/lyrics/` - Lyrics fetching, parsing, and display logic
-- `src/lib/utils/audio/` - Audio analysis and processing
+- `src/lib/utils/audio/` - Music detection utilities
 - `src/lib/utils/platform/` - YouTube integration and DOM manipulation
 - `src/background/api/` - External API integrations
 
@@ -91,7 +89,6 @@ The project uses webpack path aliases:
 - **Emotion/Styled** for styling with CSS modules support
 - **i18next** for internationalization
 - **Webpack 5** with custom multi-entry configuration
-- **Web Audio API** + **AudioWorklet** for real-time audio processing
 - **Chrome Extension APIs** (storage, messaging, scripting)
 
 ### Development Notes
@@ -101,12 +98,6 @@ The project uses webpack path aliases:
 - Uses Manifest V3 with service worker background script
 - Content Security Policy restricts inline scripts
 - Extension loads resources via `chrome.runtime.getURL()`
-
-**Audio Processing**:
-
-- AudioWorklet processes audio in separate thread
-- VAD (Voice Activity Detection) for microphone input
-- MediaElementSource for YouTube video audio analysis
 
 **Platform Integration**:
 

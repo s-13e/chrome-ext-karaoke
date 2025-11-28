@@ -46,7 +46,6 @@
         "content/style.css",
         "assets/icons/move.svg",
         "assets/icons/music_note.png",
-        "content/audioProcessor.js",
         "dict/*"
       ],
       "matches": ["<all_urls>"]
