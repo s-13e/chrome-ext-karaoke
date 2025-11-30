@@ -1,5 +1,4 @@
 // ./index.tsx
-
 import { App } from './App';
 import { i18nInstance, initializeI18n } from '@services/i18n';
 import { ErrorFallback } from '@components/common/ErrorFallback';
@@ -42,6 +41,7 @@ import { isWatchPage as checkIsWatchPage } from '@lib/utils/common/urlUtils';
 import { hasUrlChanged } from '@lib/utils/platform/navigation';
 import { SongInfoOverlay } from './components/song-info/SongInfoOverlay';
 import { overlayManager } from '@lib/utils/infra/overlayManager';
+import { KaraokeModeManager } from '@lib/utils/infra/karaokeModeManager';
 import { MusicNoteButton } from './components/karaoke-player-settings/MusicNoteButton';
 import { RiMusicAiLine } from 'react-icons/ri';
 import musicNoteStyles from './components/karaoke-player-settings/styles.module.css';
@@ -56,7 +56,6 @@ import {
 } from '@lib/utils/storage/autoDisableStorage';
 import { Toast } from './components/common/Toast';
 import { AutoDisableNotification } from './components/common/AutoDisableNotification';
-import i18next from 'i18next';
 
 (() => {
   // 새로고침 시 contentscript 내 중복 실행 방지
@@ -122,12 +121,33 @@ import i18next from 'i18next';
   // MusicNoteButton 전용 React Root
   let musicNoteButtonRoot: ReactDOM.Root | null = null;
 
-  // KaraokeModeContainer 전용 React Root 및 상태
+  // KaraokeModeContainer 전용 React Root
   let karaokeModeRoot: ReactDOM.Root | null = null;
-  let isKaraokeModeVisible = false;
 
-  // 아카펠라 녹음 상태 추적
-  let currentRecordingState: string = 'idle';
+  // 카라오케 모드 매니저 초기화
+  const karaokeModeManager = new KaraokeModeManager({
+    onShowToast: (message: string) => showToast(message),
+    onModeChanged: (isVisible: boolean) => {
+      // 모드 변경 시 렌더링 및 버튼 상태 업데이트
+      renderKaraokeModeContainer();
+      updateMusicNoteButtonState(isVisible);
+    },
+    onLyricsChanged: () => {
+      // 가사 변경 시 KaraokeModeContainer 재렌더링
+      if (karaokeModeManager.isVisible()) {
+        renderKaraokeModeContainer();
+      }
+    },
+  });
+
+  // 가라오케 모드 자동 종료 이벤트 리스너 (모드 버튼 클릭 시)
+  window.addEventListener('karaoke-mode-exit', () => {
+    console.log('[Index] 가라오케 모드 종료 이벤트 수신 (모드 버튼 클릭)');
+    if (karaokeModeManager.isVisible()) {
+      // skipTheaterModeRestore: true - 사용자가 이미 모드를 변경했으므로 복원하지 않음
+      karaokeModeManager.toggleKaraokeMode(true);
+    }
+  });
 
   // 토스트/알림 전용 React Root
   let toastRoot: ReactDOM.Root | null = null;
@@ -302,59 +322,14 @@ import i18next from 'i18next';
     }, duration);
   }
 
-  // 아카펠라 녹음 상태 추적 이벤트 리스너
-  window.addEventListener('acapella-recording-state-change', (event: Event) => {
-    const customEvent = event as CustomEvent<{ recordingState: string; recordedAudioUrl: string | null }>;
-    currentRecordingState = customEvent.detail.recordingState;
-  });
-
-  // 가라오케 모드 토글 함수
-  async function toggleKaraokeMode() {
-    // 가라오케 모드를 켜려고 할 때만 확장 활성화 상태 확인
-    if (!isKaraokeModeVisible) {
-      const result = await chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED]);
-      const isExtensionEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
-
-      if (!isExtensionEnabled) {
-        // 확장이 비활성화되어 있으면 토스트 메시지 표시 후 차단
-        showToast('확장 프로그램을 먼저 활성화해주세요 (우측 상단 확장 아이콘 클릭)');
-        console.log('[toggleKaraokeMode] 확장 비활성화 상태 - 가라오케 모드 진입 차단');
-        return;
-      }
-    } else {
-      // 가라오케 모드를 끄려고 할 때 녹음 중이면 확인
-      if (currentRecordingState === 'recording' || currentRecordingState === 'paused') {
-        // 녹음 중이면 자동 일시정지
-        if (currentRecordingState === 'recording') {
-          window.dispatchEvent(new CustomEvent('acapella-pause-recording'));
-        }
-
-        const userChoice = window.confirm(i18next.t('extAcapellaSaveAndLeaveConfirm'));
-
-        if (userChoice) {
-          // 확인 클릭: 저장 요청 이벤트 발생
-          window.dispatchEvent(new CustomEvent('acapella-save-and-close'));
-          // 저장 완료까지 대기 (간단한 딜레이)
-          await new Promise((resolve) => setTimeout(resolve, 500));
-        } else {
-          // 취소 클릭: 저장하지 않고 나가기
-          window.dispatchEvent(new CustomEvent('acapella-discard-and-close'));
-        }
-      }
-    }
-
-    // 가라오케 모드 토글 (끄는 것은 확장 활성화 여부와 무관)
-    isKaraokeModeVisible = !isKaraokeModeVisible;
-    console.log(`[toggleKaraokeMode] 가라오케 모드 ${isKaraokeModeVisible ? '활성화' : '비활성화'}`);
-
-    // KaraokeModeContainer 렌더링
-    renderKaraokeModeContainer();
-
-    // MusicNoteButton의 menuVisible 상태를 DOM으로 직접 업데이트 (재렌더링 방지)
+  /**
+   * MusicNoteButton 상태 업데이트 (DOM 직접 조작)
+   */
+  function updateMusicNoteButtonState(isVisible: boolean) {
     const musicNoteBtn = document.querySelector('.ytp-music-note-button') as HTMLButtonElement;
     if (musicNoteBtn) {
-      musicNoteBtn.classList.toggle('clicked', isKaraokeModeVisible);
-      musicNoteBtn.setAttribute('data-menu-visible', isKaraokeModeVisible ? 'true' : 'false');
+      musicNoteBtn.classList.toggle('clicked', isVisible);
+      musicNoteBtn.setAttribute('data-menu-visible', isVisible ? 'true' : 'false');
     }
   }
 
@@ -387,7 +362,9 @@ import i18next from 'i18next';
     }
 
     // KaraokeModeContainer 렌더링 (visible 상태에 따라 표시/숨김)
-    karaokeModeRoot.render(<KaraokeModeContainer visible={isKaraokeModeVisible} lyrics={latestLyrics} />);
+    karaokeModeRoot.render(
+      <KaraokeModeContainer visible={karaokeModeManager.isVisible()} lyrics={karaokeModeManager.getLyrics()} />,
+    );
   }
 
   // MusicNoteButton 렌더링 함수 (확장 로드 시 한 번만 실행)
@@ -417,8 +394,8 @@ import i18next from 'i18next';
       <MusicNoteButton
         icon={<RiMusicAiLine className={musicNoteStyles.icon} size={24} color="white" />}
         contentEnabled={true} // 항상 true
-        menuVisible={isKaraokeModeVisible}
-        onClick={toggleKaraokeMode}
+        menuVisible={karaokeModeManager.isVisible()}
+        onClick={() => karaokeModeManager.toggleKaraokeMode()}
       />,
     );
 
@@ -723,10 +700,8 @@ import i18next from 'i18next';
 
     renderLyricsOverlay(latestLyrics);
 
-    // KaraokeModeContainer도 업데이트 (가사가 변경되면 BottomContainer에 전달)
-    if (isKaraokeModeVisible) {
-      renderKaraokeModeContainer();
-    }
+    // 카라오케 모드 매니저에 가사 업데이트 (자동으로 KaraokeModeContainer 재렌더링됨)
+    karaokeModeManager.setLyrics(newLyrics);
 
     // 광고 모니터링 시작: 가사가 렌더링된 후 광고 상태를 지속적으로 체크
     startLyricsAdMonitoringIfNeeded();
