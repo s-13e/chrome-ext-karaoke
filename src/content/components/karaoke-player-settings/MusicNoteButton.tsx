@@ -19,11 +19,54 @@ export const MusicNoteButton: React.FC<Props> = ({ icon, contentEnabled, menuVis
   const iconRootRef = useRef<ReactDOM.Root | null>(null);
   const observerRef = useRef<MutationObserver | null>(null);
   const insertionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isFullscreen, setIsFullscreen] = React.useState(false);
+
+  /**
+   * 전체화면 상태 감지
+   */
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isCurrentlyFullscreen = !!document.fullscreenElement;
+      setIsFullscreen(isCurrentlyFullscreen);
+
+      // 전체화면 진입 시 버튼 제거
+      if (isCurrentlyFullscreen && btnRef.current) {
+        console.log('[MusicNoteButton] 전체화면 진입 - 버튼 제거');
+        btnRef.current.remove();
+        btnRef.current = null;
+      }
+      // 전체화면 종료 시 버튼 재삽입
+      else if (!isCurrentlyFullscreen && contentEnabled) {
+        console.log('[MusicNoteButton] 전체화면 종료 - 버튼 재삽입');
+        setTimeout(() => {
+          insertButton();
+        }, 100);
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, [contentEnabled]);
 
   /**
    * 버튼 생성 및 DOM 삽입
    */
   const insertButton = useCallback(() => {
+    // 전체화면 모드일 때는 버튼 삽입하지 않음
+    if (isFullscreen) {
+      console.log('[MusicNoteButton] 전체화면 모드 - 버튼 삽입 스킵');
+      return;
+    }
+
     // 이미 버튼이 존재하고 DOM에 연결되어 있으면 스킵
     if (btnRef.current && document.contains(btnRef.current)) {
       return;
@@ -82,7 +125,7 @@ export const MusicNoteButton: React.FC<Props> = ({ icon, contentEnabled, menuVis
 
     // 버튼 삽입: targetContainer 맨 앞에 추가
     targetContainer.insertBefore(btn, targetContainer.firstChild);
-  }, [icon, onClick]);
+  }, [icon, onClick, isFullscreen]);
 
   /**
    * YouTube UI 변경 감지 및 버튼 재삽입

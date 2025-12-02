@@ -1227,6 +1227,12 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
       `[SPA] url: ${url} videoIdChanged: ${videoIdChanged} urlChanged: ${urlChanged} watchPageChanged: ${watchPageChanged}`,
     );
 
+    // watch 페이지를 벗어날 때 가라오케 모드 자동 해제
+    if (watchPageChanged && !currentIsWatchPage && karaokeModeManager.isVisible()) {
+      console.log('[SPA] watch 페이지 벗어남 - 가라오케 모드 자동 해제');
+      karaokeModeManager.toggleKaraokeMode();
+    }
+
     if (isMiniToFullTransitioning) {
       console.log('[SPA] 미니-일반 전환 중 감지 호출 스킵');
       return;

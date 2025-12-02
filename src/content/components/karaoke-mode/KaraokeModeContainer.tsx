@@ -7,6 +7,14 @@ import { SidebarContainer } from './SidebarContainer';
 import { BottomContainer } from './BottomContainer';
 import { Line } from '@lib/types/lyrics';
 
+/**
+ * 레이아웃 상수
+ * styles.module.css의 값과 일치해야 함
+ */
+const YOUTUBE_TOOLBAR = 56; // YouTube 상단 툴바 높이
+const HEADER_HEIGHT = 30; // HeaderContainer 높이
+const BOTTOM_BAR_HEIGHT = 100; // BottomContainer 높이 (styles.module.css .bottomContainer height와 동일)
+
 interface KaraokeModeContainerProps {
   visible: boolean;
   lyrics: Line[];
@@ -21,13 +29,45 @@ interface KaraokeModeContainerProps {
 export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visible, lyrics }) => {
   const [isFullscreen, setIsFullscreen] = React.useState(false);
 
-  // 전체화면 상태 감지
+  // 전체화면 상태 감지 및 처리
   useEffect(() => {
     if (!visible) return;
 
     const handleFullscreenChange = () => {
       const isCurrentlyFullscreen = !!document.fullscreenElement;
       setIsFullscreen(isCurrentlyFullscreen);
+
+      const fullBleedContainer = document.querySelector<HTMLElement>('#full-bleed-container');
+      const columns = document.querySelector<HTMLElement>('#columns');
+
+      if (isCurrentlyFullscreen) {
+        // 전체화면 진입: 가라오케 모드 스타일 제거 (YouTube 기본 전체화면으로)
+        console.log('[KaraokeModeContainer] 전체화면 진입 - 가라오케 스타일 일시 해제');
+        if (fullBleedContainer) {
+          fullBleedContainer.style.removeProperty('position');
+          fullBleedContainer.style.removeProperty('top');
+          fullBleedContainer.style.removeProperty('left');
+          fullBleedContainer.style.removeProperty('width');
+          fullBleedContainer.style.removeProperty('height');
+          fullBleedContainer.style.removeProperty('z-index');
+          fullBleedContainer.style.removeProperty('margin');
+          fullBleedContainer.style.removeProperty('padding');
+          fullBleedContainer.style.removeProperty('max-width');
+        }
+        if (columns) {
+          columns.style.removeProperty('display');
+        }
+        document.body.style.overflow = '';
+        document.documentElement.style.overflow = '';
+      } else {
+        // 전체화면 종료: 가라오케 모드 스타일 재적용
+        console.log('[KaraokeModeContainer] 전체화면 종료 - 가라오케 스타일 복원');
+        // 잠시 후 스타일 재적용 (전체화면 종료 애니메이션 완료 대기)
+        setTimeout(() => {
+          // 스타일 재적용을 위해 useEffect 재실행 트리거
+          window.dispatchEvent(new CustomEvent('karaoke-restore-styles'));
+        }, 100);
+      }
     };
 
     document.addEventListener('fullscreenchange', handleFullscreenChange);
@@ -46,13 +86,17 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
   useEffect(() => {
     if (!visible) return;
 
-    const YOUTUBE_TOOLBAR = 56;
-    const HEADER_HEIGHT = 30; // HeaderContainer 높이
-    const BOTTOM_BAR_HEIGHT = 80; // BottomContainer 높이
-    const SIDEBAR_WIDTH = 250; // SidebarContainer 너비
+    // 반응형 사이드바 너비 계산 (CSS 미디어 쿼리와 동일)
+    const getSidebarWidth = () => {
+      const width = window.innerWidth;
+      if (width <= 768) return 150;
+      if (width <= 1024) return 200;
+      return 250;
+    };
 
-    // 영화관 모드 전환 완료를 기다린 후 DOM 조작
-    const timeoutId = setTimeout(() => {
+    // 가라오케 스타일 적용 함수
+    const applyKaraokeStyles = () => {
+      const SIDEBAR_WIDTH = getSidebarWidth();
       // YouTube 페이지 메인 컨테이너들
       const fullBleedContainer = document.querySelector<HTMLElement>('#full-bleed-container');
       const columns = document.querySelector<HTMLElement>('#columns');
@@ -89,13 +133,36 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
       const playerContainer = fullBleedContainer.querySelector<HTMLElement>('#player-container');
       if (playerContainer) {
         playerContainer.style.setProperty('width', '100%', 'important');
+        playerContainer.style.setProperty('height', '100%', 'important');
         playerContainer.style.setProperty('max-width', '100%', 'important');
+        playerContainer.style.setProperty('max-height', '100%', 'important');
       }
 
       const moviePlayer = fullBleedContainer.querySelector<HTMLElement>('#movie_player');
       if (moviePlayer) {
         moviePlayer.style.setProperty('width', '100%', 'important');
+        moviePlayer.style.setProperty('height', '100%', 'important');
         moviePlayer.style.setProperty('max-width', '100%', 'important');
+        moviePlayer.style.setProperty('max-height', '100%', 'important');
+      }
+
+      // YouTube 플레이어 내부의 비디오 컨테이너도 조정
+      const videoContainer = fullBleedContainer.querySelector<HTMLElement>('.html5-video-container');
+      if (videoContainer) {
+        videoContainer.style.setProperty('width', '100%', 'important');
+        videoContainer.style.setProperty('height', '100%', 'important');
+        videoContainer.style.setProperty('max-width', '100%', 'important');
+        videoContainer.style.setProperty('max-height', '100%', 'important');
+      }
+
+      // 실제 비디오 요소도 조정
+      const videoElement = fullBleedContainer.querySelector<HTMLVideoElement>('video.html5-main-video');
+      if (videoElement) {
+        videoElement.style.setProperty('width', '100%', 'important');
+        videoElement.style.setProperty('height', '100%', 'important');
+        videoElement.style.setProperty('max-width', '100%', 'important');
+        videoElement.style.setProperty('max-height', '100%', 'important');
+        videoElement.style.setProperty('object-fit', 'contain', 'important');
       }
 
       // 강제 리플로우 트리거 (스타일 적용 강제)
@@ -107,7 +174,18 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
       // 스크롤 방지
       document.body.style.overflow = 'hidden';
       document.documentElement.style.overflow = 'hidden';
-    }, 300); // 영화관 모드 전환 대기 (300ms)
+    };
+
+    // 초기 스타일 적용 (영화관 모드 전환 대기)
+    const timeoutId = setTimeout(applyKaraokeStyles, 300);
+
+    // 전체화면 종료 후 복원 이벤트 리스너
+    const handleRestoreStyles = () => {
+      console.log('[KaraokeModeContainer] 스타일 복원 이벤트 수신');
+      applyKaraokeStyles();
+    };
+
+    window.addEventListener('karaoke-restore-styles', handleRestoreStyles);
 
     // 영화관/기본 모드 버튼 클릭 시 가라오케 모드 자동 비활성화
     const handleTheaterModeButtonClick = () => {
@@ -120,6 +198,18 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
     if (theaterModeButton) {
       theaterModeButton.addEventListener('click', handleTheaterModeButtonClick);
     }
+
+    // 윈도우 리사이즈 시 플레이어 크기 재조정
+    const handleResize = () => {
+      const fullBleedContainer = document.querySelector<HTMLElement>('#full-bleed-container');
+      if (fullBleedContainer) {
+        const SIDEBAR_WIDTH = getSidebarWidth();
+        fullBleedContainer.style.setProperty('width', `calc(100vw - ${SIDEBAR_WIDTH}px)`, 'important');
+        fullBleedContainer.style.setProperty('max-width', `calc(100vw - ${SIDEBAR_WIDTH}px)`, 'important');
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
 
     // 클린업: 원래 상태로 복원
     return () => {
@@ -137,6 +227,7 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
         fullBleedContainer.style.removeProperty('z-index');
         fullBleedContainer.style.removeProperty('margin');
         fullBleedContainer.style.removeProperty('padding');
+        fullBleedContainer.style.removeProperty('max-width');
       }
       if (columns) {
         columns.style.removeProperty('display');
@@ -145,6 +236,8 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
       document.documentElement.style.overflow = '';
 
       // 이벤트 리스너 제거
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('karaoke-restore-styles', handleRestoreStyles);
       if (theaterModeButton) {
         theaterModeButton.removeEventListener('click', handleTheaterModeButtonClick);
       }
