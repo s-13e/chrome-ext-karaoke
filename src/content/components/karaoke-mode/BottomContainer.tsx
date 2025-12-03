@@ -16,12 +16,10 @@ import {
   MdSubtitles,
   MdRecordVoiceOver,
   MdReorder,
-  MdClose,
 } from 'react-icons/md';
 import { useTranslation } from 'react-i18next';
 import { Line } from '@lib/types/lyrics';
 import { applyOffsetToLyrics } from '@lib/utils/lyrics/display/lyricsOffset';
-import { SingleLineLyrics } from '../lyrics/SingleLineLyrics/SingleLineLyrics';
 
 // 아이콘 공통 스타일 상수
 const ICON_SIZE = 28;
@@ -91,11 +89,23 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
 
   // 오프셋 조정 모달 상태
   const [showOffsetModal, setShowOffsetModal] = React.useState<boolean>(false);
-  const [offset, setOffset] = React.useState<number>(initialOffset);
-  const [offsetLyrics, setOffsetLyrics] = React.useState<Line[]>(lyrics);
-  const videoRef = React.useRef<HTMLVideoElement | null>(null);
-  const sliderRef = React.useRef<HTMLInputElement | null>(null);
-  const [thumbPos, setThumbPos] = React.useState(0);
+  const [, setOffset] = React.useState<number>(initialOffset);
+  const syncModalRef = React.useRef<HTMLDivElement | null>(null);
+
+  // 새로운 싱크셋 방식 상태
+  const [isSyncRecording, setIsSyncRecording] = React.useState<boolean>(false);
+  const [userClickTime, setUserClickTime] = React.useState<number | null>(null);
+  const [calculatedOffset, setCalculatedOffset] = React.useState<number>(0);
+
+  // 원본 가사 보관 (초기화용) - lyrics prop이 변경될 때만 업데이트
+  const originalLyricsRef = React.useRef<Line[]>(lyrics);
+  React.useEffect(() => {
+    // lyrics가 새로 로드되었을 때만 원본으로 저장 (길이나 첫 가사 텍스트가 다를 때)
+    if (lyrics.length !== originalLyricsRef.current.length || lyrics[0]?.text !== originalLyricsRef.current[0]?.text) {
+      originalLyricsRef.current = lyrics;
+      console.log('[BottomContainer] 원본 가사 업데이트:', lyrics.length, '줄');
+    }
+  }, [lyrics]);
 
   /**
    * YouTube 동영상 플레이어 제어
@@ -120,34 +130,10 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
     [lyrics],
   );
 
-  // video element 참조 설정
-  React.useEffect(() => {
-    const vid = document.querySelector<HTMLVideoElement>('video.html5-main-video');
-    if (vid) {
-      videoRef.current = vid;
-      console.log('[BottomContainer] video element 참조 성공');
-    } else {
-      console.warn('[BottomContainer] video element를 찾지 못했습니다.');
-    }
-  }, []);
-
   // initialOffset 변경 시 업데이트
   React.useEffect(() => {
     setOffset(initialOffset);
-    setOffsetLyrics(applyOffsetToLyrics(lyrics, initialOffset, 0));
-  }, [initialOffset, lyrics]);
-
-  // 썸 위치 계산
-  React.useEffect(() => {
-    if (sliderRef.current) {
-      const slider = sliderRef.current;
-      const minVal = -15;
-      const maxVal = 15;
-      const ratio = (offset - minVal) / (maxVal - minVal);
-      const width = slider.offsetWidth;
-      setThumbPos(ratio * width);
-    }
-  }, [offset]);
+  }, [initialOffset]);
 
   // chrome.storage에서 상태 불러오기
   React.useEffect(() => {
@@ -545,58 +531,152 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
    */
   const handleSyncSettings = () => {
     setShowOffsetModal(true);
+    setIsSyncRecording(false);
+    setUserClickTime(null);
+    setCalculatedOffset(0);
   };
 
   /**
-   * 오프셋 조정 모달 닫기
+   * 오프셋 조정 모달 닫기 (취소)
    */
   const handleCloseOffsetModal = () => {
     setShowOffsetModal(false);
+    setIsSyncRecording(false);
+    setUserClickTime(null);
+    setCalculatedOffset(0);
+
+    // 녹음 중이었다면 영상 재생 중지 및 0초로 이동
+    const videoElement = getYouTubePlayer();
+    if (videoElement) {
+      videoElement.pause();
+      videoElement.currentTime = 0;
+    }
   };
 
   /**
-   * 슬라이더 값 변경 (드래그 중)
+   * 싱크 녹음 시작/지금! 버튼 클릭
    */
-  const handleOffsetSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newOffset = Number(e.target.value);
-    setOffset(newOffset);
-  };
+  const handleSyncButtonClick = () => {
+    const videoElement = getYouTubePlayer();
+    if (!videoElement) return;
 
-  /**
-   * 오프셋 리셋 (0초로)
-   */
-  const handleOffsetReset = () => {
-    setOffset(0);
+    if (!isSyncRecording) {
+      // 시작 버튼 클릭 시
+      setIsSyncRecording(true);
+      setUserClickTime(null);
+      setCalculatedOffset(0);
+
+      // 영상을 0초로 이동 후 재생
+      videoElement.currentTime = 0;
+      videoElement.play();
+      console.log('[BottomContainer] 싱크 녹음 시작 - 영상 0초부터 재생');
+    } else {
+      // 지금! 버튼 클릭 시
+      const currentTime = videoElement.currentTime;
+      setUserClickTime(currentTime);
+
+      // 원본 가사의 첫 가사 시간 가져오기
+      const originalLyrics = originalLyricsRef.current;
+      const firstLyricTime = originalLyrics.length > 0 && originalLyrics[0] ? originalLyrics[0].time : 0;
+
+      // 오프셋 계산: 사용자가 누른 시간 - 첫 가사 시간
+      const newOffset = Number((currentTime - firstLyricTime).toFixed(1));
+      setCalculatedOffset(newOffset);
+
+      // 영상 일시정지 및 0초로 이동
+      videoElement.pause();
+      videoElement.currentTime = 0;
+      setIsSyncRecording(false);
+
+      console.log(
+        '[BottomContainer] 싱크 녹음 완료 - 사용자 클릭:',
+        currentTime,
+        '첫 가사 (원본):',
+        firstLyricTime,
+        '오프셋:',
+        newOffset,
+      );
+    }
   };
 
   /**
    * 오프셋 적용 버튼
    */
   const handleApplyOffset = () => {
-    // 항상 원본(lyrics) 기준으로 적용
-    const appliedLyrics = applyOffsetToLyrics(lyrics, offset, 0);
-    setOffsetLyrics(appliedLyrics);
+    const finalOffset = calculatedOffset;
+
+    // 원본 가사를 기준으로 오프셋 적용
+    const originalLyrics = originalLyricsRef.current;
+    const appliedLyrics = applyOffsetToLyrics(originalLyrics, finalOffset, 0);
+    setOffset(finalOffset);
 
     // 부모에게 적용된 값 알림
-    onOffsetChange?.(offset, appliedLyrics);
+    onOffsetChange?.(finalOffset, appliedLyrics);
 
     // content script에 메시지 전송하여 즉시 반영
     chrome.runtime.sendMessage(
       {
         type: 'APPLY_OFFSET_LYRICS',
-        payload: { offset, lyrics: appliedLyrics },
+        payload: { offset: finalOffset, lyrics: appliedLyrics },
       },
       () => {
         if (chrome.runtime.lastError) {
           console.warn('[BottomContainer] APPLY_OFFSET_LYRICS 전송 오류:', chrome.runtime.lastError.message);
         } else {
-          console.log('[BottomContainer] APPLY_OFFSET_LYRICS 전송 완료');
+          console.log(`[BottomContainer] APPLY_OFFSET_LYRICS 전송 완료 (offset: ${finalOffset}초)`);
         }
       },
     );
 
-    // 모달 닫기
+    // 모달 닫기 및 상태 초기화
     setShowOffsetModal(false);
+    setIsSyncRecording(false);
+    setUserClickTime(null);
+    setCalculatedOffset(0);
+  };
+
+  /**
+   * 오프셋 초기화 버튼 - offset = 0 (원본 가사 타임스탬프)으로 되돌리기
+   */
+  const handleResetOffset = () => {
+    const resetOffset = 0;
+
+    // 원본 가사를 그대로 사용 (offset 0 적용 - 원본 타임스탬프 그대로)
+    const originalLyrics = originalLyricsRef.current;
+    const appliedLyrics = applyOffsetToLyrics(originalLyrics, resetOffset, 0);
+    setOffset(resetOffset);
+
+    // 부모에게 적용된 값 알림
+    onOffsetChange?.(resetOffset, appliedLyrics);
+
+    // content script에 메시지 전송하여 즉시 반영
+    chrome.runtime.sendMessage(
+      {
+        type: 'APPLY_OFFSET_LYRICS',
+        payload: { offset: resetOffset, lyrics: appliedLyrics },
+      },
+      () => {
+        if (chrome.runtime.lastError) {
+          console.warn('[BottomContainer] APPLY_OFFSET_LYRICS 전송 오류:', chrome.runtime.lastError.message);
+        } else {
+          console.log('[BottomContainer] APPLY_OFFSET_LYRICS 초기화 완료 (offset = 0) - 원본 가사 복원');
+        }
+      },
+    );
+
+    // 영상을 0초로 이동하고 재생하여 초기화된 오프셋 확인
+    const videoElement = getYouTubePlayer();
+    if (videoElement) {
+      videoElement.currentTime = 0;
+      videoElement.play();
+      console.log('[BottomContainer] 초기화 후 영상 0초부터 재생');
+    }
+
+    // 모달 닫기 및 상태 초기화
+    setShowOffsetModal(false);
+    setIsSyncRecording(false);
+    setUserClickTime(null);
+    setCalculatedOffset(0);
   };
 
   /**
@@ -776,80 +856,77 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
         </div>
       </div>
 
-      {/* 오프셋 조정 모달 */}
+      {/* 새로운 싱크셋 조정 모달 */}
       {showOffsetModal && (
-        <div className={styles.offsetModalOverlay}>
-          <div className={styles.offsetModalContainer}>
-            <div className={styles.offsetModalHeader}>
-              <h2 className={styles.offsetModalTitle}>가사 오프셋 설정</h2>
-              <button className={styles.closeButton} onClick={handleCloseOffsetModal} aria-label="닫기">
-                <MdClose size={24} color="#ffffff" />
-              </button>
-            </div>
+        <div className={styles.syncModalContainer} ref={syncModalRef}>
+          <div className={styles.syncModalContent}>
+            {/* 설명 */}
+            <p className={styles.syncDescription}>{t('extKaraokeSyncDescription')}</p>
 
-            <div className={styles.offsetModalContent}>
-              <div className={styles.offsetControlSection}>
-                <span className={styles.offsetLabel}>가사 싱크 조절</span>
+            {/* 시작/지금! 토글 버튼 */}
+            <button
+              className={isSyncRecording ? styles.syncRecordingButton : styles.syncStartButton}
+              onClick={handleSyncButtonClick}
+              aria-label={isSyncRecording ? t('extKaraokeSyncNow') : t('extKaraokeSyncStart')}
+            >
+              {isSyncRecording ? t('extKaraokeSyncNow') : t('extKaraokeSyncStart')}
+            </button>
 
-                {/* 슬라이더 */}
-                <input
-                  type="range"
-                  min={-15}
-                  max={15}
-                  step={1}
-                  value={offset}
-                  onChange={handleOffsetSliderChange}
-                  ref={sliderRef}
-                  className={styles.offsetSlider}
-                  aria-label="가사 싱크 조절 슬라이더"
-                />
-
-                {/* 슬라이더 눈금 및 값 표시 */}
-                <div className={styles.sliderTicks}>
-                  <span className={styles.tickLabel} style={{ left: 0 }}>
-                    -15
+            {/* 오프셋 정보 표시 (버튼 클릭 후에만 표시) */}
+            {userClickTime !== null && (
+              <div className={styles.syncInfo}>
+                <div className={styles.syncInfoRow}>
+                  <span>{t('extKaraokeSyncUserClickTime')}:</span>
+                  <span>
+                    {userClickTime.toFixed(1)}
+                    {t('extKaraokeSyncTimeUnit') ?? '초'}
                   </span>
-                  <span className={styles.tickLabel} style={{ left: '50%', transform: 'translateX(-50%)' }}>
-                    0
-                  </span>
-                  <span className={styles.tickLabel} style={{ right: 0 }}>
-                    15
-                  </span>
-
-                  {/* 현재값 표시 버튼 (썸 위치에 고정) */}
-                  <button
-                    type="button"
-                    onClick={handleOffsetReset}
-                    className={styles.offsetValueButton}
-                    style={{ left: thumbPos }}
-                    aria-label="가사 싱크 0초로 초기화"
-                  >
-                    {offset > 0 ? `+${offset}` : offset}
-                  </button>
                 </div>
-
-                {/* 적용 버튼 */}
-                <button className={styles.applyButton} onClick={handleApplyOffset}>
-                  적용
-                </button>
+                <div className={styles.syncInfoRow}>
+                  <span>{t('extKaraokeSyncFirstLyricTime')}:</span>
+                  <span>
+                    {originalLyricsRef.current.length > 0 && originalLyricsRef.current[0]
+                      ? originalLyricsRef.current[0].time.toFixed(1)
+                      : '0.0'}
+                    {t('extKaraokeSyncTimeUnit') ?? '초'}
+                  </span>
+                </div>
+                <div className={styles.syncInfoRow}>
+                  <span>{t('extKaraokeSyncCalculatedOffset')}:</span>
+                  <span className={styles.syncOffsetValue}>
+                    {calculatedOffset > 0 ? `+${calculatedOffset}` : calculatedOffset}
+                    {t('extKaraokeSyncTimeUnit') ?? '초'}
+                  </span>
+                </div>
               </div>
+            )}
 
-              {/* 가사 미리보기 */}
-              {videoRef.current && (
-                <div className={styles.offsetPreviewSection}>
-                  <SingleLineLyrics
-                    lyrics={offsetLyrics}
-                    offset={0}
-                    currentTime={videoRef.current.currentTime}
-                    fontColor="#fff"
-                    showRealtimeLyrics={showCurrentLyrics}
-                    showPronunciationLyrics={showPronunciation}
-                  />
-                </div>
-              )}
+            {/* 확인 문구 (오프셋 계산 후에만 표시) */}
+            {userClickTime !== null && (
+              <p className={styles.syncConfirmMessage}>
+                {calculatedOffset < 0
+                  ? t('extKaraokeSyncConfirmFaster', {
+                      offset: Math.abs(calculatedOffset),
+                      unit: t('extKaraokeSyncTimeUnit') ?? '초',
+                    })
+                  : t('extKaraokeSyncConfirmSlower', {
+                      offset: calculatedOffset,
+                      unit: t('extKaraokeSyncTimeUnit') ?? '초',
+                    })}
+              </p>
+            )}
 
-              {/* 설명 */}
-              <p className={styles.offsetDescription}>가사 자막의 타이밍이 맞지 않을 때, 여기서 미세 조절하세요.</p>
+            {/* 버튼 그룹 */}
+            <div className={styles.syncButtonGroup}>
+              <button className={styles.syncResetButton} onClick={handleResetOffset}>
+                {t('extKaraokeSyncReset')}
+              </button>
+              <button className={styles.syncCancelButton} onClick={handleCloseOffsetModal}>
+                {t('extCancel')}
+              </button>
+              <button className={styles.syncApplyButton} onClick={handleApplyOffset} disabled={userClickTime === null}>
+                {t('extKaraokeSyncApply')}
+              </button>
             </div>
           </div>
         </div>
