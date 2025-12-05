@@ -6,6 +6,7 @@ import { I18nextProvider } from 'react-i18next';
 import { ErrorBoundary } from 'react-error-boundary';
 import { detectYouTubeVideo, setupSPAObserver } from '@lib/youtube';
 import { debounce } from '@lib/utils/common/common';
+import { contentLogger, contentErrorTracker, LogLevelEnum } from '@lib/utils/monitoring';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 import { fetchYouTubeVideoMeta } from '@background/api/youtube';
 import { isMusicVideo } from '@lib/utils/audio/musicDetection';
@@ -58,12 +59,41 @@ import { Toast } from './components/common/Toast';
 import { AutoDisableNotification } from './components/common/AutoDisableNotification';
 
 (() => {
+  // 전역 에러 핸들러 설정 (최상단)
+  window.addEventListener('error', (event) => {
+    // ResizeObserver 에러는 Chrome의 harmless warning이므로 무시
+    if (event.message.includes('ResizeObserver loop')) {
+      return;
+    }
+
+    contentErrorTracker.captureError(
+      event.error || new Error(event.message),
+      'Uncaught error in content script',
+      LogLevelEnum.ERROR,
+      {
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+      },
+    );
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    contentErrorTracker.captureError(
+      event.reason instanceof Error ? event.reason : new Error(String(event.reason)),
+      'Unhandled promise rejection in content script',
+      LogLevelEnum.ERROR,
+    );
+  });
+
   // 새로고침 시 contentscript 내 중복 실행 방지
   if (window.__LYRICS_OVERLAY_INITED) {
-    console.log('[LyricsExt] Already initialized. Skipping...');
+    contentLogger.warn('Content script already initialized, skipping...');
     return;
   }
   window.__LYRICS_OVERLAY_INITED = true;
+
+  contentLogger.info('Content script initializing...');
 
   // Extension context invalidation 감지 및 자동 페이지 새로고침
   // 개발 중 확장 재로드 시 content script가 무효화되는 문제 해결
@@ -78,7 +108,7 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
 
   function checkExtensionContext() {
     if (!isExtensionContextValid()) {
-      console.warn('[Extension] Context invalidated - reloading page...');
+      contentLogger.warn('Extension context invalidated, reloading page...');
       window.location.reload();
     }
   }
@@ -195,12 +225,16 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
    * 콘텐츠 관련 전반적인 리소스를 정리하는 최상위 클린업 함수
    */
   const cleanupAllResources = (): void => {
-    console.log('cleanupAllResources 실행');
+    console.log('[cleanupAllResources] 실행 - tracking Emotion unmounting');
+    contentLogger.info('[cleanupAllResources] Cleaning up all resources and unmounting React components');
 
     listenerManager.removeAll();
     removeAllObservers();
     uiManager.cleanup();
     resetLyricsData();
+
+    console.log('[cleanupAllResources] 완료 - React components should be unmounted');
+    contentLogger.info('[cleanupAllResources] Cleanup complete');
   };
 
   // --- Observer 및 리스너 관리 함수 ---
@@ -358,6 +392,8 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
 
     // React Root 생성 또는 재사용
     if (!karaokeModeRoot) {
+      console.log('[renderKaraokeModeContainer] Tracking: Creating KaraokeModeContainer React root - Emotion may load');
+      contentLogger.debug('Creating KaraokeModeContainer React root');
       karaokeModeRoot = ReactDOM.createRoot(karaokeContainer);
     }
 
@@ -389,6 +425,8 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
     }
 
     // React Root 생성 및 렌더링
+    console.log('[renderMusicNoteButton] Tracking: Creating MusicNoteButton React root - Emotion may load');
+    contentLogger.debug('Creating MusicNoteButton React root');
     musicNoteButtonRoot = ReactDOM.createRoot(buttonContainer);
     musicNoteButtonRoot.render(
       <MusicNoteButton
@@ -414,6 +452,8 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
     }
 
     if (!toastRoot) {
+      console.log('[showReactivationToast] Tracking: Creating Toast React root - Emotion may load');
+      contentLogger.debug('Creating Toast React root');
       toastRoot = ReactDOM.createRoot(toastContainer);
     }
 
@@ -446,6 +486,10 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
     }
 
     if (!notificationRoot) {
+      console.log(
+        '[showAutoDisableNotification] Tracking: Creating AutoDisableNotification React root - Emotion may load',
+      );
+      contentLogger.debug('Creating AutoDisableNotification React root');
       notificationRoot = ReactDOM.createRoot(notificationContainer);
     }
 
@@ -792,18 +836,42 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
         const result = await collectMetadataAndLyricsCore(videoId, videoElem, attempt);
         return result;
       } catch (error) {
-        // API 타임아웃이고 아직 재시도 가능한 경우
+        // 재시도 가능한 에러이고 아직 재시도 횟수가 남은 경우
         if (
           error instanceof LyricsError &&
-          error.code === LyricsErrorCode.API_TIMEOUT &&
+          (error.code === LyricsErrorCode.API_TIMEOUT || error.code === LyricsErrorCode.NETWORK_ERROR) &&
           attempt <= API_RETRY_MAX_ATTEMPTS
         ) {
-          console.log(`[collectMetadataAndLyrics] API 타임아웃 발생, 재시도 ${attempt}/${API_RETRY_MAX_ATTEMPTS}`);
+          const errorType = error.code === LyricsErrorCode.API_TIMEOUT ? 'API timeout' : 'Network error';
+          contentLogger.warn(`${errorType}, retrying...`, {
+            videoId,
+            attempt,
+            maxAttempts: API_RETRY_MAX_ATTEMPTS,
+          });
+          console.log(`[collectMetadataAndLyrics] ${errorType} 발생, 재시도 ${attempt}/${API_RETRY_MAX_ATTEMPTS}`);
           continue; // 바로 다음 시도
         }
 
         // 재시도 불가능하거나 다른 에러인 경우
+        // 비음악 비디오인 경우는 에러가 아니므로 에러 추적 및 UI 렌더링 생략
+        if (error instanceof LyricsError && error.code === LyricsErrorCode.NOT_MUSIC_VIDEO) {
+          console.log('[NOT_MUSIC_VIDEO] Tracking: Error caught in collectMetadataAndLyrics wrapper');
+          contentLogger.info('Not a music video, skipping error tracking and UI', { videoId });
+          console.log('[NOT_MUSIC_VIDEO] Tracking: Returning null, no UI changes');
+          return null;
+        }
+
+        // 실제 에러만 console.error 로깅
         console.error('[collectMetadataAndLyrics] 최종 실패:', error);
+
+        // 에러 추적
+        if (error instanceof Error) {
+          contentErrorTracker.captureError(error, 'Failed to collect metadata and lyrics', LogLevelEnum.ERROR, {
+            videoId,
+            attempt,
+            errorCode: error instanceof LyricsError ? error.code : undefined,
+          });
+        }
 
         // 에러 UI 렌더링
         if (error instanceof LyricsError) {
@@ -874,6 +942,8 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
     }
 
     try {
+      contentLogger.debug('Starting metadata and lyrics collection', { videoId, attempt });
+
       // 🚀 Prefetch 전략: 가사 로드를 광고 여부와 무관하게 시작 (백그라운드)
       const metaStartTime = performance.now();
       const metaPromise = fetchYouTubeVideoMeta(videoId, process.env.YOUTUBE_API_KEY!);
@@ -881,19 +951,28 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
       // 1) 메타데이터 및 기본 정보 수집
       const meta = await metaPromise;
       console.log(`[Performance] YouTube Meta 조회 완료 (${(performance.now() - metaStartTime).toFixed(0)}ms)`);
-      if (!meta) throw new Error('메타 정보 없음');
+      if (!meta) {
+        contentLogger.warn('YouTube metadata not found', { videoId });
+        throw new Error('메타 정보 없음');
+      }
 
       const isMusic = isMusicVideo(meta);
+      contentLogger.debug('Music video detection result', { videoId, isMusic });
 
       // 음악 영상이 아니면 무음 해제 및 오버레이 제거
       if (!isMusic) {
         console.log('[AutoRewind] 음악 영상 아님, 무음 해제 및 오버레이 제거');
+        contentLogger.info('Not a music video, skipping lyrics and cleaning up UI', { videoId });
+        console.log('[NOT_MUSIC_VIDEO] Tracking: about to unmute and remove loading overlay');
+
         if (player) {
           player.muted = false;
         }
         if (loadingOverlay && loadingOverlay.parentElement) {
           loadingOverlay.remove();
         }
+
+        console.log('[NOT_MUSIC_VIDEO] Tracking: cleanup complete, about to throw LyricsError');
       }
 
       // 자동 비활성화 로직: 음악 여부에 따라 카운트 업데이트
@@ -919,7 +998,8 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
           showAutoDisableNotification(state.threshold);
         }
 
-        throw new Error('음악 영상 아님');
+        // 비음악 비디오는 LyricsError로 처리 (정상적인 스킵 상황)
+        throw new LyricsError(LyricsErrorCode.NOT_MUSIC_VIDEO, 'Not a music video');
       }
 
       const videoDurationSec = meta.durationSec ?? 0;
@@ -1047,6 +1127,11 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
       }
       console.log(`[Performance] 전체 가사 조회 완료 (${(performance.now() - startTime).toFixed(0)}ms)`);
       console.log('[Lyrics] 가사 로딩 완료, 광고 종료 대기 시작');
+      contentLogger.info('Lyrics loaded successfully', {
+        videoId,
+        lyricsCount: lyricsData.parsedLyrics.length,
+        duration: lyricsData.effectiveLyricsDuration,
+      });
 
       // 🚀 2단계: 광고 종료 대기 (가사 준비 후에만 수행)
       let adWaitAttempt = 0;
@@ -1056,10 +1141,12 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
         adWaitAttempt++;
       }
       if (adWaitAttempt >= 30) {
+        contentLogger.warn('Ad wait timeout exceeded', { videoId });
         throw new Error('광고 대기 시간 초과');
       }
       if (adWaitAttempt > 0) {
         console.log('[Lyrics] 광고 종료 확인');
+        contentLogger.debug('Ad playback ended', { videoId, waitAttempts: adWaitAttempt });
       }
 
       // 4) 가사 준비 완료, 상태 업데이트 및 UI 렌더링
@@ -1118,9 +1205,42 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
       // 5) 광고 종료 후 즉시 가사 렌더링
       onLyricsUpdated(parsedLyrics);
       await analyzeAudioAndRender(videoElem, meta, effectiveLyricsDuration, parsedLyrics);
+
+      contentLogger.info('Lyrics rendering completed', {
+        videoId,
+        artist: finalLyricsResult.artist,
+        title: finalLyricsResult.title,
+        totalTime: (performance.now() - startTime).toFixed(0) + 'ms',
+      });
+
       return true;
     } catch (error) {
-      console.error(`[collectMetadataAndLyricsCore] 에러 (시도 ${attempt}):`, error);
+      // NOT_MUSIC_VIDEO는 정상 시나리오이므로 에러 로깅 생략
+      if (error instanceof LyricsError && error.code === LyricsErrorCode.NOT_MUSIC_VIDEO) {
+        throw error; // 상위로 전파만
+      }
+
+      // 재시도 가능한 에러는 WARN 레벨로 로깅
+      const isRetryableError =
+        error instanceof LyricsError &&
+        (error.code === LyricsErrorCode.API_TIMEOUT || error.code === LyricsErrorCode.NETWORK_ERROR);
+
+      if (isRetryableError && attempt <= API_RETRY_MAX_ATTEMPTS) {
+        // 재시도 중인 에러는 WARN 레벨
+        console.warn(`[collectMetadataAndLyricsCore] 재시도 가능한 에러 (시도 ${attempt}):`, error);
+        contentLogger.warn('Retryable error in collectMetadataAndLyricsCore', {
+          videoId,
+          attempt,
+          errorCode: error instanceof LyricsError ? error.code : undefined,
+        });
+      } else {
+        // 최종 실패 에러는 ERROR 레벨
+        console.error(`[collectMetadataAndLyricsCore] 에러 (시도 ${attempt}):`, error);
+        contentLogger.error('Error in collectMetadataAndLyricsCore', error as Error, {
+          videoId,
+          attempt,
+        });
+      }
 
       // LyricsError 처리
       if (error instanceof LyricsError) {
@@ -1128,14 +1248,31 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
         throw error;
       } else {
         // 일반 에러를 LyricsError로 변환하여 전파
-        const lyricsError = new LyricsError(
-          LyricsErrorCode.UNKNOWN_ERROR,
-          error instanceof Error ? error.message : String(error),
-        );
+        let lyricsError: LyricsError;
+
+        if (error instanceof Error) {
+          // 네트워크 에러 감지
+          if (error.message.includes('Failed to fetch') || error.name === 'NetworkError') {
+            lyricsError = LyricsError.fromNetworkError(error, { videoId, attempt });
+          } else {
+            lyricsError = new LyricsError(LyricsErrorCode.UNKNOWN_ERROR, error.message);
+          }
+        } else {
+          lyricsError = new LyricsError(LyricsErrorCode.UNKNOWN_ERROR, String(error));
+        }
+
         throw lyricsError;
       }
     } finally {
       isCollecting = false;
+
+      // 무음 해제 및 로딩 오버레이 제거 (비음악 비디오 포함)
+      if (player) {
+        player.muted = false;
+      }
+      if (loadingOverlay && loadingOverlay.parentElement) {
+        loadingOverlay.remove();
+      }
     }
   }
 
@@ -1167,7 +1304,7 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
     //const videoIdFromUrl = getCurrentVideoId();
     const videoElem = document.querySelector('video');
     if (!videoElem) {
-      console.log('[handleVideoDetection] video element 미존재, 렌더링 생략');
+      contentLogger.warn('Video element not found, skipping detection');
       return;
     }
 
@@ -1176,12 +1313,12 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
       videoData = detectYouTubeVideo();
 
       if (!videoData || !videoData.videoId) {
-        console.log('[handleVideoDetection] 비디오 감지 실패');
+        contentLogger.warn('Failed to detect YouTube video');
         return;
       }
 
       if (videoData.videoId === lastVideoId && isLyricsOverlayMounted()) {
-        console.log('[handleVideoDetection] 이미 처리한 videoId, 오버레이도 실제로 화면에 있음 -> skip');
+        contentLogger.debug('Video already processed, skipping', { videoId: videoData.videoId });
         return;
       }
 
@@ -1192,14 +1329,18 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
       }
       // 이제 감지 성공했을 경우만 갱신
       lastVideoId = videoData.videoId;
+
+      contentLogger.info('Starting lyrics collection', { videoId: videoData.videoId });
       const collected = await collectMetadataAndLyrics(videoData.videoId, videoElem);
 
       if (!collected) {
-        console.warn('[handleVideoDetection] 가사 수집 실패 또는 데이터 없음');
+        contentLogger.warn('Lyrics collection failed or no data');
         return;
       }
     } catch (error) {
-      console.error('[handleVideoDetection] 에러 발생:', error);
+      contentErrorTracker.captureError(error as Error, 'Failed to detect and process video', LogLevelEnum.ERROR, {
+        videoId: videoData?.videoId,
+      });
     } finally {
       isDetecting = false;
 
@@ -1424,26 +1565,50 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
     console.log('[Detection] 감지 시스템 완전 비활성화');
   };
 
+  // 에러 바운더리 에러 핸들러 (모니터링 통합)
+  const handleError = (error: Error, info: { componentStack?: string | null }) => {
+    contentErrorTracker.captureError(error, 'React Error Boundary caught an error', LogLevelEnum.ERROR, {
+      componentStack: info.componentStack ?? undefined,
+      videoId: lastVideoId,
+    });
+    contentLogger.error('React component error', error, {
+      componentStack: info.componentStack ?? undefined,
+      videoId: lastVideoId,
+    });
+  };
+
   // 에러 바운더리 리셋 핸들러
   const handleReset = () => {
+    contentLogger.info('Error boundary reset triggered');
     window.location.reload();
   };
 
   function setupUIResources() {
+    contentLogger.info('[setupUIResources] Starting UI resource setup');
+    console.log('[setupUIResources] Starting UI resource setup - tracking Emotion mounting');
+
     cleanupAllResources();
     if (!overlayManager.isInitialized('lyrics')) {
       console.log('[setupUIResources] 오버레이 초기화 진행');
+      contentLogger.info('[setupUIResources] Creating overlay roots and mounting React components');
+
       overlayManager.createOverlayRoot('lyrics');
       overlayManager.createOverlayRoot('songInfo');
 
       overlayManager.renderOverlay(
         'lyrics',
-        <ErrorBoundary FallbackComponent={ErrorFallback} onReset={handleReset}>
+        <ErrorBoundary FallbackComponent={ErrorFallback} onError={handleError} onReset={handleReset}>
           <I18nextProvider i18n={i18nInstance}>
             <App />
           </I18nextProvider>
         </ErrorBoundary>,
       );
+
+      console.log('[setupUIResources] React components mounted - Emotion should be loaded');
+      contentLogger.info('[setupUIResources] React components mounted successfully');
+    } else {
+      console.log('[setupUIResources] Overlays already initialized, skipping mount');
+      contentLogger.info('[setupUIResources] Overlays already initialized');
     }
     // 다른 오버레이 타입들(예: songInfo)도 여기에 포함 가능
   }
@@ -1475,7 +1640,7 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
 
   // 앱 초기화. 맨 처음, 새로고침 할 경우.
   const initializeApp = async () => {
-    console.log('content app initializeApp 시작');
+    contentLogger.info('Content app initialization started');
     try {
       await initializeI18n();
       await injectCSS();
@@ -1511,13 +1676,14 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
       // contentEnabled 상태를 chrome.storage.sync에서 읽어옴
       const result = await chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED]);
       contentEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
-      console.log(`[initializeApp] contentEnabled 초기값: ${contentEnabled}`);
+      contentLogger.info('Content enabled state loaded', { contentEnabled });
 
       if (!contentEnabled) {
-        console.log('[Content] 콘텐츠 비활성 상태 - UI 렌더링 및 리스너 초기화 건너뜀');
+        contentLogger.info('Content disabled - skipping UI and listeners initialization');
       } else {
         setupUIResources();
         startDetectionWorkflow();
+        contentLogger.info('Content app initialization completed successfully');
       }
 
       // 온체인지 리스너
@@ -1532,6 +1698,7 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
 
           if (newValue === false) {
             if (shouldCleanupNow()) {
+              console.log('[storage.onChanged] Tracking: Content disabled, about to cleanup');
               disableDetection();
               cleanupAllResources();
             } else {
@@ -1539,6 +1706,7 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
             }
           } else if (newValue === true) {
             if (shouldCleanupNow()) {
+              console.log('[storage.onChanged] Tracking: Content enabled, about to setup UI resources');
               setupUIResources();
               startDetectionWorkflow();
             } else {
@@ -1548,7 +1716,8 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
         }
       });
     } catch (error) {
-      console.log(error);
+      contentErrorTracker.captureError(error as Error, 'Failed to initialize content app', LogLevelEnum.FATAL);
+      contentLogger.fatal('Content app initialization failed', error as Error);
     }
   };
 

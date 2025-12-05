@@ -89,13 +89,14 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
 
   // 오프셋 조정 모달 상태
   const [showOffsetModal, setShowOffsetModal] = React.useState<boolean>(false);
-  const [, setOffset] = React.useState<number>(initialOffset);
+  const [currentOffset, setCurrentOffset] = React.useState<number>(initialOffset);
   const syncModalRef = React.useRef<HTMLDivElement | null>(null);
 
   // 새로운 싱크셋 방식 상태
   const [isSyncRecording, setIsSyncRecording] = React.useState<boolean>(false);
   const [userClickTime, setUserClickTime] = React.useState<number | null>(null);
   const [calculatedOffset, setCalculatedOffset] = React.useState<number>(0);
+  const [syncStarted, setSyncStarted] = React.useState<boolean>(false); // 시작 버튼을 눌렀는지 추적
 
   // 원본 가사 보관 (초기화용) - lyrics prop이 변경될 때만 업데이트
   const originalLyricsRef = React.useRef<Line[]>(lyrics);
@@ -115,6 +116,17 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
   };
 
   /**
+   * 영상을 0초로 이동하고 재생
+   */
+  const playVideoFromStart = (): void => {
+    const videoElement = getYouTubePlayer();
+    if (videoElement) {
+      videoElement.currentTime = 0;
+      videoElement.play();
+    }
+  };
+
+  /**
    * 현재 재생 중인 가사의 인덱스 찾기
    */
   const getCurrentLyricIndex = React.useCallback(
@@ -129,11 +141,43 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
     },
     [lyrics],
   );
+  /**
+   * 오프셋 조정 모달 닫기 (취소)
+   */
+  const handleCloseOffsetModal = React.useCallback(() => {
+    setShowOffsetModal(false);
+    setIsSyncRecording(false);
+    setUserClickTime(null);
+    setCalculatedOffset(0);
+    setSyncStarted(false);
 
+    // 녹음 중이었다면 영상 재생 중지 및 0초로 이동
+    const videoElement = getYouTubePlayer();
+    if (videoElement) {
+      videoElement.pause();
+      videoElement.currentTime = 0;
+    }
+  }, []);
   // initialOffset 변경 시 업데이트
   React.useEffect(() => {
-    setOffset(initialOffset);
+    setCurrentOffset(initialOffset);
   }, [initialOffset]);
+
+  // 모달 외부 클릭 감지
+  React.useEffect(() => {
+    if (!showOffsetModal) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (syncModalRef.current && !syncModalRef.current.contains(event.target as Node)) {
+        handleCloseOffsetModal();
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showOffsetModal, handleCloseOffsetModal]);
 
   // chrome.storage에서 상태 불러오기
   React.useEffect(() => {
@@ -527,29 +571,19 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
   };
 
   /**
-   * 싱크셋 버튼 - 오프셋 조정 모달 열기
+   * 싱크셋 버튼 - 오프셋 조정 모달 토글
    */
   const handleSyncSettings = () => {
-    setShowOffsetModal(true);
-    setIsSyncRecording(false);
-    setUserClickTime(null);
-    setCalculatedOffset(0);
-  };
-
-  /**
-   * 오프셋 조정 모달 닫기 (취소)
-   */
-  const handleCloseOffsetModal = () => {
-    setShowOffsetModal(false);
-    setIsSyncRecording(false);
-    setUserClickTime(null);
-    setCalculatedOffset(0);
-
-    // 녹음 중이었다면 영상 재생 중지 및 0초로 이동
-    const videoElement = getYouTubePlayer();
-    if (videoElement) {
-      videoElement.pause();
-      videoElement.currentTime = 0;
+    if (showOffsetModal) {
+      // 이미 모달이 열려있으면 닫기
+      handleCloseOffsetModal();
+    } else {
+      // 모달 열기
+      setShowOffsetModal(true);
+      setIsSyncRecording(false);
+      setUserClickTime(null);
+      setCalculatedOffset(0);
+      setSyncStarted(false); // 모달 열 때 초기화
     }
   };
 
@@ -565,10 +599,10 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
       setIsSyncRecording(true);
       setUserClickTime(null);
       setCalculatedOffset(0);
+      setSyncStarted(true); // 시작 버튼 눌렀음을 표시
 
       // 영상을 0초로 이동 후 재생
-      videoElement.currentTime = 0;
-      videoElement.play();
+      playVideoFromStart();
       console.log('[BottomContainer] 싱크 녹음 시작 - 영상 0초부터 재생');
     } else {
       // 지금! 버튼 클릭 시
@@ -608,7 +642,7 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
     // 원본 가사를 기준으로 오프셋 적용
     const originalLyrics = originalLyricsRef.current;
     const appliedLyrics = applyOffsetToLyrics(originalLyrics, finalOffset, 0);
-    setOffset(finalOffset);
+    setCurrentOffset(finalOffset);
 
     // 부모에게 적용된 값 알림
     onOffsetChange?.(finalOffset, appliedLyrics);
@@ -628,6 +662,10 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
       },
     );
 
+    // 영상을 0초로 이동하고 재생하여 적용된 오프셋 확인
+    playVideoFromStart();
+    console.log('[BottomContainer] 적용 후 영상 0초부터 재생');
+
     // 모달 닫기 및 상태 초기화
     setShowOffsetModal(false);
     setIsSyncRecording(false);
@@ -644,7 +682,7 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
     // 원본 가사를 그대로 사용 (offset 0 적용 - 원본 타임스탬프 그대로)
     const originalLyrics = originalLyricsRef.current;
     const appliedLyrics = applyOffsetToLyrics(originalLyrics, resetOffset, 0);
-    setOffset(resetOffset);
+    setCurrentOffset(resetOffset);
 
     // 부모에게 적용된 값 알림
     onOffsetChange?.(resetOffset, appliedLyrics);
@@ -665,12 +703,8 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
     );
 
     // 영상을 0초로 이동하고 재생하여 초기화된 오프셋 확인
-    const videoElement = getYouTubePlayer();
-    if (videoElement) {
-      videoElement.currentTime = 0;
-      videoElement.play();
-      console.log('[BottomContainer] 초기화 후 영상 0초부터 재생');
-    }
+    playVideoFromStart();
+    console.log('[BottomContainer] 초기화 후 영상 0초부터 재생');
 
     // 모달 닫기 및 상태 초기화
     setShowOffsetModal(false);
@@ -918,15 +952,31 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
 
             {/* 버튼 그룹 */}
             <div className={styles.syncButtonGroup}>
-              <button className={styles.syncResetButton} onClick={handleResetOffset}>
+              {/* 초기화 버튼 - 항상 표시하되, 오프셋이 0이면 비활성화 */}
+              <button
+                className={styles.syncResetButton}
+                onClick={handleResetOffset}
+                disabled={currentOffset === 0}
+                title={currentOffset === 0 ? '현재 오프셋이 0입니다' : '원본 타임스탬프로 초기화'}
+              >
                 {t('extKaraokeSyncReset')}
               </button>
-              <button className={styles.syncCancelButton} onClick={handleCloseOffsetModal}>
-                {t('extCancel')}
-              </button>
-              <button className={styles.syncApplyButton} onClick={handleApplyOffset} disabled={userClickTime === null}>
-                {t('extKaraokeSyncApply')}
-              </button>
+
+              {/* 취소/적용 버튼 - 시작 버튼을 눌렀을 때만 표시 */}
+              {syncStarted && (
+                <>
+                  <button className={styles.syncCancelButton} onClick={handleCloseOffsetModal}>
+                    {t('extCancel')}
+                  </button>
+                  <button
+                    className={styles.syncApplyButton}
+                    onClick={handleApplyOffset}
+                    disabled={userClickTime === null}
+                  >
+                    {t('extKaraokeSyncApply')}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

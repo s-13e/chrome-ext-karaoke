@@ -7,6 +7,7 @@ export enum LyricsErrorCode {
   VIDEO_INFO_MISSING = 1001, // 비디오 정보 없음
   ARTIST_TITLE_EXTRACT_FAILED = 1002, // 아티스트/제목 추출 실패
   INVALID_VIDEO_DURATION = 1003, // 잘못된 비디오 길이
+  NOT_MUSIC_VIDEO = 1004, // 음악 비디오 아님 (정상적인 스킵 상황)
 
   // 네트워크 관련 (2xxx)
   NETWORK_ERROR = 2001, // 네트워크 연결 실패
@@ -42,6 +43,7 @@ export const LYRICS_ERROR_ACTIONS: Record<LyricsErrorCode, LyricsErrorAction[]> 
   [LyricsErrorCode.VIDEO_INFO_MISSING]: [{ type: 'retry' }],
   [LyricsErrorCode.ARTIST_TITLE_EXTRACT_FAILED]: [{ type: 'manual_search' }, { type: 'upload_lyrics' }],
   [LyricsErrorCode.INVALID_VIDEO_DURATION]: [{ type: 'retry' }],
+  [LyricsErrorCode.NOT_MUSIC_VIDEO]: [{ type: 'ignore' }],
   [LyricsErrorCode.NETWORK_ERROR]: [{ type: 'retry' }],
   [LyricsErrorCode.API_TIMEOUT]: [{ type: 'retry' }],
   [LyricsErrorCode.API_RATE_LIMITED]: [{ type: 'retry' }],
