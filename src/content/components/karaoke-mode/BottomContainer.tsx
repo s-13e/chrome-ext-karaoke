@@ -16,10 +16,12 @@ import {
   MdSubtitles,
   MdRecordVoiceOver,
   MdReorder,
+  MdFormatColorText,
 } from 'react-icons/md';
 import { useTranslation } from 'react-i18next';
 import { Line } from '@lib/types/lyrics';
 import { applyOffsetToLyrics } from '@lib/utils/lyrics/display/lyricsOffset';
+import { TextEffectsModal } from './TextEffectsModal';
 
 // 아이콘 공통 스타일 상수
 const ICON_SIZE = 28;
@@ -92,6 +94,11 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
   const [currentOffset, setCurrentOffset] = React.useState<number>(initialOffset);
   const syncModalRef = React.useRef<HTMLDivElement | null>(null);
 
+  // 텍스트 효과 모달 상태
+  const [showTextEffectsModal, setShowTextEffectsModal] = React.useState<boolean>(false);
+  const textEffectsModalRef = React.useRef<HTMLDivElement | null>(null);
+  const textEffectsButtonRef = React.useRef<HTMLButtonElement | null>(null);
+
   // 새로운 싱크셋 방식 상태
   const [isSyncRecording, setIsSyncRecording] = React.useState<boolean>(false);
   const [userClickTime, setUserClickTime] = React.useState<number | null>(null);
@@ -142,7 +149,8 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
     [lyrics],
   );
   /**
-   * 오프셋 조정 모달 닫기 (취소)
+   * 오프셋 조정 모달 닫기 (취소 또는 외부 클릭 또는 버튼 재클릭)
+   * 영상 정지/이동 로직은 여기서 제거 - 시작/적용/초기화 버튼에서만 처리
    */
   const handleCloseOffsetModal = React.useCallback(() => {
     setShowOffsetModal(false);
@@ -150,34 +158,71 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
     setUserClickTime(null);
     setCalculatedOffset(0);
     setSyncStarted(false);
-
-    // 녹음 중이었다면 영상 재생 중지 및 0초로 이동
-    const videoElement = getYouTubePlayer();
-    if (videoElement) {
-      videoElement.pause();
-      videoElement.currentTime = 0;
-    }
   }, []);
   // initialOffset 변경 시 업데이트
   React.useEffect(() => {
     setCurrentOffset(initialOffset);
   }, [initialOffset]);
 
-  // 모달 외부 클릭 감지
+  // 싱크셋 모달 외부 클릭 감지
   React.useEffect(() => {
     if (!showOffsetModal) return;
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (syncModalRef.current && !syncModalRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+
+      // 싱크셋 버튼을 찾아서 클릭 여부 확인
+      const syncButton = document.querySelector('[aria-label="' + t('extKaraokeSyncSettings') + '"]');
+      if (syncButton && syncButton.contains(target)) {
+        // 싱크셋 버튼 클릭 시 handleSyncSettings에서 처리하므로 여기서는 무시
+        return;
+      }
+
+      // 모달 외부 클릭 시
+      if (syncModalRef.current && !syncModalRef.current.contains(target)) {
         handleCloseOffsetModal();
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
+    // 약간의 딜레이를 주어 모달 오픈 클릭 이벤트와 분리
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+    }, 0);
+
     return () => {
+      clearTimeout(timeoutId);
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showOffsetModal, handleCloseOffsetModal]);
+  }, [showOffsetModal, handleCloseOffsetModal, t]);
+
+  // 텍스트 효과 모달 외부 클릭 감지
+  React.useEffect(() => {
+    if (!showTextEffectsModal) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+
+      // 텍스트 효과 버튼 클릭 시 (같은 버튼 재클릭) - 버튼의 onClick에서 처리하므로 여기서는 무시
+      if (textEffectsButtonRef.current && textEffectsButtonRef.current.contains(target)) {
+        return;
+      }
+
+      // 모달 외부 클릭 시
+      if (textEffectsModalRef.current && !textEffectsModalRef.current.contains(target)) {
+        setShowTextEffectsModal(false);
+      }
+    };
+
+    // 약간의 딜레이를 주어 모달 오픈 클릭 이벤트와 분리
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+    }, 0);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showTextEffectsModal]);
 
   // chrome.storage에서 상태 불러오기
   React.useEffect(() => {
@@ -575,7 +620,7 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
    */
   const handleSyncSettings = () => {
     if (showOffsetModal) {
-      // 이미 모달이 열려있으면 닫기
+      // 이미 모달이 열려있으면 닫기 (같은 버튼 재클릭)
       handleCloseOffsetModal();
     } else {
       // 모달 열기
@@ -787,6 +832,13 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
   };
 
   /**
+   * 텍스트 효과 버튼 클릭
+   */
+  const handleTextEffectsToggle = () => {
+    setShowTextEffectsModal((prev) => !prev);
+  };
+
+  /**
    * 가사 방식 모드 텍스트 반환
    */
   const getLyricsDisplayModeText = (): string => {
@@ -886,9 +938,26 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
                 발음 표시
               </span>
             </button>
+            <button
+              ref={textEffectsButtonRef}
+              className={styles.bottomButton}
+              onClick={handleTextEffectsToggle}
+              aria-label="텍스트 효과"
+              title="텍스트 효과"
+            >
+              <MdFormatColorText size={ICON_SIZE} color={ICON_COLOR} />
+              <span className={styles.buttonText}>텍스트 효과</span>
+            </button>
           </div>
         </div>
       </div>
+
+      {/* 텍스트 효과 모달 */}
+      {showTextEffectsModal && (
+        <div className={styles.textEffectsModalContainer} ref={textEffectsModalRef}>
+          <TextEffectsModal onClose={() => setShowTextEffectsModal(false)} />
+        </div>
+      )}
 
       {/* 새로운 싱크셋 조정 모달 */}
       {showOffsetModal && (

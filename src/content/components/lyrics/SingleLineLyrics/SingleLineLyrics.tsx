@@ -5,6 +5,9 @@ import { usePronunciations } from '../common/usePronunciation';
 import { LyricLine } from '../common/LyricLine';
 import { CountdownOverlay } from '../common/CountdownOverlay';
 import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/display/lyricsOffset';
+import { GlobalLyricsStyleConfig, SingleLineLyricsStyleConfig } from '@lib/types/lyricsStyles';
+import { mergeSingleLineStyles } from '@lib/utils/lyrics/styles/lyricsStyleMerger';
+import { DEFAULT_COUNTDOWN_COLORS } from '@constants/lyricsStyles';
 import styles from './styles.module.css';
 
 interface SingleLineLyricsProps {
@@ -16,6 +19,9 @@ interface SingleLineLyricsProps {
   showRealtimeLyrics?: boolean;
   showPronunciationLyrics?: boolean;
   currentTime?: number; // 외부에서 시간을 주입할 수 있도록 (싱크셋 미리보기용)
+  // 스타일 커스터마이징
+  globalStyleConfig?: Partial<GlobalLyricsStyleConfig>;
+  styleConfig?: Partial<SingleLineLyricsStyleConfig>;
 }
 
 /**
@@ -31,7 +37,17 @@ export const SingleLineLyrics: React.FC<SingleLineLyricsProps> = ({
   showRealtimeLyrics = true,
   showPronunciationLyrics = true,
   currentTime: externalCurrentTime,
+  globalStyleConfig,
+  styleConfig,
 }) => {
+  // 스타일 병합 (single은 기본/하이라이트 구분 없음)
+  const mergedStyles = useMemo(() => {
+    return mergeSingleLineStyles(globalStyleConfig, styleConfig);
+  }, [globalStyleConfig, styleConfig]);
+
+  // 발음이 메인 가사를 대체하는지 여부
+  const pronunciationAsMain = !showRealtimeLyrics && showPronunciationLyrics;
+
   // 오프셋 보정 적용
   const shiftedLyrics = useMemo(() => shiftFirstLyricEarlier(lyrics, 3), [lyrics]);
   const internalCurrentTime = useCurrentTime();
@@ -77,30 +93,46 @@ export const SingleLineLyrics: React.FC<SingleLineLyricsProps> = ({
   const pronList = usePronunciations(lyricTexts);
   const currentPron = currentIndex >= 0 ? pronList[currentIndex] : '';
 
-  // 원본 lyrics에서 현재 라인의 실제 인덱스 찾기
-  const currentIndexInOriginal = useMemo(() => {
-    if (currentIndex < 0 || !currentLine) return -1;
-    return lyrics.findIndex((l) => l.text === currentLine.text && Math.abs(l.time - currentLine.time) < 4);
-  }, [currentIndex, currentLine, lyrics]);
-
-  // 원본 타임 라인 기준 하이라이트 인덱스
-  const highlightIndex = useMemo(() => {
-    return lyrics.findLastIndex((line) => adjustedTime >= line.time);
-  }, [lyrics, adjustedTime]);
-
   // 첫 가사 시작 시간 (카운트다운 표시용)
   const firstLyricTime = useMemo(() => {
     return lyrics.length > 0 && lyrics[0] ? lyrics[0].time : null;
   }, [lyrics]);
 
+  // 가사/발음 색상 계산 (single은 항상 하이라이트 스타일)
+  const getTextColor = () => {
+    if (pronunciationAsMain) {
+      // 발음이 메인을 대체
+      return mergedStyles.pronunciationAsMain.color || fontColor;
+    }
+    // 일반 메인 가사
+    return mergedStyles.lyrics.color || fontColor;
+  };
+
+  const getPronunciationColor = () => {
+    if (pronunciationAsMain) {
+      // 발음이 메인을 대체
+      return mergedStyles.pronunciationAsMain.color || pronunciationColor;
+    }
+    // 일반 발음
+    return mergedStyles.pronunciation.color || pronunciationColor;
+  };
+
   return (
     <div className={styles.singleLineSubtitle} style={{ color: fontColor }}>
       {/* 카운트다운 오버레이 (첫 가사 또는 아카펠라 녹음) */}
       {firstLyricTime !== null && !acapellaCountdownStart && (
-        <CountdownOverlay startTime={firstLyricTime} currentTime={adjustedTime} fontColor="#ffcc00" />
+        <CountdownOverlay
+          startTime={firstLyricTime}
+          currentTime={adjustedTime}
+          fontColor={DEFAULT_COUNTDOWN_COLORS.firstLyric}
+        />
       )}
       {acapellaCountdownStart !== null && (
-        <CountdownOverlay startTime={acapellaCountdownStart} currentTime={currentTime} fontColor="#FFEB3B" />
+        <CountdownOverlay
+          startTime={acapellaCountdownStart}
+          currentTime={currentTime}
+          fontColor={DEFAULT_COUNTDOWN_COLORS.acapella}
+        />
       )}
 
       <LyricLine
@@ -108,8 +140,8 @@ export const SingleLineLyrics: React.FC<SingleLineLyricsProps> = ({
         pron={currentPron}
         showText={showRealtimeLyrics}
         showPron={showPronunciationLyrics}
-        fontColor={currentIndexInOriginal >= 0 && currentIndexInOriginal <= highlightIndex ? 'blue' : fontColor}
-        pronunciationColor={pronunciationColor}
+        fontColor={getTextColor()}
+        pronunciationColor={getPronunciationColor()}
       />
     </div>
   );

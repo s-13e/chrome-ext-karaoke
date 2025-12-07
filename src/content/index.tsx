@@ -55,8 +55,6 @@ import {
   disableAutoDisable,
   shouldAutoDisable,
 } from '@lib/utils/storage/autoDisableStorage';
-import { Toast } from './components/common/Toast';
-import { AutoDisableNotification } from './components/common/AutoDisableNotification';
 
 (() => {
   // 전역 에러 핸들러 설정 (최상단)
@@ -133,6 +131,12 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
   // font
   let lyricsFontColorCurrent = '#FFFFFF';
   let lyricsFontColorPronunciation = '#FFFFFF';
+
+  // 가사 스타일 설정
+  let lyricsStyleGlobal: Partial<import('@lib/types/lyricsStyles').GlobalLyricsStyleConfig> = {};
+  let lyricsStyleDual: Partial<import('@lib/types/lyricsStyles').DualHighlightLyricsStyleConfig> = {};
+  let lyricsStyleFull: Partial<import('@lib/types/lyricsStyles').FullLyricsStyleConfig> = {};
+  let lyricsStyleSingle: Partial<import('@lib/types/lyricsStyles').SingleLineLyricsStyleConfig> = {};
 
   let showRealtimeLyrics = true; // 현재 가사 ui 보이게
   let showPronunciationLyrics = true;
@@ -441,8 +445,11 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
   }
 
   // 재활성화 토스트 표시
-  function showReactivationToast() {
+  async function showReactivationToast() {
     console.log('[AutoDisable] 재활성화 토스트 표시');
+
+    // Lazy import Toast component
+    const { Toast } = await import('./components/common/Toast');
 
     let toastContainer = document.getElementById('auto-disable-toast-container');
     if (!toastContainer) {
@@ -475,8 +482,11 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
   }
 
   // 자동 비활성화 알림 표시
-  function showAutoDisableNotification(threshold: number) {
+  async function showAutoDisableNotification(threshold: number) {
     console.log('[AutoDisable] 자동 비활성화 알림 표시');
+
+    // Lazy import AutoDisableNotification component
+    const { AutoDisableNotification } = await import('./components/common/AutoDisableNotification');
 
     let notificationContainer = document.getElementById('auto-disable-notification-container');
     if (!notificationContainer) {
@@ -523,6 +533,8 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
           pronunciationColor={lyricsFontColorPronunciation}
           showRealtimeLyrics={showRealtimeLyrics}
           showPronunciationLyrics={showPronunciationLyrics}
+          globalStyleConfig={lyricsStyleGlobal}
+          styleConfig={lyricsStyleFull}
         />,
       );
     } else if (lyricsMode === 'sync') {
@@ -535,6 +547,8 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
           pronunciationColor={lyricsFontColorPronunciation}
           showRealtimeLyrics={showRealtimeLyrics}
           showPronunciationLyrics={showPronunciationLyrics}
+          globalStyleConfig={lyricsStyleGlobal}
+          styleConfig={lyricsStyleDual}
         />,
       );
     } else if (lyricsMode === 'single') {
@@ -547,6 +561,8 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
           pronunciationColor={lyricsFontColorPronunciation}
           showRealtimeLyrics={showRealtimeLyrics}
           showPronunciationLyrics={showPronunciationLyrics}
+          globalStyleConfig={lyricsStyleGlobal}
+          styleConfig={lyricsStyleSingle}
         />,
       );
     } else {
@@ -641,7 +657,17 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
   function initStorageState(): Promise<void> {
     return new Promise((resolve) => {
       chrome.storage.sync.get(
-        ['lyricsFontColorCurrent', 'lyricsFontColorPronunciation', 'realtimeLyrics', 'announceLyrics', 'lyricsMode'],
+        [
+          'lyricsFontColorCurrent',
+          'lyricsFontColorPronunciation',
+          'realtimeLyrics',
+          'announceLyrics',
+          'lyricsMode',
+          'lyricsStyleGlobal',
+          'lyricsStyleDual',
+          'lyricsStyleFull',
+          'lyricsStyleSingle',
+        ],
         (items) => {
           if (typeof items.lyricsFontColorCurrent === 'string') {
             lyricsFontColorCurrent = items.lyricsFontColorCurrent;
@@ -657,6 +683,18 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
           }
           if (['sync', 'single', 'full'].includes(items.lyricsMode)) {
             lyricsMode = items.lyricsMode;
+          }
+          if (items.lyricsStyleGlobal) {
+            lyricsStyleGlobal = items.lyricsStyleGlobal;
+          }
+          if (items.lyricsStyleDual) {
+            lyricsStyleDual = items.lyricsStyleDual;
+          }
+          if (items.lyricsStyleFull) {
+            lyricsStyleFull = items.lyricsStyleFull;
+          }
+          if (items.lyricsStyleSingle) {
+            lyricsStyleSingle = items.lyricsStyleSingle;
           }
 
           // 최초 렌더 호출 (초기 상태 반영)
@@ -725,9 +763,32 @@ import { AutoDisableNotification } from './components/common/AutoDisableNotifica
           needRerender = true;
         }
       }
+      if ('lyricsStyleGlobal' in changes) {
+        // 전역 가사 스타일 변경 감지
+        lyricsStyleGlobal = changes.lyricsStyleGlobal.newValue || {};
+        console.log('[Storage] lyricsStyleGlobal 변경 감지:', lyricsStyleGlobal);
+        needRerender = true;
+      }
+      if ('lyricsStyleDual' in changes) {
+        lyricsStyleDual = changes.lyricsStyleDual.newValue || {};
+        console.log('[Storage] lyricsStyleDual 변경 감지:', lyricsStyleDual);
+        needRerender = true;
+      }
+      if ('lyricsStyleFull' in changes) {
+        lyricsStyleFull = changes.lyricsStyleFull.newValue || {};
+        console.log('[Storage] lyricsStyleFull 변경 감지:', lyricsStyleFull);
+        needRerender = true;
+      }
+      if ('lyricsStyleSingle' in changes) {
+        lyricsStyleSingle = changes.lyricsStyleSingle.newValue || {};
+        console.log('[Storage] lyricsStyleSingle 변경 감지:', lyricsStyleSingle);
+        needRerender = true;
+      }
 
-      if (needRerender && latestLyrics.length) {
-        renderLyricsOverlay(latestLyrics);
+      if (needRerender) {
+        if (latestLyrics.length) {
+          renderLyricsOverlay(latestLyrics);
+        }
       }
     });
   }
