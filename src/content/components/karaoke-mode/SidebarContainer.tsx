@@ -37,12 +37,6 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics }) =>
     return (
       <div className={styles.sidebarContainer}>
         <div className={styles.sidebarContent}>
-          <button className={styles.sidebarButton} onClick={() => handleMenuClick('reservation')}>
-            다음 곡 예약
-          </button>
-          <button className={styles.sidebarButton} onClick={() => handleMenuClick('queue')}>
-            예약 전환
-          </button>
           <button className={styles.sidebarButton} onClick={() => handleMenuClick('chart')}>
             인기 차트
           </button>
@@ -51,11 +45,6 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics }) =>
           </button>
           <button className={styles.sidebarButton} onClick={() => handleMenuClick('recordings-list')}>
             녹음 목록
-          </button>
-          <button className={styles.sidebarButton} onClick={() => handleMenuClick('analysis')}>
-            나의 노래
-            <br />
-            스타일 분석
           </button>
         </div>
       </div>

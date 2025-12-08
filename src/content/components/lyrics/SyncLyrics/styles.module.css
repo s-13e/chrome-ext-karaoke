@@ -14,7 +14,6 @@
   font-size: clamp(1rem, calc(1.2rem + 1vw), 2.2rem);
 
   line-height: 1.4;
-  color: #fff;
   text-shadow:
     2px 2px 8px rgba(0, 0, 0, 0.8),
     0 0 2px #000,

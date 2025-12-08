@@ -15,6 +15,13 @@ import {
 } from '@lib/types/lyricsStyles';
 
 /**
+ * 색상 상수 (모달 및 기본값에서 사용)
+ */
+export const DEFAULT_LYRICS_COLOR = '#ffffff';
+export const DEFAULT_HIGHLIGHT_COLOR = '#357aff';
+export const DEFAULT_PRONUNCIATION_COLOR = '#aaaaaa';
+
+/**
  * 전역 가사 스타일 기본값
  * 모든 가사 타입(dual, full, single)에 공통 적용
  */
@@ -27,7 +34,7 @@ export const DEFAULT_GLOBAL_LYRICS_STYLE: GlobalLyricsStyleConfig = {
     },
     // 하이라이트 상태 (현재 재생 중)
     highlight: {
-      color: 'blue',
+      color: DEFAULT_LYRICS_COLOR,
     },
   },
 
@@ -47,7 +54,7 @@ export const DEFAULT_GLOBAL_LYRICS_STYLE: GlobalLyricsStyleConfig = {
       // fontColor prop 사용
     },
     highlight: {
-      color: 'blue',
+      color: DEFAULT_HIGHLIGHT_COLOR,
     },
   },
 };
@@ -57,7 +64,35 @@ export const DEFAULT_GLOBAL_LYRICS_STYLE: GlobalLyricsStyleConfig = {
  * 전역 스타일을 오버라이드하려면 여기에 정의
  */
 export const DEFAULT_DUAL_HIGHLIGHT_STYLE: DualHighlightLyricsStyleConfig = {
-  // 기본적으로 전역 스타일 사용
+  // 가사 스타일 (파란색 하이라이트)
+  lyrics: {
+    default: {
+      color: DEFAULT_LYRICS_COLOR,
+    },
+    highlight: {
+      color: DEFAULT_HIGHLIGHT_COLOR,
+      fontWeight: 700,
+    },
+  },
+
+  // 발음 스타일
+  pronunciation: {
+    default: {
+      opacity: 0.6,
+    },
+    highlight: {
+      opacity: 0.85,
+      fontWeight: 600,
+    },
+  },
+
+  // 발음이 메인을 대체할 때 스타일
+  pronunciationAsMain: {
+    default: {
+      color: DEFAULT_LYRICS_COLOR,
+    },
+    // highlight는 사용자가 명시적으로 활성화할 때만 적용됨
+  },
 };
 
 /**
@@ -103,18 +138,8 @@ export const DEFAULT_FULL_LYRICS_STYLE: FullLyricsStyleConfig = {
       color: '#f3f3f3',
       fontWeight: 500,
       transition: 'color 0.15s, font-size 0.15s',
-      opacity: 0.6,
     },
-    highlight: {
-      color: '#fff',
-      fontWeight: 700,
-      background: 'linear-gradient(90deg, #357aff, #e91e63 80%)',
-      backgroundClip: 'text',
-      webkitBackgroundClip: 'text',
-      webkitTextFillColor: 'transparent',
-      transition: 'color 0.15s, font-size 0.15s',
-      opacity: 0.85,
-    },
+    // highlight는 사용자가 명시적으로 활성화할 때만 적용됨
   },
 };
 
@@ -123,7 +148,16 @@ export const DEFAULT_FULL_LYRICS_STYLE: FullLyricsStyleConfig = {
  * single은 기본/하이라이트 구분 없음
  */
 export const DEFAULT_SINGLE_LINE_STYLE: SingleLineLyricsStyleConfig = {
-  // 기본적으로 전역 스타일 사용
+  // Single은 항상 흰색 기본값
+  lyrics: {
+    color: DEFAULT_LYRICS_COLOR,
+  },
+  pronunciation: {
+    color: DEFAULT_PRONUNCIATION_COLOR,
+  },
+  pronunciationAsMain: {
+    color: DEFAULT_LYRICS_COLOR,
+  },
 };
 
 /**

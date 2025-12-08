@@ -24,10 +24,8 @@ import {
  * TextStyleOptions 병합
  */
 function mergeTextStyle(...styles: (TextStyleOptions | undefined)[]): TextStyleOptions {
-  return styles.reduce((acc, style) => {
-    if (!style) return acc;
-    return { ...acc, ...style };
-  }, {} as TextStyleOptions);
+  const filtered = styles.filter((s): s is TextStyleOptions => !!s);
+  return filtered.reduce((acc, style) => ({ ...acc, ...style }), {} as TextStyleOptions);
 }
 
 /**
@@ -37,9 +35,11 @@ function mergeLyricsTextState(...states: (LyricsTextState | undefined)[]): Lyric
   const defaultStyles = states.map((state) => state?.default).filter(Boolean);
   const highlightStyles = states.map((state) => state?.highlight).filter(Boolean);
 
+  // LyricsTextState expects TextStyleOptions for both `default` and `highlight`.
+  // Ensure we always return an object (possibly empty) to satisfy the type.
   return {
-    default: defaultStyles.length > 0 ? mergeTextStyle(...defaultStyles) : undefined,
-    highlight: highlightStyles.length > 0 ? mergeTextStyle(...highlightStyles) : undefined,
+    default: defaultStyles.length > 0 ? mergeTextStyle(...defaultStyles) : ({} as TextStyleOptions),
+    highlight: highlightStyles.length > 0 ? mergeTextStyle(...highlightStyles) : ({} as TextStyleOptions),
   };
 }
 

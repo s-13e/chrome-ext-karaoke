@@ -1,6 +1,6 @@
 // TextEffectsModal.tsx
 // 텍스트 효과 설정 모달 컴포넌트
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import styles from './TextEffectsModal.module.css';
 import {
   GlobalLyricsStyleConfig,
@@ -8,21 +8,20 @@ import {
   FullLyricsStyleConfig,
   SingleLineLyricsStyleConfig,
 } from '@lib/types/lyricsStyles';
+import { DEFAULT_LYRICS_COLOR, DEFAULT_HIGHLIGHT_COLOR, DEFAULT_PRONUNCIATION_COLOR } from '@constants/lyricsStyles';
 type TabType = 'global' | 'dual' | 'full' | 'single';
 interface TextEffectsModalProps {
   onClose: () => void;
+  // 부모가 모달의 '취소(원본 복구)' 콜백을 등록할 수 있도록 함
+  registerCancel?: (fn: (() => void) | null) => void;
 }
-// 기본 색상 값 정의
-const DEFAULT_LYRICS_COLOR = '#ffffff';
-const DEFAULT_HIGHLIGHT_COLOR = '#357aff';
-const DEFAULT_PRONUNCIATION_COLOR = '#aaaaaa';
 /**
  * 텍스트 효과 설정 모달
  * - 전역 설정: 모든 가사 타입에 공통 적용
  * - 개별 설정(Dual/Full/Single): 특정 가사 타입에만 적용
  * - 각 탭은 기본 스타일, 하이라이트 스타일, 발음 스타일 섹션으로 구성
  */
-export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose }) => {
+export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, registerCancel }) => {
   const [activeTab, setActiveTab] = useState<TabType>('global');
   // 전역 설정 상태
   const [globalConfig, setGlobalConfig] = useState<Partial<GlobalLyricsStyleConfig>>({});
@@ -52,8 +51,6 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose }) =
         const full = items.lyricsStyleFull || {};
         const single = items.lyricsStyleSingle || {};
 
-        console.log('[TextEffectsModal] 초기 로드:', { global, dual, full, single });
-
         setGlobalConfig(global);
         setDualConfig(dual);
         setFullConfig(full);
@@ -65,8 +62,6 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose }) =
           full: JSON.parse(JSON.stringify(full)),
           single: JSON.parse(JSON.stringify(single)),
         };
-
-        console.log('[TextEffectsModal] 원본 저장 완료:', originalConfigsRef.current);
       },
     );
   }, []);
@@ -115,9 +110,7 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose }) =
     onClose();
   };
   // 취소/모달 닫기 공통 로직
-  const handleCancelOrClose = () => {
-    console.log('[TextEffectsModal] 취소/닫기 - 원본으로 복구:', originalConfigsRef.current);
-
+  const handleCancelOrClose = useCallback(() => {
     // 원본 설정으로 복구
     setGlobalConfig(originalConfigsRef.current.global);
     setDualConfig(originalConfigsRef.current.dual);
@@ -133,7 +126,22 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose }) =
     });
 
     onClose();
-  };
+  }, [onClose]);
+
+  // 부모 컴포넌트가 이 모달의 취소 콜백을 받을 수 있게 등록해줌
+  useEffect(() => {
+    if (registerCancel) {
+      registerCancel(handleCancelOrClose);
+      return () => {
+        try {
+          registerCancel(null);
+        } catch {
+          // ignore
+        }
+      };
+    }
+    return undefined;
+  }, [registerCancel, handleCancelOrClose]);
   return (
     <div className={styles.modalContainer}>
       <div className={styles.modalHeader}>
@@ -463,7 +471,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
   };
   // 발음 하이라이트는 기본적으로 활성화
   const [pronunciationHighlightEnabled, setPronunciationHighlightEnabled] = useState(
-    config.pronunciation?.highlight !== undefined ? !!config.pronunciation?.highlight : true,
+    config.pronunciationAsMain?.highlight !== undefined ? !!config.pronunciationAsMain?.highlight : false,
   );
   const handlePronunciationHighlightToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
     const enabled = e.target.checked;
@@ -471,11 +479,24 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
     if (!enabled) {
       setConfig((prev) => ({
         ...prev,
-        pronunciation: {
-          ...prev.pronunciation,
+        pronunciationAsMain: {
+          ...prev.pronunciationAsMain,
           highlight: undefined,
         },
       }));
+    } else {
+      // 활성화할 때 기본 하이라이트 색상 설정
+      setConfig((prev) => ({
+        ...prev,
+        pronunciationAsMain: {
+          ...prev.pronunciationAsMain,
+          highlight: {
+            color: DEFAULT_HIGHLIGHT_COLOR,
+            fontWeight: 700,
+          },
+        },
+      }));
+      onPreviewUpdate();
     }
   };
   return (
@@ -628,9 +649,12 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
           <input
             type="color"
             className={styles.colorInput}
-            value={config.pronunciation?.highlight?.color || DEFAULT_HIGHLIGHT_COLOR}
+            value={config.pronunciationAsMain?.highlight?.color || DEFAULT_HIGHLIGHT_COLOR}
             onChange={(e) =>
-              updateConfig(['pronunciation', 'highlight', 'color'], (e.target as HTMLInputElement).value || undefined)
+              updateConfig(
+                ['pronunciationAsMain', 'highlight', 'color'],
+                (e.target as HTMLInputElement).value || undefined,
+              )
             }
             onBlur={onPreviewUpdate}
             onMouseUp={onPreviewUpdate}
@@ -641,8 +665,10 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
           <label className={styles.settingLabel}>애니메이션 효과</label>
           <select
             className={styles.selectInput}
-            value={config.pronunciation?.highlight?.animation ?? ''}
-            onChange={(e) => updateConfig(['pronunciation', 'highlight', 'animation'], e.target.value || undefined)}
+            value={config.pronunciationAsMain?.highlight?.animation ?? ''}
+            onChange={(e) =>
+              updateConfig(['pronunciationAsMain', 'highlight', 'animation'], e.target.value || undefined)
+            }
             disabled={!pronunciationHighlightEnabled}
           >
             <option value="">전역 설정 사용</option>
@@ -688,7 +714,7 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
   };
   // 발음 하이라이트는 기본적으로 활성화
   const [pronunciationHighlightEnabled, setPronunciationHighlightEnabled] = useState(
-    config.pronunciation?.highlight !== undefined ? !!config.pronunciation?.highlight : true,
+    config.pronunciationAsMain?.highlight !== undefined ? !!config.pronunciationAsMain?.highlight : false,
   );
   const handlePronunciationHighlightToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
     const enabled = e.target.checked;
@@ -696,11 +722,28 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
     if (!enabled) {
       setConfig((prev) => ({
         ...prev,
-        pronunciation: {
-          ...prev.pronunciation,
+        pronunciationAsMain: {
+          ...prev.pronunciationAsMain,
           highlight: undefined,
         },
       }));
+    } else {
+      // 활성화할 때 기본 하이라이트 색상 설정
+      setConfig((prev) => ({
+        ...prev,
+        pronunciationAsMain: {
+          ...prev.pronunciationAsMain,
+          highlight: {
+            color: '#fff',
+            fontWeight: 700,
+            background: 'linear-gradient(90deg, #357aff, #e91e63 80%)',
+            backgroundClip: 'text',
+            webkitBackgroundClip: 'text',
+            webkitTextFillColor: 'transparent',
+          },
+        },
+      }));
+      onPreviewUpdate();
     }
   };
   return (
@@ -846,9 +889,12 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
           <input
             type="color"
             className={styles.colorInput}
-            value={config.pronunciation?.highlight?.color || DEFAULT_HIGHLIGHT_COLOR}
+            value={config.pronunciationAsMain?.highlight?.color || DEFAULT_HIGHLIGHT_COLOR}
             onChange={(e) =>
-              updateConfig(['pronunciation', 'highlight', 'color'], (e.target as HTMLInputElement).value || undefined)
+              updateConfig(
+                ['pronunciationAsMain', 'highlight', 'color'],
+                (e.target as HTMLInputElement).value || undefined,
+              )
             }
             onBlur={onPreviewUpdate}
             onMouseUp={onPreviewUpdate}
@@ -859,8 +905,10 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
           <label className={styles.settingLabel}>애니메이션 효과</label>
           <select
             className={styles.selectInput}
-            value={config.pronunciation?.highlight?.animation ?? ''}
-            onChange={(e) => updateConfig(['pronunciation', 'highlight', 'animation'], e.target.value || undefined)}
+            value={config.pronunciationAsMain?.highlight?.animation ?? ''}
+            onChange={(e) =>
+              updateConfig(['pronunciationAsMain', 'highlight', 'animation'], e.target.value || undefined)
+            }
             disabled={!pronunciationHighlightEnabled}
           >
             <option value="">전역 설정 사용</option>
@@ -919,7 +967,7 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
           <input
             type="color"
             className={styles.colorInput}
-            value={config.lyrics?.color || DEFAULT_HIGHLIGHT_COLOR}
+            value={config.lyrics?.color || DEFAULT_LYRICS_COLOR}
             onChange={(e) => updateConfig(['lyrics', 'color'], (e.target as HTMLInputElement).value || undefined)}
             onBlur={onPreviewUpdate}
             onMouseUp={onPreviewUpdate}
@@ -977,7 +1025,7 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
           <input
             type="color"
             className={styles.colorInput}
-            value={config.pronunciation?.color || DEFAULT_HIGHLIGHT_COLOR}
+            value={config.pronunciation?.color || DEFAULT_LYRICS_COLOR}
             onChange={(e) =>
               updateConfig(['pronunciation', 'color'], (e.target as HTMLInputElement).value || undefined)
             }

@@ -98,6 +98,8 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
   const [showTextEffectsModal, setShowTextEffectsModal] = React.useState<boolean>(false);
   const textEffectsModalRef = React.useRef<HTMLDivElement | null>(null);
   const textEffectsButtonRef = React.useRef<HTMLButtonElement | null>(null);
+  // 모달이 제공하는 취소(원본 복구) 콜백 보관용 ref
+  const textEffectsCancelRef = React.useRef<(() => void) | null>(null);
 
   // 새로운 싱크셋 방식 상태
   const [isSyncRecording, setIsSyncRecording] = React.useState<boolean>(false);
@@ -207,9 +209,17 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
         return;
       }
 
-      // 모달 외부 클릭 시
+      // 모달 외부 클릭 시: 모달이 등록한 취소 콜백이 있으면 호출 (원본 복구), 아니면 그냥 닫기
       if (textEffectsModalRef.current && !textEffectsModalRef.current.contains(target)) {
-        setShowTextEffectsModal(false);
+        if (textEffectsCancelRef.current) {
+          try {
+            textEffectsCancelRef.current();
+          } catch {
+            setShowTextEffectsModal(false);
+          }
+        } else {
+          setShowTextEffectsModal(false);
+        }
       }
     };
 
@@ -835,7 +845,20 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
    * 텍스트 효과 버튼 클릭
    */
   const handleTextEffectsToggle = () => {
-    setShowTextEffectsModal((prev) => !prev);
+    // 이미 모달이 열려있으면 모달의 취소 콜백을 호출하여 원본 복구 후 닫기
+    if (showTextEffectsModal) {
+      if (textEffectsCancelRef.current) {
+        try {
+          textEffectsCancelRef.current();
+        } catch {
+          setShowTextEffectsModal(false);
+        }
+      } else {
+        setShowTextEffectsModal(false);
+      }
+    } else {
+      setShowTextEffectsModal(true);
+    }
   };
 
   /**
@@ -955,7 +978,12 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
       {/* 텍스트 효과 모달 */}
       {showTextEffectsModal && (
         <div className={styles.textEffectsModalContainer} ref={textEffectsModalRef}>
-          <TextEffectsModal onClose={() => setShowTextEffectsModal(false)} />
+          <TextEffectsModal
+            onClose={() => setShowTextEffectsModal(false)}
+            registerCancel={(fn) => {
+              textEffectsCancelRef.current = fn || null;
+            }}
+          />
         </div>
       )}
 

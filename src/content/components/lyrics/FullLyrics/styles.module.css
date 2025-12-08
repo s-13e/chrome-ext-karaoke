@@ -29,23 +29,14 @@
 .lyricLine {
   font-size: clamp(14px, calc(0.8vw + 0.8vh), 28px);
   line-height: 1.5;
-  color: #f3f3f3;
-  font-weight: 500;
-  transition:
-    color 0.15s,
-    font-size 0.15s;
+  /* color/fontWeight/transition are controlled by JS style objects */
   /* 기타 spacing, margin, etc */
   margin-bottom: 0; /* 줄 간 여백 없애기 */
   padding: 0;
 }
 .active .lyricLine {
-  color: #fff;
   font-size: clamp(18px, calc(1vw + 1vh), 32px);
-  font-weight: 700;
-  background: linear-gradient(90deg, #357aff, #e91e63 80%);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  /* highlight rendering (color/gradient/weight) is applied via inline styles from JS */
 }
 .pronunciation {
   font-size: clamp(10px, calc(0.6vw + 0.6vh), 20px);
@@ -53,10 +44,8 @@
 }
 /* 부모 .active의 투명 텍스트 처리 무시 */
 .active .pronunciation {
-  -webkit-text-fill-color: initial; /* 투명 처리 해제 */
-  background: none; /* 그라데이션 배경 제거 */
-  color: inherit; /* props로 넘어온 색상 적용 */
+  -webkit-text-fill-color: initial; /* preserve non-gradient rendering */
+  background: none; /* gradient removal left for JS when needed */
   opacity: 0.85;
-  font-weight: 600; /* 약간 굵게 */
-  font-size: clamp(11px, calc(0.65vw + 0.65vh), 22px); /* 5~10% 크기 업 */
+  font-size: clamp(11px, calc(0.65vw + 0.65vh), 22px);
 }
