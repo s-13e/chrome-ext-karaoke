@@ -23,10 +23,17 @@
     opacity 0.15s ease;
 }
 
-/* 발음만 있는 경우 */
+/* 발음만 있는 경우 (일반 모드) */
 .lyricItem:not(:has(.lyricLine)) .pronunciation {
   font-size: clamp(20px, calc(1vw + 1vh), 36px);
   font-weight: 600; /* 단독일 때 굵게 */
+}
+
+/* pronunciationAsMain: 발음이 메인 가사를 대체하는 경우 - 가사 라인과 동일한 스타일 적용 */
+.lyricItem.pronunciationAsMain .pronunciation {
+  font-size: inherit !important; /* 인라인 스타일 또는 가사 크기 상속 */
+  font-weight: bold !important; /* 가사와 동일하게 굵게 */
+  opacity: 1 !important; /* 완전 불투명 */
 }
 
 /* 전체화면 - 발음 가사 */

@@ -52,8 +52,8 @@ export interface DualHighlightLyricsStyleConfig {
   lyrics?: LyricsTextState;
   // 발음 스타일 (전역 스타일 오버라이드)
   pronunciation?: LyricsTextState;
-  // 발음이 메인을 대체할 때 스타일 (전역 스타일 오버라이드)
-  pronunciationAsMain?: LyricsTextState;
+  // 발음이 메인을 대체할 때 하이라이트 활성화 여부
+  pronunciationAsMainHighlight?: boolean;
 }
 
 /**
@@ -64,8 +64,8 @@ export interface FullLyricsStyleConfig {
   lyrics?: LyricsTextState;
   // 발음 스타일 (전역 스타일 오버라이드)
   pronunciation?: LyricsTextState;
-  // 발음이 메인을 대체할 때 스타일 (전역 스타일 오버라이드)
-  pronunciationAsMain?: LyricsTextState;
+  // 발음이 메인을 대체할 때 하이라이트 활성화 여부
+  pronunciationAsMainHighlight?: boolean;
 }
 
 /**
@@ -77,6 +77,4 @@ export interface SingleLineLyricsStyleConfig {
   lyrics?: TextStyleOptions;
   // 발음 스타일 (전역 스타일 오버라이드)
   pronunciation?: TextStyleOptions;
-  // 발음이 메인을 대체할 때 스타일 (전역 스타일 오버라이드)
-  pronunciationAsMain?: TextStyleOptions;
 }

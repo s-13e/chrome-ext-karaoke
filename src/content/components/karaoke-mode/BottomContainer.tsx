@@ -1056,7 +1056,7 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
                 disabled={currentOffset === 0}
                 title={currentOffset === 0 ? '현재 오프셋이 0입니다' : '원본 타임스탬프로 초기화'}
               >
-                {t('extKaraokeSyncReset')}
+                {t('extReset')}
               </button>
 
               {/* 취소/적용 버튼 - 시작 버튼을 눌렀을 때만 표시 */}
@@ -1070,7 +1070,7 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
                     onClick={handleApplyOffset}
                     disabled={userClickTime === null}
                   >
-                    {t('extKaraokeSyncApply')}
+                    {t('extApply')}
                   </button>
                 </>
               )}

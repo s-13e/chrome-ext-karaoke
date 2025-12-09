@@ -5,7 +5,7 @@ import { usePronunciations } from '../common/usePronunciation';
 import { LyricLine } from '../common/LyricLine';
 import { CountdownOverlay } from '../common/CountdownOverlay';
 import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/display/lyricsOffset';
-import { GlobalLyricsStyleConfig, SingleLineLyricsStyleConfig } from '@lib/types/lyricsStyles';
+import { SingleLineLyricsStyleConfig } from '@lib/types/lyricsStyles';
 import { mergeSingleLineStyles } from '@lib/utils/lyrics/styles/lyricsStyleMerger';
 import { DEFAULT_COUNTDOWN_COLORS } from '@constants/lyricsStyles';
 import styles from './styles.module.css';
@@ -20,7 +20,6 @@ interface SingleLineLyricsProps {
   showPronunciationLyrics?: boolean;
   currentTime?: number; // 외부에서 시간을 주입할 수 있도록 (싱크셋 미리보기용)
   // 스타일 커스터마이징
-  globalStyleConfig?: Partial<GlobalLyricsStyleConfig>;
   styleConfig?: Partial<SingleLineLyricsStyleConfig>;
 }
 
@@ -37,13 +36,12 @@ export const SingleLineLyrics: React.FC<SingleLineLyricsProps> = ({
   showRealtimeLyrics = true,
   showPronunciationLyrics = true,
   currentTime: externalCurrentTime,
-  globalStyleConfig,
   styleConfig,
 }) => {
   // 스타일 병합 (single은 기본/하이라이트 구분 없음)
   const mergedStyles = useMemo(() => {
-    return mergeSingleLineStyles(globalStyleConfig, styleConfig);
-  }, [globalStyleConfig, styleConfig]);
+    return mergeSingleLineStyles(styleConfig);
+  }, [styleConfig]);
 
   // 발음이 메인 가사를 대체하는지 여부
   const pronunciationAsMain = !showRealtimeLyrics && showPronunciationLyrics;
@@ -98,23 +96,54 @@ export const SingleLineLyrics: React.FC<SingleLineLyricsProps> = ({
     return lyrics.length > 0 && lyrics[0] ? lyrics[0].time : null;
   }, [lyrics]);
 
-  // 가사/발음 색상 계산 (single은 항상 하이라이트 스타일)
+  // 가사 색상 (single은 항상 lyrics 스타일 사용, pronunciationAsMain일 때도 동일)
   const getTextColor = () => {
-    if (pronunciationAsMain) {
-      // 발음이 메인을 대체
-      return mergedStyles.pronunciationAsMain.color || fontColor;
-    }
-    // 일반 메인 가사
     return mergedStyles.lyrics.color || fontColor;
   };
 
+  // 발음 색상
   const getPronunciationColor = () => {
     if (pronunciationAsMain) {
-      // 발음이 메인을 대체
-      return mergedStyles.pronunciationAsMain.color || pronunciationColor;
+      // 발음이 메인을 대체: lyrics 스타일 색상 사용
+      return mergedStyles.lyrics.color || fontColor;
     }
-    // 일반 발음
     return mergedStyles.pronunciation.color || pronunciationColor;
+  };
+
+  // 인라인 스타일 생성 (CSS 모듈로 처리할 수 없는 동적 스타일)
+  const getInlineStyle = (isForPronunciation: boolean) => {
+    let style;
+    if (isForPronunciation && pronunciationAsMain) {
+      // 발음이 메인을 대체하는 경우: 발음 텍스트에 lyrics 스타일 적용
+      style = mergedStyles.lyrics;
+    } else if (isForPronunciation) {
+      // 일반 발음 스타일
+      style = mergedStyles.pronunciation;
+    } else {
+      // 가사 텍스트 스타일
+      style = mergedStyles.lyrics;
+    }
+    if (!style) return {};
+
+    const inlineStyle: React.CSSProperties = {};
+
+    if (style.fontWeight) inlineStyle.fontWeight = style.fontWeight;
+    if (style.textShadow) inlineStyle.textShadow = style.textShadow;
+    if (style.fontSize) inlineStyle.fontSize = style.fontSize;
+    if (style.opacity !== undefined) inlineStyle.opacity = style.opacity;
+    if (style.transition) inlineStyle.transition = style.transition;
+    if (style.transform) inlineStyle.transform = style.transform;
+    if (style.background) inlineStyle.background = style.background;
+    if (style.backgroundClip) inlineStyle.backgroundClip = style.backgroundClip;
+    if (style.webkitBackgroundClip) inlineStyle.WebkitBackgroundClip = style.webkitBackgroundClip;
+    if (style.webkitTextFillColor) inlineStyle.WebkitTextFillColor = style.webkitTextFillColor;
+
+    // pronunciationAsMain일 때는 CSS의 기본 opacity 덮어쓰기
+    if (isForPronunciation && pronunciationAsMain && style.opacity === undefined) {
+      inlineStyle.opacity = 1;
+    }
+
+    return inlineStyle;
   };
 
   return (
@@ -142,6 +171,9 @@ export const SingleLineLyrics: React.FC<SingleLineLyricsProps> = ({
         showPron={showPronunciationLyrics}
         fontColor={getTextColor()}
         pronunciationColor={getPronunciationColor()}
+        textStyle={getInlineStyle(false)}
+        pronStyle={getInlineStyle(true)}
+        pronunciationAsMain={pronunciationAsMain}
       />
     </div>
   );

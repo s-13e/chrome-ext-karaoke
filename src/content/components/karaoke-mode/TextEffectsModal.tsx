@@ -3,13 +3,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import styles from './TextEffectsModal.module.css';
 import {
-  GlobalLyricsStyleConfig,
   DualHighlightLyricsStyleConfig,
   FullLyricsStyleConfig,
   SingleLineLyricsStyleConfig,
 } from '@lib/types/lyricsStyles';
 import { DEFAULT_LYRICS_COLOR, DEFAULT_HIGHLIGHT_COLOR, DEFAULT_PRONUNCIATION_COLOR } from '@constants/lyricsStyles';
-type TabType = 'global' | 'dual' | 'full' | 'single';
+import { useTranslation } from 'react-i18next';
+
+type TabType = 'dual' | 'full' | 'single';
 interface TextEffectsModalProps {
   onClose: () => void;
   // 부모가 모달의 '취소(원본 복구)' 콜백을 등록할 수 있도록 함
@@ -17,59 +18,49 @@ interface TextEffectsModalProps {
 }
 /**
  * 텍스트 효과 설정 모달
- * - 전역 설정: 모든 가사 타입에 공통 적용
  * - 개별 설정(Dual/Full/Single): 특정 가사 타입에만 적용
  * - 각 탭은 기본 스타일, 하이라이트 스타일, 발음 스타일 섹션으로 구성
  */
 export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, registerCancel }) => {
-  const [activeTab, setActiveTab] = useState<TabType>('global');
-  // 전역 설정 상태
-  const [globalConfig, setGlobalConfig] = useState<Partial<GlobalLyricsStyleConfig>>({});
+  const [activeTab, setActiveTab] = useState<TabType>('dual');
   // 개별 설정 상태
   const [dualConfig, setDualConfig] = useState<Partial<DualHighlightLyricsStyleConfig>>({});
   const [fullConfig, setFullConfig] = useState<Partial<FullLyricsStyleConfig>>({});
   const [singleConfig, setSingleConfig] = useState<Partial<SingleLineLyricsStyleConfig>>({});
   // 원본 설정 저장 (취소 시 복구용)
   const originalConfigsRef = useRef<{
-    global: Partial<GlobalLyricsStyleConfig>;
     dual: Partial<DualHighlightLyricsStyleConfig>;
     full: Partial<FullLyricsStyleConfig>;
     single: Partial<SingleLineLyricsStyleConfig>;
   }>({
-    global: {},
     dual: {},
     full: {},
     single: {},
   });
+  const { t } = useTranslation();
+
   // chrome.storage에서 초기값 로드
   useEffect(() => {
-    chrome.storage.sync.get(
-      ['lyricsStyleGlobal', 'lyricsStyleDual', 'lyricsStyleFull', 'lyricsStyleSingle'],
-      (items) => {
-        const global = items.lyricsStyleGlobal || {};
-        const dual = items.lyricsStyleDual || {};
-        const full = items.lyricsStyleFull || {};
-        const single = items.lyricsStyleSingle || {};
+    chrome.storage.sync.get(['lyricsStyleDual', 'lyricsStyleFull', 'lyricsStyleSingle'], (items) => {
+      const dual = items.lyricsStyleDual || {};
+      const full = items.lyricsStyleFull || {};
+      const single = items.lyricsStyleSingle || {};
 
-        setGlobalConfig(global);
-        setDualConfig(dual);
-        setFullConfig(full);
-        setSingleConfig(single);
-        // 원본 저장
-        originalConfigsRef.current = {
-          global: JSON.parse(JSON.stringify(global)),
-          dual: JSON.parse(JSON.stringify(dual)),
-          full: JSON.parse(JSON.stringify(full)),
-          single: JSON.parse(JSON.stringify(single)),
-        };
-      },
-    );
+      setDualConfig(dual);
+      setFullConfig(full);
+      setSingleConfig(single);
+      // 원본 저장
+      originalConfigsRef.current = {
+        dual: JSON.parse(JSON.stringify(dual)),
+        full: JSON.parse(JSON.stringify(full)),
+        single: JSON.parse(JSON.stringify(single)),
+      };
+    });
   }, []);
   // 실시간 미리보기를 위한 임시 storage 저장
   const handlePreviewUpdate = () => {
     // 실시간 미리보기: storage에 임시로 저장 (적용 전까지는 확정 아님)
     chrome.storage.sync.set({
-      lyricsStyleGlobal: globalConfig,
       lyricsStyleDual: dualConfig,
       lyricsStyleFull: fullConfig,
       lyricsStyleSingle: singleConfig,
@@ -79,14 +70,12 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, reg
   // 초기화 버튼
   const handleReset = () => {
     const emptyConfig = {};
-    setGlobalConfig(emptyConfig);
     setDualConfig(emptyConfig);
     setFullConfig(emptyConfig);
     setSingleConfig(emptyConfig);
 
     // 즉시 storage에도 반영 (실시간 미리보기)
     chrome.storage.sync.set({
-      lyricsStyleGlobal: emptyConfig,
       lyricsStyleDual: emptyConfig,
       lyricsStyleFull: emptyConfig,
       lyricsStyleSingle: emptyConfig,
@@ -95,14 +84,12 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, reg
   // 적용 버튼
   const handleApply = () => {
     chrome.storage.sync.set({
-      lyricsStyleGlobal: globalConfig,
       lyricsStyleDual: dualConfig,
       lyricsStyleFull: fullConfig,
       lyricsStyleSingle: singleConfig,
     });
     // 원본 업데이트 (다음 취소 시 현재 상태가 기준이 됨)
     originalConfigsRef.current = {
-      global: JSON.parse(JSON.stringify(globalConfig)),
       dual: JSON.parse(JSON.stringify(dualConfig)),
       full: JSON.parse(JSON.stringify(fullConfig)),
       single: JSON.parse(JSON.stringify(singleConfig)),
@@ -112,14 +99,12 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, reg
   // 취소/모달 닫기 공통 로직
   const handleCancelOrClose = useCallback(() => {
     // 원본 설정으로 복구
-    setGlobalConfig(originalConfigsRef.current.global);
     setDualConfig(originalConfigsRef.current.dual);
     setFullConfig(originalConfigsRef.current.full);
     setSingleConfig(originalConfigsRef.current.single);
 
     // 즉시 원본 설정을 storage에 복구
     chrome.storage.sync.set({
-      lyricsStyleGlobal: originalConfigsRef.current.global,
       lyricsStyleDual: originalConfigsRef.current.dual,
       lyricsStyleFull: originalConfigsRef.current.full,
       lyricsStyleSingle: originalConfigsRef.current.single,
@@ -153,22 +138,10 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, reg
       {/* 탭 네비게이션 */}
       <div className={styles.tabNav}>
         <button
-          className={`${styles.tabButton} ${activeTab === 'global' ? styles.active : ''}`}
-          onClick={() => setActiveTab('global')}
-        >
-          전역 설정
-        </button>
-        <button
           className={`${styles.tabButton} ${activeTab === 'dual' ? styles.active : ''}`}
           onClick={() => setActiveTab('dual')}
         >
           Dual
-        </button>
-        <button
-          className={`${styles.tabButton} ${activeTab === 'full' ? styles.active : ''}`}
-          onClick={() => setActiveTab('full')}
-        >
-          Full
         </button>
         <button
           className={`${styles.tabButton} ${activeTab === 'single' ? styles.active : ''}`}
@@ -176,21 +149,17 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, reg
         >
           Single
         </button>
+        <button
+          className={`${styles.tabButton} ${activeTab === 'full' ? styles.active : ''}`}
+          onClick={() => setActiveTab('full')}
+        >
+          Full
+        </button>
       </div>
       {/* 탭 컨텐츠 */}
       <div className={styles.tabContent}>
-        {activeTab === 'global' && (
-          <GlobalSettingsPanel
-            config={globalConfig}
-            setConfig={setGlobalConfig}
-            onPreviewUpdate={handlePreviewUpdate}
-          />
-        )}
         {activeTab === 'dual' && (
           <DualSettingsPanel config={dualConfig} setConfig={setDualConfig} onPreviewUpdate={handlePreviewUpdate} />
-        )}
-        {activeTab === 'full' && (
-          <FullSettingsPanel config={fullConfig} setConfig={setFullConfig} onPreviewUpdate={handlePreviewUpdate} />
         )}
         {activeTab === 'single' && (
           <SingleSettingsPanel
@@ -199,245 +168,28 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, reg
             onPreviewUpdate={handlePreviewUpdate}
           />
         )}
+        {activeTab === 'full' && (
+          <FullSettingsPanel config={fullConfig} setConfig={setFullConfig} onPreviewUpdate={handlePreviewUpdate} />
+        )}
       </div>
       {/* 하단 버튼 */}
       <div className={styles.modalFooter}>
         <button className={styles.resetButton} onClick={handleReset}>
-          초기화
+          {t('extReset')}
         </button>
         <div className={styles.footerRight}>
           <button className={styles.cancelButton} onClick={handleCancelOrClose}>
-            취소
+            {t('extCancel')}
           </button>
           <button className={styles.applyButton} onClick={handleApply}>
-            적용
+            {t('extApply')}
           </button>
         </div>
       </div>
     </div>
   );
 };
-/**
- * 전역 설정 패널
- * 모든 가사 타입에 공통 적용되는 스타일 설정
- */
-interface GlobalSettingsPanelProps {
-  config: Partial<GlobalLyricsStyleConfig>;
-  setConfig: React.Dispatch<React.SetStateAction<Partial<GlobalLyricsStyleConfig>>>;
-  onPreviewUpdate: () => void;
-}
-const GlobalSettingsPanel: React.FC<GlobalSettingsPanelProps> = ({ config, setConfig, onPreviewUpdate }) => {
-  // 발음 하이라이트 활성화 여부
-  const [pronunciationHighlightEnabled, setPronunciationHighlightEnabled] = useState(!!config.pronunciation?.highlight);
-  // 색상 변경 핸들러
-  const updateConfig = (path: string[], value: string | number | undefined) => {
-    setConfig((prev) => {
-      const newConfig = { ...prev };
-      let current: Record<string, unknown> = newConfig as Record<string, unknown>;
-      for (let i = 0; i < path.length - 1; i++) {
-        const key = path[i];
-        if (key && !current[key]) {
-          current[key] = {};
-        }
-        if (key) {
-          current = current[key] as Record<string, unknown>;
-        }
-      }
-      const lastKey = path[path.length - 1];
-      if (lastKey) {
-        current[lastKey] = value;
-      }
-      return newConfig;
-    });
-  };
-  // 발음 하이라이트 토글
-  const handlePronunciationHighlightToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const enabled = e.target.checked;
-    setPronunciationHighlightEnabled(enabled);
-    if (!enabled) {
-      // 하이라이트 비활성화 시 하이라이트 스타일 제거
-      setConfig((prev) => ({
-        ...prev,
-        pronunciation: {
-          ...prev.pronunciation,
-          highlight: undefined,
-        },
-      }));
-    }
-  };
-  return (
-    <div className={styles.settingsPanel}>
-      <p className={styles.panelDescription}>모든 가사 타입에 공통으로 적용됩니다. 개별 설정이 우선합니다.</p>
-      {/* 기본 스타일 섹션 */}
-      <div className={styles.section}>
-        <h4 className={styles.sectionTitle}>기본 스타일</h4>
-        <p className={styles.sectionDescription}>타임스탬프 전/재생 중이 아닌 가사</p>
-        <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글자 색</label>
-          <input
-            type="color"
-            className={styles.colorInput}
-            value={config.lyrics?.default?.color || DEFAULT_LYRICS_COLOR}
-            onChange={(e) =>
-              updateConfig(['lyrics', 'default', 'color'], (e.target as HTMLInputElement).value || undefined)
-            }
-            onBlur={onPreviewUpdate}
-            onMouseUp={onPreviewUpdate}
-          />
-        </div>
-        <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글꼴 종류</label>
-          <select
-            className={styles.selectInput}
-            value={config.lyrics?.default?.fontFamily ?? ''}
-            onChange={(e) => updateConfig(['lyrics', 'default', 'fontFamily'], e.target.value || undefined)}
-          >
-            <option value="">기본</option>
-            <option value="Arial">Arial</option>
-            <option value="Noto Sans KR">Noto Sans KR</option>
-            <option value="Roboto">Roboto</option>
-          </select>
-        </div>
-        <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글꼴 크기</label>
-          <input
-            type="number"
-            className={styles.numberInput}
-            value={config.lyrics?.default?.fontSize ?? ''}
-            onChange={(e) =>
-              updateConfig(['lyrics', 'default', 'fontSize'], e.target.value ? Number(e.target.value) : undefined)
-            }
-            min={10}
-            max={48}
-            placeholder="16"
-          />
-          <span className={styles.unit}>px</span>
-        </div>
-      </div>
-      {/* 하이라이트 스타일 섹션 */}
-      <div className={styles.section}>
-        <h4 className={styles.sectionTitle}>하이라이트 스타일</h4>
-        <p className={styles.sectionDescription}>현재 재생 중인 가사</p>
-        <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>하이라이트 색</label>
-          <input
-            type="color"
-            className={styles.colorInput}
-            value={config.lyrics?.highlight?.color || DEFAULT_HIGHLIGHT_COLOR}
-            onChange={(e) =>
-              updateConfig(['lyrics', 'highlight', 'color'], (e.target as HTMLInputElement).value || undefined)
-            }
-            onBlur={onPreviewUpdate}
-            onMouseUp={onPreviewUpdate}
-          />
-        </div>
 
-        <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>애니메이션 효과</label>
-          <select
-            className={styles.selectInput}
-            value={config.lyrics?.highlight?.animation ?? 'none'}
-            onChange={(e) => updateConfig(['lyrics', 'highlight', 'animation'], e.target.value || undefined)}
-          >
-            <option value="none">없음</option>
-            <option value="fade">페이드</option>
-            <option value="scale">크기 변화</option>
-            <option value="glow">글로우</option>
-          </select>
-        </div>
-      </div>
-      {/* 발음 스타일 섹션 */}
-      <div className={styles.section}>
-        <h4 className={styles.sectionTitle}>발음 스타일</h4>
-        <p className={styles.sectionDescription}>로마자 발음 가사</p>
-        <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글자 색</label>
-          <input
-            type="color"
-            className={styles.colorInput}
-            value={config.pronunciation?.default?.color || DEFAULT_PRONUNCIATION_COLOR}
-            onChange={(e) =>
-              updateConfig(['pronunciation', 'default', 'color'], (e.target as HTMLInputElement).value || undefined)
-            }
-            onBlur={onPreviewUpdate}
-            onMouseUp={onPreviewUpdate}
-          />
-        </div>
-
-        <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글꼴 종류</label>
-          <select
-            className={styles.selectInput}
-            value={config.pronunciation?.default?.fontFamily ?? ''}
-            onChange={(e) => updateConfig(['pronunciation', 'default', 'fontFamily'], e.target.value || undefined)}
-          >
-            <option value="">기본</option>
-            <option value="Arial">Arial</option>
-            <option value="Noto Sans KR">Noto Sans KR</option>
-            <option value="Roboto">Roboto</option>
-          </select>
-        </div>
-
-        <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글꼴 크기</label>
-          <input
-            type="number"
-            className={styles.numberInput}
-            value={config.pronunciation?.default?.fontSize ?? ''}
-            onChange={(e) =>
-              updateConfig(
-                ['pronunciation', 'default', 'fontSize'],
-                e.target.value ? Number(e.target.value) : undefined,
-              )
-            }
-            min={10}
-            max={48}
-            placeholder="14"
-          />
-          <span className={styles.unit}>px</span>
-        </div>
-        <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>하이라이트 표시</label>
-          <input
-            type="checkbox"
-            className={styles.checkboxInput}
-            checked={pronunciationHighlightEnabled}
-            onChange={handlePronunciationHighlightToggle}
-          />
-        </div>
-
-        <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>하이라이트 색</label>
-          <input
-            type="color"
-            className={styles.colorInput}
-            value={config.pronunciation?.highlight?.color || DEFAULT_HIGHLIGHT_COLOR}
-            onChange={(e) =>
-              updateConfig(['pronunciation', 'highlight', 'color'], (e.target as HTMLInputElement).value || undefined)
-            }
-            onBlur={onPreviewUpdate}
-            onMouseUp={onPreviewUpdate}
-            disabled={!pronunciationHighlightEnabled}
-          />
-        </div>
-        <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>애니메이션 효과</label>
-          <select
-            className={styles.selectInput}
-            value={config.pronunciation?.highlight?.animation ?? 'none'}
-            onChange={(e) => updateConfig(['pronunciation', 'highlight', 'animation'], e.target.value || undefined)}
-            disabled={!pronunciationHighlightEnabled}
-          >
-            <option value="none">없음</option>
-            <option value="fade">페이드</option>
-            <option value="scale">크기 변화</option>
-            <option value="glow">글로우</option>
-          </select>
-        </div>
-      </div>
-    </div>
-  );
-};
 /**
  * Dual 설정 패널
  * DualHighlightLyrics 전용 스타일 설정 (전역 설정 오버라이드)
@@ -469,39 +221,28 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
       return newConfig;
     });
   };
-  // 발음 하이라이트는 기본적으로 활성화
+  // 발음 하이라이트 토글 상태
   const [pronunciationHighlightEnabled, setPronunciationHighlightEnabled] = useState(
-    config.pronunciationAsMain?.highlight !== undefined ? !!config.pronunciationAsMain?.highlight : false,
+    config.pronunciationAsMainHighlight ?? false,
   );
+
+  // config 변경 시 체크박스 상태 동기화 (초기화 버튼 대응)
+  useEffect(() => {
+    setPronunciationHighlightEnabled(config.pronunciationAsMainHighlight ?? false);
+  }, [config.pronunciationAsMainHighlight]);
+
   const handlePronunciationHighlightToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
     const enabled = e.target.checked;
     setPronunciationHighlightEnabled(enabled);
-    if (!enabled) {
-      setConfig((prev) => ({
-        ...prev,
-        pronunciationAsMain: {
-          ...prev.pronunciationAsMain,
-          highlight: undefined,
-        },
-      }));
-    } else {
-      // 활성화할 때 기본 하이라이트 색상 설정
-      setConfig((prev) => ({
-        ...prev,
-        pronunciationAsMain: {
-          ...prev.pronunciationAsMain,
-          highlight: {
-            color: DEFAULT_HIGHLIGHT_COLOR,
-            fontWeight: 700,
-          },
-        },
-      }));
-      onPreviewUpdate();
-    }
+    setConfig((prev) => ({
+      ...prev,
+      pronunciationAsMainHighlight: enabled,
+    }));
+    onPreviewUpdate();
   };
   return (
     <div className={styles.settingsPanel}>
-      <p className={styles.panelDescription}>Dual 가사 타입에만 적용됩니다. 전역 설정을 오버라이드합니다.</p>
+      <p className={styles.panelDescription}>Dual 가사 타입에만 적용됩니다.</p>
       {/* 기본 스타일 섹션 */}
       <div className={styles.section}>
         <h4 className={styles.sectionTitle}>기본 스타일</h4>
@@ -527,7 +268,6 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
             value={config.lyrics?.default?.fontFamily ?? ''}
             onChange={(e) => updateConfig(['lyrics', 'default', 'fontFamily'], e.target.value || undefined)}
           >
-            <option value="">전역 설정 사용</option>
             <option value="Arial">Arial</option>
             <option value="Noto Sans KR">Noto Sans KR</option>
             <option value="Roboto">Roboto</option>
@@ -575,7 +315,6 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
             value={config.lyrics?.highlight?.animation ?? ''}
             onChange={(e) => updateConfig(['lyrics', 'highlight', 'animation'], e.target.value || undefined)}
           >
-            <option value="">전역 설정 사용</option>
             <option value="none">없음</option>
             <option value="fade">페이드</option>
             <option value="scale">크기 변화</option>
@@ -609,7 +348,6 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
             value={config.pronunciation?.default?.fontFamily ?? ''}
             onChange={(e) => updateConfig(['pronunciation', 'default', 'fontFamily'], e.target.value || undefined)}
           >
-            <option value="">전역 설정 사용</option>
             <option value="Arial">Arial</option>
             <option value="Noto Sans KR">Noto Sans KR</option>
             <option value="Roboto">Roboto</option>
@@ -643,41 +381,9 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
             onChange={handlePronunciationHighlightToggle}
           />
         </div>
-
-        <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>하이라이트 색</label>
-          <input
-            type="color"
-            className={styles.colorInput}
-            value={config.pronunciationAsMain?.highlight?.color || DEFAULT_HIGHLIGHT_COLOR}
-            onChange={(e) =>
-              updateConfig(
-                ['pronunciationAsMain', 'highlight', 'color'],
-                (e.target as HTMLInputElement).value || undefined,
-              )
-            }
-            onBlur={onPreviewUpdate}
-            onMouseUp={onPreviewUpdate}
-            disabled={!pronunciationHighlightEnabled}
-          />
-        </div>
-        <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>애니메이션 효과</label>
-          <select
-            className={styles.selectInput}
-            value={config.pronunciationAsMain?.highlight?.animation ?? ''}
-            onChange={(e) =>
-              updateConfig(['pronunciationAsMain', 'highlight', 'animation'], e.target.value || undefined)
-            }
-            disabled={!pronunciationHighlightEnabled}
-          >
-            <option value="">전역 설정 사용</option>
-            <option value="none">없음</option>
-            <option value="fade">페이드</option>
-            <option value="scale">크기 변화</option>
-            <option value="glow">글로우</option>
-          </select>
-        </div>
+        <p className={styles.settingDescription}>
+          💡 현재 가사가 사라져 발음 가사만 남았을 때 하이라이트 효과를 적용합니다
+        </p>
       </div>
     </div>
   );
@@ -712,43 +418,28 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
       return newConfig;
     });
   };
-  // 발음 하이라이트는 기본적으로 활성화
+  // 발음 하이라이트 토글 상태
   const [pronunciationHighlightEnabled, setPronunciationHighlightEnabled] = useState(
-    config.pronunciationAsMain?.highlight !== undefined ? !!config.pronunciationAsMain?.highlight : false,
+    config.pronunciationAsMainHighlight ?? false,
   );
+
+  // config 변경 시 체크박스 상태 동기화 (초기화 버튼 대응)
+  useEffect(() => {
+    setPronunciationHighlightEnabled(config.pronunciationAsMainHighlight ?? false);
+  }, [config.pronunciationAsMainHighlight]);
+
   const handlePronunciationHighlightToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
     const enabled = e.target.checked;
     setPronunciationHighlightEnabled(enabled);
-    if (!enabled) {
-      setConfig((prev) => ({
-        ...prev,
-        pronunciationAsMain: {
-          ...prev.pronunciationAsMain,
-          highlight: undefined,
-        },
-      }));
-    } else {
-      // 활성화할 때 기본 하이라이트 색상 설정
-      setConfig((prev) => ({
-        ...prev,
-        pronunciationAsMain: {
-          ...prev.pronunciationAsMain,
-          highlight: {
-            color: '#fff',
-            fontWeight: 700,
-            background: 'linear-gradient(90deg, #357aff, #e91e63 80%)',
-            backgroundClip: 'text',
-            webkitBackgroundClip: 'text',
-            webkitTextFillColor: 'transparent',
-          },
-        },
-      }));
-      onPreviewUpdate();
-    }
+    setConfig((prev) => ({
+      ...prev,
+      pronunciationAsMainHighlight: enabled,
+    }));
+    onPreviewUpdate();
   };
   return (
     <div className={styles.settingsPanel}>
-      <p className={styles.panelDescription}>Full 가사 타입에만 적용됩니다. 전역 설정을 오버라이드합니다.</p>
+      <p className={styles.panelDescription}>Full 가사 타입에만 적용됩니다.</p>
       {/* 기본 스타일 섹션 */}
       <div className={styles.section}>
         <h4 className={styles.sectionTitle}>기본 스타일</h4>
@@ -773,7 +464,6 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
             value={config.lyrics?.default?.fontFamily ?? ''}
             onChange={(e) => updateConfig(['lyrics', 'default', 'fontFamily'], e.target.value || undefined)}
           >
-            <option value="">전역 설정 사용</option>
             <option value="Arial">Arial</option>
             <option value="Noto Sans KR">Noto Sans KR</option>
             <option value="Roboto">Roboto</option>
@@ -819,7 +509,6 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
             value={config.lyrics?.highlight?.animation ?? ''}
             onChange={(e) => updateConfig(['lyrics', 'highlight', 'animation'], e.target.value || undefined)}
           >
-            <option value="">전역 설정 사용</option>
             <option value="none">없음</option>
             <option value="fade">페이드</option>
             <option value="scale">크기 변화</option>
@@ -851,7 +540,6 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
             value={config.pronunciation?.default?.fontFamily ?? ''}
             onChange={(e) => updateConfig(['pronunciation', 'default', 'fontFamily'], e.target.value || undefined)}
           >
-            <option value="">전역 설정 사용</option>
             <option value="Arial">Arial</option>
             <option value="Noto Sans KR">Noto Sans KR</option>
             <option value="Roboto">Roboto</option>
@@ -884,40 +572,9 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
             onChange={handlePronunciationHighlightToggle}
           />
         </div>
-        <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>하이라이트 색</label>
-          <input
-            type="color"
-            className={styles.colorInput}
-            value={config.pronunciationAsMain?.highlight?.color || DEFAULT_HIGHLIGHT_COLOR}
-            onChange={(e) =>
-              updateConfig(
-                ['pronunciationAsMain', 'highlight', 'color'],
-                (e.target as HTMLInputElement).value || undefined,
-              )
-            }
-            onBlur={onPreviewUpdate}
-            onMouseUp={onPreviewUpdate}
-            disabled={!pronunciationHighlightEnabled}
-          />
-        </div>
-        <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>애니메이션 효과</label>
-          <select
-            className={styles.selectInput}
-            value={config.pronunciationAsMain?.highlight?.animation ?? ''}
-            onChange={(e) =>
-              updateConfig(['pronunciationAsMain', 'highlight', 'animation'], e.target.value || undefined)
-            }
-            disabled={!pronunciationHighlightEnabled}
-          >
-            <option value="">전역 설정 사용</option>
-            <option value="none">없음</option>
-            <option value="fade">페이드</option>
-            <option value="scale">크기 변화</option>
-            <option value="glow">글로우</option>
-          </select>
-        </div>
+        <p className={styles.settingDescription}>
+          💡 현재 가사가 사라져 발음 가사만 남았을 때 하이라이트 효과를 적용합니다
+        </p>
       </div>
     </div>
   );
@@ -981,7 +638,6 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
             value={config.lyrics?.fontFamily ?? ''}
             onChange={(e) => updateConfig(['lyrics', 'fontFamily'], e.target.value || undefined)}
           >
-            <option value="">전역 설정 사용</option>
             <option value="Arial">Arial</option>
             <option value="Noto Sans KR">Noto Sans KR</option>
             <option value="Roboto">Roboto</option>
@@ -1008,7 +664,6 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
             value={config.lyrics?.animation ?? ''}
             onChange={(e) => updateConfig(['lyrics', 'animation'], e.target.value || undefined)}
           >
-            <option value="">전역 설정 사용</option>
             <option value="none">없음</option>
             <option value="fade">페이드</option>
             <option value="scale">크기 변화</option>
@@ -1041,7 +696,6 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
             value={config.pronunciation?.fontFamily ?? ''}
             onChange={(e) => updateConfig(['pronunciation', 'fontFamily'], e.target.value || undefined)}
           >
-            <option value="">전역 설정 사용</option>
             <option value="Arial">Arial</option>
             <option value="Noto Sans KR">Noto Sans KR</option>
             <option value="Roboto">Roboto</option>
@@ -1062,20 +716,6 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
             max={48}
           />
           <span className={styles.unit}>px</span>
-        </div>
-        <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>애니메이션 효과</label>
-          <select
-            className={styles.selectInput}
-            value={config.pronunciation?.animation ?? ''}
-            onChange={(e) => updateConfig(['pronunciation', 'animation'], e.target.value || undefined)}
-          >
-            <option value="">전역 설정 사용</option>
-            <option value="none">없음</option>
-            <option value="fade">페이드</option>
-            <option value="scale">크기 변화</option>
-            <option value="glow">글로우</option>
-          </select>
         </div>
       </div>
     </div>

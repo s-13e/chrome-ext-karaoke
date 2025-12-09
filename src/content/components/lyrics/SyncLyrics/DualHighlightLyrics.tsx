@@ -6,7 +6,7 @@ import { usePronunciations } from '../common/usePronunciation';
 import { Line } from '@lib/types/lyrics';
 import { LyricLine } from '../common/LyricLine';
 import { CountdownOverlay } from '../common/CountdownOverlay';
-import { GlobalLyricsStyleConfig, DualHighlightLyricsStyleConfig } from '@lib/types/lyricsStyles';
+import { DualHighlightLyricsStyleConfig } from '@lib/types/lyricsStyles';
 import { mergeDualHighlightStyles } from '@lib/utils/lyrics/styles/lyricsStyleMerger';
 import { DEFAULT_COUNTDOWN_COLORS } from '@constants/lyricsStyles';
 import styles from './styles.module.css';
@@ -19,7 +19,6 @@ interface DualHighlightLyricsProps {
   showRealtimeLyrics: boolean;
   showPronunciationLyrics: boolean;
   // 스타일 커스터마이징
-  globalStyleConfig?: Partial<GlobalLyricsStyleConfig>;
   styleConfig?: Partial<DualHighlightLyricsStyleConfig>;
 }
 export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
@@ -29,13 +28,12 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
   pronunciationColor,
   showRealtimeLyrics,
   showPronunciationLyrics,
-  globalStyleConfig,
   styleConfig,
 }) => {
   // 스타일 병합
   const mergedStyles = useMemo(() => {
-    return mergeDualHighlightStyles(globalStyleConfig, styleConfig);
-  }, [globalStyleConfig, styleConfig]);
+    return mergeDualHighlightStyles(styleConfig);
+  }, [styleConfig]);
 
   // 발음이 메인 가사를 대체하는지 여부
   const pronunciationAsMain = !showRealtimeLyrics && showPronunciationLyrics;
@@ -105,33 +103,72 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
     return lyrics.length > 0 && lyrics[0] ? lyrics[0].time : null;
   }, [lyrics]);
 
-  // 가사/발음 색상 및 스타일 계산
-  const getTextStyle = (isHighlight: boolean, isForPronunciation: boolean) => {
-    if (isForPronunciation) {
-      // 발음 스타일
-      if (pronunciationAsMain) {
-        // 발음이 메인을 대체
-        return isHighlight ? mergedStyles.pronunciationAsMain.highlight : mergedStyles.pronunciationAsMain.default;
-      } else {
-        // 일반 발음
-        return isHighlight ? mergedStyles.pronunciation.highlight : mergedStyles.pronunciation.default;
-      }
+  // 가사 색상 (발음이 메인을 대체할 때는 lyrics 스타일 사용)
+  const getTextColor = (isHighlight: boolean) => {
+    if (pronunciationAsMain) {
+      // 발음이 메인을 대체: lyrics 스타일 사용
+      const lyricsStyle =
+        isHighlight && mergedStyles.pronunciationAsMainHighlight
+          ? mergedStyles.lyrics.highlight
+          : mergedStyles.lyrics.default;
+      return lyricsStyle?.color || fontColor;
     } else {
-      // 메인 가사 스타일
-      return isHighlight ? mergedStyles.lyrics.highlight : mergedStyles.lyrics.default;
+      // 일반 가사
+      const style = isHighlight ? mergedStyles.lyrics.highlight : mergedStyles.lyrics.default;
+      return style?.color || fontColor;
     }
   };
 
-  // 가사 색상 (스타일과 prop 병합)
-  const getTextColor = (isHighlight: boolean) => {
-    const style = getTextStyle(isHighlight, false);
-    return style?.color || fontColor;
+  // 발음 색상
+  const getPronunciationColor = (isHighlight: boolean) => {
+    if (pronunciationAsMain) {
+      // 발음이 메인을 대체: lyrics 스타일 색상 사용
+      const lyricsStyle =
+        isHighlight && mergedStyles.pronunciationAsMainHighlight
+          ? mergedStyles.lyrics.highlight
+          : mergedStyles.lyrics.default;
+      return lyricsStyle?.color || fontColor;
+    }
+    return mergedStyles.pronunciation.default?.color || pronunciationColor;
   };
 
-  // 발음 색상 (스타일과 prop 병합)
-  const getPronunciationColor = (isHighlight: boolean) => {
-    const style = getTextStyle(isHighlight, true);
-    return style?.color || pronunciationColor;
+  // 인라인 스타일 생성 (CSS 모듈로 처리할 수 없는 동적 스타일)
+  const getInlineStyle = (isHighlight: boolean, isForPronunciation: boolean) => {
+    let style;
+    if (isForPronunciation && pronunciationAsMain) {
+      // 발음이 메인을 대체하는 경우: 발음 텍스트에 lyrics 스타일 적용
+      style =
+        isHighlight && mergedStyles.pronunciationAsMainHighlight
+          ? mergedStyles.lyrics.highlight
+          : mergedStyles.lyrics.default;
+    } else if (isForPronunciation) {
+      // 일반 발음 스타일
+      style = isHighlight ? mergedStyles.pronunciation.highlight : mergedStyles.pronunciation.default;
+    } else {
+      // 가사 텍스트 스타일
+      style = isHighlight ? mergedStyles.lyrics.highlight : mergedStyles.lyrics.default;
+    }
+    if (!style) return {};
+
+    const inlineStyle: React.CSSProperties = {};
+
+    if (style.fontWeight) inlineStyle.fontWeight = style.fontWeight;
+    if (style.textShadow) inlineStyle.textShadow = style.textShadow;
+    if (style.fontSize) inlineStyle.fontSize = style.fontSize;
+    if (style.opacity !== undefined) inlineStyle.opacity = style.opacity;
+    if (style.transition) inlineStyle.transition = style.transition;
+    if (style.transform) inlineStyle.transform = style.transform;
+    if (style.background) inlineStyle.background = style.background;
+    if (style.backgroundClip) inlineStyle.backgroundClip = style.backgroundClip;
+    if (style.webkitBackgroundClip) inlineStyle.WebkitBackgroundClip = style.webkitBackgroundClip;
+    if (style.webkitTextFillColor) inlineStyle.WebkitTextFillColor = style.webkitTextFillColor;
+
+    // pronunciationAsMain일 때는 CSS의 기본 opacity 덮어쓰기
+    if (isForPronunciation && pronunciationAsMain && style.opacity === undefined) {
+      inlineStyle.opacity = 1;
+    }
+
+    return inlineStyle;
   };
 
   return (
@@ -159,6 +196,9 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
         showPron={showPronunciationLyrics}
         fontColor={getTextColor(topIndexInOriginal >= 0 && topIndexInOriginal <= highlightIndex)}
         pronunciationColor={getPronunciationColor(topIndexInOriginal >= 0 && topIndexInOriginal <= highlightIndex)}
+        textStyle={getInlineStyle(topIndexInOriginal >= 0 && topIndexInOriginal <= highlightIndex, false)}
+        pronStyle={getInlineStyle(topIndexInOriginal >= 0 && topIndexInOriginal <= highlightIndex, true)}
+        pronunciationAsMain={pronunciationAsMain}
       />
       <LyricLine
         text={bottom}
@@ -169,6 +209,9 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
         pronunciationColor={getPronunciationColor(
           bottomIndexInOriginal >= 0 && bottomIndexInOriginal <= highlightIndex,
         )}
+        textStyle={getInlineStyle(bottomIndexInOriginal >= 0 && bottomIndexInOriginal <= highlightIndex, false)}
+        pronStyle={getInlineStyle(bottomIndexInOriginal >= 0 && bottomIndexInOriginal <= highlightIndex, true)}
+        pronunciationAsMain={pronunciationAsMain}
       />
     </div>
   );

@@ -3,12 +3,10 @@
  * Default lyrics style configurations
  *
  * 사용자 커스터마이징을 위한 기본값
- * - 전역 스타일: 모든 가사 타입에 공통 적용
- * - 개별 스타일: 특정 가사 타입에만 적용 (전역 스타일 오버라이드)
+ * - 개별 스타일: 특정 가사 타입에만 적용
  */
 
 import {
-  GlobalLyricsStyleConfig,
   DualHighlightLyricsStyleConfig,
   FullLyricsStyleConfig,
   SingleLineLyricsStyleConfig,
@@ -19,45 +17,7 @@ import {
  */
 export const DEFAULT_LYRICS_COLOR = '#ffffff';
 export const DEFAULT_HIGHLIGHT_COLOR = '#357aff';
-export const DEFAULT_PRONUNCIATION_COLOR = '#aaaaaa';
-
-/**
- * 전역 가사 스타일 기본값
- * 모든 가사 타입(dual, full, single)에 공통 적용
- */
-export const DEFAULT_GLOBAL_LYRICS_STYLE: GlobalLyricsStyleConfig = {
-  // 전역 가사 스타일
-  lyrics: {
-    // 기본 상태 (dual: 타임스탬프 전, full: 재생 중 아님)
-    default: {
-      // fontColor prop 사용
-    },
-    // 하이라이트 상태 (현재 재생 중)
-    highlight: {
-      color: DEFAULT_LYRICS_COLOR,
-    },
-  },
-
-  // 전역 발음 스타일 (기본적으로 효과 없음)
-  pronunciation: {
-    default: {
-      // pronunciationColor prop 사용
-    },
-    highlight: {
-      // pronunciationColor prop 사용 (기본적으로 하이라이트 효과 없음)
-    },
-  },
-
-  // 발음이 메인을 대체할 때 스타일
-  pronunciationAsMain: {
-    default: {
-      // fontColor prop 사용
-    },
-    highlight: {
-      color: DEFAULT_HIGHLIGHT_COLOR,
-    },
-  },
-};
+export const DEFAULT_PRONUNCIATION_COLOR = '#F5F5F5';
 
 /**
  * DualHighlightLyrics 개별 스타일 기본값
@@ -78,20 +38,13 @@ export const DEFAULT_DUAL_HIGHLIGHT_STYLE: DualHighlightLyricsStyleConfig = {
   // 발음 스타일
   pronunciation: {
     default: {
-      opacity: 0.6,
+      color: DEFAULT_PRONUNCIATION_COLOR,
+      opacity: 1,
     },
     highlight: {
-      opacity: 0.85,
-      fontWeight: 600,
+      color: DEFAULT_PRONUNCIATION_COLOR,
+      opacity: 1,
     },
-  },
-
-  // 발음이 메인을 대체할 때 스타일
-  pronunciationAsMain: {
-    default: {
-      color: DEFAULT_LYRICS_COLOR,
-    },
-    // highlight는 사용자가 명시적으로 활성화할 때만 적용됨
   },
 };
 
@@ -121,25 +74,16 @@ export const DEFAULT_FULL_LYRICS_STYLE: FullLyricsStyleConfig = {
   // 발음 스타일 (전역 스타일 오버라이드)
   pronunciation: {
     default: {
-      opacity: 0.6,
+      color: DEFAULT_PRONUNCIATION_COLOR,
+      opacity: 1,
     },
     highlight: {
-      opacity: 0.85,
-      fontWeight: 600,
+      color: DEFAULT_PRONUNCIATION_COLOR,
+      opacity: 1,
       // 그라데이션 배경 제거
       webkitTextFillColor: 'initial',
       background: 'none',
     },
-  },
-
-  // 발음이 메인을 대체할 때 스타일
-  pronunciationAsMain: {
-    default: {
-      color: '#f3f3f3',
-      fontWeight: 500,
-      transition: 'color 0.15s, font-size 0.15s',
-    },
-    // highlight는 사용자가 명시적으로 활성화할 때만 적용됨
   },
 };
 
@@ -154,9 +98,6 @@ export const DEFAULT_SINGLE_LINE_STYLE: SingleLineLyricsStyleConfig = {
   },
   pronunciation: {
     color: DEFAULT_PRONUNCIATION_COLOR,
-  },
-  pronunciationAsMain: {
-    color: DEFAULT_LYRICS_COLOR,
   },
 };
 

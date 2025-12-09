@@ -49,3 +49,13 @@
   opacity: 0.85;
   font-size: clamp(11px, calc(0.65vw + 0.65vh), 22px);
 }
+
+/* pronunciationAsMain: 발음이 메인 가사를 대체하는 경우 - 가사 라인과 동일한 크기 */
+.lyricItem.pronunciationAsMain .pronunciation {
+  font-size: clamp(14px, calc(0.8vw + 0.8vh), 28px) !important; /* 기본 가사 크기와 동일 */
+  opacity: 1 !important;
+}
+.lyricItem.pronunciationAsMain.active .pronunciation {
+  font-size: clamp(18px, calc(1vw + 1vh), 32px) !important; /* 하이라이트 가사 크기와 동일 */
+  opacity: 1 !important;
+}

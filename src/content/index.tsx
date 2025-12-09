@@ -133,7 +133,6 @@ import {
   let lyricsFontColorPronunciation = '#FFFFFF';
 
   // 가사 스타일 설정
-  let lyricsStyleGlobal: Partial<import('@lib/types/lyricsStyles').GlobalLyricsStyleConfig> = {};
   let lyricsStyleDual: Partial<import('@lib/types/lyricsStyles').DualHighlightLyricsStyleConfig> = {};
   let lyricsStyleFull: Partial<import('@lib/types/lyricsStyles').FullLyricsStyleConfig> = {};
   let lyricsStyleSingle: Partial<import('@lib/types/lyricsStyles').SingleLineLyricsStyleConfig> = {};
@@ -533,7 +532,6 @@ import {
           pronunciationColor={lyricsFontColorPronunciation}
           showRealtimeLyrics={showRealtimeLyrics}
           showPronunciationLyrics={showPronunciationLyrics}
-          globalStyleConfig={lyricsStyleGlobal}
           styleConfig={lyricsStyleFull}
         />,
       );
@@ -547,7 +545,6 @@ import {
           pronunciationColor={lyricsFontColorPronunciation}
           showRealtimeLyrics={showRealtimeLyrics}
           showPronunciationLyrics={showPronunciationLyrics}
-          globalStyleConfig={lyricsStyleGlobal}
           styleConfig={lyricsStyleDual}
         />,
       );
@@ -561,7 +558,6 @@ import {
           pronunciationColor={lyricsFontColorPronunciation}
           showRealtimeLyrics={showRealtimeLyrics}
           showPronunciationLyrics={showPronunciationLyrics}
-          globalStyleConfig={lyricsStyleGlobal}
           styleConfig={lyricsStyleSingle}
         />,
       );
@@ -663,7 +659,6 @@ import {
           'realtimeLyrics',
           'announceLyrics',
           'lyricsMode',
-          'lyricsStyleGlobal',
           'lyricsStyleDual',
           'lyricsStyleFull',
           'lyricsStyleSingle',
@@ -683,9 +678,6 @@ import {
           }
           if (['sync', 'single', 'full'].includes(items.lyricsMode)) {
             lyricsMode = items.lyricsMode;
-          }
-          if (items.lyricsStyleGlobal) {
-            lyricsStyleGlobal = items.lyricsStyleGlobal;
           }
           if (items.lyricsStyleDual) {
             lyricsStyleDual = items.lyricsStyleDual;
@@ -762,12 +754,6 @@ import {
           lyricsMode = m;
           needRerender = true;
         }
-      }
-      if ('lyricsStyleGlobal' in changes) {
-        // 전역 가사 스타일 변경 감지
-        lyricsStyleGlobal = changes.lyricsStyleGlobal.newValue || {};
-        console.log('[Storage] lyricsStyleGlobal 변경 감지:', lyricsStyleGlobal);
-        needRerender = true;
       }
       if ('lyricsStyleDual' in changes) {
         lyricsStyleDual = changes.lyricsStyleDual.newValue || {};

@@ -8,18 +8,21 @@ export const LyricLine: React.FC<{
   showPron: boolean;
   fontColor?: string;
   pronunciationColor?: string;
-}> = ({ text, pron, showText, showPron, fontColor, pronunciationColor }) => {
+  textStyle?: React.CSSProperties;
+  pronStyle?: React.CSSProperties;
+  pronunciationAsMain?: boolean;
+}> = ({ text, pron, showText, showPron, fontColor, pronunciationColor, textStyle, pronStyle, pronunciationAsMain }) => {
   if (!showText && !showPron) return null;
 
   return (
-    <div className={styles.lyricItem}>
+    <div className={`${styles.lyricItem} ${pronunciationAsMain ? styles.pronunciationAsMain : ''}`}>
       {showText && text && (
-        <div className={styles.lyricLine} style={{ color: fontColor }}>
+        <div className={styles.lyricLine} style={{ color: fontColor, ...textStyle }}>
           {text}
         </div>
       )}
       {showPron && pron && (
-        <div className={styles.pronunciation} style={{ color: pronunciationColor }}>
+        <div className={styles.pronunciation} style={{ color: pronunciationColor, ...pronStyle }}>
           {pron}
         </div>
       )}

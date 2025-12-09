@@ -5,7 +5,7 @@ import { Line } from '@lib/types/lyrics';
 import { useCurrentTime } from '@hooks/useCurrentTime';
 import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/display/lyricsOffset';
 import { usePronunciations } from '../common/usePronunciation';
-import { GlobalLyricsStyleConfig, FullLyricsStyleConfig } from '@lib/types/lyricsStyles';
+import { FullLyricsStyleConfig } from '@lib/types/lyricsStyles';
 import { mergeFullLyricsStyles } from '@lib/utils/lyrics/styles/lyricsStyleMerger';
 
 interface FullLyricsProps {
@@ -17,7 +17,6 @@ interface FullLyricsProps {
   showRealtimeLyrics?: boolean;
   showPronunciationLyrics?: boolean;
   // 스타일 커스터마이징
-  globalStyleConfig?: Partial<GlobalLyricsStyleConfig>;
   styleConfig?: Partial<FullLyricsStyleConfig>;
 }
 
@@ -28,13 +27,12 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({
   pronunciationColor = '#AAAAAA',
   showRealtimeLyrics = true,
   showPronunciationLyrics = true,
-  globalStyleConfig,
   styleConfig,
 }) => {
   // 스타일 병합
   const mergedStyles = useMemo(() => {
-    return mergeFullLyricsStyles(globalStyleConfig, styleConfig);
-  }, [globalStyleConfig, styleConfig]);
+    return mergeFullLyricsStyles(styleConfig);
+  }, [styleConfig]);
 
   // 발음이 메인 가사를 대체하는지 여부
   const pronunciationAsMain = !showRealtimeLyrics && showPronunciationLyrics;
@@ -60,38 +58,51 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({
     }
   }, [activeLineIndex, scrollToCurrent]);
 
-  // 가사/발음 스타일 계산
-  const getTextStyle = (isActive: boolean, isForPronunciation: boolean) => {
-    if (isForPronunciation) {
-      // 발음 스타일
-      if (pronunciationAsMain) {
-        // 발음이 메인을 대체
-        return isActive ? mergedStyles.pronunciationAsMain.highlight : mergedStyles.pronunciationAsMain.default;
-      } else {
-        // 일반 발음
-        return isActive ? mergedStyles.pronunciation.highlight : mergedStyles.pronunciation.default;
-      }
+  // 가사 색상 (발음이 메인을 대체할 때는 lyrics 스타일 사용)
+  const getTextColor = (isActive: boolean) => {
+    if (pronunciationAsMain) {
+      // 발음이 메인을 대체: lyrics 스타일 사용
+      const lyricsStyle =
+        isActive && mergedStyles.pronunciationAsMainHighlight
+          ? mergedStyles.lyrics.highlight
+          : mergedStyles.lyrics.default;
+      return lyricsStyle?.color || fontColor;
     } else {
-      // 메인 가사 스타일
-      return isActive ? mergedStyles.lyrics.highlight : mergedStyles.lyrics.default;
+      // 일반 가사
+      const style = isActive ? mergedStyles.lyrics.highlight : mergedStyles.lyrics.default;
+      return style?.color || fontColor;
     }
   };
 
-  // 가사 색상과 스타일 (CSS 모듈과 인라인 스타일 병합)
-  const getTextColor = (isActive: boolean) => {
-    const style = getTextStyle(isActive, false);
-    return style?.color || fontColor;
-  };
-
-  // 발음 색상과 스타일
+  // 발음 색상
   const getPronunciationColor = (isActive: boolean) => {
-    const style = getTextStyle(isActive, true);
-    return style?.color || pronunciationColor;
+    if (pronunciationAsMain) {
+      // 발음이 메인을 대체: lyrics 스타일 색상 사용
+      const lyricsStyle =
+        isActive && mergedStyles.pronunciationAsMainHighlight
+          ? mergedStyles.lyrics.highlight
+          : mergedStyles.lyrics.default;
+      return lyricsStyle?.color || fontColor;
+    }
+    return mergedStyles.pronunciation.default?.color || pronunciationColor;
   };
 
   // 인라인 스타일 생성 (CSS 모듈로 처리할 수 없는 동적 스타일)
   const getInlineStyle = (isActive: boolean, isForPronunciation: boolean) => {
-    const style = getTextStyle(isActive, isForPronunciation);
+    let style;
+    if (isForPronunciation && pronunciationAsMain) {
+      // 발음이 메인을 대체하는 경우: 발음 텍스트에 lyrics 스타일 적용
+      style =
+        isActive && mergedStyles.pronunciationAsMainHighlight
+          ? mergedStyles.lyrics.highlight
+          : mergedStyles.lyrics.default;
+    } else if (isForPronunciation) {
+      // 일반 발음 스타일
+      style = isActive ? mergedStyles.pronunciation.highlight : mergedStyles.pronunciation.default;
+    } else {
+      // 가사 텍스트 스타일
+      style = isActive ? mergedStyles.lyrics.highlight : mergedStyles.lyrics.default;
+    }
     if (!style) return {};
 
     const inlineStyle: React.CSSProperties = {};
@@ -107,6 +118,11 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({
     if (style.webkitBackgroundClip) inlineStyle.WebkitBackgroundClip = style.webkitBackgroundClip;
     if (style.webkitTextFillColor) inlineStyle.WebkitTextFillColor = style.webkitTextFillColor;
 
+    // pronunciationAsMain일 때는 CSS의 기본 opacity 덮어쓰기
+    if (isForPronunciation && pronunciationAsMain && style.opacity === undefined) {
+      inlineStyle.opacity = 1;
+    }
+
     return inlineStyle;
   };
 
@@ -120,7 +136,11 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({
         if (!showRealtimeLyrics && !showPronunciationLyrics) return null;
 
         return (
-          <div key={idx} data-lyric-idx={idx} className={`${styles.lyricItem} ${isActive ? styles.active : ''}`}>
+          <div
+            key={idx}
+            data-lyric-idx={idx}
+            className={`${styles.lyricItem} ${isActive ? styles.active : ''} ${pronunciationAsMain ? styles.pronunciationAsMain : ''}`}
+          >
             {showRealtimeLyrics && (
               <div
                 className={`${styles.lyricLine} ${isActive ? styles.active : ''}`}
