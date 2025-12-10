@@ -15,6 +15,8 @@ import {
   calculateSingleFontSizes,
   calculateCommonFontSizes,
 } from '@lib/utils/lyrics/styles/fontSizeCalculator';
+import { FontFamilySelect } from './FontFamilySelect';
+import { FontWeightSelect } from './FontWeightSelect';
 
 type TabType = 'dual' | 'full' | 'single';
 interface TextEffectsModalProps {
@@ -310,15 +312,28 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
 
         <div className={styles.settingRow}>
           <label className={styles.settingLabel}>글꼴 종류</label>
-          <select
-            className={styles.selectInput}
-            value={config.lyrics?.default?.fontFamily ?? ''}
-            onChange={(e) => updateConfig(['lyrics', 'default', 'fontFamily'], e.target.value || undefined)}
-          >
-            <option value="Arial">Arial</option>
-            <option value="Noto Sans KR">Noto Sans KR</option>
-            <option value="Roboto">Roboto</option>
-          </select>
+          <FontFamilySelect
+            value={config.lyrics?.default?.fontFamily}
+            onChange={(value) => {
+              // 기본과 하이라이트 모두에 적용
+              updateConfig(['lyrics', 'default', 'fontFamily'], value);
+              updateConfig(['lyrics', 'highlight', 'fontFamily'], value);
+            }}
+          />
+        </div>
+
+        <div className={styles.settingRow}>
+          <label className={styles.settingLabel}>글꼴 두께</label>
+          <FontWeightSelect
+            value={
+              typeof config.lyrics?.default?.fontWeight === 'number' ? config.lyrics.default.fontWeight : undefined
+            }
+            onChange={(value) => {
+              // 기본과 하이라이트 모두에 적용
+              updateConfig(['lyrics', 'default', 'fontWeight'], value);
+              updateConfig(['lyrics', 'highlight', 'fontWeight'], value);
+            }}
+          />
         </div>
 
         <div className={styles.settingRow}>
@@ -334,15 +349,6 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
               const inputNum = Number(inputValue);
 
               const value = inputValue === '' ? calculatedSizes.lyrics : inputNum;
-
-              console.log('[Dual 가사 크기 변경]', {
-                이벤트타입: e.nativeEvent.constructor.name,
-                inputValue,
-                inputNum,
-                계산된값: value,
-                config현재값: config.lyrics?.default?.fontSize,
-                calculatedSizes: calculatedSizes.lyrics,
-              });
 
               // 기본과 하이라이트 모두에 적용 (updateConfig 내부에서 storage 저장)
               updateConfig(['lyrics', 'default', 'fontSize'], value);
@@ -407,15 +413,30 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
 
         <div className={styles.settingRow}>
           <label className={styles.settingLabel}>글꼴 종류</label>
-          <select
-            className={styles.selectInput}
-            value={config.pronunciation?.default?.fontFamily ?? ''}
-            onChange={(e) => updateConfig(['pronunciation', 'default', 'fontFamily'], e.target.value || undefined)}
-          >
-            <option value="Arial">Arial</option>
-            <option value="Noto Sans KR">Noto Sans KR</option>
-            <option value="Roboto">Roboto</option>
-          </select>
+          <FontFamilySelect
+            value={config.pronunciation?.default?.fontFamily}
+            onChange={(value) => {
+              // 기본과 하이라이트 모두에 적용
+              updateConfig(['pronunciation', 'default', 'fontFamily'], value);
+              updateConfig(['pronunciation', 'highlight', 'fontFamily'], value);
+            }}
+          />
+        </div>
+
+        <div className={styles.settingRow}>
+          <label className={styles.settingLabel}>글꼴 두께</label>
+          <FontWeightSelect
+            value={
+              typeof config.pronunciation?.default?.fontWeight === 'number'
+                ? config.pronunciation.default.fontWeight
+                : undefined
+            }
+            onChange={(value) => {
+              // 기본과 하이라이트 모두에 적용
+              updateConfig(['pronunciation', 'default', 'fontWeight'], value);
+              updateConfig(['pronunciation', 'highlight', 'fontWeight'], value);
+            }}
+          />
         </div>
 
         <div className={styles.settingRow}>
@@ -441,21 +462,8 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
                 if (diff === 1 || diff === -1) {
                   // 첫 클릭: calculatedSize + diff를 적용
                   value = calculatedSizes.pronunciation + diff;
-                  console.log('[Dual 발음] 첫 증감 클릭:', {
-                    calculatedSize: calculatedSizes.pronunciation,
-                    diff,
-                    최종값: value,
-                  });
                 }
               }
-
-              console.log('[Dual 발음 크기 변경]', {
-                이벤트타입: e.nativeEvent.constructor.name,
-                inputValue,
-                계산된값: value,
-                config현재값: config.pronunciation?.default?.fontSize,
-                calculatedSizes: calculatedSizes.pronunciation,
-              });
 
               // 기본과 하이라이트 모두에 적용 (updateConfig 내부에서 storage 저장)
               updateConfig(['pronunciation', 'default', 'fontSize'], value);
@@ -568,15 +576,27 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
         </div>
         <div className={styles.settingRow}>
           <label className={styles.settingLabel}>글꼴 종류</label>
-          <select
-            className={styles.selectInput}
-            value={config.lyrics?.default?.fontFamily ?? ''}
-            onChange={(e) => updateConfig(['lyrics', 'default', 'fontFamily'], e.target.value || undefined)}
-          >
-            <option value="Arial">Arial</option>
-            <option value="Noto Sans KR">Noto Sans KR</option>
-            <option value="Roboto">Roboto</option>
-          </select>
+          <FontFamilySelect
+            value={config.lyrics?.default?.fontFamily}
+            onChange={(value) => {
+              // 기본과 하이라이트 모두에 적용
+              updateConfig(['lyrics', 'default', 'fontFamily'], value);
+              updateConfig(['lyrics', 'highlight', 'fontFamily'], value);
+            }}
+          />
+        </div>
+        <div className={styles.settingRow}>
+          <label className={styles.settingLabel}>글꼴 두께</label>
+          <FontWeightSelect
+            value={
+              typeof config.lyrics?.default?.fontWeight === 'number' ? config.lyrics.default.fontWeight : undefined
+            }
+            onChange={(value) => {
+              // 기본과 하이라이트 모두에 적용
+              updateConfig(['lyrics', 'default', 'fontWeight'], value);
+              updateConfig(['lyrics', 'highlight', 'fontWeight'], value);
+            }}
+          />
         </div>
         <div className={styles.settingRow}>
           <label className={styles.settingLabel}>글꼴 크기</label>
@@ -601,21 +621,8 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
                 if (diff === 1 || diff === -1) {
                   // 첫 클릭: calculatedSize + diff를 적용
                   value = calculatedSizes.lyricsDefault + diff;
-                  console.log('[Full 가사] 첫 증감 클릭:', {
-                    calculatedSize: calculatedSizes.lyricsDefault,
-                    diff,
-                    최종값: value,
-                  });
                 }
               }
-
-              console.log('[Full 가사 기본 크기 변경]', {
-                이벤트타입: e.nativeEvent.constructor.name,
-                inputValue,
-                계산된값: value,
-                config현재값: config.lyrics?.default?.fontSize,
-                calculatedSizes: calculatedSizes.lyricsDefault,
-              });
 
               // 기본과 하이라이트 모두에 적용 (updateConfig 내부에서 storage 저장)
               updateConfig(['lyrics', 'default', 'fontSize'], value);
@@ -677,15 +684,29 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
         </div>
         <div className={styles.settingRow}>
           <label className={styles.settingLabel}>글꼴 종류</label>
-          <select
-            className={styles.selectInput}
-            value={config.pronunciation?.default?.fontFamily ?? ''}
-            onChange={(e) => updateConfig(['pronunciation', 'default', 'fontFamily'], e.target.value || undefined)}
-          >
-            <option value="Arial">Arial</option>
-            <option value="Noto Sans KR">Noto Sans KR</option>
-            <option value="Roboto">Roboto</option>
-          </select>
+          <FontFamilySelect
+            value={config.pronunciation?.default?.fontFamily}
+            onChange={(value) => {
+              // 기본과 하이라이트 모두에 적용
+              updateConfig(['pronunciation', 'default', 'fontFamily'], value);
+              updateConfig(['pronunciation', 'highlight', 'fontFamily'], value);
+            }}
+          />
+        </div>
+        <div className={styles.settingRow}>
+          <label className={styles.settingLabel}>글꼴 두께</label>
+          <FontWeightSelect
+            value={
+              typeof config.pronunciation?.default?.fontWeight === 'number'
+                ? config.pronunciation.default.fontWeight
+                : undefined
+            }
+            onChange={(value) => {
+              // 기본과 하이라이트 모두에 적용
+              updateConfig(['pronunciation', 'default', 'fontWeight'], value);
+              updateConfig(['pronunciation', 'highlight', 'fontWeight'], value);
+            }}
+          />
         </div>
         <div className={styles.settingRow}>
           <label className={styles.settingLabel}>글꼴 크기</label>
@@ -710,21 +731,8 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
                 if (diff === 1 || diff === -1) {
                   // 첫 클릭: calculatedSize + diff를 적용
                   value = calculatedSizes.pronunciationDefault + diff;
-                  console.log('[Full 발음] 첫 증감 클릭:', {
-                    calculatedSize: calculatedSizes.pronunciationDefault,
-                    diff,
-                    최종값: value,
-                  });
                 }
               }
-
-              console.log('[Full 발음 크기 변경]', {
-                이벤트타입: e.nativeEvent.constructor.name,
-                inputValue,
-                계산된값: value,
-                config현재값: config.pronunciation?.default?.fontSize,
-                calculatedSizes: calculatedSizes.pronunciationDefault,
-              });
 
               // 기본과 하이라이트 모두에 적용 (updateConfig 내부에서 storage 저장)
               updateConfig(['pronunciation', 'default', 'fontSize'], value);
@@ -814,15 +822,18 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
 
         <div className={styles.settingRow}>
           <label className={styles.settingLabel}>글꼴 종류</label>
-          <select
-            className={styles.selectInput}
-            value={config.lyrics?.fontFamily ?? ''}
-            onChange={(e) => updateConfig(['lyrics', 'fontFamily'], e.target.value || undefined)}
-          >
-            <option value="Arial">Arial</option>
-            <option value="Noto Sans KR">Noto Sans KR</option>
-            <option value="Roboto">Roboto</option>
-          </select>
+          <FontFamilySelect
+            value={config.lyrics?.fontFamily}
+            onChange={(value) => updateConfig(['lyrics', 'fontFamily'], value)}
+          />
+        </div>
+
+        <div className={styles.settingRow}>
+          <label className={styles.settingLabel}>글꼴 두께</label>
+          <FontWeightSelect
+            value={typeof config.lyrics?.fontWeight === 'number' ? config.lyrics.fontWeight : undefined}
+            onChange={(value) => updateConfig(['lyrics', 'fontWeight'], value)}
+          />
         </div>
 
         <div className={styles.settingRow}>
@@ -844,21 +855,8 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
                 if (diff === 1 || diff === -1) {
                   // 첫 클릭: calculatedSize + diff를 적용
                   value = calculatedSizes.lyrics + diff;
-                  console.log('[Single 가사] 첫 증감 클릭:', {
-                    calculatedSize: calculatedSizes.lyrics,
-                    diff,
-                    최종값: value,
-                  });
                 }
               }
-
-              console.log('[Single 가사 크기 변경]', {
-                이벤트타입: e.nativeEvent.constructor.name,
-                inputValue,
-                계산된값: value,
-                config현재값: config.lyrics?.fontSize,
-                calculatedSizes: calculatedSizes.lyrics,
-              });
 
               // updateConfig 내부에서 storage 저장
               updateConfig(['lyrics', 'fontSize'], value);
@@ -902,15 +900,18 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
 
         <div className={styles.settingRow}>
           <label className={styles.settingLabel}>글꼴 종류</label>
-          <select
-            className={styles.selectInput}
-            value={config.pronunciation?.fontFamily ?? ''}
-            onChange={(e) => updateConfig(['pronunciation', 'fontFamily'], e.target.value || undefined)}
-          >
-            <option value="Arial">Arial</option>
-            <option value="Noto Sans KR">Noto Sans KR</option>
-            <option value="Roboto">Roboto</option>
-          </select>
+          <FontFamilySelect
+            value={config.pronunciation?.fontFamily}
+            onChange={(value) => updateConfig(['pronunciation', 'fontFamily'], value)}
+          />
+        </div>
+
+        <div className={styles.settingRow}>
+          <label className={styles.settingLabel}>글꼴 두께</label>
+          <FontWeightSelect
+            value={typeof config.pronunciation?.fontWeight === 'number' ? config.pronunciation.fontWeight : undefined}
+            onChange={(value) => updateConfig(['pronunciation', 'fontWeight'], value)}
+          />
         </div>
 
         <div className={styles.settingRow}>
@@ -936,21 +937,8 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
                 if (diff === 1 || diff === -1) {
                   // 첫 클릭: calculatedSize + diff를 적용
                   value = calculatedSizes.pronunciation + diff;
-                  console.log('[Single 발음] 첫 증감 클릭:', {
-                    calculatedSize: calculatedSizes.pronunciation,
-                    diff,
-                    최종값: value,
-                  });
                 }
               }
-
-              console.log('[Single 발음 크기 변경]', {
-                이벤트타입: e.nativeEvent.constructor.name,
-                inputValue,
-                계산된값: value,
-                config현재값: config.pronunciation?.fontSize,
-                calculatedSizes: calculatedSizes.pronunciation,
-              });
 
               // updateConfig 내부에서 storage 저장
               updateConfig(['pronunciation', 'fontSize'], value);

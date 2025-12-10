@@ -158,6 +158,7 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
 
     const inlineStyle: React.CSSProperties = {};
 
+    if (style.fontFamily) inlineStyle.fontFamily = style.fontFamily;
     if (style.fontWeight) inlineStyle.fontWeight = style.fontWeight;
     if (style.textShadow) inlineStyle.textShadow = style.textShadow;
     // fontSize가 설정되어 있으면 사용, 없으면 계산된 값 사용 (올림 처리됨)

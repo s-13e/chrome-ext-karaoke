@@ -107,6 +107,7 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({
 
     const inlineStyle: React.CSSProperties = {};
 
+    if (style.fontFamily) inlineStyle.fontFamily = style.fontFamily;
     if (style.fontWeight) inlineStyle.fontWeight = style.fontWeight;
     if (style.textShadow) inlineStyle.textShadow = style.textShadow;
     if (style.fontSize) inlineStyle.fontSize = style.fontSize;
