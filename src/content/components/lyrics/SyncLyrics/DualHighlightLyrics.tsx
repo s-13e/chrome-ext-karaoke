@@ -9,6 +9,7 @@ import { CountdownOverlay } from '../common/CountdownOverlay';
 import { DualHighlightLyricsStyleConfig } from '@lib/types/lyricsStyles';
 import { mergeDualHighlightStyles } from '@lib/utils/lyrics/styles/lyricsStyleMerger';
 import { DEFAULT_COUNTDOWN_COLORS } from '@constants/lyricsStyles';
+import { calculateDualFontSizes } from '@lib/utils/lyrics/styles/fontSizeCalculator';
 import styles from './styles.module.css';
 
 interface DualHighlightLyricsProps {
@@ -32,7 +33,12 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
 }) => {
   // 스타일 병합
   const mergedStyles = useMemo(() => {
-    return mergeDualHighlightStyles(styleConfig);
+    const merged = mergeDualHighlightStyles(styleConfig);
+    console.log('[DualHighlightLyrics] mergedStyles 재계산:', {
+      styleConfig,
+      merged,
+    });
+    return merged;
   }, [styleConfig]);
 
   // 발음이 메인 가사를 대체하는지 여부
@@ -154,7 +160,13 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
 
     if (style.fontWeight) inlineStyle.fontWeight = style.fontWeight;
     if (style.textShadow) inlineStyle.textShadow = style.textShadow;
-    if (style.fontSize) inlineStyle.fontSize = style.fontSize;
+    // fontSize가 설정되어 있으면 사용, 없으면 계산된 값 사용 (올림 처리됨)
+    if (style.fontSize) {
+      inlineStyle.fontSize = style.fontSize;
+    } else if (!isForPronunciation) {
+      // 가사는 항상 계산된 fontSize 적용 (CSS clamp 대신)
+      inlineStyle.fontSize = calculateDualFontSizes();
+    }
     if (style.opacity !== undefined) inlineStyle.opacity = style.opacity;
     if (style.transition) inlineStyle.transition = style.transition;
     if (style.transform) inlineStyle.transform = style.transform;

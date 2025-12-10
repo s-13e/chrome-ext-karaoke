@@ -1,6 +1,6 @@
 // TextEffectsModal.tsx
 // 텍스트 효과 설정 모달 컴포넌트
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import styles from './TextEffectsModal.module.css';
 import {
   DualHighlightLyricsStyleConfig,
@@ -9,20 +9,28 @@ import {
 } from '@lib/types/lyricsStyles';
 import { DEFAULT_LYRICS_COLOR, DEFAULT_HIGHLIGHT_COLOR, DEFAULT_PRONUNCIATION_COLOR } from '@constants/lyricsStyles';
 import { useTranslation } from 'react-i18next';
+import {
+  calculateDualFontSizes,
+  calculateFullFontSizes,
+  calculateSingleFontSizes,
+  calculateCommonFontSizes,
+} from '@lib/utils/lyrics/styles/fontSizeCalculator';
 
 type TabType = 'dual' | 'full' | 'single';
 interface TextEffectsModalProps {
   onClose: () => void;
   // 부모가 모달의 '취소(원본 복구)' 콜백을 등록할 수 있도록 함
   registerCancel?: (fn: (() => void) | null) => void;
+  // 초기 탭 설정 (현재 가사 표시 모드에 따라)
+  initialTab?: TabType;
 }
 /**
  * 텍스트 효과 설정 모달
  * - 개별 설정(Dual/Full/Single): 특정 가사 타입에만 적용
  * - 각 탭은 기본 스타일, 하이라이트 스타일, 발음 스타일 섹션으로 구성
  */
-export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, registerCancel }) => {
-  const [activeTab, setActiveTab] = useState<TabType>('dual');
+export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, registerCancel, initialTab = 'dual' }) => {
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab);
   // 개별 설정 상태
   const [dualConfig, setDualConfig] = useState<Partial<DualHighlightLyricsStyleConfig>>({});
   const [fullConfig, setFullConfig] = useState<Partial<FullLyricsStyleConfig>>({});
@@ -127,6 +135,23 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, reg
     }
     return undefined;
   }, [registerCancel, handleCancelOrClose]);
+
+  // 페이지 언로드 시 원본 설정으로 복구 (모달이 열려있을 때 페이지 이동/닫기 대응)
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // 모달이 열려있는 상태에서 페이지가 닫히면 원본 설정으로 복구
+      chrome.storage.sync.set({
+        lyricsStyleDual: originalConfigsRef.current.dual,
+        lyricsStyleFull: originalConfigsRef.current.full,
+        lyricsStyleSingle: originalConfigsRef.current.single,
+      });
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
   return (
     <div className={styles.modalContainer}>
       <div className={styles.modalHeader}>
@@ -200,6 +225,16 @@ interface DualSettingsPanelProps {
   onPreviewUpdate: () => void;
 }
 const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig, onPreviewUpdate }) => {
+  // 현재 뷰포트 기준 계산된 폰트 크기
+  const calculatedSizes = useMemo(() => {
+    const dualSize = calculateDualFontSizes();
+    const commonSizes = calculateCommonFontSizes();
+    return {
+      lyrics: dualSize,
+      pronunciation: commonSizes.pronunciationDefault,
+    };
+  }, []);
+
   // 색상 변경 핸들러
   const updateConfig = (path: string[], value: string | number | undefined) => {
     setConfig((prev) => {
@@ -218,6 +253,12 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
       if (lastKey) {
         current[lastKey] = value;
       }
+
+      // 즉시 storage에 저장 (실시간 미리보기)
+      chrome.storage.sync.set({
+        lyricsStyleDual: newConfig,
+      });
+
       return newConfig;
     });
   };
@@ -234,11 +275,17 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
   const handlePronunciationHighlightToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
     const enabled = e.target.checked;
     setPronunciationHighlightEnabled(enabled);
-    setConfig((prev) => ({
-      ...prev,
-      pronunciationAsMainHighlight: enabled,
-    }));
-    onPreviewUpdate();
+    setConfig((prev) => {
+      const newConfig = {
+        ...prev,
+        pronunciationAsMainHighlight: enabled,
+      };
+      // 즉시 storage에 저장
+      chrome.storage.sync.set({
+        lyricsStyleDual: newConfig,
+      });
+      return newConfig;
+    });
   };
   return (
     <div className={styles.settingsPanel}>
@@ -279,11 +326,28 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
           <input
             type="number"
             className={styles.numberInput}
-            value={config.lyrics?.default?.fontSize ?? ''}
-            onChange={(e) =>
-              updateConfig(['lyrics', 'default', 'fontSize'], e.target.value ? Number(e.target.value) : undefined)
+            value={
+              config.lyrics?.default?.fontSize !== undefined ? config.lyrics.default.fontSize : calculatedSizes.lyrics
             }
-            placeholder="전역 설정 사용"
+            onChange={(e) => {
+              const inputValue = e.target.value;
+              const inputNum = Number(inputValue);
+
+              const value = inputValue === '' ? calculatedSizes.lyrics : inputNum;
+
+              console.log('[Dual 가사 크기 변경]', {
+                이벤트타입: e.nativeEvent.constructor.name,
+                inputValue,
+                inputNum,
+                계산된값: value,
+                config현재값: config.lyrics?.default?.fontSize,
+                calculatedSizes: calculatedSizes.lyrics,
+              });
+
+              // 기본과 하이라이트 모두에 적용 (updateConfig 내부에서 storage 저장)
+              updateConfig(['lyrics', 'default', 'fontSize'], value);
+              updateConfig(['lyrics', 'highlight', 'fontSize'], value);
+            }}
             min={10}
             max={48}
           />
@@ -359,14 +423,44 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
           <input
             type="number"
             className={styles.numberInput}
-            value={config.pronunciation?.default?.fontSize ?? ''}
-            onChange={(e) =>
-              updateConfig(
-                ['pronunciation', 'default', 'fontSize'],
-                e.target.value ? Number(e.target.value) : undefined,
-              )
+            value={
+              config.pronunciation?.default?.fontSize !== undefined
+                ? config.pronunciation.default.fontSize
+                : calculatedSizes.pronunciation
             }
-            placeholder="전역 설정 사용"
+            onChange={(e) => {
+              const inputValue = e.target.value;
+              const inputNum = Number(inputValue);
+
+              let value = inputValue === '' ? calculatedSizes.pronunciation : inputNum;
+
+              // config가 undefined일 때 증감 버튼 처리
+              if (config.pronunciation?.default?.fontSize === undefined) {
+                const diff = inputNum - calculatedSizes.pronunciation;
+                // 증감 버튼은 ±1씩 변경됨
+                if (diff === 1 || diff === -1) {
+                  // 첫 클릭: calculatedSize + diff를 적용
+                  value = calculatedSizes.pronunciation + diff;
+                  console.log('[Dual 발음] 첫 증감 클릭:', {
+                    calculatedSize: calculatedSizes.pronunciation,
+                    diff,
+                    최종값: value,
+                  });
+                }
+              }
+
+              console.log('[Dual 발음 크기 변경]', {
+                이벤트타입: e.nativeEvent.constructor.name,
+                inputValue,
+                계산된값: value,
+                config현재값: config.pronunciation?.default?.fontSize,
+                calculatedSizes: calculatedSizes.pronunciation,
+              });
+
+              // 기본과 하이라이트 모두에 적용 (updateConfig 내부에서 storage 저장)
+              updateConfig(['pronunciation', 'default', 'fontSize'], value);
+              updateConfig(['pronunciation', 'highlight', 'fontSize'], value);
+            }}
             min={10}
             max={48}
           />
@@ -398,6 +492,9 @@ interface FullSettingsPanelProps {
   onPreviewUpdate: () => void;
 }
 const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig, onPreviewUpdate }) => {
+  // 현재 뷰포트 기준 계산된 폰트 크기
+  const calculatedSizes = useMemo(() => calculateFullFontSizes(), []);
+
   const updateConfig = (path: string[], value: string | number | undefined) => {
     setConfig((prev) => {
       const newConfig = { ...prev };
@@ -415,6 +512,12 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
       if (lastKey) {
         current[lastKey] = value;
       }
+
+      // 즉시 storage에 저장 (실시간 미리보기)
+      chrome.storage.sync.set({
+        lyricsStyleFull: newConfig,
+      });
+
       return newConfig;
     });
   };
@@ -431,11 +534,17 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
   const handlePronunciationHighlightToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
     const enabled = e.target.checked;
     setPronunciationHighlightEnabled(enabled);
-    setConfig((prev) => ({
-      ...prev,
-      pronunciationAsMainHighlight: enabled,
-    }));
-    onPreviewUpdate();
+    setConfig((prev) => {
+      const newConfig = {
+        ...prev,
+        pronunciationAsMainHighlight: enabled,
+      };
+      // 즉시 storage에 저장
+      chrome.storage.sync.set({
+        lyricsStyleFull: newConfig,
+      });
+      return newConfig;
+    });
   };
   return (
     <div className={styles.settingsPanel}>
@@ -474,11 +583,44 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
           <input
             type="number"
             className={styles.numberInput}
-            value={config.lyrics?.default?.fontSize ?? ''}
-            onChange={(e) =>
-              updateConfig(['lyrics', 'default', 'fontSize'], e.target.value ? Number(e.target.value) : undefined)
+            value={
+              config.lyrics?.default?.fontSize !== undefined
+                ? config.lyrics.default.fontSize
+                : calculatedSizes.lyricsDefault
             }
-            placeholder="전역 설정 사용"
+            onChange={(e) => {
+              const inputValue = e.target.value;
+              const inputNum = Number(inputValue);
+
+              let value = inputValue === '' ? calculatedSizes.lyricsDefault : inputNum;
+
+              // config가 undefined일 때 증감 버튼 처리
+              if (config.lyrics?.default?.fontSize === undefined) {
+                const diff = inputNum - calculatedSizes.lyricsDefault;
+                // 증감 버튼은 ±1씩 변경됨
+                if (diff === 1 || diff === -1) {
+                  // 첫 클릭: calculatedSize + diff를 적용
+                  value = calculatedSizes.lyricsDefault + diff;
+                  console.log('[Full 가사] 첫 증감 클릭:', {
+                    calculatedSize: calculatedSizes.lyricsDefault,
+                    diff,
+                    최종값: value,
+                  });
+                }
+              }
+
+              console.log('[Full 가사 기본 크기 변경]', {
+                이벤트타입: e.nativeEvent.constructor.name,
+                inputValue,
+                계산된값: value,
+                config현재값: config.lyrics?.default?.fontSize,
+                calculatedSizes: calculatedSizes.lyricsDefault,
+              });
+
+              // 기본과 하이라이트 모두에 적용 (updateConfig 내부에서 storage 저장)
+              updateConfig(['lyrics', 'default', 'fontSize'], value);
+              updateConfig(['lyrics', 'highlight', 'fontSize'], value);
+            }}
             min={10}
             max={48}
           />
@@ -550,14 +692,44 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
           <input
             type="number"
             className={styles.numberInput}
-            value={config.pronunciation?.default?.fontSize ?? ''}
-            onChange={(e) =>
-              updateConfig(
-                ['pronunciation', 'default', 'fontSize'],
-                e.target.value ? Number(e.target.value) : undefined,
-              )
+            value={
+              config.pronunciation?.default?.fontSize !== undefined
+                ? config.pronunciation.default.fontSize
+                : calculatedSizes.pronunciationDefault
             }
-            placeholder="전역 설정 사용"
+            onChange={(e) => {
+              const inputValue = e.target.value;
+              const inputNum = Number(inputValue);
+
+              let value = inputValue === '' ? calculatedSizes.pronunciationDefault : inputNum;
+
+              // config가 undefined일 때 증감 버튼 처리
+              if (config.pronunciation?.default?.fontSize === undefined) {
+                const diff = inputNum - calculatedSizes.pronunciationDefault;
+                // 증감 버튼은 ±1씩 변경됨
+                if (diff === 1 || diff === -1) {
+                  // 첫 클릭: calculatedSize + diff를 적용
+                  value = calculatedSizes.pronunciationDefault + diff;
+                  console.log('[Full 발음] 첫 증감 클릭:', {
+                    calculatedSize: calculatedSizes.pronunciationDefault,
+                    diff,
+                    최종값: value,
+                  });
+                }
+              }
+
+              console.log('[Full 발음 크기 변경]', {
+                이벤트타입: e.nativeEvent.constructor.name,
+                inputValue,
+                계산된값: value,
+                config현재값: config.pronunciation?.default?.fontSize,
+                calculatedSizes: calculatedSizes.pronunciationDefault,
+              });
+
+              // 기본과 하이라이트 모두에 적용 (updateConfig 내부에서 storage 저장)
+              updateConfig(['pronunciation', 'default', 'fontSize'], value);
+              updateConfig(['pronunciation', 'highlight', 'fontSize'], value);
+            }}
             min={10}
             max={48}
           />
@@ -590,6 +762,9 @@ interface SingleSettingsPanelProps {
   onPreviewUpdate: () => void;
 }
 const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setConfig, onPreviewUpdate }) => {
+  // 현재 뷰포트 기준 계산된 폰트 크기
+  const calculatedSizes = useMemo(() => calculateSingleFontSizes(), []);
+
   const updateConfig = (path: string[], value: string | number | undefined) => {
     setConfig((prev) => {
       const newConfig = { ...prev };
@@ -607,6 +782,12 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
       if (lastKey) {
         current[lastKey] = value;
       }
+
+      // 즉시 storage에 저장 (실시간 미리보기)
+      chrome.storage.sync.set({
+        lyricsStyleSingle: newConfig,
+      });
+
       return newConfig;
     });
   };
@@ -649,9 +830,39 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
           <input
             type="number"
             className={styles.numberInput}
-            value={config.lyrics?.fontSize ?? ''}
-            onChange={(e) => updateConfig(['lyrics', 'fontSize'], e.target.value ? Number(e.target.value) : undefined)}
-            placeholder="전역 설정 사용"
+            value={config.lyrics?.fontSize !== undefined ? config.lyrics.fontSize : calculatedSizes.lyrics}
+            onChange={(e) => {
+              const inputValue = e.target.value;
+              const inputNum = Number(inputValue);
+
+              let value = inputValue === '' ? calculatedSizes.lyrics : inputNum;
+
+              // config가 undefined일 때 증감 버튼 처리
+              if (config.lyrics?.fontSize === undefined) {
+                const diff = inputNum - calculatedSizes.lyrics;
+                // 증감 버튼은 ±1씩 변경됨
+                if (diff === 1 || diff === -1) {
+                  // 첫 클릭: calculatedSize + diff를 적용
+                  value = calculatedSizes.lyrics + diff;
+                  console.log('[Single 가사] 첫 증감 클릭:', {
+                    calculatedSize: calculatedSizes.lyrics,
+                    diff,
+                    최종값: value,
+                  });
+                }
+              }
+
+              console.log('[Single 가사 크기 변경]', {
+                이벤트타입: e.nativeEvent.constructor.name,
+                inputValue,
+                계산된값: value,
+                config현재값: config.lyrics?.fontSize,
+                calculatedSizes: calculatedSizes.lyrics,
+              });
+
+              // updateConfig 내부에서 storage 저장
+              updateConfig(['lyrics', 'fontSize'], value);
+            }}
             min={10}
             max={48}
           />
@@ -707,11 +918,43 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
           <input
             type="number"
             className={styles.numberInput}
-            value={config.pronunciation?.fontSize ?? ''}
-            onChange={(e) =>
-              updateConfig(['pronunciation', 'fontSize'], e.target.value ? Number(e.target.value) : undefined)
+            value={
+              config.pronunciation?.fontSize !== undefined
+                ? config.pronunciation.fontSize
+                : calculatedSizes.pronunciation
             }
-            placeholder="전역 설정 사용"
+            onChange={(e) => {
+              const inputValue = e.target.value;
+              const inputNum = Number(inputValue);
+
+              let value = inputValue === '' ? calculatedSizes.pronunciation : inputNum;
+
+              // config가 undefined일 때 증감 버튼 처리
+              if (config.pronunciation?.fontSize === undefined) {
+                const diff = inputNum - calculatedSizes.pronunciation;
+                // 증감 버튼은 ±1씩 변경됨
+                if (diff === 1 || diff === -1) {
+                  // 첫 클릭: calculatedSize + diff를 적용
+                  value = calculatedSizes.pronunciation + diff;
+                  console.log('[Single 발음] 첫 증감 클릭:', {
+                    calculatedSize: calculatedSizes.pronunciation,
+                    diff,
+                    최종값: value,
+                  });
+                }
+              }
+
+              console.log('[Single 발음 크기 변경]', {
+                이벤트타입: e.nativeEvent.constructor.name,
+                inputValue,
+                계산된값: value,
+                config현재값: config.pronunciation?.fontSize,
+                calculatedSizes: calculatedSizes.pronunciation,
+              });
+
+              // updateConfig 내부에서 storage 저장
+              updateConfig(['pronunciation', 'fontSize'], value);
+            }}
             min={10}
             max={48}
           />

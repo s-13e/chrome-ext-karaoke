@@ -983,6 +983,7 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
             registerCancel={(fn) => {
               textEffectsCancelRef.current = fn || null;
             }}
+            initialTab={lyricsDisplayMode === 'sync' ? 'dual' : lyricsDisplayMode}
           />
         </div>
       )}
