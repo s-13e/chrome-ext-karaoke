@@ -9,10 +9,9 @@ import styles from './TextEffectsModal.module.css';
 interface ColorPickerInputProps {
   value: string;
   onChange: (value: string | undefined) => void;
-  onPreviewUpdate: () => void;
 }
 
-export const ColorPickerInput: React.FC<ColorPickerInputProps> = ({ value, onChange, onPreviewUpdate }) => {
+export const ColorPickerInput: React.FC<ColorPickerInputProps> = ({ value, onChange }) => {
   const [tempValue, setTempValue] = useState(value);
   const changeTimeoutRef = useRef<number | null>(null);
   const pendingValueRef = useRef<string | null>(null);
@@ -24,14 +23,18 @@ export const ColorPickerInput: React.FC<ColorPickerInputProps> = ({ value, onCha
 
   const applyChange = useCallback(
     (newValue: string) => {
+      // eslint-disable-next-line no-console
+      console.log('[ColorPickerInput] applyChange called with:', newValue);
       onChange(newValue || undefined);
-      onPreviewUpdate();
+      // onPreviewUpdate 제거: onChange에서 이미 storage에 저장하므로 중복 호출 불필요
     },
-    [onChange, onPreviewUpdate],
+    [onChange],
   );
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = (e.target as HTMLInputElement).value;
+    // eslint-disable-next-line no-console
+    console.log('[ColorPickerInput] handleChange:', newValue);
     setTempValue(newValue);
     pendingValueRef.current = newValue;
 
@@ -42,6 +45,8 @@ export const ColorPickerInput: React.FC<ColorPickerInputProps> = ({ value, onCha
 
     // 200ms 동안 onChange가 발생하지 않으면 드래그가 끝난 것으로 간주하고 적용
     changeTimeoutRef.current = window.setTimeout(() => {
+      // eslint-disable-next-line no-console
+      console.log('[ColorPickerInput] Drag stopped, applying change');
       if (pendingValueRef.current !== null) {
         applyChange(pendingValueRef.current);
         pendingValueRef.current = null;
@@ -50,14 +55,29 @@ export const ColorPickerInput: React.FC<ColorPickerInputProps> = ({ value, onCha
   };
 
   const handleBlur = () => {
+    // eslint-disable-next-line no-console
+    console.log(
+      '[ColorPickerInput] handleBlur, pending:',
+      pendingValueRef.current,
+      'tempValue:',
+      tempValue,
+      'value:',
+      value,
+    );
     // 타이머 취소하고 즉시 적용
     if (changeTimeoutRef.current) {
       clearTimeout(changeTimeoutRef.current);
       changeTimeoutRef.current = null;
     }
+    // pendingValueRef가 있으면 적용, 없으면 tempValue가 value와 다른지 확인
     if (pendingValueRef.current !== null) {
       applyChange(pendingValueRef.current);
       pendingValueRef.current = null;
+    } else if (tempValue !== value) {
+      // 단일 클릭의 경우 pending이 없을 수 있으므로 tempValue 확인
+      // eslint-disable-next-line no-console
+      console.log('[ColorPickerInput] Applying tempValue on blur');
+      applyChange(tempValue);
     }
   };
 

@@ -345,7 +345,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
           <ColorPickerInput
             value={config.lyrics?.default?.color || DEFAULT_LYRICS_COLOR}
             onChange={(value) => updateConfig(['lyrics', 'default', 'color'], value)}
-            onPreviewUpdate={onPreviewUpdate}
+            // onPreviewUpdate 제거 (ColorPickerInput의 onChange에서 이미 storage 저장)
           />
         </div>
 
@@ -428,7 +428,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
               <ColorPickerInput
                 value={config.lyrics?.highlight?.color || DEFAULT_HIGHLIGHT_COLOR}
                 onChange={(value) => updateConfig(['lyrics', 'highlight', 'color'], value)}
-                onPreviewUpdate={onPreviewUpdate}
+                // onPreviewUpdate 제거 (ColorPickerInput의 onChange에서 이미 storage 저장)
               />
             </div>
           )}
@@ -452,7 +452,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
                     updateGradientConfig('color1', value || '#357aff');
                     onPreviewUpdate();
                   }}
-                  onPreviewUpdate={onPreviewUpdate}
+                  // onPreviewUpdate 제거 (ColorPickerInput의 onChange에서 이미 storage 저장)
                 />
               </div>
 
@@ -465,7 +465,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
                     updateGradientConfig('color2', value || '#e91e63');
                     onPreviewUpdate();
                   }}
-                  onPreviewUpdate={onPreviewUpdate}
+                  // onPreviewUpdate 제거 (ColorPickerInput의 onChange에서 이미 storage 저장)
                 />
               </div>
 
@@ -529,7 +529,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
           <ColorPickerInput
             value={config.pronunciation?.default?.color || DEFAULT_PRONUNCIATION_COLOR}
             onChange={(value) => updateConfig(['pronunciation', 'default', 'color'], value)}
-            onPreviewUpdate={onPreviewUpdate}
+            // onPreviewUpdate 제거 (ColorPickerInput의 onChange에서 이미 storage 저장)
           />
         </div>
 
@@ -726,7 +726,7 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
           <ColorPickerInput
             value={config.lyrics?.default?.color || DEFAULT_LYRICS_COLOR}
             onChange={(value) => updateConfig(['lyrics', 'default', 'color'], value)}
-            onPreviewUpdate={onPreviewUpdate}
+            // onPreviewUpdate 제거 (ColorPickerInput의 onChange에서 이미 storage 저장)
           />
         </div>
         <div className={styles.settingRow}>
@@ -814,7 +814,7 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
             <ColorPickerInput
               value={config.lyrics?.highlight?.color || DEFAULT_HIGHLIGHT_COLOR}
               onChange={(value) => updateConfig(['lyrics', 'highlight', 'color'], value)}
-              onPreviewUpdate={onPreviewUpdate}
+              // onPreviewUpdate 제거 (ColorPickerInput의 onChange에서 이미 storage 저장)
             />
           </div>
         )}
@@ -830,7 +830,7 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
                   updateGradientConfig('color1', value || '#357aff');
                   onPreviewUpdate();
                 }}
-                onPreviewUpdate={onPreviewUpdate}
+                // onPreviewUpdate 제거 (ColorPickerInput의 onChange에서 이미 storage 저장)
               />
             </div>
 
@@ -842,7 +842,7 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
                   updateGradientConfig('color2', value || '#e91e63');
                   onPreviewUpdate();
                 }}
-                onPreviewUpdate={onPreviewUpdate}
+                // onPreviewUpdate 제거 (ColorPickerInput의 onChange에서 이미 storage 저장)
               />
             </div>
 
@@ -888,7 +888,7 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
           <ColorPickerInput
             value={config.pronunciation?.default?.color || DEFAULT_PRONUNCIATION_COLOR}
             onChange={(value) => updateConfig(['pronunciation', 'default', 'color'], value)}
-            onPreviewUpdate={onPreviewUpdate}
+            // onPreviewUpdate 제거 (ColorPickerInput의 onChange에서 이미 storage 저장)
           />
         </div>
         <div className={styles.settingRow}>
@@ -1073,7 +1073,7 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
             <ColorPickerInput
               value={config.lyrics?.color || DEFAULT_LYRICS_COLOR}
               onChange={(value) => updateConfig(['lyrics', 'color'], value)}
-              onPreviewUpdate={onPreviewUpdate}
+              // onPreviewUpdate 제거 (ColorPickerInput의 onChange에서 이미 storage 저장)
             />
           </div>
         )}
@@ -1089,7 +1089,7 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
                   updateGradientConfig('color1', value || '#357aff');
                   onPreviewUpdate();
                 }}
-                onPreviewUpdate={onPreviewUpdate}
+                // onPreviewUpdate 제거 (ColorPickerInput의 onChange에서 이미 storage 저장)
               />
             </div>
 
@@ -1101,7 +1101,7 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
                   updateGradientConfig('color2', value || '#e91e63');
                   onPreviewUpdate();
                 }}
-                onPreviewUpdate={onPreviewUpdate}
+                // onPreviewUpdate 제거 (ColorPickerInput의 onChange에서 이미 storage 저장)
               />
             </div>
 
@@ -1193,7 +1193,7 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
           <ColorPickerInput
             value={config.pronunciation?.color || DEFAULT_LYRICS_COLOR}
             onChange={(value) => updateConfig(['pronunciation', 'color'], value)}
-            onPreviewUpdate={onPreviewUpdate}
+            // onPreviewUpdate 제거 (ColorPickerInput의 onChange에서 이미 storage 저장)
           />
         </div>
 
