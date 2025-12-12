@@ -10,6 +10,7 @@
 .lyricLine {
   margin-bottom: 0; /* 발음이 있으면 붙이고 */
   font-weight: bold;
+  display: inline-block; /* background-clip: text가 작동하려면 필요 */
 }
 
 /* 발음 가사 라인 */

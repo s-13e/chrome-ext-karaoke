@@ -172,9 +172,12 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
     if (style.transition) inlineStyle.transition = style.transition;
     if (style.transform) inlineStyle.transform = style.transform;
     if (style.background) inlineStyle.background = style.background;
+    if (style.backgroundImage) inlineStyle.backgroundImage = style.backgroundImage;
     if (style.backgroundClip) inlineStyle.backgroundClip = style.backgroundClip;
-    if (style.webkitBackgroundClip) inlineStyle.WebkitBackgroundClip = style.webkitBackgroundClip;
-    if (style.webkitTextFillColor) inlineStyle.WebkitTextFillColor = style.webkitTextFillColor;
+    if (style.WebkitBackgroundClip) inlineStyle.WebkitBackgroundClip = style.WebkitBackgroundClip;
+    if (style.WebkitTextFillColor) inlineStyle.WebkitTextFillColor = style.WebkitTextFillColor;
+    if (style.WebkitTextStroke) inlineStyle.WebkitTextStroke = style.WebkitTextStroke;
+    if (style.filter) inlineStyle.filter = style.filter;
 
     // pronunciationAsMain일 때는 CSS의 기본 opacity 덮어쓰기
     if (isForPronunciation && pronunciationAsMain && style.opacity === undefined) {

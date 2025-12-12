@@ -17,12 +17,25 @@ export const LyricLine: React.FC<{
   return (
     <div className={`${styles.lyricItem} ${pronunciationAsMain ? styles.pronunciationAsMain : ''}`}>
       {showText && text && (
-        <div className={styles.lyricLine} style={{ color: fontColor, ...textStyle }}>
+        <div
+          className={styles.lyricLine}
+          style={{
+            ...textStyle,
+            // gradient가 없을 때만 fontColor 적용 (gradient는 WebkitTextFillColor로 색상 처리)
+            ...(textStyle?.WebkitTextFillColor ? {} : { color: fontColor }),
+          }}
+        >
           {text}
         </div>
       )}
       {showPron && pron && (
-        <div className={styles.pronunciation} style={{ color: pronunciationColor, ...pronStyle }}>
+        <div
+          className={styles.pronunciation}
+          style={{
+            ...pronStyle,
+            ...(pronStyle?.WebkitTextFillColor ? {} : { color: pronunciationColor }),
+          }}
+        >
           {pron}
         </div>
       )}

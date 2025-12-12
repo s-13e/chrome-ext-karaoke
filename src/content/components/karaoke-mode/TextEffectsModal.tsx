@@ -6,6 +6,7 @@ import {
   DualHighlightLyricsStyleConfig,
   FullLyricsStyleConfig,
   SingleLineLyricsStyleConfig,
+  LinearGradientOptions,
 } from '@lib/types/lyricsStyles';
 import { DEFAULT_LYRICS_COLOR, DEFAULT_HIGHLIGHT_COLOR, DEFAULT_PRONUNCIATION_COLOR } from '@constants/lyricsStyles';
 import { useTranslation } from 'react-i18next';
@@ -17,6 +18,7 @@ import {
 } from '@lib/utils/lyrics/styles/fontSizeCalculator';
 import { FontFamilySelect } from './FontFamilySelect';
 import { FontWeightSelect } from './FontWeightSelect';
+import { ColorPickerInput } from './ColorPickerInput';
 
 type TabType = 'dual' | 'full' | 'single';
 interface TextEffectsModalProps {
@@ -269,7 +271,10 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
     config.pronunciationAsMainHighlight ?? false,
   );
 
-  // config 변경 시 체크박스 상태 동기화 (초기화 버튼 대응)
+  // 색상 모드 상태 (단색 vs 다색)
+  const [colorMode, setColorMode] = useState<'solid' | 'multi'>('solid');
+
+  // config 변경 시 상태 동기화 (초기화 버튼 대응)
   useEffect(() => {
     setPronunciationHighlightEnabled(config.pronunciationAsMainHighlight ?? false);
   }, [config.pronunciationAsMainHighlight]);
@@ -289,6 +294,45 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
       return newConfig;
     });
   };
+
+  const handleColorModeChange = (mode: 'solid' | 'multi') => {
+    setColorMode(mode);
+    if (mode === 'solid') {
+      // 단색 모드: gradient 비활성화
+      updateGradientConfig('enabled', false);
+    } else {
+      // 다색 모드: gradient 활성화
+      updateGradientConfig('enabled', true);
+    }
+  };
+
+  const updateGradientConfig = <K extends keyof LinearGradientOptions>(key: K, value: LinearGradientOptions[K]) => {
+    setConfig((prev) => {
+      const newConfig = {
+        ...prev,
+        lyrics: {
+          ...prev.lyrics,
+          highlight: {
+            ...prev.lyrics?.highlight,
+            linearGradient: {
+              ...prev.lyrics?.highlight?.linearGradient,
+              enabled: prev.lyrics?.highlight?.linearGradient?.enabled ?? false,
+              color1: prev.lyrics?.highlight?.linearGradient?.color1 || '#357aff',
+              color2: prev.lyrics?.highlight?.linearGradient?.color2 || '#e91e63',
+              direction: prev.lyrics?.highlight?.linearGradient?.direction || 'right',
+              [key]: value,
+            },
+          },
+        },
+      };
+      // 즉시 storage에 저장
+      chrome.storage.sync.set({
+        lyricsStyleDual: newConfig,
+      });
+      return newConfig;
+    });
+  };
+
   return (
     <div className={styles.settingsPanel}>
       <p className={styles.panelDescription}>Dual 가사 타입에만 적용됩니다.</p>
@@ -298,15 +342,10 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
         <p className={styles.sectionDescription}>타임스탬프 전 가사 (아직 불리지 않은 가사)</p>
         <div className={styles.settingRow}>
           <label className={styles.settingLabel}>글자 색</label>
-          <input
-            type="color"
-            className={styles.colorInput}
+          <ColorPickerInput
             value={config.lyrics?.default?.color || DEFAULT_LYRICS_COLOR}
-            onChange={(e) =>
-              updateConfig(['lyrics', 'default', 'color'], (e.target as HTMLInputElement).value || undefined)
-            }
-            onBlur={onPreviewUpdate}
-            onMouseUp={onPreviewUpdate}
+            onChange={(value) => updateConfig(['lyrics', 'default', 'color'], value)}
+            onPreviewUpdate={onPreviewUpdate}
           />
         </div>
 
@@ -364,32 +403,120 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
       <div className={styles.section}>
         <h4 className={styles.sectionTitle}>하이라이트 스타일</h4>
         <p className={styles.sectionDescription}>현재 재생 중인 가사</p>
-        <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>하이라이트 색</label>
-          <input
-            type="color"
-            className={styles.colorInput}
-            value={config.lyrics?.highlight?.color || DEFAULT_HIGHLIGHT_COLOR}
-            onChange={(e) =>
-              updateConfig(['lyrics', 'highlight', 'color'], (e.target as HTMLInputElement).value || undefined)
-            }
-            onBlur={onPreviewUpdate}
-            onMouseUp={onPreviewUpdate}
-          />
+
+        {/* 텍스트 색상 효과 */}
+        <div className={styles.subSection}>
+          <h5 className={styles.subSectionTitle}>텍스트 색상 효과</h5>
+
+          {/* 색상 모드 선택 */}
+          <div className={styles.settingRow}>
+            <label className={styles.settingLabel}>색상 모드</label>
+            <select
+              className={styles.selectInput}
+              value={colorMode}
+              onChange={(e) => handleColorModeChange(e.target.value as 'solid' | 'multi')}
+            >
+              <option value="solid">단색</option>
+              <option value="multi">다색</option>
+            </select>
+          </div>
+
+          {/* 단색 모드 */}
+          {colorMode === 'solid' && (
+            <div className={styles.settingRow}>
+              <label className={styles.settingLabel}>하이라이트 색</label>
+              <ColorPickerInput
+                value={config.lyrics?.highlight?.color || DEFAULT_HIGHLIGHT_COLOR}
+                onChange={(value) => updateConfig(['lyrics', 'highlight', 'color'], value)}
+                onPreviewUpdate={onPreviewUpdate}
+              />
+            </div>
+          )}
+
+          {/* 다색 모드 */}
+          {colorMode === 'multi' && (
+            <>
+              <div className={styles.settingRow}>
+                <label className={styles.settingLabel}>패턴</label>
+                <select className={styles.selectInput} value="linear" disabled>
+                  <option value="linear">Linear Gradient</option>
+                </select>
+              </div>
+
+              {/* 색상 1 */}
+              <div className={styles.settingRow}>
+                <label className={styles.settingLabel}>색상 1</label>
+                <ColorPickerInput
+                  value={config.lyrics?.highlight?.linearGradient?.color1 || '#357aff'}
+                  onChange={(value) => {
+                    updateGradientConfig('color1', value || '#357aff');
+                    onPreviewUpdate();
+                  }}
+                  onPreviewUpdate={onPreviewUpdate}
+                />
+              </div>
+
+              {/* 색상 2 */}
+              <div className={styles.settingRow}>
+                <label className={styles.settingLabel}>색상 2</label>
+                <ColorPickerInput
+                  value={config.lyrics?.highlight?.linearGradient?.color2 || '#e91e63'}
+                  onChange={(value) => {
+                    updateGradientConfig('color2', value || '#e91e63');
+                    onPreviewUpdate();
+                  }}
+                  onPreviewUpdate={onPreviewUpdate}
+                />
+              </div>
+
+              {/* 방향 선택 */}
+              <div className={styles.settingRow}>
+                <label className={styles.settingLabel}>방향</label>
+                <select
+                  className={styles.selectInput}
+                  value={config.lyrics?.highlight?.linearGradient?.direction || 'right'}
+                  onChange={(e) => {
+                    updateGradientConfig('direction', e.target.value as 'right' | 'left' | 'down' | 'up');
+                    onPreviewUpdate();
+                  }}
+                >
+                  <option value="right">→ 오른쪽</option>
+                  <option value="left">← 왼쪽</option>
+                  <option value="down">↓ 아래</option>
+                  <option value="up">↑ 위</option>
+                </select>
+              </div>
+            </>
+          )}
+
+          {/* 추가 효과 (그림자 등) */}
+          <div className={styles.settingRow}>
+            <label className={styles.settingLabel}>추가 효과</label>
+            <div className={styles.checkboxGroup}>
+              <label className={styles.checkboxLabel}>
+                <input type="checkbox" className={styles.checkbox} disabled />
+                <span>그림자 효과 (준비중)</span>
+              </label>
+            </div>
+          </div>
         </div>
 
-        <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>애니메이션 효과</label>
-          <select
-            className={styles.selectInput}
-            value={config.lyrics?.highlight?.animation ?? ''}
-            onChange={(e) => updateConfig(['lyrics', 'highlight', 'animation'], e.target.value || undefined)}
-          >
-            <option value="none">없음</option>
-            <option value="fade">페이드</option>
-            <option value="scale">크기 변화</option>
-            <option value="glow">글로우</option>
-          </select>
+        {/* 애니메이션 효과 */}
+        <div className={styles.subSection}>
+          <h5 className={styles.subSectionTitle}>애니메이션 효과</h5>
+          <div className={styles.settingRow}>
+            <label className={styles.settingLabel}>애니메이션</label>
+            <select
+              className={styles.selectInput}
+              value={config.lyrics?.highlight?.animation ?? ''}
+              onChange={(e) => updateConfig(['lyrics', 'highlight', 'animation'], e.target.value || undefined)}
+            >
+              <option value="none">없음</option>
+              <option value="fade">페이드</option>
+              <option value="scale">크기 변화</option>
+              <option value="glow">글로우</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -399,15 +526,10 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
         <p className={styles.sectionDescription}>로마자 발음 가사</p>
         <div className={styles.settingRow}>
           <label className={styles.settingLabel}>글자 색</label>
-          <input
-            type="color"
-            className={styles.colorInput}
+          <ColorPickerInput
             value={config.pronunciation?.default?.color || DEFAULT_PRONUNCIATION_COLOR}
-            onChange={(e) =>
-              updateConfig(['pronunciation', 'default', 'color'], (e.target as HTMLInputElement).value || undefined)
-            }
-            onBlur={onPreviewUpdate}
-            onMouseUp={onPreviewUpdate}
+            onChange={(value) => updateConfig(['pronunciation', 'default', 'color'], value)}
+            onPreviewUpdate={onPreviewUpdate}
           />
         </div>
 
@@ -529,6 +651,44 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
       return newConfig;
     });
   };
+
+  // Linear Gradient 업데이트 함수
+  const updateGradientConfig = <K extends keyof LinearGradientOptions>(key: K, value: LinearGradientOptions[K]) => {
+    setConfig((prev) => {
+      const newConfig = {
+        ...prev,
+        lyrics: {
+          ...prev.lyrics,
+          highlight: {
+            ...prev.lyrics?.highlight,
+            linearGradient: {
+              ...prev.lyrics?.highlight?.linearGradient,
+              enabled: prev.lyrics?.highlight?.linearGradient?.enabled ?? false,
+              color1: prev.lyrics?.highlight?.linearGradient?.color1 || '#357aff',
+              color2: prev.lyrics?.highlight?.linearGradient?.color2 || '#e91e63',
+              direction: prev.lyrics?.highlight?.linearGradient?.direction || 'right',
+              [key]: value,
+            },
+          },
+        },
+      };
+      chrome.storage.sync.set({ lyricsStyleFull: newConfig });
+      return newConfig;
+    });
+  };
+
+  // 색상 모드 (단색 / 다색)
+  const colorMode = config.lyrics?.highlight?.linearGradient?.enabled ? 'multi' : 'single';
+
+  const handleColorModeChange = (mode: 'single' | 'multi') => {
+    if (mode === 'single') {
+      // 단색 모드: gradient 비활성화
+      updateGradientConfig('enabled', false);
+    } else {
+      // 다색 모드: gradient 활성화
+      updateGradientConfig('enabled', true);
+    }
+  };
   // 발음 하이라이트 토글 상태
   const [pronunciationHighlightEnabled, setPronunciationHighlightEnabled] = useState(
     config.pronunciationAsMainHighlight ?? false,
@@ -563,15 +723,10 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
         <p className={styles.sectionDescription}>현재 재생 중이 아닌 가사</p>
         <div className={styles.settingRow}>
           <label className={styles.settingLabel}>글자 색</label>
-          <input
-            type="color"
-            className={styles.colorInput}
+          <ColorPickerInput
             value={config.lyrics?.default?.color || DEFAULT_LYRICS_COLOR}
-            onChange={(e) =>
-              updateConfig(['lyrics', 'default', 'color'], (e.target as HTMLInputElement).value || undefined)
-            }
-            onBlur={onPreviewUpdate}
-            onMouseUp={onPreviewUpdate}
+            onChange={(value) => updateConfig(['lyrics', 'default', 'color'], value)}
+            onPreviewUpdate={onPreviewUpdate}
           />
         </div>
         <div className={styles.settingRow}>
@@ -638,19 +793,78 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
       <div className={styles.section}>
         <h4 className={styles.sectionTitle}>하이라이트 스타일</h4>
         <p className={styles.sectionDescription}>현재 재생 중인 가사</p>
+
+        {/* 색상 모드 선택 */}
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>하이라이트 색</label>
-          <input
-            type="color"
-            className={styles.colorInput}
-            value={config.lyrics?.highlight?.color || DEFAULT_HIGHLIGHT_COLOR}
-            onChange={(e) =>
-              updateConfig(['lyrics', 'highlight', 'color'], (e.target as HTMLInputElement).value || undefined)
-            }
-            onBlur={onPreviewUpdate}
-            onMouseUp={onPreviewUpdate}
-          />
+          <label className={styles.settingLabel}>색상 모드</label>
+          <select
+            className={styles.selectInput}
+            value={colorMode}
+            onChange={(e) => handleColorModeChange(e.target.value as 'single' | 'multi')}
+          >
+            <option value="single">단색</option>
+            <option value="multi">다색 (그라데이션)</option>
+          </select>
         </div>
+
+        {/* 단색 모드: 하나의 색상 선택 */}
+        {colorMode === 'single' && (
+          <div className={styles.settingRow}>
+            <label className={styles.settingLabel}>하이라이트 색</label>
+            <ColorPickerInput
+              value={config.lyrics?.highlight?.color || DEFAULT_HIGHLIGHT_COLOR}
+              onChange={(value) => updateConfig(['lyrics', 'highlight', 'color'], value)}
+              onPreviewUpdate={onPreviewUpdate}
+            />
+          </div>
+        )}
+
+        {/* 다색 모드: 그라데이션 설정 */}
+        {colorMode === 'multi' && (
+          <>
+            <div className={styles.settingRow}>
+              <label className={styles.settingLabel}>색상 1</label>
+              <ColorPickerInput
+                value={config.lyrics?.highlight?.linearGradient?.color1 || '#357aff'}
+                onChange={(value) => {
+                  updateGradientConfig('color1', value || '#357aff');
+                  onPreviewUpdate();
+                }}
+                onPreviewUpdate={onPreviewUpdate}
+              />
+            </div>
+
+            <div className={styles.settingRow}>
+              <label className={styles.settingLabel}>색상 2</label>
+              <ColorPickerInput
+                value={config.lyrics?.highlight?.linearGradient?.color2 || '#e91e63'}
+                onChange={(value) => {
+                  updateGradientConfig('color2', value || '#e91e63');
+                  onPreviewUpdate();
+                }}
+                onPreviewUpdate={onPreviewUpdate}
+              />
+            </div>
+
+            <div className={styles.settingRow}>
+              <label className={styles.settingLabel}>방향</label>
+              <select
+                className={styles.selectInput}
+                value={config.lyrics?.highlight?.linearGradient?.direction || 'right'}
+                onChange={(e) => {
+                  updateGradientConfig('direction', e.target.value as 'right' | 'left' | 'down' | 'up');
+                  onPreviewUpdate();
+                }}
+              >
+                <option value="right">→ 오른쪽</option>
+                <option value="left">← 왼쪽</option>
+                <option value="down">↓ 아래</option>
+                <option value="up">↑ 위</option>
+              </select>
+            </div>
+          </>
+        )}
+
         <div className={styles.settingRow}>
           <label className={styles.settingLabel}>애니메이션 효과</label>
           <select
@@ -671,15 +885,10 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
         <p className={styles.sectionDescription}>로마자 발음 가사</p>
         <div className={styles.settingRow}>
           <label className={styles.settingLabel}>글자 색</label>
-          <input
-            type="color"
-            className={styles.colorInput}
+          <ColorPickerInput
             value={config.pronunciation?.default?.color || DEFAULT_PRONUNCIATION_COLOR}
-            onChange={(e) =>
-              updateConfig(['pronunciation', 'default', 'color'], (e.target as HTMLInputElement).value || undefined)
-            }
-            onBlur={onPreviewUpdate}
-            onMouseUp={onPreviewUpdate}
+            onChange={(value) => updateConfig(['pronunciation', 'default', 'color'], value)}
+            onPreviewUpdate={onPreviewUpdate}
           />
         </div>
         <div className={styles.settingRow}>
@@ -799,6 +1008,41 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
       return newConfig;
     });
   };
+
+  // Linear Gradient 업데이트 함수
+  const updateGradientConfig = <K extends keyof LinearGradientOptions>(key: K, value: LinearGradientOptions[K]) => {
+    setConfig((prev) => {
+      const newConfig = {
+        ...prev,
+        lyrics: {
+          ...prev.lyrics,
+          linearGradient: {
+            ...prev.lyrics?.linearGradient,
+            enabled: prev.lyrics?.linearGradient?.enabled ?? false,
+            color1: prev.lyrics?.linearGradient?.color1 || '#357aff',
+            color2: prev.lyrics?.linearGradient?.color2 || '#e91e63',
+            direction: prev.lyrics?.linearGradient?.direction || 'right',
+            [key]: value,
+          },
+        },
+      };
+      chrome.storage.sync.set({ lyricsStyleSingle: newConfig });
+      return newConfig;
+    });
+  };
+
+  // 색상 모드 (단색 / 다색)
+  const colorMode = config.lyrics?.linearGradient?.enabled ? 'multi' : 'single';
+
+  const handleColorModeChange = (mode: 'single' | 'multi') => {
+    if (mode === 'single') {
+      // 단색 모드: gradient 비활성화
+      updateGradientConfig('enabled', false);
+    } else {
+      // 다색 모드: gradient 활성화
+      updateGradientConfig('enabled', true);
+    }
+  };
   return (
     <div className={styles.settingsPanel}>
       <p className={styles.panelDescription}>
@@ -808,17 +1052,77 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
       <div className={styles.section}>
         <h4 className={styles.sectionTitle}>가사 스타일</h4>
         <p className={styles.sectionDescription}>현재 표시되는 가사 (하이라이트 스타일 적용)</p>
+
+        {/* 색상 모드 선택 */}
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글자 색</label>
-          <input
-            type="color"
-            className={styles.colorInput}
-            value={config.lyrics?.color || DEFAULT_LYRICS_COLOR}
-            onChange={(e) => updateConfig(['lyrics', 'color'], (e.target as HTMLInputElement).value || undefined)}
-            onBlur={onPreviewUpdate}
-            onMouseUp={onPreviewUpdate}
-          />
+          <label className={styles.settingLabel}>색상 모드</label>
+          <select
+            className={styles.selectInput}
+            value={colorMode}
+            onChange={(e) => handleColorModeChange(e.target.value as 'single' | 'multi')}
+          >
+            <option value="single">단색</option>
+            <option value="multi">다색 (그라데이션)</option>
+          </select>
         </div>
+
+        {/* 단색 모드: 하나의 색상 선택 */}
+        {colorMode === 'single' && (
+          <div className={styles.settingRow}>
+            <label className={styles.settingLabel}>글자 색</label>
+            <ColorPickerInput
+              value={config.lyrics?.color || DEFAULT_LYRICS_COLOR}
+              onChange={(value) => updateConfig(['lyrics', 'color'], value)}
+              onPreviewUpdate={onPreviewUpdate}
+            />
+          </div>
+        )}
+
+        {/* 다색 모드: 그라데이션 설정 */}
+        {colorMode === 'multi' && (
+          <>
+            <div className={styles.settingRow}>
+              <label className={styles.settingLabel}>색상 1</label>
+              <ColorPickerInput
+                value={config.lyrics?.linearGradient?.color1 || '#357aff'}
+                onChange={(value) => {
+                  updateGradientConfig('color1', value || '#357aff');
+                  onPreviewUpdate();
+                }}
+                onPreviewUpdate={onPreviewUpdate}
+              />
+            </div>
+
+            <div className={styles.settingRow}>
+              <label className={styles.settingLabel}>색상 2</label>
+              <ColorPickerInput
+                value={config.lyrics?.linearGradient?.color2 || '#e91e63'}
+                onChange={(value) => {
+                  updateGradientConfig('color2', value || '#e91e63');
+                  onPreviewUpdate();
+                }}
+                onPreviewUpdate={onPreviewUpdate}
+              />
+            </div>
+
+            <div className={styles.settingRow}>
+              <label className={styles.settingLabel}>방향</label>
+              <select
+                className={styles.selectInput}
+                value={config.lyrics?.linearGradient?.direction || 'right'}
+                onChange={(e) => {
+                  updateGradientConfig('direction', e.target.value as 'right' | 'left' | 'down' | 'up');
+                  onPreviewUpdate();
+                }}
+              >
+                <option value="right">→ 오른쪽</option>
+                <option value="left">← 왼쪽</option>
+                <option value="down">↓ 아래</option>
+                <option value="up">↑ 위</option>
+              </select>
+            </div>
+          </>
+        )}
 
         <div className={styles.settingRow}>
           <label className={styles.settingLabel}>글꼴 종류</label>
@@ -886,15 +1190,10 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
         <p className={styles.sectionDescription}>로마자 발음 가사 (하이라이트 스타일 적용)</p>
         <div className={styles.settingRow}>
           <label className={styles.settingLabel}>글자 색</label>
-          <input
-            type="color"
-            className={styles.colorInput}
+          <ColorPickerInput
             value={config.pronunciation?.color || DEFAULT_LYRICS_COLOR}
-            onChange={(e) =>
-              updateConfig(['pronunciation', 'color'], (e.target as HTMLInputElement).value || undefined)
-            }
-            onBlur={onPreviewUpdate}
-            onMouseUp={onPreviewUpdate}
+            onChange={(value) => updateConfig(['pronunciation', 'color'], value)}
+            onPreviewUpdate={onPreviewUpdate}
           />
         </div>
 

@@ -4,6 +4,16 @@
  */
 
 /**
+ * Linear Gradient 옵션 (Phase 1)
+ */
+export interface LinearGradientOptions {
+  enabled: boolean;
+  color1: string;
+  color2: string;
+  direction: 'right' | 'left' | 'down' | 'up'; // 오른쪽, 왼쪽, 아래, 위
+}
+
+/**
  * 텍스트 스타일 옵션
  */
 export interface TextStyleOptions {
@@ -16,10 +26,17 @@ export interface TextStyleOptions {
   transition?: string;
   transform?: string;
   background?: string;
+  backgroundImage?: string;
   backgroundClip?: string;
   webkitBackgroundClip?: string;
   webkitTextFillColor?: string;
+  WebkitBackgroundClip?: string;
+  WebkitTextFillColor?: string;
+  WebkitTextStroke?: string;
+  filter?: string;
   animation?: string;
+  // Linear Gradient 효과
+  linearGradient?: LinearGradientOptions;
 }
 
 /**

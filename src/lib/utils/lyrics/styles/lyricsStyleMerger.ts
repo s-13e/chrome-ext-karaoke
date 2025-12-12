@@ -17,13 +17,27 @@ import {
   DEFAULT_FULL_LYRICS_STYLE,
   DEFAULT_SINGLE_LINE_STYLE,
 } from '@constants/lyricsStyles';
+import { generateLinearGradientCSS } from './linearGradientEffects';
 
 /**
  * TextStyleOptions 병합
  */
 function mergeTextStyle(...styles: (TextStyleOptions | undefined)[]): TextStyleOptions {
   const filtered = styles.filter((s): s is TextStyleOptions => !!s);
-  return filtered.reduce((acc, style) => ({ ...acc, ...style }), {} as TextStyleOptions);
+  const merged = filtered.reduce((acc, style) => ({ ...acc, ...style }), {} as TextStyleOptions);
+
+  // Linear Gradient 효과 적용
+  if (merged.linearGradient?.enabled) {
+    const gradientCSS = generateLinearGradientCSS(merged.linearGradient);
+    if (gradientCSS) {
+      return {
+        ...merged,
+        ...gradientCSS,
+      };
+    }
+  }
+
+  return merged;
 }
 
 /**

@@ -61,12 +61,8 @@ export const DEFAULT_FULL_LYRICS_STYLE: FullLyricsStyleConfig = {
       transition: 'color 0.15s, font-size 0.15s',
     },
     highlight: {
-      color: '#fff',
+      color: DEFAULT_HIGHLIGHT_COLOR, // 기본 하이라이트 색상 (#357aff)
       fontWeight: 700,
-      background: 'linear-gradient(90deg, #357aff, #e91e63 80%)',
-      backgroundClip: 'text',
-      webkitBackgroundClip: 'text',
-      webkitTextFillColor: 'transparent',
       transition: 'color 0.15s, font-size 0.15s',
     },
   },
@@ -80,9 +76,6 @@ export const DEFAULT_FULL_LYRICS_STYLE: FullLyricsStyleConfig = {
     highlight: {
       color: DEFAULT_PRONUNCIATION_COLOR,
       opacity: 1,
-      // 그라데이션 배경 제거
-      webkitTextFillColor: 'initial',
-      background: 'none',
     },
   },
 };
