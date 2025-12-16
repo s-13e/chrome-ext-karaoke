@@ -1,0 +1,12 @@
+.discoToggle {
+  display: flex;
+  justify-content: center;
+  margin-top: 24px;
+  cursor: pointer;
+}
+
+.discoToggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}

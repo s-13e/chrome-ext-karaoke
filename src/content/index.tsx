@@ -43,9 +43,9 @@ import { hasUrlChanged } from '@lib/utils/platform/navigation';
 import { SongInfoOverlay } from './components/song-info/SongInfoOverlay';
 import { overlayManager } from '@lib/utils/infra/overlayManager';
 import { KaraokeModeManager } from '@lib/utils/infra/karaokeModeManager';
-import { MusicNoteButton } from './components/karaoke-player-settings/MusicNoteButton';
+import { MusicNoteButton } from './components/karaoke-mode/MusicNoteButton';
 import { RiMusicAiLine } from 'react-icons/ri';
-import musicNoteStyles from './components/karaoke-player-settings/styles.module.css';
+import musicNoteStyles from './components/karaoke-mode/musicNoteButton.module.css';
 import ReactDOM from 'react-dom/client';
 import { KaraokeModeContainer } from './components/karaoke-mode';
 import {

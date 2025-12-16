@@ -1,6 +1,6 @@
 // MusicNoteButton.tsx
 import React, { ReactNode, useRef, useEffect, useCallback } from 'react';
-import styles from './styles.module.css';
+import styles from './musicNoteButton.module.css';
 import ReactDOM from 'react-dom/client';
 
 interface Props {

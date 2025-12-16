@@ -1,11 +1,9 @@
 // src/content/App.tsx
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { i18nInstance } from '@services/i18n';
 import { isToggleContentMessage } from '@lib/utils/common/typeGuards';
 import { ContentScriptMessage } from '@lib/types/message';
 import { STORAGE_KEYS } from '@constants/storageKeys';
-import { MainMenu } from './components/karaoke-player-settings/MainMenu';
-// import { LyricsContainer } from './components/LyricsContainer';
 
 export function App() {
   // 버튼 클릭 핸들러(토글)
@@ -55,20 +53,6 @@ export function App() {
     };
   }, []);
 
-  const [offset, setOffset] = useState(0);
-  const [menuVisible, setMenuVisible] = useState(false);
-  const [menuPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
-
-  // MusicNoteButton은 이제 index.tsx에서 직접 렌더링됨
-  // App.tsx는 MainMenu만 관리
-
-  return menuVisible ? (
-    <MainMenu
-      position={menuPosition}
-      visible={true}
-      onClose={() => setMenuVisible(false)}
-      offset={offset}
-      setOffset={setOffset}
-    />
-  ) : null;
+  // MusicNoteButton은 index.tsx에서 직접 렌더링됨
+  return null;
 }

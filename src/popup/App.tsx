@@ -10,9 +10,9 @@ import { STORAGE_KEYS } from '@constants/storageKeys';
 import { PopupSettingsPanel } from './components/settings/PopupSettingsPanel';
 import { LanguagePreferenceOnboarding } from './components/onboarding/LanguagePreferenceOnboarding';
 import './popup.css';
-import { IoSettingsOutline } from 'react-icons/io5';
 import { getAutoDisableState, disableAutoDisable, enableAutoDisable } from '@lib/utils/storage/autoDisableStorage';
 import { AutoDisableState } from '@lib/types/autoDisable';
+import { MainScreen } from './components/screens/MainScreen';
 
 interface LanguageChangeMessage {
   type: typeof MESSAGE_TYPES.LANGUAGE_CHANGED;
@@ -20,7 +20,7 @@ interface LanguageChangeMessage {
 }
 
 export function App() {
-  const { t, i18n } = useTranslation();
+  const { i18n } = useTranslation();
   const { phase } = useLangLoader();
 
   const [enabled, setEnabled] = useChromeStorage(STORAGE_KEYS.CONTENT_ENABLED, false);
@@ -151,42 +151,12 @@ export function App() {
 
   return (
     <div>
-      <div className="popup-header">
-        <h2>{t('extName')}</h2>
-        <button id="go-to-options" className="icon-button" onClick={() => setShowSettings(true)}>
-          <IoSettingsOutline size={16} />
-        </button>
-      </div>
-      <div>
-        <label className="switch">
-          <input type="checkbox" checked={enabled} onChange={handleToggle} />
-          <span className="slider"></span>
-        </label>
-      </div>
-
-      {/* 자동 비활성화 상태 표시 */}
-      {autoDisableState?.autoDisabled && autoDisableState.autoDisabledReason === 'consecutive_non_music' && (
-        <div
-          style={{
-            marginTop: '12px',
-            padding: '10px',
-            backgroundColor: '#f0f0f0',
-            borderRadius: '6px',
-            fontSize: '13px',
-            color: '#555',
-            lineHeight: '1.5',
-          }}
-        >
-          <div style={{ fontWeight: 600, marginBottom: '4px' }}>💤 {t('extAutoDisableTitle')}</div>
-          <div>{t('extAutoDisableMessage', { count: autoDisableState.threshold })}</div>
-          <div style={{ marginTop: '8px', fontSize: '12px', opacity: 0.8 }}>
-            {t('extAutoDisableCount', {
-              current: autoDisableState.consecutiveNonMusicCount,
-              threshold: autoDisableState.threshold,
-            })}
-          </div>
-        </div>
-      )}
+      <MainScreen
+        enabled={enabled}
+        onToggle={handleToggle}
+        autoDisableState={autoDisableState}
+        onOpenSettings={() => setShowSettings(true)}
+      />
     </div>
   );
 }
