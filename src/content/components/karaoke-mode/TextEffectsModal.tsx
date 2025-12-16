@@ -500,24 +500,6 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
             </div>
           </div>
         </div>
-
-        {/* 애니메이션 효과 */}
-        <div className={styles.subSection}>
-          <h5 className={styles.subSectionTitle}>애니메이션 효과</h5>
-          <div className={styles.settingRow}>
-            <label className={styles.settingLabel}>애니메이션</label>
-            <select
-              className={styles.selectInput}
-              value={config.lyrics?.highlight?.animation ?? ''}
-              onChange={(e) => updateConfig(['lyrics', 'highlight', 'animation'], e.target.value || undefined)}
-            >
-              <option value="none">없음</option>
-              <option value="fade">페이드</option>
-              <option value="scale">크기 변화</option>
-              <option value="glow">글로우</option>
-            </select>
-          </div>
-        </div>
       </div>
 
       {/* 발음 스타일 섹션 */}
@@ -864,20 +846,6 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
             </div>
           </>
         )}
-
-        <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>애니메이션 효과</label>
-          <select
-            className={styles.selectInput}
-            value={config.lyrics?.highlight?.animation ?? ''}
-            onChange={(e) => updateConfig(['lyrics', 'highlight', 'animation'], e.target.value || undefined)}
-          >
-            <option value="none">없음</option>
-            <option value="fade">페이드</option>
-            <option value="scale">크기 변화</option>
-            <option value="glow">글로우</option>
-          </select>
-        </div>
       </div>
       {/* 발음 스타일 섹션 */}
       <div className={styles.section}>
@@ -1169,19 +1137,6 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
             max={48}
           />
           <span className={styles.unit}>px</span>
-        </div>
-        <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>애니메이션 효과</label>
-          <select
-            className={styles.selectInput}
-            value={config.lyrics?.animation ?? ''}
-            onChange={(e) => updateConfig(['lyrics', 'animation'], e.target.value || undefined)}
-          >
-            <option value="none">없음</option>
-            <option value="fade">페이드</option>
-            <option value="scale">크기 변화</option>
-            <option value="glow">글로우</option>
-          </select>
         </div>
       </div>
       {/* 발음 스타일 섹션 */}

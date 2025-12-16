@@ -4,6 +4,7 @@
  */
 import React from 'react';
 import { AVAILABLE_FONTS, getFontLabel } from '@constants/fonts';
+import { loadGoogleFont } from '@lib/utils/fonts/googleFontsLoader';
 import styles from './TextEffectsModal.module.css';
 
 interface FontFamilySelectProps {
@@ -23,7 +24,13 @@ export const FontFamilySelect: React.FC<FontFamilySelectProps> = ({ value, onCha
     } else {
       // label을 선택하면 해당하는 전체 font-family 문자열을 반환
       const font = AVAILABLE_FONTS.find((f) => f.label === selectedLabel);
-      onChange(font?.value);
+      if (font) {
+        // Google Fonts인 경우 동적으로 로드
+        if (font.requiresLoad) {
+          loadGoogleFont(font.label);
+        }
+        onChange(font.value);
+      }
     }
   };
 

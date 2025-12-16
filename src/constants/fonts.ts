@@ -25,23 +25,78 @@ export const AVAILABLE_FONTS: FontOption[] = [
   },
   // Google Fonts - 알파벳순 정렬
   {
-    label: 'Black Han Sans',
-    value: '"Black Han Sans", "Arial Black", sans-serif',
+    label: 'Cherry Bomb One',
+    value: '"Cherry Bomb One", cursive',
+    requiresLoad: true,
+  },
+  {
+    label: 'Dancing Script',
+    value: '"Dancing Script", cursive',
+    requiresLoad: true,
+  },
+  {
+    label: 'Dela Gothic One',
+    value: '"Dela Gothic One", sans-serif',
+    requiresLoad: true,
+  },
+  {
+    label: 'Diphylleia',
+    value: 'Diphylleia, serif',
     requiresLoad: true,
   },
   {
     label: 'Do Hyeon',
-    value: '"Do Hyeon", "Apple SD Gothic Neo", sans-serif',
+    value: '"Do Hyeon", sans-serif',
     requiresLoad: true,
   },
   {
-    label: 'Inter',
-    value: 'Inter, sans-serif',
+    label: 'DotGothic16',
+    value: 'DotGothic16, sans-serif',
     requiresLoad: true,
   },
   {
-    label: 'Montserrat',
-    value: 'Montserrat, sans-serif',
+    label: 'East Sea Dokdo',
+    value: '"East Sea Dokdo", cursive',
+    requiresLoad: true,
+  },
+  {
+    label: 'Gasoek One',
+    value: '"Gasoek One", sans-serif',
+    requiresLoad: true,
+  },
+  {
+    label: 'Hachi Maru Pop',
+    value: '"Hachi Maru Pop", cursive',
+    requiresLoad: true,
+  },
+  {
+    label: 'Jolly Lodger',
+    value: '"Jolly Lodger", cursive',
+    requiresLoad: true,
+  },
+  {
+    label: 'Kaisei Decol',
+    value: '"Kaisei Decol", serif',
+    requiresLoad: true,
+  },
+  {
+    label: 'LXGW WenKai Mono TC',
+    value: '"LXGW WenKai Mono TC", monospace',
+    requiresLoad: true,
+  },
+  {
+    label: 'Luckiest Guy',
+    value: '"Luckiest Guy", cursive',
+    requiresLoad: true,
+  },
+  {
+    label: 'Ma Shan Zheng',
+    value: '"Ma Shan Zheng", cursive',
+    requiresLoad: true,
+  },
+  {
+    label: 'Monoton',
+    value: 'Monoton, cursive',
     requiresLoad: true,
   },
   {
@@ -85,13 +140,33 @@ export const AVAILABLE_FONTS: FontOption[] = [
     requiresLoad: true,
   },
   {
-    label: 'Open Sans',
-    value: '"Open Sans", sans-serif',
+    label: 'Purple Purse',
+    value: '"Purple Purse", cursive',
     requiresLoad: true,
   },
   {
-    label: 'Roboto',
-    value: 'Roboto, sans-serif',
+    label: 'Rampart One',
+    value: '"Rampart One", cursive',
+    requiresLoad: true,
+  },
+  {
+    label: 'Rubik Puddles',
+    value: '"Rubik Puddles", display',
+    requiresLoad: true,
+  },
+  {
+    label: 'Shadows Into Light',
+    value: '"Shadows Into Light", cursive',
+    requiresLoad: true,
+  },
+  {
+    label: 'Stick',
+    value: 'Stick, sans-serif',
+    requiresLoad: true,
+  },
+  {
+    label: 'Zen Antique',
+    value: '"Zen Antique", serif',
     requiresLoad: true,
   },
 ];
