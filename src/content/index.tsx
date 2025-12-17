@@ -48,6 +48,7 @@ import { RiMusicAiLine } from 'react-icons/ri';
 import musicNoteStyles from './components/karaoke-mode/musicNoteButton.module.css';
 import ReactDOM from 'react-dom/client';
 import { KaraokeModeContainer } from './components/karaoke-mode';
+import { loadFontFromFamilyString } from '@lib/utils/fonts/googleFontsLoader';
 import {
   incrementNonMusicCount,
   resetNonMusicCount,
@@ -207,6 +208,57 @@ import {
   // current video id를 얻는 헬퍼
   function getCurrentVideoId(): string | null {
     return extractVideoIdFromUrl(window.location.href);
+  }
+
+  /**
+   * 가사 스타일 설정에서 폰트를 추출하여 Google Fonts 로드
+   * 페이지 로드 시 및 스타일 변경 시 호출되어 필요한 폰트를 미리 로드
+   */
+  function loadFontsFromStyleConfigs(): void {
+    const fontFamilies = new Set<string>();
+
+    // Dual 스타일에서 폰트 추출
+    if (lyricsStyleDual?.lyrics?.default?.fontFamily) {
+      fontFamilies.add(lyricsStyleDual.lyrics.default.fontFamily);
+    }
+    if (lyricsStyleDual?.lyrics?.highlight?.fontFamily) {
+      fontFamilies.add(lyricsStyleDual.lyrics.highlight.fontFamily);
+    }
+    if (lyricsStyleDual?.pronunciation?.default?.fontFamily) {
+      fontFamilies.add(lyricsStyleDual.pronunciation.default.fontFamily);
+    }
+    if (lyricsStyleDual?.pronunciation?.highlight?.fontFamily) {
+      fontFamilies.add(lyricsStyleDual.pronunciation.highlight.fontFamily);
+    }
+
+    // Full 스타일에서 폰트 추출
+    if (lyricsStyleFull?.lyrics?.default?.fontFamily) {
+      fontFamilies.add(lyricsStyleFull.lyrics.default.fontFamily);
+    }
+    if (lyricsStyleFull?.lyrics?.highlight?.fontFamily) {
+      fontFamilies.add(lyricsStyleFull.lyrics.highlight.fontFamily);
+    }
+    if (lyricsStyleFull?.pronunciation?.default?.fontFamily) {
+      fontFamilies.add(lyricsStyleFull.pronunciation.default.fontFamily);
+    }
+
+    // Single 스타일에서 폰트 추출
+    if (lyricsStyleSingle?.lyrics?.fontFamily) {
+      fontFamilies.add(lyricsStyleSingle.lyrics.fontFamily);
+    }
+    if (lyricsStyleSingle?.pronunciation?.fontFamily) {
+      fontFamilies.add(lyricsStyleSingle.pronunciation.fontFamily);
+    }
+
+    // 각 폰트를 로드 (중복 제거됨)
+    fontFamilies.forEach((fontFamily) => {
+      loadFontFromFamilyString(fontFamily);
+    });
+
+    if (fontFamilies.size > 0) {
+      // eslint-disable-next-line no-console
+      console.log('[Index] 가사 스타일에서 폰트 로드:', Array.from(fontFamilies));
+    }
   }
 
   interface DetectionObserverManager {
@@ -689,6 +741,9 @@ import {
             lyricsStyleSingle = items.lyricsStyleSingle;
           }
 
+          // 스타일에서 폰트 로드 (페이지 로드 시)
+          loadFontsFromStyleConfigs();
+
           // 최초 렌더 호출 (초기 상태 반영)
           if (latestLyrics.length > 0) {
             renderLyricsOverlay(latestLyrics);
@@ -758,16 +813,19 @@ import {
       if ('lyricsStyleDual' in changes) {
         lyricsStyleDual = changes.lyricsStyleDual.newValue || {};
         console.log('[Storage] lyricsStyleDual 변경 감지:', lyricsStyleDual);
+        loadFontsFromStyleConfigs();
         needRerender = true;
       }
       if ('lyricsStyleFull' in changes) {
         lyricsStyleFull = changes.lyricsStyleFull.newValue || {};
         console.log('[Storage] lyricsStyleFull 변경 감지:', lyricsStyleFull);
+        loadFontsFromStyleConfigs();
         needRerender = true;
       }
       if ('lyricsStyleSingle' in changes) {
         lyricsStyleSingle = changes.lyricsStyleSingle.newValue || {};
         console.log('[Storage] lyricsStyleSingle 변경 감지:', lyricsStyleSingle);
+        loadFontsFromStyleConfigs();
         needRerender = true;
       }
 

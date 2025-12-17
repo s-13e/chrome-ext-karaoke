@@ -488,17 +488,6 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
               </div>
             </>
           )}
-
-          {/* 추가 효과 (그림자 등) */}
-          <div className={styles.settingRow}>
-            <label className={styles.settingLabel}>추가 효과</label>
-            <div className={styles.checkboxGroup}>
-              <label className={styles.checkboxLabel}>
-                <input type="checkbox" className={styles.checkbox} disabled />
-                <span>그림자 효과 (준비중)</span>
-              </label>
-            </div>
-          </div>
         </div>
       </div>
 
