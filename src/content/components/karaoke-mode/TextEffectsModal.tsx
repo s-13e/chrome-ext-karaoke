@@ -159,8 +159,8 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, reg
   return (
     <div className={styles.modalContainer}>
       <div className={styles.modalHeader}>
-        <h3 className={styles.modalTitle}>텍스트 효과 설정</h3>
-        <button className={styles.closeButton} onClick={handleCancelOrClose} aria-label="닫기">
+        <h3 className={styles.modalTitle}>{t('extTextEffectsModalTitle')}</h3>
+        <button className={styles.closeButton} onClick={handleCancelOrClose} aria-label={t('extTextEffectsModalClose')}>
           ×
         </button>
       </div>
@@ -188,17 +188,28 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, reg
       {/* 탭 컨텐츠 */}
       <div className={styles.tabContent}>
         {activeTab === 'dual' && (
-          <DualSettingsPanel config={dualConfig} setConfig={setDualConfig} onPreviewUpdate={handlePreviewUpdate} />
+          <DualSettingsPanel
+            config={dualConfig}
+            setConfig={setDualConfig}
+            onPreviewUpdate={handlePreviewUpdate}
+            t={t}
+          />
         )}
         {activeTab === 'single' && (
           <SingleSettingsPanel
             config={singleConfig}
             setConfig={setSingleConfig}
             onPreviewUpdate={handlePreviewUpdate}
+            t={t}
           />
         )}
         {activeTab === 'full' && (
-          <FullSettingsPanel config={fullConfig} setConfig={setFullConfig} onPreviewUpdate={handlePreviewUpdate} />
+          <FullSettingsPanel
+            config={fullConfig}
+            setConfig={setFullConfig}
+            onPreviewUpdate={handlePreviewUpdate}
+            t={t}
+          />
         )}
       </div>
       {/* 하단 버튼 */}
@@ -227,8 +238,9 @@ interface DualSettingsPanelProps {
   config: Partial<DualHighlightLyricsStyleConfig>;
   setConfig: React.Dispatch<React.SetStateAction<Partial<DualHighlightLyricsStyleConfig>>>;
   onPreviewUpdate: () => void;
+  t: (key: string) => string;
 }
-const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig, onPreviewUpdate }) => {
+const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig, onPreviewUpdate, t }) => {
   // 현재 뷰포트 기준 계산된 폰트 크기
   const calculatedSizes = useMemo(() => {
     const dualSize = calculateDualFontSizes();
@@ -338,10 +350,10 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
       <p className={styles.panelDescription}>Dual 가사 타입에만 적용됩니다.</p>
       {/* 기본 스타일 섹션 */}
       <div className={styles.section}>
-        <h4 className={styles.sectionTitle}>기본 스타일</h4>
+        <h4 className={styles.sectionTitle}>{t('extTextEffectsSectionDefaultStyle')}</h4>
         <p className={styles.sectionDescription}>타임스탬프 전 가사 (아직 불리지 않은 가사)</p>
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글자 색</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsLabelTextColor')}</label>
           <ColorPickerInput
             value={config.lyrics?.default?.color || DEFAULT_LYRICS_COLOR}
             onChange={(value) => updateConfig(['lyrics', 'default', 'color'], value)}
@@ -350,7 +362,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
         </div>
 
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글꼴 종류</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsLabelFontFamily')}</label>
           <FontFamilySelect
             value={config.lyrics?.default?.fontFamily}
             onChange={(value) => {
@@ -362,7 +374,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
         </div>
 
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글꼴 두께</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsLabelFontWeight')}</label>
           <FontWeightSelect
             value={
               typeof config.lyrics?.default?.fontWeight === 'number' ? config.lyrics.default.fontWeight : undefined
@@ -376,7 +388,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
         </div>
 
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글꼴 크기</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsLabelFontSize')}</label>
           <input
             type="number"
             className={styles.numberInput}
@@ -401,30 +413,30 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
       </div>
       {/* 하이라이트 스타일 섹션 */}
       <div className={styles.section}>
-        <h4 className={styles.sectionTitle}>하이라이트 스타일</h4>
+        <h4 className={styles.sectionTitle}>{t('extTextEffectsSectionHighlightStyle')}</h4>
         <p className={styles.sectionDescription}>현재 재생 중인 가사</p>
 
         {/* 텍스트 색상 효과 */}
         <div className={styles.subSection}>
-          <h5 className={styles.subSectionTitle}>텍스트 색상 효과</h5>
+          <h5 className={styles.subSectionTitle}>{t('extTextEffectsSubsectionTextColorEffect')}</h5>
 
           {/* 색상 모드 선택 */}
           <div className={styles.settingRow}>
-            <label className={styles.settingLabel}>색상 모드</label>
+            <label className={styles.settingLabel}>{t('extTextEffectsLabelColorMode')}</label>
             <select
               className={styles.selectInput}
               value={colorMode}
               onChange={(e) => handleColorModeChange(e.target.value as 'solid' | 'multi')}
             >
-              <option value="solid">단색</option>
-              <option value="multi">다색</option>
+              <option value="solid">{t('extTextEffectsColorModeSolid')}</option>
+              <option value="multi">{t('extTextEffectsColorModeGradient')}</option>
             </select>
           </div>
 
           {/* 단색 모드 */}
           {colorMode === 'solid' && (
             <div className={styles.settingRow}>
-              <label className={styles.settingLabel}>하이라이트 색</label>
+              <label className={styles.settingLabel}>{t('extTextEffectsLabelHighlightColor')}</label>
               <ColorPickerInput
                 value={config.lyrics?.highlight?.color || DEFAULT_HIGHLIGHT_COLOR}
                 onChange={(value) => updateConfig(['lyrics', 'highlight', 'color'], value)}
@@ -437,7 +449,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
           {colorMode === 'multi' && (
             <>
               <div className={styles.settingRow}>
-                <label className={styles.settingLabel}>패턴</label>
+                <label className={styles.settingLabel}>{t('extPattern')}</label>
                 <select className={styles.selectInput} value="linear" disabled>
                   <option value="linear">Linear Gradient</option>
                 </select>
@@ -445,7 +457,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
 
               {/* 색상 1 */}
               <div className={styles.settingRow}>
-                <label className={styles.settingLabel}>색상 1</label>
+                <label className={styles.settingLabel}>{t('extTextEffectsLabelColor1')}</label>
                 <ColorPickerInput
                   value={config.lyrics?.highlight?.linearGradient?.color1 || '#357aff'}
                   onChange={(value) => {
@@ -458,7 +470,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
 
               {/* 색상 2 */}
               <div className={styles.settingRow}>
-                <label className={styles.settingLabel}>색상 2</label>
+                <label className={styles.settingLabel}>{t('extTextEffectsLabelColor2')}</label>
                 <ColorPickerInput
                   value={config.lyrics?.highlight?.linearGradient?.color2 || '#e91e63'}
                   onChange={(value) => {
@@ -471,7 +483,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
 
               {/* 방향 선택 */}
               <div className={styles.settingRow}>
-                <label className={styles.settingLabel}>방향</label>
+                <label className={styles.settingLabel}>{t('extDirection')}</label>
                 <select
                   className={styles.selectInput}
                   value={config.lyrics?.highlight?.linearGradient?.direction || 'right'}
@@ -493,10 +505,10 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
 
       {/* 발음 스타일 섹션 */}
       <div className={styles.section}>
-        <h4 className={styles.sectionTitle}>발음 스타일</h4>
+        <h4 className={styles.sectionTitle}>{t('extTextEffectsSectionPronunciationStyle')}</h4>
         <p className={styles.sectionDescription}>로마자 발음 가사</p>
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글자 색</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsLabelTextColor')}</label>
           <ColorPickerInput
             value={config.pronunciation?.default?.color || DEFAULT_PRONUNCIATION_COLOR}
             onChange={(value) => updateConfig(['pronunciation', 'default', 'color'], value)}
@@ -505,7 +517,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
         </div>
 
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글꼴 종류</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsLabelFontFamily')}</label>
           <FontFamilySelect
             value={config.pronunciation?.default?.fontFamily}
             onChange={(value) => {
@@ -517,7 +529,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
         </div>
 
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글꼴 두께</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsLabelFontWeight')}</label>
           <FontWeightSelect
             value={
               typeof config.pronunciation?.default?.fontWeight === 'number'
@@ -533,7 +545,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
         </div>
 
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글꼴 크기</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsLabelFontSize')}</label>
           <input
             type="number"
             className={styles.numberInput}
@@ -568,7 +580,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
           <span className={styles.unit}>px</span>
         </div>
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>하이라이트 표시</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsLabelHighlightDisplay')}</label>
           <input
             type="checkbox"
             className={styles.checkboxInput}
@@ -591,8 +603,9 @@ interface FullSettingsPanelProps {
   config: Partial<FullLyricsStyleConfig>;
   setConfig: React.Dispatch<React.SetStateAction<Partial<FullLyricsStyleConfig>>>;
   onPreviewUpdate: () => void;
+  t: (key: string) => string;
 }
-const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig, onPreviewUpdate }) => {
+const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig, onPreviewUpdate, t }) => {
   // 현재 뷰포트 기준 계산된 폰트 크기
   const calculatedSizes = useMemo(() => calculateFullFontSizes(), []);
 
@@ -690,10 +703,10 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
       <p className={styles.panelDescription}>Full 가사 타입에만 적용됩니다.</p>
       {/* 기본 스타일 섹션 */}
       <div className={styles.section}>
-        <h4 className={styles.sectionTitle}>기본 스타일</h4>
+        <h4 className={styles.sectionTitle}>{t('extTextEffectsSectionDefaultStyle')}</h4>
         <p className={styles.sectionDescription}>현재 재생 중이 아닌 가사</p>
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글자 색</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsLabelTextColor')}</label>
           <ColorPickerInput
             value={config.lyrics?.default?.color || DEFAULT_LYRICS_COLOR}
             onChange={(value) => updateConfig(['lyrics', 'default', 'color'], value)}
@@ -701,7 +714,7 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
           />
         </div>
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글꼴 종류</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsLabelFontFamily')}</label>
           <FontFamilySelect
             value={config.lyrics?.default?.fontFamily}
             onChange={(value) => {
@@ -712,7 +725,7 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
           />
         </div>
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글꼴 두께</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsLabelFontWeight')}</label>
           <FontWeightSelect
             value={
               typeof config.lyrics?.default?.fontWeight === 'number' ? config.lyrics.default.fontWeight : undefined
@@ -725,7 +738,7 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
           />
         </div>
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글꼴 크기</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsLabelFontSize')}</label>
           <input
             type="number"
             className={styles.numberInput}
@@ -762,7 +775,7 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
       </div>
       {/* 하이라이트 스타일 섹션 */}
       <div className={styles.section}>
-        <h4 className={styles.sectionTitle}>하이라이트 스타일</h4>
+        <h4 className={styles.sectionTitle}>{t('extTextEffectsSectionHighlightStyle')}</h4>
         <p className={styles.sectionDescription}>현재 재생 중인 가사</p>
 
         {/* 색상 모드 선택 */}
@@ -773,8 +786,8 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
             value={colorMode}
             onChange={(e) => handleColorModeChange(e.target.value as 'single' | 'multi')}
           >
-            <option value="single">단색</option>
-            <option value="multi">다색 (그라데이션)</option>
+            <option value="single">{t('extTextEffectsColorModeSolid')}</option>
+            <option value="multi">{t('extTextEffectsColorModeGradient')}</option>
           </select>
         </div>
 
@@ -827,10 +840,10 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
                   onPreviewUpdate();
                 }}
               >
-                <option value="right">→ 오른쪽</option>
-                <option value="left">← 왼쪽</option>
-                <option value="down">↓ 아래</option>
-                <option value="up">↑ 위</option>
+                <option value="right">→</option>
+                <option value="left">←</option>
+                <option value="down">↓</option>
+                <option value="up">↑</option>
               </select>
             </div>
           </>
@@ -838,10 +851,10 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
       </div>
       {/* 발음 스타일 섹션 */}
       <div className={styles.section}>
-        <h4 className={styles.sectionTitle}>발음 스타일</h4>
+        <h4 className={styles.sectionTitle}>{t('extTextEffectsSectionPronunciationStyle')}</h4>
         <p className={styles.sectionDescription}>로마자 발음 가사</p>
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글자 색</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsLabelTextColor')}</label>
           <ColorPickerInput
             value={config.pronunciation?.default?.color || DEFAULT_PRONUNCIATION_COLOR}
             onChange={(value) => updateConfig(['pronunciation', 'default', 'color'], value)}
@@ -849,7 +862,7 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
           />
         </div>
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글꼴 종류</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsLabelFontFamily')}</label>
           <FontFamilySelect
             value={config.pronunciation?.default?.fontFamily}
             onChange={(value) => {
@@ -860,7 +873,7 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
           />
         </div>
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글꼴 두께</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsLabelFontWeight')}</label>
           <FontWeightSelect
             value={
               typeof config.pronunciation?.default?.fontWeight === 'number'
@@ -875,7 +888,7 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
           />
         </div>
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글꼴 크기</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsLabelFontSize')}</label>
           <input
             type="number"
             className={styles.numberInput}
@@ -910,7 +923,7 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
           <span className={styles.unit}>px</span>
         </div>
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>하이라이트 표시</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsLabelHighlightDisplay')}</label>
           <input
             type="checkbox"
             className={styles.checkboxInput}
@@ -934,8 +947,9 @@ interface SingleSettingsPanelProps {
   config: Partial<SingleLineLyricsStyleConfig>;
   setConfig: React.Dispatch<React.SetStateAction<Partial<SingleLineLyricsStyleConfig>>>;
   onPreviewUpdate: () => void;
+  t: (key: string) => string;
 }
-const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setConfig, onPreviewUpdate }) => {
+const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setConfig, onPreviewUpdate, t }) => {
   // 현재 뷰포트 기준 계산된 폰트 크기
   const calculatedSizes = useMemo(() => calculateSingleFontSizes(), []);
 
@@ -1007,7 +1021,7 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
       </p>
       {/* 가사 스타일 섹션 (기본/하이라이트 구분 없음) */}
       <div className={styles.section}>
-        <h4 className={styles.sectionTitle}>가사 스타일</h4>
+        <h4 className={styles.sectionTitle}>{t('extTextEffectsSectionLyricsStyle')}</h4>
         <p className={styles.sectionDescription}>현재 표시되는 가사 (하이라이트 스타일 적용)</p>
 
         {/* 색상 모드 선택 */}
@@ -1018,15 +1032,15 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
             value={colorMode}
             onChange={(e) => handleColorModeChange(e.target.value as 'single' | 'multi')}
           >
-            <option value="single">단색</option>
-            <option value="multi">다색 (그라데이션)</option>
+            <option value="single">{t('extTextEffectsColorModeSolid')}</option>
+            <option value="multi">{t('extTextEffectsColorModeGradient')}</option>
           </select>
         </div>
 
         {/* 단색 모드: 하나의 색상 선택 */}
         {colorMode === 'single' && (
           <div className={styles.settingRow}>
-            <label className={styles.settingLabel}>글자 색</label>
+            <label className={styles.settingLabel}>{t('extTextEffectsLabelTextColor')}</label>
             <ColorPickerInput
               value={config.lyrics?.color || DEFAULT_LYRICS_COLOR}
               onChange={(value) => updateConfig(['lyrics', 'color'], value)}
@@ -1072,17 +1086,17 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
                   onPreviewUpdate();
                 }}
               >
-                <option value="right">→ 오른쪽</option>
-                <option value="left">← 왼쪽</option>
-                <option value="down">↓ 아래</option>
-                <option value="up">↑ 위</option>
+                <option value="right">→</option>
+                <option value="left">←</option>
+                <option value="down">↓</option>
+                <option value="up">↑</option>
               </select>
             </div>
           </>
         )}
 
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글꼴 종류</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsLabelFontFamily')}</label>
           <FontFamilySelect
             value={config.lyrics?.fontFamily}
             onChange={(value) => updateConfig(['lyrics', 'fontFamily'], value)}
@@ -1090,7 +1104,7 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
         </div>
 
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글꼴 두께</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsLabelFontWeight')}</label>
           <FontWeightSelect
             value={typeof config.lyrics?.fontWeight === 'number' ? config.lyrics.fontWeight : undefined}
             onChange={(value) => updateConfig(['lyrics', 'fontWeight'], value)}
@@ -1098,7 +1112,7 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
         </div>
 
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글꼴 크기</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsLabelFontSize')}</label>
           <input
             type="number"
             className={styles.numberInput}
@@ -1130,10 +1144,10 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
       </div>
       {/* 발음 스타일 섹션 */}
       <div className={styles.section}>
-        <h4 className={styles.sectionTitle}>발음 스타일</h4>
+        <h4 className={styles.sectionTitle}>{t('extTextEffectsSectionPronunciationStyle')}</h4>
         <p className={styles.sectionDescription}>로마자 발음 가사 (하이라이트 스타일 적용)</p>
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글자 색</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsLabelTextColor')}</label>
           <ColorPickerInput
             value={config.pronunciation?.color || DEFAULT_LYRICS_COLOR}
             onChange={(value) => updateConfig(['pronunciation', 'color'], value)}
@@ -1142,7 +1156,7 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
         </div>
 
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글꼴 종류</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsLabelFontFamily')}</label>
           <FontFamilySelect
             value={config.pronunciation?.fontFamily}
             onChange={(value) => updateConfig(['pronunciation', 'fontFamily'], value)}
@@ -1150,7 +1164,7 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
         </div>
 
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글꼴 두께</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsLabelFontWeight')}</label>
           <FontWeightSelect
             value={typeof config.pronunciation?.fontWeight === 'number' ? config.pronunciation.fontWeight : undefined}
             onChange={(value) => updateConfig(['pronunciation', 'fontWeight'], value)}
@@ -1158,7 +1172,7 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
         </div>
 
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>글꼴 크기</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsLabelFontSize')}</label>
           <input
             type="number"
             className={styles.numberInput}

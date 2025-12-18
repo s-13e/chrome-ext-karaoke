@@ -418,7 +418,7 @@ export const AcapellaRecording: React.FC<AcapellaRecordingProps> = ({ onBack, ly
           deviceId: device.deviceId,
           label:
             device.label ||
-            `${t('extAcapellaMicrophoneDevice')} ${device.deviceId.slice(0, DEVICE_LABEL_CONFIG.DEVICE_ID_DISPLAY_LENGTH)}`,
+            `${t('extMicrophoneDevice')} ${device.deviceId.slice(0, DEVICE_LABEL_CONFIG.DEVICE_ID_DISPLAY_LENGTH)}`,
           kind: device.kind,
         }));
 
@@ -429,7 +429,7 @@ export const AcapellaRecording: React.FC<AcapellaRecordingProps> = ({ onBack, ly
           deviceId: device.deviceId,
           label:
             device.label ||
-            `${t('extAcapellaSpeakerDevice')} ${device.deviceId.slice(0, DEVICE_LABEL_CONFIG.DEVICE_ID_DISPLAY_LENGTH)}`,
+            `${t('extSpeakerDevice')} ${device.deviceId.slice(0, DEVICE_LABEL_CONFIG.DEVICE_ID_DISPLAY_LENGTH)}`,
           kind: device.kind,
         }));
 

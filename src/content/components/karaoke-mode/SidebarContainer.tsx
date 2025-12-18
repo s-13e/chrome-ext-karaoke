@@ -2,6 +2,7 @@
 // 가라오케 모드 오른쪽 사이드바 컨테이너
 // 가라오케 확장의 다양한 서비스 제공
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AcapellaRecording } from './sideBar/AcapellaRecording';
 import { RecordingsList } from './sideBar/RecordingsList';
 import { Line } from '@lib/types/lyrics';
@@ -20,6 +21,7 @@ interface SidebarContainerProps {
  * - 버튼: 다음 곡 예약, 예약 전환, 인기 차트, 무반주 녹음, 나의 노래 스타일 분석
  */
 export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics }) => {
+  const { t } = useTranslation();
   const [currentView, setCurrentView] = useState<SidebarView>('main');
 
   const handleMenuClick = (view: SidebarView) => {
@@ -38,13 +40,13 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics }) =>
       <div className={styles.sidebarContainer}>
         <div className={styles.sidebarContent}>
           <button className={styles.sidebarButton} onClick={() => handleMenuClick('chart')}>
-            인기 차트
+            {t('extSidebarPopularChart')}
           </button>
           <button className={styles.sidebarButton} onClick={() => handleMenuClick('acapella')}>
-            무반주 녹음
+            {t('extSidebarAcapellaRecording')}
           </button>
           <button className={styles.sidebarButton} onClick={() => handleMenuClick('recordings-list')}>
-            녹음 목록
+            {t('extSidebarRecordingsList')}
           </button>
         </div>
       </div>
@@ -74,9 +76,11 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics }) =>
     <div className={styles.sidebarContainer}>
       <div className={styles.sidebarContent}>
         <button className={styles.sidebarButton} onClick={handleBackToMain}>
-          ← 뒤로가기
+          {t('extSidebarBackButton')}
         </button>
-        <p style={{ color: '#fff', textAlign: 'center', marginTop: '20px' }}>{currentView} 화면 (구현 예정)</p>
+        <p style={{ color: '#fff', textAlign: 'center', marginTop: '20px' }}>
+          {currentView} {t('extSidebarComingSoon')}
+        </p>
       </div>
     </div>
   );

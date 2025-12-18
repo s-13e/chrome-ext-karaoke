@@ -867,13 +867,13 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
   const getLyricsDisplayModeText = (): string => {
     switch (lyricsDisplayMode) {
       case 'sync':
-        return '기본';
+        return t('extKaraokeModeSync');
       case 'single':
-        return '싱글';
+        return t('extKaraokeModeSingle');
       case 'full':
-        return '전체';
+        return t('extKaraokeModeFull');
       default:
-        return '기본';
+        return t('extKaraokeModeSync');
     }
   };
 
@@ -933,8 +933,8 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
             <button
               className={styles.bottomButton}
               onClick={handleLyricsDisplayModeToggle}
-              aria-label="가사 방식"
-              title={`가사 방식: ${getLyricsDisplayModeText()}`}
+              aria-label={t('extKaraokeLyricsDisplayMode')}
+              title={`${t('extKaraokeLyricsDisplayMode')}: ${getLyricsDisplayModeText()}`}
             >
               {getLyricsDisplayModeIcon()}
               <span className={styles.buttonText}>{getLyricsDisplayModeText()}</span>
@@ -942,34 +942,34 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
             <button
               className={styles.bottomButton}
               onClick={handleCurrentLyricsToggle}
-              aria-label="현재 가사"
-              title={`현재 가사: ${showCurrentLyrics ? 'On' : 'Off'}`}
+              aria-label={t('extKaraokeShowCurrentLyrics')}
+              title={`${t('extKaraokeShowCurrentLyrics')}: ${showCurrentLyrics ? 'On' : 'Off'}`}
             >
               <MdSubtitles size={ICON_SIZE} color={getCurrentLyricsIconColor()} />
               <span className={styles.buttonText} style={{ color: getCurrentLyricsIconColor() }}>
-                현재 가사
+                {t('extKaraokeShowCurrentLyrics')}
               </span>
             </button>
             <button
               className={styles.bottomButton}
               onClick={handlePronunciationToggle}
-              aria-label="발음 표시"
-              title={`발음 표시: ${showPronunciation ? 'On' : 'Off'}`}
+              aria-label={t('extKaraokeShowPronunciation')}
+              title={`${t('extKaraokeShowPronunciation')}: ${showPronunciation ? 'On' : 'Off'}`}
             >
               <MdRecordVoiceOver size={ICON_SIZE} color={getPronunciationIconColor()} />
               <span className={styles.buttonText} style={{ color: getPronunciationIconColor() }}>
-                발음 표시
+                {t('extKaraokeShowPronunciation')}
               </span>
             </button>
             <button
               ref={textEffectsButtonRef}
               className={styles.bottomButton}
               onClick={handleTextEffectsToggle}
-              aria-label="텍스트 효과"
-              title="텍스트 효과"
+              aria-label={t('extKaraokeTextEffects')}
+              title={t('extKaraokeTextEffects')}
             >
               <MdFormatColorText size={ICON_SIZE} color={ICON_COLOR} />
-              <span className={styles.buttonText}>텍스트 효과</span>
+              <span className={styles.buttonText}>{t('extKaraokeTextEffects')}</span>
             </button>
           </div>
         </div>
