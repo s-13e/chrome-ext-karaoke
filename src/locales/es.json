@@ -157,5 +157,16 @@
   "extTextEffectsLabelHighlightDisplay": "Mostrar resaltado",
   "extTextEffectsSubsectionTextColorEffect": "Efecto de color de texto",
   "extTextEffectsColorModeSolid": "Sólido",
-  "extTextEffectsColorModeGradient": "Degradado"
+  "extTextEffectsColorModeGradient": "Degradado",
+  "extChartSelectCategory": "Seleccionar categoría de gráfica",
+  "extChartGlobalTop100": "TOP 100 Global",
+  "extChartTrendingNow": "Tendencias",
+  "extChartSteadySeller": "Éxitos constantes",
+  "extChartKPopHits": "Éxitos K-POP",
+  "extChartPopHits": "Éxitos POP",
+  "extChartRockClassics": "Clásicos del Rock",
+  "extChartHipHopHeat": "Hip-Hop Popular",
+  "extChartLoading": "Cargando...",
+  "extChartNoData": "No hay datos disponibles",
+  "extChartViews": "visualizaciones"
 }

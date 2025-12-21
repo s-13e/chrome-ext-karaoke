@@ -157,5 +157,16 @@
   "extTextEffectsLabelHighlightDisplay": "하이라이트 표시",
   "extTextEffectsSubsectionTextColorEffect": "텍스트 색상 효과",
   "extTextEffectsColorModeSolid": "단색",
-  "extTextEffectsColorModeGradient": "그라데이션"
+  "extTextEffectsColorModeGradient": "그라데이션",
+  "extChartSelectCategory": "차트 카테고리 선택",
+  "extChartGlobalTop100": "글로벌 TOP 100",
+  "extChartTrendingNow": "트렌딩",
+  "extChartSteadySeller": "스테디셀러",
+  "extChartKPopHits": "K-POP 히트곡",
+  "extChartPopHits": "POP 히트곡",
+  "extChartRockClassics": "록 클래식",
+  "extChartHipHopHeat": "힙합 인기곡",
+  "extChartLoading": "로딩 중...",
+  "extChartNoData": "데이터가 없습니다",
+  "extChartViews": "조회"
 }

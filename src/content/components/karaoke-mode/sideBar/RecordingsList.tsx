@@ -159,7 +159,11 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onBack }) => {
             {recordings.map((recording) => (
               <li key={recording.id} className={styles.recordingItem}>
                 <div className={styles.recordingInfo}>
-                  <p className={styles.recordingFilename}>{recording.filename}</p>
+                  <div className={styles.marqueeContainer}>
+                    <p className={`${styles.recordingFilename} ${styles.marqueeText}`}>
+                      {recording.filename} &nbsp;&nbsp;&nbsp; {recording.filename}
+                    </p>
+                  </div>
                   <p className={styles.recordingMeta}>
                     {formatDate(recording.timestamp)} • {formatDuration(recording.duration)}
                   </p>

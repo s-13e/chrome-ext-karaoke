@@ -157,5 +157,16 @@
   "extTextEffectsLabelHighlightDisplay": "高亮显示",
   "extTextEffectsSubsectionTextColorEffect": "文本颜色效果",
   "extTextEffectsColorModeSolid": "纯色",
-  "extTextEffectsColorModeGradient": "渐变"
+  "extTextEffectsColorModeGradient": "渐变",
+  "extChartSelectCategory": "选择榜单类别",
+  "extChartGlobalTop100": "全球 TOP 100",
+  "extChartTrendingNow": "热门趋势",
+  "extChartSteadySeller": "长青榜",
+  "extChartKPopHits": "K-POP 热门歌曲",
+  "extChartPopHits": "POP 热门歌曲",
+  "extChartRockClassics": "摇滚经典",
+  "extChartHipHopHeat": "嘻哈热门",
+  "extChartLoading": "加载中...",
+  "extChartNoData": "无数据",
+  "extChartViews": "次观看"
 }

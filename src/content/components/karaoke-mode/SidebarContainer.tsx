@@ -5,13 +5,25 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AcapellaRecording } from './sideBar/AcapellaRecording';
 import { RecordingsList } from './sideBar/RecordingsList';
+import { ChartCategoryMenu } from './sideBar/ChartCategoryMenu';
+import { PopularChart } from './sideBar/PopularChart';
 import { Line } from '@lib/types/lyrics';
+import { ChartCategory } from '@lib/types/chart';
 import styles from './styles.module.css';
 
-type SidebarView = 'main' | 'reservation' | 'queue' | 'chart' | 'acapella' | 'recordings-list' | 'analysis';
+type SidebarView =
+  | 'main'
+  | 'reservation'
+  | 'queue'
+  | 'chart-category' // 차트 카테고리 선택
+  | 'chart-list' // 특정 차트의 곡 목록
+  | 'acapella'
+  | 'recordings-list'
+  | 'analysis';
 
 interface SidebarContainerProps {
   lyrics?: Line[];
+  width?: number; // 사이드바 너비 (px)
 }
 
 /**
@@ -20,9 +32,13 @@ interface SidebarContainerProps {
  * - 가라오케 확장의 다양한 서비스 제공
  * - 버튼: 다음 곡 예약, 예약 전환, 인기 차트, 무반주 녹음, 나의 노래 스타일 분석
  */
-export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics }) => {
+export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, width }) => {
   const { t } = useTranslation();
   const [currentView, setCurrentView] = useState<SidebarView>('main');
+  const [selectedChartCategory, setSelectedChartCategory] = useState<ChartCategory | null>(null);
+
+  // 인라인 스타일: 동적 너비 주입
+  const sidebarStyle: React.CSSProperties = width ? { width: `${width}px` } : {};
 
   const handleMenuClick = (view: SidebarView) => {
     console.log(`[SidebarContainer] ${view} 메뉴 클릭`);
@@ -34,12 +50,23 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics }) =>
     setCurrentView('main');
   };
 
+  const handleSelectCategory = (category: ChartCategory) => {
+    console.log(`[SidebarContainer] 차트 카테고리 선택: ${category}`);
+    setSelectedChartCategory(category);
+    setCurrentView('chart-list');
+  };
+
+  const handleBackToCategoryMenu = () => {
+    console.log('[SidebarContainer] 차트 카테고리 메뉴로 돌아가기');
+    setCurrentView('chart-category');
+  };
+
   // 메인 메뉴 화면
   if (currentView === 'main') {
     return (
-      <div className={styles.sidebarContainer}>
+      <div className={styles.sidebarContainer} style={sidebarStyle}>
         <div className={styles.sidebarContent}>
-          <button className={styles.sidebarButton} onClick={() => handleMenuClick('chart')}>
+          <button className={styles.sidebarButton} onClick={() => handleMenuClick('chart-category')}>
             {t('extSidebarPopularChart')}
           </button>
           <button className={styles.sidebarButton} onClick={() => handleMenuClick('acapella')}>
@@ -56,7 +83,7 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics }) =>
   // 무반주 녹음 화면
   if (currentView === 'acapella') {
     return (
-      <div className={styles.sidebarContainer}>
+      <div className={styles.sidebarContainer} style={sidebarStyle}>
         <AcapellaRecording onBack={handleBackToMain} lyrics={lyrics} />
       </div>
     );
@@ -65,15 +92,33 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics }) =>
   // 녹음 목록 화면
   if (currentView === 'recordings-list') {
     return (
-      <div className={styles.sidebarContainer}>
+      <div className={styles.sidebarContainer} style={sidebarStyle}>
         <RecordingsList onBack={handleBackToMain} />
+      </div>
+    );
+  }
+
+  // 차트 카테고리 선택 화면
+  if (currentView === 'chart-category') {
+    return (
+      <div className={styles.sidebarContainer} style={sidebarStyle}>
+        <ChartCategoryMenu onBackToMain={handleBackToMain} onSelectCategory={handleSelectCategory} />
+      </div>
+    );
+  }
+
+  // 차트 목록 화면
+  if (currentView === 'chart-list' && selectedChartCategory) {
+    return (
+      <div className={styles.sidebarContainer} style={sidebarStyle}>
+        <PopularChart category={selectedChartCategory} onBackToCategoryMenu={handleBackToCategoryMenu} />
       </div>
     );
   }
 
   // 다른 메뉴들은 아직 구현 전
   return (
-    <div className={styles.sidebarContainer}>
+    <div className={styles.sidebarContainer} style={sidebarStyle}>
       <div className={styles.sidebarContent}>
         <button className={styles.sidebarButton} onClick={handleBackToMain}>
           {t('extSidebarBackButton')}

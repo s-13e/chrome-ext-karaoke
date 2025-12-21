@@ -49,11 +49,12 @@
 }
 
 /* 사이드바 컨테이너 - 화면 오른쪽에 고정 */
+/* 너비는 TSX(KaraokeModeContainer)에서 동적으로 설정됨 - inline style로 주입 */
 .sidebarContainer {
   position: absolute;
   top: 30px;
   right: 0;
-  width: 250px;
+  /* width는 inline style로 주입 (반응형) */
   height: calc(100% - 130px); /* 30px (top) + 100px (bottom bar) = 130px */
   background-color: rgba(40, 40, 40, 0.95);
   z-index: 10;
@@ -418,15 +419,8 @@
 }
 
 /* 반응형 디자인 */
+/* 사이드바 너비와 버튼 그룹 margin은 TSX에서 동적으로 설정됨 */
 @media (max-width: 1024px) {
-  .sidebarContainer {
-    width: 200px;
-  }
-
-  .buttonGroupRight {
-    margin-right: 200px; /* 사이드바 너비 조정 */
-  }
-
   .syncModalContainer {
     min-width: 260px;
     max-width: 300px;
@@ -434,14 +428,6 @@
 }
 
 @media (max-width: 768px) {
-  .sidebarContainer {
-    width: 150px;
-  }
-
-  .buttonGroupRight {
-    margin-right: 150px; /* 사이드바 너비 조정 */
-  }
-
   .bottomButton {
     padding: 8px 12px;
     font-size: 12px;

@@ -26,6 +26,14 @@ interface KaraokeModeContainerProps {
  * - SidebarContainer: 동영상 플레이어 오른쪽에 가라오케 서비스 제공
  * - BottomContainer: 하단에 구간 반복, 싱크셋 등 기능 제공
  */
+// 반응형 사이드바 너비 계산 함수
+const getSidebarWidth = () => {
+  const width = window.innerWidth;
+  if (width <= 768) return 250; // 모바일: 250px
+  if (width <= 1024) return 320; // 태블릿: 320px
+  return 400; // 데스크톱: 400px
+};
+
 export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visible, lyrics }) => {
   const [isFullscreen, setIsFullscreen] = React.useState(false);
 
@@ -85,14 +93,6 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
 
   useEffect(() => {
     if (!visible) return;
-
-    // 반응형 사이드바 너비 계산 (CSS 미디어 쿼리와 동일)
-    const getSidebarWidth = () => {
-      const width = window.innerWidth;
-      if (width <= 768) return 150;
-      if (width <= 1024) return 200;
-      return 250;
-    };
 
     // 가라오케 스타일 적용 함수
     const applyKaraokeStyles = () => {
@@ -249,10 +249,13 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
   // 전체화면일 때는 커스텀 컨테이너들 숨김
   if (isFullscreen) return null;
 
+  // 현재 사이드바 너비 계산 (반응형)
+  const currentSidebarWidth = getSidebarWidth();
+
   return (
     <>
       <HeaderContainer />
-      <SidebarContainer lyrics={lyrics} />
+      <SidebarContainer lyrics={lyrics} width={currentSidebarWidth} />
       <BottomContainer lyrics={lyrics} />
     </>
   );
