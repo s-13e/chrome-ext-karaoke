@@ -1010,7 +1010,7 @@ import {
     const startTime = performance.now();
     console.log(`[collectMetadataAndLyrics] 시도 ${attempt}/${API_RETRY_MAX_ATTEMPTS + 1} - videoId: ${videoId}`);
 
-    // 🎵 "가사 준비 중..." 오버레이 표시 (무음 처리는 즉시 실행 코드에서 이미 완료됨)
+    // 🎵 "가사 준비 중..." 오버레이 표시
     const player =
       (document.querySelector('video') as HTMLVideoElement)?.closest('ytd-watch-flexy')?.querySelector('video') ||
       document.querySelector('video');
@@ -1064,15 +1064,12 @@ import {
       const isMusic = isMusicVideo(meta);
       contentLogger.debug('Music video detection result', { videoId, isMusic });
 
-      // 음악 영상이 아니면 무음 해제 및 오버레이 제거
+      // 음악 영상이 아니면 오버레이 제거
       if (!isMusic) {
-        console.log('[AutoRewind] 음악 영상 아님, 무음 해제 및 오버레이 제거');
+        console.log('[AutoRewind] 음악 영상 아님, 오버레이 제거');
         contentLogger.info('Not a music video, skipping lyrics and cleaning up UI', { videoId });
-        console.log('[NOT_MUSIC_VIDEO] Tracking: about to unmute and remove loading overlay');
+        console.log('[NOT_MUSIC_VIDEO] Tracking: about to remove loading overlay');
 
-        if (player) {
-          player.muted = false;
-        }
         if (loadingOverlay && loadingOverlay.parentElement) {
           loadingOverlay.remove();
         }
@@ -1286,13 +1283,12 @@ import {
             console.log(`[AutoRewind] 첫 가사 놓치지 않음 (여유: ${Math.abs(rewindDistance).toFixed(1)}초)`);
           }
 
-          // 모든 경우에 무음 해제 및 오버레이 제거
-          player.muted = false;
+          // 모든 경우에 오버레이 제거
           if (loadingOverlay && loadingOverlay.parentElement) {
             loadingOverlay.remove();
             loadingOverlay = null;
           }
-          console.log(`[AutoRewind] 무음 해제 및 오버레이 제거 완료`);
+          console.log(`[AutoRewind] 오버레이 제거 완료`);
         }
       }
 
@@ -1371,10 +1367,7 @@ import {
     } finally {
       isCollecting = false;
 
-      // 무음 해제 및 로딩 오버레이 제거 (비음악 비디오 포함)
-      if (player) {
-        player.muted = false;
-      }
+      // 로딩 오버레이 제거 (비음악 비디오 포함)
       if (loadingOverlay && loadingOverlay.parentElement) {
         loadingOverlay.remove();
       }
