@@ -22,52 +22,59 @@
  *    - 45% 이상이면 로마자 확정 (영어는 일반적으로 35-42%)
  */
 export function isRomanizedLyrics(lyrics: string): boolean {
+  // 방어적 프로그래밍: 입력값 검증
   if (!lyrics || typeof lyrics !== 'string') return false;
 
-  // 가사에서 처음 5줄만 샘플링 (성능 최적화)
-  const lines = lyrics.split('\n').slice(0, 5);
-  const sampleText = lines
-    .map((line) => line.replace(/^\[\d+:\d+\.\d+\]/, '').trim()) // 타임스탬프 제거
-    .filter((line) => line.length > 0)
-    .join(' ');
+  try {
+    // 가사에서 처음 5줄만 샘플링 (성능 최적화)
+    const lines = lyrics.split('\n').slice(0, 5);
+    const sampleText = lines
+      .map((line) => line.replace(/^\[\d+:\d+\.\d+\]/, '').trim()) // 타임스탬프 제거
+      .filter((line) => line.length > 0)
+      .join(' ');
 
-  if (sampleText.length < 20) return false; // 너무 짧으면 판단 불가
+    if (sampleText.length < 20) return false; // 너무 짧으면 판단 불가
 
-  // 1. 비ASCII 문자 비율 체크 (한글, 한자, 일본어 등)
-  const nonAsciiChars = sampleText.split('').filter((char) => char.charCodeAt(0) > 127);
-  const nonAsciiRatio = nonAsciiChars.length / sampleText.length;
+    // 1. 비ASCII 문자 비율 체크 (한글, 한자, 일본어 등)
+    const nonAsciiChars = sampleText.split('').filter((char) => char.charCodeAt(0) > 127);
+    const nonAsciiRatio = nonAsciiChars.length / sampleText.length;
 
-  // 비ASCII 문자가 30% 이상이면 원본 언어 가사로 판단
-  if (nonAsciiRatio > 0.3) {
-    console.log(`[Romanization Check] 원본 언어 가사 (비ASCII ${(nonAsciiRatio * 100).toFixed(1)}%)`);
+    // 비ASCII 문자가 30% 이상이면 원본 언어 가사로 판단
+    if (nonAsciiRatio > 0.3) {
+      console.log(`[Romanization Check] 원본 언어 가사 (비ASCII ${(nonAsciiRatio * 100).toFixed(1)}%)`);
+      return false;
+    }
+
+    // 2. 알파벳만 사용하는지 체크 (공백, 숫자, 기본 구두점 제외)
+    const alphaOnly = sampleText.replace(/[\s0-9.,!?'"()-]/g, '');
+    if (alphaOnly.length === 0) return false; // 알파벳이 없으면 판단 불가
+
+    const alphabetRatio = (alphaOnly.match(/[a-zA-Z]/g) || []).length / alphaOnly.length;
+
+    // 알파벳 비율이 90% 미만이면 로마자 아님
+    if (alphabetRatio < 0.9) {
+      console.log(`[Romanization Check] 혼합 언어 가사 (알파벳 ${(alphabetRatio * 100).toFixed(1)}%)`);
+      return false;
+    }
+
+    // 3. 모음 패턴 체크 (로마자 표기는 모음이 많음)
+    const vowels = sampleText.match(/[aeiou]/gi) || [];
+    const vowelRatio = vowels.length / alphaOnly.length;
+
+    // 모음 비율이 45% 이상이면 로마자 표기로 판단
+    // 영어: 일반적으로 35-42% (예: "I love you" → 40%)
+    // 로마자: 일반적으로 45-55% (예: "saranghae neoreul" → 51%)
+    const isRomanized = vowelRatio > 0.45;
+    console.log(
+      `[Romanization Check] ${isRomanized ? '⚠️ 로마자 표기' : '✅ 영어 가사'} (모음 ${(vowelRatio * 100).toFixed(1)}%)`,
+    );
+
+    return isRomanized;
+  } catch (error) {
+    // 예외 발생 시 안전하게 false 반환 (가사를 표시하도록)
+    console.warn('[Romanization Check] ❌ 처리 실패, 안전하게 원본 가사로 판단:', error);
     return false;
   }
-
-  // 2. 알파벳만 사용하는지 체크 (공백, 숫자, 기본 구두점 제외)
-  const alphaOnly = sampleText.replace(/[\s0-9.,!?'"()-]/g, '');
-  if (alphaOnly.length === 0) return false; // 알파벳이 없으면 판단 불가
-
-  const alphabetRatio = (alphaOnly.match(/[a-zA-Z]/g) || []).length / alphaOnly.length;
-
-  // 알파벳 비율이 90% 미만이면 로마자 아님
-  if (alphabetRatio < 0.9) {
-    console.log(`[Romanization Check] 혼합 언어 가사 (알파벳 ${(alphabetRatio * 100).toFixed(1)}%)`);
-    return false;
-  }
-
-  // 3. 모음 패턴 체크 (로마자 표기는 모음이 많음)
-  const vowels = sampleText.match(/[aeiou]/gi) || [];
-  const vowelRatio = vowels.length / alphaOnly.length;
-
-  // 모음 비율이 45% 이상이면 로마자 표기로 판단
-  // 영어: 일반적으로 35-42% (예: "I love you" → 40%)
-  // 로마자: 일반적으로 45-55% (예: "saranghae neoreul" → 51%)
-  const isRomanized = vowelRatio > 0.45;
-  console.log(
-    `[Romanization Check] ${isRomanized ? '⚠️ 로마자 표기' : '✅ 영어 가사'} (모음 ${(vowelRatio * 100).toFixed(1)}%)`,
-  );
-
-  return isRomanized;
 }
 
 /**

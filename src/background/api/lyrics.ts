@@ -3,6 +3,37 @@ import { fetchLyricsByArtistAndTrack, LrcLibLyricsResult } from './lrclib';
 import { LyricsError, LyricsErrorCode } from '@lib/types/lyricsError';
 
 const API_SERVER_URL = process.env.API_SERVER_URL!;
+const CACHE_TIMEOUT_MS = 2000; // 2초 타임아웃 (빠른 실패)
+
+/**
+ * Negative Cache 저장 (검색 실패 기록)
+ * 7일 TTL로 저장하여 같은 영상에 대한 불필요한 재검색 방지
+ */
+async function saveNegativeCacheForVideo(videoId: string, artist: string, title: string): Promise<void> {
+  try {
+    const response = await fetch(`${API_SERVER_URL}/api/v1/youtube/lrclib/not-found`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        videoId,
+        artist,
+        title,
+        status: 'not_found',
+        timestamp: Date.now(),
+      }),
+      signal: AbortSignal.timeout(CACHE_TIMEOUT_MS),
+    });
+
+    if (!response.ok) {
+      console.warn(`[Negative Cache] 저장 실패 - HTTP ${response.status}`);
+    } else {
+      console.log(`[Negative Cache] ✅ 저장 완료: ${videoId} (${artist} - ${title})`);
+    }
+  } catch (error) {
+    // Fire-and-forget이므로 에러는 로그만 남김
+    console.warn(`[Negative Cache] 저장 실패:`, error);
+  }
+}
 
 /**
  * artistVariants에서 성공한 아티스트를 기준으로 나머지 variants를 reverse 캐시에 저장
@@ -111,6 +142,12 @@ export async function fetchLyricsWithAliasFallback(
     // 3차 시도: lrclib.ts에서 모든 검색 시도 (LRCLib FreeText, MusicBrainz FreeText 포함)
     // 추가 시도 없음 - lrclib.ts가 모든 fallback 처리
 
+    // 모든 시도 실패 시 negative cache 저장 (fire-and-forget)
+    if (videoId) {
+      console.log(`[Negative Cache] 검색 실패 기록 저장: ${videoId}`);
+      saveNegativeCacheForVideo(videoId, processedArtist, processedTitle);
+    }
+
     // 모든 시도 실패 시 예외 던짐
     throw new LyricsError(LyricsErrorCode.LRCLIB_NOT_FOUND, undefined, {
       artist: processedArtist,
@@ -147,6 +184,12 @@ export async function fetchLyricsWithAliasFallback(
 
     // 3단계: lrclib.ts에서 모든 검색 시도 (Spotify, LRCLib FreeText, MusicBrainz FreeText 포함)
     // 추가 시도 없음 - lrclib.ts가 모든 fallback 처리
+
+    // 모든 시도 실패 시 negative cache 저장 (fire-and-forget)
+    if (videoId) {
+      console.log(`[Negative Cache] 검색 실패 기록 저장: ${videoId}`);
+      saveNegativeCacheForVideo(videoId, processedArtist, processedTitle);
+    }
 
     // 모든 시도 실패
     throw new LyricsError(LyricsErrorCode.LRCLIB_NOT_FOUND, undefined, {

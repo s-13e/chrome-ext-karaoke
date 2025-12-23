@@ -233,6 +233,16 @@ export async function fetchLyricsByArtistAndTrack(
       if (ytCacheRes.ok) {
         const ytCachedData = await ytCacheRes.json();
         const lrclibId = ytCachedData?.lrclibId;
+        const status = ytCachedData?.status;
+
+        // Negative cache 체크: 이전에 가사를 찾지 못한 영상
+        if (status === 'not_found') {
+          console.log(`[LRCLib] ⚠️ YouTube videoId Negative Cache 히트: ${videoId} (이전 검색 실패)`);
+          throw new LyricsError(LyricsErrorCode.LRCLIB_NOT_FOUND, '가사를 찾을 수 없습니다 (캐시됨)', {
+            videoId,
+            cached: true,
+          });
+        }
 
         if (lrclibId && typeof lrclibId === 'number' && lrclibId > 0) {
           console.log(`[LRCLib] YouTube videoId 캐시 히트: ${videoId} → LRCLib ID ${lrclibId}`);
@@ -253,7 +263,11 @@ export async function fetchLyricsByArtistAndTrack(
         }
       }
     } catch (error) {
-      // YouTube videoId 캐시 실패해도 다음 단계로 진행
+      // Negative cache에서 LyricsError 던진 경우 상위로 전파
+      if (error instanceof LyricsError) {
+        throw error;
+      }
+      // 기타 YouTube videoId 캐시 실패는 다음 단계로 진행
       console.warn('[LRCLib] YouTube videoId 캐시 조회 실패, 다음 단계로 진행:', error);
     }
   }
@@ -597,66 +611,75 @@ export async function fetchLyricsWithEndpoint(
     let fallbackSynced: LrcLibLyricsResult | null = null;
 
     for (const [index, candidate] of limitedCandidates.entries()) {
-      // Search API 응답에서 직접 가사 데이터 추출
-      const lyrics = candidate.syncedLyrics;
-      if (!lyrics) {
-        console.log(`[LRCLib API] ⚠️ 후보 ${index + 1}: Synced 가사 없음`);
-        continue;
-      }
+      try {
+        // Search API 응답에서 직접 가사 데이터 추출
+        const lyrics = candidate.syncedLyrics;
+        if (!lyrics) {
+          console.log(`[LRCLib API] ⚠️ 후보 ${index + 1}: Synced 가사 없음`);
+          continue;
+        }
 
-      // 가사가 비어있는지 확인
-      if (typeof lyrics === 'string' && lyrics.trim().length === 0) {
-        console.log(`[LRCLib API] ⚠️ 후보 ${index + 1}: 빈 Synced 가사`);
-        continue;
-      }
-      if (Array.isArray(lyrics) && lyrics.length === 0) {
-        console.log(`[LRCLib API] ⚠️ 후보 ${index + 1}: 빈 Synced 가사 배열`);
-        continue;
-      }
+        // 가사가 비어있는지 확인
+        if (typeof lyrics === 'string' && lyrics.trim().length === 0) {
+          console.log(`[LRCLib API] ⚠️ 후보 ${index + 1}: 빈 Synced 가사`);
+          continue;
+        }
+        if (Array.isArray(lyrics) && lyrics.length === 0) {
+          console.log(`[LRCLib API] ⚠️ 후보 ${index + 1}: 빈 Synced 가사 배열`);
+          continue;
+        }
 
-      // 🔍 Duration 검증
-      const responseDuration = candidate.duration ?? 0;
-      const durationDiff = Math.abs(durationSeconds - responseDuration);
-      console.log(
-        `[LRCLib API] 📊 후보 ${index + 1} (ID: ${candidate.id}): Duration ${durationDiff.toFixed(1)}s 차이 ${durationDiff > 2 ? '❌' : '✅'}`,
-      );
-
-      // Duration이 2초 초과 차이나면 스킵
-      if (durationDiff > 2) {
-        console.log(`[LRCLib API] ⚠️ 후보 ${index + 1}: Duration 차이 초과, 스킵`);
-        continue;
-      }
-
-      // 🚫 로마자 표기 가사 필터링
-      if (isRomanizedLyrics(lyrics)) {
-        console.log(`[LRCLib API] ⚠️ 후보 ${index + 1}: 로마자 표기 가사, 스킵`);
-        continue;
-      }
-
-      const candidateTitle = (candidate.trackName ?? '').trim().toLowerCase();
-      const isStrictMatch = candidateTitle === normalizedReqTitle;
-
-      const result: LrcLibLyricsResult = {
-        lyrics,
-        duration: candidate.duration,
-        artist: candidate.artistName,
-        title: candidate.trackName,
-        id: candidate.id,
-      };
-
-      // 🎯 Perfect Match 발견 시 즉시 반환
-      if (isStrictMatch && durationDiff <= 1) {
+        // 🔍 Duration 검증
+        const responseDuration = candidate.duration ?? 0;
+        const durationDiff = Math.abs(durationSeconds - responseDuration);
         console.log(
-          `[LRCLib API] 🎯 Perfect Match 발견! 후보 ${index + 1}/${limitedCandidates.length} (${(performance.now() - startTime).toFixed(0)}ms)`,
+          `[LRCLib API] 📊 후보 ${index + 1} (ID: ${candidate.id}): Duration ${durationDiff.toFixed(1)}s 차이 ${durationDiff > 2 ? '❌' : '✅'}`,
         );
-        perfectMatch = result;
-        break;
-      }
 
-      // Fallback 후보로 저장 (첫 번째만)
-      if (!fallbackSynced) {
-        console.log(`[LRCLib API] 💾 Fallback 후보 ${index + 1} (Duration ${durationDiff.toFixed(1)}s)`);
-        fallbackSynced = result;
+        // Duration이 2초 초과 차이나면 스킵
+        if (durationDiff > 2) {
+          console.log(`[LRCLib API] ⚠️ 후보 ${index + 1}: Duration 차이 초과, 스킵`);
+          continue;
+        }
+
+        // 🚫 로마자 표기 가사 필터링
+        if (isRomanizedLyrics(lyrics)) {
+          console.log(`[LRCLib API] ⚠️ 후보 ${index + 1}: 로마자 표기 가사, 스킵`);
+          continue;
+        }
+
+        const candidateTitle = (candidate.trackName ?? '').trim().toLowerCase();
+        const isStrictMatch = candidateTitle === normalizedReqTitle;
+
+        const result: LrcLibLyricsResult = {
+          lyrics,
+          duration: candidate.duration,
+          artist: candidate.artistName,
+          title: candidate.trackName,
+          id: candidate.id,
+        };
+
+        // 🎯 Perfect Match 발견 시 즉시 반환
+        if (isStrictMatch && durationDiff <= 1) {
+          console.log(
+            `[LRCLib API] 🎯 Perfect Match 발견! 후보 ${index + 1}/${limitedCandidates.length} (${(performance.now() - startTime).toFixed(0)}ms)`,
+          );
+          perfectMatch = result;
+          break;
+        }
+
+        // Fallback 후보로 저장 (첫 번째만)
+        if (!fallbackSynced) {
+          console.log(`[LRCLib API] 💾 Fallback 후보 ${index + 1} (Duration ${durationDiff.toFixed(1)}s)`);
+          fallbackSynced = result;
+        }
+      } catch (candidateError) {
+        // 개별 후보 처리 실패 시 다음 후보로 진행
+        console.warn(
+          `[LRCLib API] ❌ 후보 ${index + 1} (ID: ${candidate.id}) 처리 실패, 다음 후보 시도:`,
+          candidateError,
+        );
+        continue;
       }
     }
 
