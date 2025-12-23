@@ -64,3 +64,94 @@ export async function fetchYouTubeVideoMeta(
 }
 
 // saveYouTubeMetaToCache 함수 제거 (캐시 미사용)
+
+/**
+ * YouTube Playlist Item 인터페이스
+ */
+export interface YouTubePlaylistItem {
+  videoId: string;
+  title: string;
+  artist: string; // channelTitle로부터 추출
+  thumbnailUrl: string;
+  position: number; // 플레이리스트 내 순서 (0부터 시작)
+}
+
+/**
+ * YouTube API playlistItems 응답 타입
+ */
+interface YouTubePlaylistApiResponse {
+  items: Array<{
+    snippet: {
+      position: number;
+      title: string;
+      videoOwnerChannelTitle?: string;
+      resourceId: {
+        videoId: string;
+      };
+      thumbnails?: {
+        medium?: {
+          url: string;
+        };
+      };
+    };
+  }>;
+}
+
+/**
+ * YouTube Data API - playlistItems.list
+ * 플레이리스트의 동영상 목록을 가져옵니다.
+ *
+ * @param playlistId - YouTube 플레이리스트 ID
+ * @param apiKey - YouTube Data API 키
+ * @param maxResults - 가져올 최대 항목 수 (기본: 50, 최대: 50)
+ * @returns 플레이리스트 아이템 배열
+ */
+export async function fetchPlaylistItems(
+  playlistId: string,
+  apiKey: string,
+  maxResults: number = 50,
+): Promise<YouTubePlaylistItem[]> {
+  const startTime = performance.now();
+  console.log(`[YouTube Playlist API] 플레이리스트 조회 시작: ${playlistId}`);
+
+  const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${playlistId}&key=${apiKey}&maxResults=${maxResults}&fields=items(snippet(position,title,videoOwnerChannelTitle,resourceId/videoId,thumbnails/medium/url))`;
+
+  try {
+    const res = await fetch(url);
+
+    if (!res.ok) {
+      // 에러 응답의 상세 내용 확인
+      const errorData = await res.json().catch(() => ({}));
+      console.error(`[YouTube Playlist API] ❌ HTTP ${res.status}: ${res.statusText}`);
+      console.error('[YouTube Playlist API] 에러 상세:', errorData);
+      return [];
+    }
+
+    const data: YouTubePlaylistApiResponse = await res.json();
+    console.log(
+      `[YouTube Playlist API] 응답 받음 (${(performance.now() - startTime).toFixed(0)}ms, 항목 수: ${data.items?.length || 0})`,
+    );
+
+    if (!data.items || data.items.length === 0) {
+      console.log('[YouTube Playlist API] ❌ 플레이리스트 항목 없음');
+      return [];
+    }
+
+    const items: YouTubePlaylistItem[] = data.items.map((item) => ({
+      videoId: item.snippet.resourceId.videoId,
+      title: item.snippet.title,
+      artist: item.snippet.videoOwnerChannelTitle || 'Unknown Artist',
+      thumbnailUrl: item.snippet.thumbnails?.medium?.url || '',
+      position: item.snippet.position,
+    }));
+
+    console.log(
+      `[YouTube Playlist API] ✅ 플레이리스트 조회 성공 (${items.length}개 항목, ${(performance.now() - startTime).toFixed(0)}ms)`,
+    );
+
+    return items;
+  } catch (error) {
+    console.error('[YouTube Playlist API] ❌ 네트워크 오류:', error);
+    return [];
+  }
+}

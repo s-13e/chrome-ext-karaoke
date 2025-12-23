@@ -48,6 +48,12 @@ interface FetchYouTubeLyricsMessage {
   videoId: string;
 }
 
+interface FetchPlaylistItemsMessage {
+  type: 'FETCH_PLAYLIST_ITEMS';
+  playlistId: string;
+  maxResults?: number;
+}
+
 export type ExtensionMessage =
   | LyricsReadyMessage
   | GetLatestLyricsMessage
@@ -55,7 +61,8 @@ export type ExtensionMessage =
   | ApplyOffsetLyricsMessage
   | FetchYouTubeLRCLibCacheMessage
   | FetchLyricsByIdMessage
-  | FetchYouTubeLyricsMessage;
+  | FetchYouTubeLyricsMessage
+  | FetchPlaylistItemsMessage;
 
 // ===== Chrome 확장 이벤트 리스너 =====
 
@@ -266,6 +273,30 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendRespon
         sendResponse({ success: true, data: result });
       } catch (error) {
         console.error('[background] FETCH_YOUTUBE_LYRICS 실패:', error);
+        sendResponse({ success: false, error: String(error) });
+      }
+    })();
+
+    return true; // 비동기 응답
+  }
+
+  // YouTube 플레이리스트 항목 조회
+  if (msg.type === 'FETCH_PLAYLIST_ITEMS') {
+    console.log('[background] FETCH_PLAYLIST_ITEMS 요청 수신 - playlistId:', msg.playlistId);
+
+    (async () => {
+      try {
+        const { fetchPlaylistItems } = await import('./api/youtube');
+        const apiKey = process.env.YOUTUBE_API_KEY;
+        console.log('[background] API 키 확인:', apiKey ? `존재 (길이: ${apiKey.length})` : '없음');
+        if (!apiKey) {
+          throw new Error('YouTube API key not configured');
+        }
+        const result = await fetchPlaylistItems(msg.playlistId, apiKey, msg.maxResults);
+        console.log('[background] FETCH_PLAYLIST_ITEMS 응답:', result.length, '개 항목');
+        sendResponse({ success: true, data: result });
+      } catch (error) {
+        console.error('[background] FETCH_PLAYLIST_ITEMS 실패:', error);
         sendResponse({ success: false, error: String(error) });
       }
     })();

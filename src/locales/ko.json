@@ -160,6 +160,8 @@
   "extTextEffectsColorModeGradient": "그라데이션",
   "extChartSelectCategory": "차트 카테고리 선택",
   "extChartGlobalTop100": "글로벌 TOP 100",
+  "extChartKoreaTop100": "한국 TOP 100",
+  "extChartJapanTop100": "일본 TOP 100",
   "extChartTrendingNow": "트렌딩",
   "extChartSteadySeller": "스테디셀러",
   "extChartKPopHits": "K-POP 히트곡",

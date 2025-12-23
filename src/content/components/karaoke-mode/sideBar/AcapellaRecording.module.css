@@ -21,7 +21,7 @@
 .marqueeText {
   display: inline-flex;
   white-space: nowrap;
-  animation: marquee 10s linear infinite;
+  animation: marquee 15s linear infinite;
   will-change: transform;
 }
 

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MdArrowBackIosNew } from 'react-icons/md';
 import { ChartCategory, ChartItem, CHART_CATEGORIES } from '@lib/types/chart';
+import type { YouTubePlaylistItem } from '@background/api/youtube';
 import styles from '../styles.module.css';
 import acapellaStyles from './AcapellaRecording.module.css';
 
@@ -27,22 +28,49 @@ export const PopularChart: React.FC<PopularChartProps> = ({ category, onBackToCa
   const categoryLabel = categoryInfo ? t(categoryInfo.labelKey) : category;
 
   useEffect(() => {
-    // TODO: 실제 API 연동 시 구현
-    // 현재는 더미 데이터로 대체
-    setLoading(true);
-    setTimeout(() => {
-      const dummyData: ChartItem[] = Array.from({ length: 10 }, (_, i) => ({
-        rank: i + 1,
-        videoId: `dummy-video-${i}`,
-        title: `${categoryLabel} 인기곡 ${i + 1}`,
-        artist: `아티스트 ${i + 1}`,
-        thumbnailUrl: `https://i.ytimg.com/vi/dummy-video-${i}/mqdefault.jpg`,
-        viewCount: Math.floor(Math.random() * 10000000),
-      }));
-      setChartData(dummyData);
+    // 플레이리스트 ID 가져오기
+    const playlistId = categoryInfo?.playlistId;
+    if (!playlistId) {
+      console.error('[PopularChart] playlistId 없음:', category);
+      setChartData([]);
       setLoading(false);
-    }, 500);
-  }, [category, categoryLabel]);
+      return;
+    }
+
+    setLoading(true);
+    console.log('[PopularChart] 차트 데이터 조회 시작:', category, playlistId);
+
+    // Background script를 통해 YouTube API 호출
+    chrome.runtime
+      .sendMessage({
+        type: 'FETCH_PLAYLIST_ITEMS',
+        playlistId,
+        maxResults: 100,
+      })
+      .then((response) => {
+        if (response.success && Array.isArray(response.data)) {
+          const items: ChartItem[] = response.data.map((item: YouTubePlaylistItem, index: number) => ({
+            rank: index + 1,
+            videoId: item.videoId,
+            title: item.title,
+            artist: item.artist,
+            thumbnailUrl: item.thumbnailUrl,
+          }));
+          console.log('[PopularChart] 차트 데이터 조회 성공:', items.length, '개');
+          setChartData(items);
+        } else {
+          console.error('[PopularChart] 차트 데이터 조회 실패:', response);
+          setChartData([]);
+        }
+      })
+      .catch((error) => {
+        console.error('[PopularChart] API 호출 오류:', error);
+        setChartData([]);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [category, categoryInfo]);
 
   const handlePlayMV = (videoId: string) => {
     // MV (뮤직비디오) 재생 - YouTube 영상 페이지로 이동
