@@ -5,8 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { MdArrowBackIosNew } from 'react-icons/md';
 import { ChartCategory, ChartItem, CHART_CATEGORIES } from '@lib/types/chart';
 import type { YouTubePlaylistItem } from '@background/api/youtube';
-import styles from '../styles.module.css';
 import acapellaStyles from './AcapellaRecording.module.css';
+import { SIDEBAR_COLORS } from './sidebarStyles';
 
 interface PopularChartProps {
   category: ChartCategory;
@@ -94,39 +94,52 @@ export const PopularChart: React.FC<PopularChartProps> = ({ category, onBackToCa
       </div>
 
       {/* 차트 목록 */}
-      <div className={styles.sidebarContent}>
+      <div
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          padding: '16px',
+        }}
+      >
         {loading ? (
-          <p style={{ color: '#fff', textAlign: 'center', marginTop: '20px' }}>{t('extChartLoading')}</p>
+          <p style={{ color: SIDEBAR_COLORS.textPrimary, textAlign: 'center', marginTop: '20px' }}>
+            {t('extChartLoading')}
+          </p>
         ) : chartData.length === 0 ? (
-          <p style={{ color: '#fff', textAlign: 'center', marginTop: '20px' }}>{t('extChartNoData')}</p>
+          <p style={{ color: SIDEBAR_COLORS.textPrimary, textAlign: 'center', marginTop: '20px' }}>
+            {t('extChartNoData')}
+          </p>
         ) : (
-          <div style={{ marginTop: '10px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {chartData.map((item) => (
               <div
                 key={item.videoId}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  padding: '10px 12px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  borderRadius: '8px',
-                  marginBottom: '8px',
-                  transition: 'background-color 0.2s',
+                  padding: '12px',
+                  backgroundColor: SIDEBAR_COLORS.overlay05,
+                  border: `1px solid ${SIDEBAR_COLORS.border}`,
+                  borderRadius: '6px',
+                  transition: 'all 0.2s',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
+                  e.currentTarget.style.backgroundColor = SIDEBAR_COLORS.overlay10;
+                  e.currentTarget.style.borderColor = SIDEBAR_COLORS.borderHover;
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                  e.currentTarget.style.backgroundColor = SIDEBAR_COLORS.overlay05;
+                  e.currentTarget.style.borderColor = SIDEBAR_COLORS.border;
                 }}
               >
                 {/* 순위 */}
                 <span
                   style={{
-                    color: '#fff',
+                    color: SIDEBAR_COLORS.textPrimary,
                     fontWeight: 'bold',
-                    fontSize: '18px',
-                    minWidth: '35px',
+                    fontSize: '16px',
+                    minWidth: '30px',
                     textAlign: 'center',
                     marginRight: '12px',
                   }}
@@ -135,14 +148,14 @@ export const PopularChart: React.FC<PopularChartProps> = ({ category, onBackToCa
                 </span>
 
                 {/* 곡 정보 */}
-                <div style={{ flex: 1, minWidth: 0, marginRight: '12px' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <div className={acapellaStyles.marqueeContainer}>
                     <p
                       className={acapellaStyles.marqueeText}
                       style={{
-                        color: '#fff',
+                        color: SIDEBAR_COLORS.textPrimary,
                         fontSize: '14px',
-                        fontWeight: 'bold',
+                        fontWeight: '500',
                         margin: 0,
                       }}
                     >
@@ -151,7 +164,7 @@ export const PopularChart: React.FC<PopularChartProps> = ({ category, onBackToCa
                   </div>
                   <p
                     style={{
-                      color: '#ccc',
+                      color: SIDEBAR_COLORS.textSecondary,
                       fontSize: '12px',
                       margin: '4px 0 0',
                       overflow: 'hidden',
@@ -164,7 +177,7 @@ export const PopularChart: React.FC<PopularChartProps> = ({ category, onBackToCa
                 </div>
 
                 {/* MV/MR 버튼 그룹 */}
-                <div style={{ display: 'flex', gap: '6px' }}>
+                <div style={{ display: 'flex', gap: '6px', marginLeft: '8px' }}>
                   {/* MV 버튼 */}
                   <button
                     onClick={(e) => {
@@ -172,24 +185,21 @@ export const PopularChart: React.FC<PopularChartProps> = ({ category, onBackToCa
                       handlePlayMV(item.videoId);
                     }}
                     style={{
-                      padding: '8px 14px',
-                      backgroundColor: '#ff0000',
-                      color: '#fff',
+                      padding: '6px 12px',
+                      backgroundColor: SIDEBAR_COLORS.youtube,
+                      color: SIDEBAR_COLORS.textPrimary,
                       border: 'none',
-                      borderRadius: '6px',
-                      fontSize: '12px',
+                      borderRadius: '4px',
+                      fontSize: '11px',
                       fontWeight: 'bold',
                       cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      minWidth: '50px',
+                      transition: 'background-color 0.2s',
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = '#cc0000';
-                      e.currentTarget.style.transform = 'translateY(-1px)';
+                      e.currentTarget.style.backgroundColor = SIDEBAR_COLORS.youtubeHover;
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = '#ff0000';
-                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.backgroundColor = SIDEBAR_COLORS.youtube;
                     }}
                   >
                     MV
@@ -202,24 +212,21 @@ export const PopularChart: React.FC<PopularChartProps> = ({ category, onBackToCa
                       handlePlayMR(item.videoId);
                     }}
                     style={{
-                      padding: '8px 14px',
-                      backgroundColor: '#1976d2',
-                      color: '#fff',
+                      padding: '6px 12px',
+                      backgroundColor: SIDEBAR_COLORS.primary,
+                      color: SIDEBAR_COLORS.textPrimary,
                       border: 'none',
-                      borderRadius: '6px',
-                      fontSize: '12px',
+                      borderRadius: '4px',
+                      fontSize: '11px',
                       fontWeight: 'bold',
                       cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      minWidth: '50px',
+                      transition: 'background-color 0.2s',
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = '#1565c0';
-                      e.currentTarget.style.transform = 'translateY(-1px)';
+                      e.currentTarget.style.backgroundColor = SIDEBAR_COLORS.primaryHover;
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = '#1976d2';
-                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.backgroundColor = SIDEBAR_COLORS.primary;
                     }}
                   >
                     MR

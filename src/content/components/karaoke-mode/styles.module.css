@@ -56,7 +56,7 @@
   right: 0;
   /* width는 inline style로 주입 (반응형) */
   height: calc(100% - 130px); /* 30px (top) + 100px (bottom bar) = 130px */
-  background-color: rgba(40, 40, 40, 0.95);
+  background-color: #1a1a1a;
   z-index: 10;
   overflow-y: auto;
   box-shadow: -2px 0 8px rgba(0, 0, 0, 0.3);

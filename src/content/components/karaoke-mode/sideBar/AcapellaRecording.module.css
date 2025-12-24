@@ -21,7 +21,7 @@
 .marqueeText {
   display: inline-flex;
   white-space: nowrap;
-  animation: marquee 15s linear infinite;
+  animation: marquee 17s linear infinite;
   will-change: transform;
 }
 
@@ -64,6 +64,7 @@
   margin: 0;
   font-size: 18px;
   font-weight: 600;
+  color: #ffffff;
 }
 
 .content {
