@@ -1,8 +1,7 @@
 // KaraokeModeContainer.tsx
 // 가라오케 모드의 메인 컨테이너 컴포넌트
-// MusicNoteButton 클릭 시 헤더, 사이드바, 하단 컨테이너를 표시/숨김 처리
+// MusicNoteButton 클릭 시 사이드바, 하단 컨테이너를 표시/숨김 처리
 import React, { useEffect } from 'react';
-import { HeaderContainer } from './HeaderContainer';
 import { SidebarContainer } from './SidebarContainer';
 import { BottomContainer } from './BottomContainer';
 import { Line } from '@lib/types/lyrics';
@@ -12,8 +11,7 @@ import { Line } from '@lib/types/lyrics';
  * styles.module.css의 값과 일치해야 함
  */
 const YOUTUBE_TOOLBAR = 56; // YouTube 상단 툴바 높이
-const HEADER_HEIGHT = 30; // HeaderContainer 높이
-const BOTTOM_BAR_HEIGHT = 100; // BottomContainer 높이 (styles.module.css .bottomContainer height와 동일)
+const BOTTOM_BAR_HEIGHT = 100; // 동영상 플레이어 하단 여백 (실제 하단바는 100px이지만 겹치도록 설정)
 
 interface KaraokeModeContainerProps {
   visible: boolean;
@@ -22,7 +20,6 @@ interface KaraokeModeContainerProps {
 
 /**
  * 가라오케 모드의 전체 컨테이너
- * - HeaderContainer: 상단에 로고와 설정 버튼 표시
  * - SidebarContainer: 동영상 플레이어 오른쪽에 가라오케 서비스 제공
  * - BottomContainer: 하단에 구간 반복, 싱크셋 등 기능 제공
  */
@@ -94,6 +91,8 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
   useEffect(() => {
     if (!visible) return;
 
+    let styleObserver: MutationObserver | null = null;
+
     // 가라오케 스타일 적용 함수
     const applyKaraokeStyles = () => {
       const SIDEBAR_WIDTH = getSidebarWidth();
@@ -116,34 +115,44 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
 
       // 플레이어를 전체화면처럼 확장 (영화관 모드의 #full-bleed-container 조작)
       fullBleedContainer.style.setProperty('position', 'fixed', 'important');
-      fullBleedContainer.style.setProperty('top', `${YOUTUBE_TOOLBAR + HEADER_HEIGHT}px`, 'important');
+      fullBleedContainer.style.setProperty('top', `${YOUTUBE_TOOLBAR}px`, 'important');
       fullBleedContainer.style.setProperty('left', '0', 'important');
       fullBleedContainer.style.setProperty('width', `calc(100vw - ${SIDEBAR_WIDTH}px)`, 'important');
       fullBleedContainer.style.setProperty(
         'height',
-        `calc(100vh - ${YOUTUBE_TOOLBAR + HEADER_HEIGHT + BOTTOM_BAR_HEIGHT}px)`,
+        `calc(100vh - ${YOUTUBE_TOOLBAR + BOTTOM_BAR_HEIGHT}px)`,
         'important',
       );
       fullBleedContainer.style.setProperty('z-index', '2000', 'important');
       fullBleedContainer.style.setProperty('margin', '0', 'important');
       fullBleedContainer.style.setProperty('padding', '0', 'important');
       fullBleedContainer.style.setProperty('max-width', `calc(100vw - ${SIDEBAR_WIDTH}px)`, 'important');
-
+      fullBleedContainer.style.setProperty(
+        'max-height',
+        `calc(100vh - ${YOUTUBE_TOOLBAR + BOTTOM_BAR_HEIGHT}px)`,
+        'important',
+      );
       // 내부 플레이어 컨테이너도 함께 조정
       const playerContainer = fullBleedContainer.querySelector<HTMLElement>('#player-container');
       if (playerContainer) {
         playerContainer.style.setProperty('width', '100%', 'important');
         playerContainer.style.setProperty('height', '100%', 'important');
-        playerContainer.style.setProperty('max-width', '100%', 'important');
-        playerContainer.style.setProperty('max-height', '100%', 'important');
+        playerContainer.style.setProperty('max-width', 'none', 'important');
+        playerContainer.style.setProperty('max-height', 'none', 'important');
+        playerContainer.style.setProperty('min-height', '100%', 'important');
+        // aspect-ratio 제거 시도
+        playerContainer.style.setProperty('aspect-ratio', 'auto', 'important');
       }
 
       const moviePlayer = fullBleedContainer.querySelector<HTMLElement>('#movie_player');
       if (moviePlayer) {
         moviePlayer.style.setProperty('width', '100%', 'important');
         moviePlayer.style.setProperty('height', '100%', 'important');
-        moviePlayer.style.setProperty('max-width', '100%', 'important');
-        moviePlayer.style.setProperty('max-height', '100%', 'important');
+        moviePlayer.style.setProperty('max-width', 'none', 'important');
+        moviePlayer.style.setProperty('max-height', 'none', 'important');
+        moviePlayer.style.setProperty('min-height', '100%', 'important');
+        // aspect-ratio 제거 시도
+        moviePlayer.style.setProperty('aspect-ratio', 'auto', 'important');
       }
 
       // YouTube 플레이어 내부의 비디오 컨테이너도 조정
@@ -153,6 +162,8 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
         videoContainer.style.setProperty('height', '100%', 'important');
         videoContainer.style.setProperty('max-width', '100%', 'important');
         videoContainer.style.setProperty('max-height', '100%', 'important');
+        // aspect-ratio 제거 시도
+        videoContainer.style.setProperty('aspect-ratio', 'auto', 'important');
       }
 
       // 실제 비디오 요소도 조정
@@ -168,12 +179,29 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
       // 강제 리플로우 트리거 (스타일 적용 강제)
       void fullBleedContainer.offsetHeight;
 
-      // YouTube 플레이어의 resize 핸들러를 강제로 호출하기 위한 window resize 이벤트 발생
-      window.dispatchEvent(new Event('resize'));
-
       // 스크롤 방지
       document.body.style.overflow = 'hidden';
       document.documentElement.style.overflow = 'hidden';
+
+      // MutationObserver로 YouTube의 동적 스타일 변경 감지 및 재적용
+      if (styleObserver) {
+        styleObserver.disconnect();
+      }
+
+      if (playerContainer) {
+        styleObserver = new MutationObserver(() => {
+          // YouTube가 높이를 변경하면 다시 100%로 강제
+          if (playerContainer.style.height !== '100%') {
+            playerContainer.style.setProperty('height', '100%', 'important');
+            playerContainer.style.setProperty('aspect-ratio', 'auto', 'important');
+          }
+        });
+
+        styleObserver.observe(playerContainer, {
+          attributes: true,
+          attributeFilter: ['style'],
+        });
+      }
     };
 
     // 초기 스타일 적용 (영화관 모드 전환 대기)
@@ -254,7 +282,6 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
 
   return (
     <>
-      <HeaderContainer />
       <SidebarContainer lyrics={lyrics} width={currentSidebarWidth} />
       <BottomContainer lyrics={lyrics} />
     </>
