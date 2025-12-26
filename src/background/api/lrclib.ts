@@ -609,6 +609,7 @@ export async function fetchLyricsWithEndpoint(
     // 🚀 Search API 응답 직접 사용 (Detail API 호출 제거)
     let perfectMatch: LrcLibLyricsResult | null = null;
     let fallbackSynced: LrcLibLyricsResult | null = null;
+    let closestCandidate: { result: LrcLibLyricsResult; durationDiff: number } | null = null;
 
     for (const [index, candidate] of limitedCandidates.entries()) {
       try {
@@ -636,13 +637,7 @@ export async function fetchLyricsWithEndpoint(
           `[LRCLib API] 📊 후보 ${index + 1} (ID: ${candidate.id}): Duration ${durationDiff.toFixed(1)}s 차이 ${durationDiff > 2 ? '❌' : '✅'}`,
         );
 
-        // Duration이 2초 초과 차이나면 스킵
-        if (durationDiff > 2) {
-          console.log(`[LRCLib API] ⚠️ 후보 ${index + 1}: Duration 차이 초과, 스킵`);
-          continue;
-        }
-
-        // 🚫 로마자 표기 가사 필터링
+        // 🚫 로마자 표기 가사 필터링 (duration 체크 전에 수행)
         if (isRomanizedLyrics(lyrics)) {
           console.log(`[LRCLib API] ⚠️ 후보 ${index + 1}: 로마자 표기 가사, 스킵`);
           continue;
@@ -658,6 +653,15 @@ export async function fetchLyricsWithEndpoint(
           title: candidate.trackName,
           id: candidate.id,
         };
+
+        // Duration 차이가 2초 초과인 경우, 최근접 후보로 추적만 하고 스킵
+        if (durationDiff > 2) {
+          console.log(`[LRCLib API] ⚠️ 후보 ${index + 1}: Duration 차이 초과, 최근접 후보로 저장`);
+          if (!closestCandidate || durationDiff < closestCandidate.durationDiff) {
+            closestCandidate = { result, durationDiff };
+          }
+          continue;
+        }
 
         // 🎯 Perfect Match 발견 시 즉시 반환
         if (isStrictMatch && durationDiff <= 1) {
@@ -687,7 +691,7 @@ export async function fetchLyricsWithEndpoint(
       `[LRCLib API] ✅ Search 결과 처리 완료 (소요: ${(performance.now() - startTime).toFixed(0)}ms, 검사: ${limitedCandidates.length}개)`,
     );
 
-    // Perfect Match 우선, 없으면 Fallback 반환
+    // Perfect Match 우선, 없으면 Fallback 반환, 최종적으로 최근접 후보 반환
     if (perfectMatch) {
       console.log(
         `[LRCLib Search] ✅ ${_attemptNumber}차 시도 성공 (Perfect Match, 총 소요: ${(performance.now() - startTime).toFixed(0)}ms): ${perfectMatch.artist} - ${perfectMatch.title}`,
@@ -700,6 +704,14 @@ export async function fetchLyricsWithEndpoint(
         `[LRCLib Search] ✅ ${_attemptNumber}차 시도 성공 (Fallback Synced, 총 소요: ${(performance.now() - startTime).toFixed(0)}ms): ${fallbackSynced.artist} - ${fallbackSynced.title}`,
       );
       return fallbackSynced;
+    }
+
+    // 2초 이내 후보가 없었지만, 최근접 후보가 있으면 반환
+    if (closestCandidate) {
+      console.log(
+        `[LRCLib Search] ⚠️ ${_attemptNumber}차 시도 성공 (최근접 후보, Duration ${closestCandidate.durationDiff.toFixed(1)}s 차이, 총 소요: ${(performance.now() - startTime).toFixed(0)}ms): ${closestCandidate.result.artist} - ${closestCandidate.result.title}`,
+      );
+      return closestCandidate.result;
     }
 
     // 아무것도 못 찾음
