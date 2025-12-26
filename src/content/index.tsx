@@ -642,7 +642,8 @@ import {
     const videoElem = document.querySelector('video');
     if (videoElem) {
       songInfoVideoTimeListener = () => {
-        if (videoElem.currentTime >= SONG_INFO_HIDE_AT_VIDEO_TIME) {
+        // 광고 중이 아니고, 영상 재생 시간이 8초 이상일 때만 숨김
+        if (!isAdPlaying() && videoElem.currentTime >= SONG_INFO_HIDE_AT_VIDEO_TIME) {
           overlayManager.setVisibility('songInfo', false);
           removeSongInfoVideoTimeListener();
         }
@@ -1228,28 +1229,15 @@ import {
         lyricsData = { lyricsResult: result, parsedLyrics, effectiveLyricsDuration };
       }
       console.log(`[Performance] 전체 가사 조회 완료 (${(performance.now() - startTime).toFixed(0)}ms)`);
-      console.log('[Lyrics] 가사 로딩 완료, 광고 종료 대기 시작');
+      console.log('[Lyrics] 가사 로딩 완료');
       contentLogger.info('Lyrics loaded successfully', {
         videoId,
         lyricsCount: lyricsData.parsedLyrics.length,
         duration: lyricsData.effectiveLyricsDuration,
       });
 
-      // 🚀 2단계: 광고 종료 대기 (가사 준비 후에만 수행)
-      let adWaitAttempt = 0;
-      while (isAdPlaying() && adWaitAttempt < 30) {
-        console.log('[Lyrics] 광고 재생 중, 대기... (' + (adWaitAttempt + 1) + '/30)');
-        await delay(500);
-        adWaitAttempt++;
-      }
-      if (adWaitAttempt >= 30) {
-        contentLogger.warn('Ad wait timeout exceeded', { videoId });
-        throw new Error('광고 대기 시간 초과');
-      }
-      if (adWaitAttempt > 0) {
-        console.log('[Lyrics] 광고 종료 확인');
-        contentLogger.debug('Ad playback ended', { videoId, waitAttempts: adWaitAttempt });
-      }
+      // 광고 대기 로직 제거: 광고 여부와 상관없이 즉시 렌더링
+      // 광고 모니터링(startLyricsAdMonitoring)이 자동으로 가사 숨김/표시 처리
 
       // 4) 가사 준비 완료, 상태 업데이트 및 UI 렌더링
       const { lyricsResult: finalLyricsResult, parsedLyrics, effectiveLyricsDuration } = lyricsData;
@@ -1260,7 +1248,7 @@ import {
         }
       });
 
-      // 🔄 Auto-Rewind: 첫 가사를 놓쳤다면 영상 처음으로 되감기
+      // 🔄 Auto-Rewind: 첫 가사를 놓쳤다면 영상 처음으로 되감기 (광고 중에는 실행 안 함)
       if (parsedLyrics.length > 0 && parsedLyrics[0] && player) {
         const firstLyricTime = parsedLyrics[0].time;
 
@@ -1268,19 +1256,24 @@ import {
           const currentTime = player.currentTime;
           const rewindDistance = currentTime - firstLyricTime;
 
-          // 가사를 받은 시점이 첫 가사 타임스탬프 이후라면 무조건 0초로 되감기
-          if (rewindDistance > 0.5) {
-            console.log(`[AutoRewind] 첫 가사 놓침 감지 (${rewindDistance.toFixed(1)}초), 0초로 되감기 실행`);
-            console.log(
-              `[AutoRewind] 현재 시간: ${currentTime.toFixed(1)}초 → 첫 가사: ${firstLyricTime.toFixed(1)}초`,
-            );
+          // 광고가 아닐 때만 되감기 로직 실행
+          if (!isAdPlaying()) {
+            // 가사를 받은 시점이 첫 가사 타임스탬프 이후라면 무조건 0초로 되감기
+            if (rewindDistance > 0.5) {
+              console.log(`[AutoRewind] 첫 가사 놓침 감지 (${rewindDistance.toFixed(1)}초), 0초로 되감기 실행`);
+              console.log(
+                `[AutoRewind] 현재 시간: ${currentTime.toFixed(1)}초 → 첫 가사: ${firstLyricTime.toFixed(1)}초`,
+              );
 
-            // 영상 처음(0초)으로 이동
-            player.currentTime = 0;
+              // 영상 처음(0초)으로 이동
+              player.currentTime = 0;
 
-            console.log(`[AutoRewind] 되감기 완료: 영상 처음(0초)으로 이동`);
+              console.log(`[AutoRewind] 되감기 완료: 영상 처음(0초)으로 이동`);
+            } else {
+              console.log(`[AutoRewind] 첫 가사 놓치지 않음 (여유: ${Math.abs(rewindDistance).toFixed(1)}초)`);
+            }
           } else {
-            console.log(`[AutoRewind] 첫 가사 놓치지 않음 (여유: ${Math.abs(rewindDistance).toFixed(1)}초)`);
+            console.log(`[AutoRewind] 광고 재생 중, 되감기 스킵`);
           }
 
           // 모든 경우에 오버레이 제거
