@@ -176,5 +176,7 @@
   "extChartHipHopHeat": "嘻哈热门",
   "extChartLoading": "加载中...",
   "extChartNoData": "无数据",
-  "extChartViews": "次观看"
+  "extChartViews": "次观看",
+  "extPopupStatusOn": "KARAOKE ON",
+  "extPopupStatusOff": "KARAOKE OFF"
 }

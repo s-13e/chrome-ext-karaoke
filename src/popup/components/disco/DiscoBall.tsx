@@ -19,7 +19,7 @@ export function DiscoBall({ enabled, onToggle }: Props) {
       aria-pressed={enabled}
     >
       <div className={styles.stage}>
-        <div className={styles.light} />
+        {enabled && <div className={styles.light} />}
 
         {/* ✅ 항상 회전 */}
         <div className={styles.discoBall}>

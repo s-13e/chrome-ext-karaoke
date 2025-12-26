@@ -176,5 +176,7 @@
   "extChartHipHopHeat": "힙합 인기곡",
   "extChartLoading": "로딩 중...",
   "extChartNoData": "데이터가 없습니다",
-  "extChartViews": "조회"
+  "extChartViews": "조회",
+  "extPopupStatusOn": "KARAOKE ON",
+  "extPopupStatusOff": "KARAOKE OFF"
 }

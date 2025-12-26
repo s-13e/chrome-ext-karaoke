@@ -176,5 +176,7 @@
   "extChartHipHopHeat": "ヒップホップ 人気曲",
   "extChartLoading": "読み込み中...",
   "extChartNoData": "データがありません",
-  "extChartViews": "回"
+  "extChartViews": "回",
+  "extPopupStatusOn": "KARAOKE ON",
+  "extPopupStatusOff": "KARAOKE OFF"
 }

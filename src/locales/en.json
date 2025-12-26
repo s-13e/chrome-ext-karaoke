@@ -176,5 +176,7 @@
   "extChartHipHopHeat": "Hip-Hop Heat",
   "extChartLoading": "Loading...",
   "extChartNoData": "No data available",
-  "extChartViews": "views"
+  "extChartViews": "views",
+  "extPopupStatusOn": "KARAOKE ON",
+  "extPopupStatusOff": "KARAOKE OFF"
 }

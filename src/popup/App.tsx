@@ -150,7 +150,7 @@ export function App() {
   }
 
   return (
-    <div>
+    <div className="popup-wrapper">
       <MainScreen
         enabled={enabled}
         onToggle={handleToggle}
