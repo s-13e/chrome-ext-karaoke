@@ -76,7 +76,7 @@ export const PopupSettingsPanel: React.FC<PopupSettingsPanelProps> = ({ onBack }
         <BackButton
           onClick={handleBackButtonClick}
           className={styles.popupBackButton}
-          arrowColor="#000"
+          arrowColor="#ffffff"
           transparentBackground
           style={{ marginLeft: 0 }}
         />

@@ -6,6 +6,19 @@
   width: 100%;
   position: relative;
   z-index: 2;
+  transition: transform 0.3s ease, filter 0.3s ease;
+}
+
+.wrapper:hover {
+  transform: scale(1.05);
+}
+
+.wrapper:hover .stage {
+  filter: brightness(1.2);
+}
+
+.wrapper:active {
+  transform: scale(0.98);
 }
 
 .stage {
@@ -16,6 +29,7 @@
   background: transparent;
   border-radius: 50%;
   overflow: visible;
+  transition: filter 0.3s ease;
 }
 
 .light {
