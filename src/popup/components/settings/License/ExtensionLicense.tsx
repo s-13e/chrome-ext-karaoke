@@ -1,11 +1,15 @@
 import React from 'react';
 import styles from './styles.module.css';
 
-export const ExtensionLicense: React.FC = () => {
+interface ExtensionLicenseProps {
+  isDarkMode: boolean;
+}
+
+export const ExtensionLicense: React.FC<ExtensionLicenseProps> = ({ isDarkMode }) => {
   return (
-    <div className={styles.openSourceList}>
-      <h2>Extension licenses</h2>
-      <p></p>
+    <div className={styles.openSourceList} style={{ color: isDarkMode ? '#ffffff' : '#000000' }}>
+      <h2 style={{ color: isDarkMode ? '#ffffff' : '#000000' }}>Extension licenses</h2>
+      <p style={{ color: isDarkMode ? '#cccccc' : '#333333' }}></p>
     </div>
   );
 };

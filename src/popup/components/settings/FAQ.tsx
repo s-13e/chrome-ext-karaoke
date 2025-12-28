@@ -16,7 +16,11 @@ const faqList = [
   // ... 더 많은 FAQ 항목을 추가할 수 있습니다
 ];
 
-export function FAQ() {
+interface FAQProps {
+  isDarkMode: boolean;
+}
+
+export function FAQ({ isDarkMode }: FAQProps) {
   const { t } = useTranslation();
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
@@ -24,8 +28,8 @@ export function FAQ() {
     setOpenIndex((prev) => (prev === idx ? null : idx));
   };
   return (
-    <div className={styles.menuSection}>
-      <h3> {t('extFAQ')}</h3>
+    <div className={styles.settingsContent} style={{ color: isDarkMode ? '#ffffff' : '#000000' }}>
+      <h3 style={{ color: isDarkMode ? '#ffffff' : '#000000', padding: '0 15px' }}> {t('extFAQ')}</h3>
       <div className={faqStyles.faqContent}>
         {faqList.map((item, idx) => (
           <div key={idx} className={faqStyles.faqItem}>

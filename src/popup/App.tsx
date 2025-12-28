@@ -8,7 +8,6 @@ import { ErrorFallback } from '@components/common/ErrorFallback';
 import { LoadingOverlay } from '@components/common/LoadingOverlay';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 import { PopupSettingsPanel } from './components/settings/PopupSettingsPanel';
-import { LanguagePreferenceOnboarding } from './components/onboarding/LanguagePreferenceOnboarding';
 import './popup.css';
 import { getAutoDisableState, disableAutoDisable, enableAutoDisable } from '@lib/utils/storage/autoDisableStorage';
 import { AutoDisableState } from '@lib/types/autoDisable';
@@ -25,17 +24,29 @@ export function App() {
 
   const [enabled, setEnabled] = useChromeStorage(STORAGE_KEYS.CONTENT_ENABLED, false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(false);
   const [autoDisableState, setAutoDisableState] = useState<AutoDisableState | null>(null);
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
+  const [isDarkModeLoaded, setIsDarkModeLoaded] = useState<boolean>(false);
 
-  // 온보딩 완료 여부 확인
+  // 다크모드 상태 로드 및 감지
   useEffect(() => {
-    const checkOnboardingStatus = async () => {
-      const result = await chrome.storage.sync.get('hasCompletedLanguageOnboarding');
-      const hasCompleted = result.hasCompletedLanguageOnboarding || false;
-      setShowOnboarding(!hasCompleted);
+    const loadDarkMode = async () => {
+      const result = await chrome.storage.sync.get(['darkMode']);
+      setIsDarkMode(result.darkMode ?? true);
+      setIsDarkModeLoaded(true);
     };
-    checkOnboardingStatus();
+    loadDarkMode();
+
+    const handleDarkModeChange = (changes: Record<string, chrome.storage.StorageChange>) => {
+      if (changes.darkMode) {
+        setIsDarkMode(changes.darkMode.newValue ?? true);
+      }
+    };
+
+    chrome.storage.onChanged.addListener(handleDarkModeChange);
+    return () => {
+      chrome.storage.onChanged.removeListener(handleDarkModeChange);
+    };
   }, []);
 
   // 자동 비활성화 상태 로드
@@ -138,15 +149,10 @@ export function App() {
     );
   }
 
-  if (phase !== 'ready') return <LoadingOverlay />;
-
-  // 온보딩 화면 표시
-  if (showOnboarding) {
-    return <LanguagePreferenceOnboarding onComplete={() => setShowOnboarding(false)} />;
-  }
+  if (phase !== 'ready' || !isDarkModeLoaded) return <LoadingOverlay />;
 
   if (showSettings) {
-    return <PopupSettingsPanel onBack={() => setShowSettings(false)} />;
+    return <PopupSettingsPanel onBack={() => setShowSettings(false)} isDarkMode={isDarkMode} />;
   }
 
   return (
@@ -156,6 +162,7 @@ export function App() {
         onToggle={handleToggle}
         autoDisableState={autoDisableState}
         onOpenSettings={() => setShowSettings(true)}
+        isDarkMode={isDarkMode}
       />
     </div>
   );

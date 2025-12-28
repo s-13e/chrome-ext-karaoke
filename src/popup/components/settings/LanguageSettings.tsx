@@ -9,7 +9,11 @@ import { MESSAGE_TYPES } from '@constants/messageTypes';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 import styles from './styles.module.css';
 
-export function LanguageSettings() {
+interface LanguageSettingsProps {
+  isDarkMode: boolean;
+}
+
+export function LanguageSettings({ isDarkMode }: LanguageSettingsProps) {
   const { t, i18n } = useTranslation();
   const { phase, error } = useLangLoader();
   const [isChanging, setIsChanging] = React.useState(false);
@@ -61,9 +65,9 @@ export function LanguageSettings() {
   };
 
   return (
-    <div className={styles.menuSection}>
-      <h2>{t('extLanguage')}</h2>
-      <p>사용자 인터페이스가 해당 언어로 제공합니다.</p>
+    <div className={styles.settingsContent} style={{ color: isDarkMode ? '#ffffff' : '#000000', padding: '18px 15px' }}>
+      <h2 style={{ color: isDarkMode ? '#ffffff' : '#000000' }}>{t('extLanguage')}</h2>
+      <p style={{ color: isDarkMode ? '#ffffff' : '#000000' }}>사용자 인터페이스가 해당 언어로 제공합니다.</p>
       <select value={currentLang} onChange={handleChange} disabled={isChanging} aria-busy={isChanging}>
         {SUPPORTED_LANGUAGES.map((lang) => (
           <option key={lang} value={lang}>

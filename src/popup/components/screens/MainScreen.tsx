@@ -13,9 +13,10 @@ interface Props {
   onToggle: (e: ChangeEvent<HTMLInputElement>) => void;
   autoDisableState: AutoDisableState | null;
   onOpenSettings: () => void;
+  isDarkMode: boolean;
 }
 
-export function MainScreen({ autoDisableState, onOpenSettings }: Props) {
+export function MainScreen({ autoDisableState, onOpenSettings, isDarkMode }: Props) {
   const { t } = useTranslation();
   const [enabled, setEnabled] = useChromeStorage(STORAGE_KEYS.CONTENT_ENABLED, false);
 
@@ -34,14 +35,21 @@ export function MainScreen({ autoDisableState, onOpenSettings }: Props) {
   }, [enabled, setEnabled]);
   return (
     <div className={styles.mainScreenContainer}>
-      <div className="popup-header">
-        <h2>{t('extName')}</h2>
-        <button className="icon-button" onClick={onOpenSettings}>
+      <div className="popup-header" style={{ backgroundColor: isDarkMode ? '#1a1a1a' : '#f5f5f5' }}>
+        <h2 style={{ color: isDarkMode ? '#ffffff' : '#000000' }}>{t('extName')}</h2>
+        <button className="icon-button" onClick={onOpenSettings} style={{ color: isDarkMode ? '#ffffff' : '#000000' }}>
           <IoSettingsOutline size={16} />
         </button>
       </div>
 
-      <div className={`${styles.discoSection} ${enabled ? styles.discoSectionOn : ''}`}>
+      <div
+        className={`${styles.discoSection} ${enabled ? styles.discoSectionOn : ''}`}
+        style={{
+          background: isDarkMode
+            ? 'linear-gradient(135deg, #0a0a0f 0%, #0d0d15 50%, #050508 100%)'
+            : 'linear-gradient(135deg, #f0f0f5 0%, #e8e8f0 50%, #f5f5fa 100%)',
+        }}
+      >
         {/* 디스코볼 빛 효과 - ON 상태일 때만 표시 */}
         {enabled && (
           <div className={styles.fireflies}>

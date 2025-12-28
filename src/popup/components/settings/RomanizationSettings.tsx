@@ -3,7 +3,11 @@ import { useTranslation } from 'react-i18next';
 import styles from './styles.module.css';
 import { ROMANIZATION_LANGUAGE_OPTIONS } from '../onboarding/LanguagePreferenceOnboarding';
 
-export function RomanizationSettings() {
+interface RomanizationSettingsProps {
+  isDarkMode: boolean;
+}
+
+export function RomanizationSettings({ isDarkMode }: RomanizationSettingsProps) {
   const { t, i18n } = useTranslation();
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [loadedLibraries, setLoadedLibraries] = useState<Set<string>>(new Set());
@@ -62,9 +66,9 @@ export function RomanizationSettings() {
   );
 
   return (
-    <div className={styles.menuSection}>
-      <h2>{t('extRomanization', '로마자 변환')}</h2>
-      <p className={styles.settingsDescription}>
+    <div className={styles.menuSection} style={{ color: isDarkMode ? '#ffffff' : '#000000' }}>
+      <h2 style={{ color: isDarkMode ? '#ffffff' : '#000000' }}>{t('extRomanization', '로마자 변환')}</h2>
+      <p className={styles.settingsDescription} style={{ color: isDarkMode ? '#aaaaaa' : '#666666' }}>
         {t(
           'extRomanizationDescription',
           '자주 듣는 언어를 선택하면 더 정확한 로마자 변환을 제공합니다. 선택하지 않은 언어도 기본 로마자 변환이 제공됩니다.',
@@ -100,13 +104,15 @@ export function RomanizationSettings() {
       </div>
 
       {selectedLanguages.length > 0 && (
-        <div className={styles.settingsSummary}>
-          <p>
-            {t('extRomanizationSelected', '선택된 언어')}: <strong>{selectedLanguages.length}</strong>
+        <div className={styles.settingsSummary} style={{ backgroundColor: isDarkMode ? '#2a2a2a' : '#f5f5f5' }}>
+          <p style={{ color: isDarkMode ? '#aaaaaa' : '#666666' }}>
+            {t('extRomanizationSelected', '선택된 언어')}:{' '}
+            <strong style={{ color: isDarkMode ? '#4a90e2' : '#2c5aa0' }}>{selectedLanguages.length}</strong>
           </p>
           {totalSize > 0 && (
-            <p>
-              {t('extRomanizationSize', '추가 크기')}: <strong>{totalSize} KB</strong>
+            <p style={{ color: isDarkMode ? '#aaaaaa' : '#666666' }}>
+              {t('extRomanizationSize', '추가 크기')}:{' '}
+              <strong style={{ color: isDarkMode ? '#4a90e2' : '#2c5aa0' }}>{totalSize} KB</strong>
             </p>
           )}
         </div>
