@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import styles from '@popup/components/settings/styles.module.css';
 import { ComponentKey } from '../PopupSettingsPanel';
 
@@ -9,12 +10,13 @@ interface LicenseInfoProps {
 }
 
 export const LicenseInfo: React.FC<LicenseInfoProps> = ({ onNavigate, isDarkMode }) => {
+  const { t } = useTranslation();
   const handleOpenSourceList = () => onNavigate('openSourceList');
   const handleShowExtensionLicense = () => onNavigate('extensionLicense');
   return (
     <div className={styles.settingsContent}>
       <div className={styles.sectionLabel} style={{ color: isDarkMode ? '#888888' : '#666666', marginLeft: '15px' }}>
-        라이선스 정보
+        {t('extLicenseInfo', 'License Information')}
       </div>
       <div>
         <button
@@ -26,7 +28,7 @@ export const LicenseInfo: React.FC<LicenseInfoProps> = ({ onNavigate, isDarkMode
             borderBottom: isDarkMode ? '1px solid #333333' : '1px solid #e0e0e0',
           }}
         >
-          크롬 확장 라이선스
+          {t('extExtensionLicense', 'Extension License')}
         </button>
         <button
           onClick={handleOpenSourceList}
@@ -37,7 +39,7 @@ export const LicenseInfo: React.FC<LicenseInfoProps> = ({ onNavigate, isDarkMode
             borderBottom: isDarkMode ? '1px solid #333333' : '1px solid #e0e0e0',
           }}
         >
-          오픈소스 라이선스
+          {t('extOpenSourceLicense', 'Open Source Licenses')}
         </button>
       </div>
     </div>
