@@ -20,7 +20,7 @@
     "service_worker": "background/background.js",
     "type": "module"
   },
-  "permissions": ["storage", "activeTab", "webNavigation", "scripting", "tabs", "notifications"],
+  "permissions": ["storage", "activeTab", "webNavigation", "scripting", "tabs", "notifications", "alarms"],
   "host_permissions": ["*://*.youtube.com/*", "https://lrclib.net/*"],
   "action": {
     "default_popup": "popup/popup.html",

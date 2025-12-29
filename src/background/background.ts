@@ -359,3 +359,25 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     }
   }
 });
+
+// ===== Service Worker Keep-Alive (Alarms API 사용) =====
+/**
+ * Service Worker를 활성 상태로 유지하는 함수
+ * - Chrome은 30초간 유휴 상태면 Service Worker를 자동으로 종료함
+ * - Chrome Alarms API를 사용하여 24초마다 Service Worker를 깨움
+ * - setInterval보다 배터리 효율적이고 Chrome이 권장하는 방식
+ * - Content Script와의 메시지 통신이 항상 즉시 처리되도록 보장
+ */
+const KEEP_ALIVE_ALARM = 'keep-alive';
+
+// 24초마다 알람 생성 (30초 타임아웃보다 짧게)
+chrome.alarms.create(KEEP_ALIVE_ALARM, {
+  periodInMinutes: 0.4, // 0.4분 = 24초
+});
+
+// 알람 이벤트 리스너
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === KEEP_ALIVE_ALARM) {
+    console.log('[Service Worker] Keep-alive ping');
+  }
+});
