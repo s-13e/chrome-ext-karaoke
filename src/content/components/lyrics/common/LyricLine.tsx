@@ -19,6 +19,7 @@ export const LyricLine: React.FC<{
       {showText && text && (
         <div
           className={styles.lyricLine}
+          data-content={text}
           style={{
             ...textStyle,
             // gradient가 없을 때만 fontColor 적용 (gradient는 WebkitTextFillColor로 색상 처리)
@@ -31,6 +32,7 @@ export const LyricLine: React.FC<{
       {showPron && pron && (
         <div
           className={styles.pronunciation}
+          data-content={pron}
           style={{
             ...pronStyle,
             ...(pronStyle?.WebkitTextFillColor ? {} : { color: pronunciationColor }),

@@ -8,13 +8,29 @@
 
 /* 현재 가사 라인 */
 .lyricLine {
+  z-index: 0;
+  position: relative;
   margin-bottom: 0; /* 발음이 있으면 붙이고 */
   font-weight: bold;
   display: inline-block; /* background-clip: text가 작동하려면 필요 */
 }
 
+/* 테두리 효과를 위한 가상 요소 */
+.lyricLine::before {
+  content: attr(data-content);
+  position: absolute;
+  z-index: -1;
+  left: 0;
+  top: 0;
+  /* 글자 바깥쪽으로 나갔으면 하는 테두리 크기의 두 배 (목표: 2px 테두리) */
+  -webkit-text-stroke: 4px rgba(36, 36, 36, 0.8);
+  color: transparent;
+}
+
 /* 발음 가사 라인 */
 .pronunciation {
+  z-index: 0;
+  position: relative;
   font-size: clamp(17px, calc(0.6vw + 0.6vh), 28px);
   opacity: 0.85;
   font-weight: 400;
@@ -22,6 +38,19 @@
     font-size 0.15s ease,
     font-weight 0.15s ease,
     opacity 0.15s ease;
+}
+
+/* 발음 테두리 효과를 위한 가상 요소 */
+.pronunciation::before {
+  content: attr(data-content);
+  position: absolute;
+  z-index: -1;
+  left: 0;
+  top: 0;
+  /* 글자 바깥쪽으로 나갔으면 하는 테두리 크기의 두 배 (목표: 2px 테두리) */
+  -webkit-text-stroke: 4px rgba(36, 36, 36, 0.8);
+  color: transparent;
+  opacity: 1; /* 테두리는 항상 불투명하게 */
 }
 
 /* 발음만 있는 경우 (일반 모드) */

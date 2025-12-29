@@ -149,6 +149,7 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({
             {showRealtimeLyrics && (
               <div
                 className={`${styles.lyricLine} ${isActive ? styles.active : ''}`}
+                data-content={line.text}
                 style={{
                   color: getTextColor(isActive),
                   ...getInlineStyle(isActive, false),
@@ -161,6 +162,7 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({
             {showPronunciationLyrics && (
               <div
                 className={`${styles.pronunciation} ${isActive ? styles.active : ''}`}
+                data-content={pron && pron.trim() !== '' ? pron : ' '}
                 style={{
                   color: getPronunciationColor(isActive),
                   ...getInlineStyle(isActive, true),

@@ -27,6 +27,8 @@
   margin-bottom: 20px; /* 세트(한 줄) 간격 */
 }
 .lyricLine {
+  z-index: 0;
+  position: relative;
   font-size: clamp(14px, calc(0.8vw + 0.8vh), 28px);
   line-height: 1.5;
   /* color/fontWeight/transition are controlled by JS style objects */
@@ -34,13 +36,40 @@
   margin-bottom: 0; /* 줄 간 여백 없애기 */
   padding: 0;
 }
+
+/* 테두리 효과를 위한 가상 요소 */
+.lyricLine::before {
+  content: attr(data-content);
+  position: absolute;
+  z-index: -1;
+  left: 0;
+  top: 0;
+  /* 글자 바깥쪽으로 나갔으면 하는 테두리 크기의 두 배 (목표: 2px 테두리) */
+  -webkit-text-stroke: 4px rgba(36, 36, 36, 0.8);
+  color: transparent;
+}
 .active .lyricLine {
   font-size: clamp(18px, calc(1vw + 1vh), 32px);
   /* highlight rendering (color/gradient/weight) is applied via inline styles from JS */
 }
 .pronunciation {
+  z-index: 0;
+  position: relative;
   font-size: clamp(10px, calc(0.6vw + 0.6vh), 20px);
   opacity: 0.6;
+}
+
+/* 발음 테두리 효과를 위한 가상 요소 */
+.pronunciation::before {
+  content: attr(data-content);
+  position: absolute;
+  z-index: -1;
+  left: 0;
+  top: 0;
+  /* 글자 바깥쪽으로 나갔으면 하는 테두리 크기의 두 배 (목표: 2px 테두리) */
+  -webkit-text-stroke: 4px rgba(36, 36, 36, 0.8);
+  color: transparent;
+  opacity: 1; /* 테두리는 항상 불투명하게 */
 }
 /* 부모 .active의 투명 텍스트 처리 무시 */
 .active .pronunciation {

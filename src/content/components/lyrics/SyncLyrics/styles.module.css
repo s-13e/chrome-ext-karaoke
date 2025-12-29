@@ -14,8 +14,6 @@
   font-size: clamp(1rem, calc(1.2rem + 1vw), 2.2rem);
 
   line-height: 1.4;
-  /* drop-shadow로 변경하여 gradient와 일관성 유지 */
-  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.3));
 }
 :fullscreen .dual-highlight-subtitle,
 :-webkit-full-screen .dual-highlight-subtitle {

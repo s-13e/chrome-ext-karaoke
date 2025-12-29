@@ -183,6 +183,11 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
       document.body.style.overflow = 'hidden';
       document.documentElement.style.overflow = 'hidden';
 
+      // 레이아웃 재계산을 위한 resize 이벤트 트리거
+      requestAnimationFrame(() => {
+        window.dispatchEvent(new Event('resize'));
+      });
+
       // MutationObserver로 YouTube의 동적 스타일 변경 감지 및 재적용
       if (styleObserver) {
         styleObserver.disconnect();
