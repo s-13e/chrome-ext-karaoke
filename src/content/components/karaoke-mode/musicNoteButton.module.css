@@ -10,7 +10,7 @@
   padding: 0;
   height: 36px; /* ⇐ 48px → 36px 권장, 유튜브 기본 컨트롤바 버튼 높이와 맞춰줌 */
   width: 36px; /* ⇐ 48px → 36px */
-  opacity: 0.8;
+  opacity: 0.9;
   transition: opacity 0.15s;
   position: relative; /* 툴팁 Absolute 위치에 필요하면 추가 */
 }
@@ -25,8 +25,63 @@
   margin: auto;
   display: block;
   pointer-events: none;
-  filter: brightness(0) invert(1) drop-shadow(0 1px 0 rgba(32, 32, 32, 0.4)) drop-shadow(0 0px 2px #323232);
+  /* 무지개 그라데이션 애니메이션 */
+  filter: brightness(0) invert(1)
+    drop-shadow(0 0 4px currentColor)
+    drop-shadow(0 0 8px currentColor)
+    hue-rotate(0deg);
+  animation: rainbowGlow 8s linear infinite;
   transition: filter 0.15s;
+}
+
+@keyframes rainbowGlow {
+  0% {
+    filter: brightness(0) invert(1)
+      drop-shadow(0 0 4px hsl(0, 80%, 60%))
+      drop-shadow(0 0 8px hsl(0, 80%, 60%))
+      hue-rotate(0deg);
+  }
+  16.66% {
+    filter: brightness(0) invert(1)
+      drop-shadow(0 0 4px hsl(60, 80%, 60%))
+      drop-shadow(0 0 8px hsl(60, 80%, 60%))
+      hue-rotate(60deg);
+  }
+  33.33% {
+    filter: brightness(0) invert(1)
+      drop-shadow(0 0 4px hsl(120, 80%, 60%))
+      drop-shadow(0 0 8px hsl(120, 80%, 60%))
+      hue-rotate(120deg);
+  }
+  50% {
+    filter: brightness(0) invert(1)
+      drop-shadow(0 0 4px hsl(180, 80%, 60%))
+      drop-shadow(0 0 8px hsl(180, 80%, 60%))
+      hue-rotate(180deg);
+  }
+  66.66% {
+    filter: brightness(0) invert(1)
+      drop-shadow(0 0 4px hsl(240, 80%, 60%))
+      drop-shadow(0 0 8px hsl(240, 80%, 60%))
+      hue-rotate(240deg);
+  }
+  83.33% {
+    filter: brightness(0) invert(1)
+      drop-shadow(0 0 4px hsl(300, 80%, 60%))
+      drop-shadow(0 0 8px hsl(300, 80%, 60%))
+      hue-rotate(300deg);
+  }
+  100% {
+    filter: brightness(0) invert(1)
+      drop-shadow(0 0 4px hsl(360, 80%, 60%))
+      drop-shadow(0 0 8px hsl(360, 80%, 60%))
+      hue-rotate(360deg);
+  }
+}
+
+.musicNoteButton:hover .icon {
+  /* hover 시 애니메이션 속도 증가 */
+  animation-duration: 4s;
 }
 #my-custom-music-menu {
   position: absolute;

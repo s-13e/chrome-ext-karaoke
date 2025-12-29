@@ -1,6 +1,7 @@
 // src/components/common/LoadingOverlay.tsx
 import styled from '@emotion/styled';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 const Container = styled.div`
   position: fixed;
@@ -33,10 +34,14 @@ const Spinner = styled.div`
   }
 `;
 
-export const LoadingOverlay = React.memo(() => (
-  <Container role="alert" aria-live="polite">
-    <Spinner />
-    <span className="visually-hidden">로딩 중입니다</span>
-  </Container>
-));
+export const LoadingOverlay = React.memo(() => {
+  const { t } = useTranslation();
+
+  return (
+    <Container role="alert" aria-live="polite">
+      <Spinner />
+      <span className="visually-hidden">{t('extChartLoading', 'Loading...')}</span>
+    </Container>
+  );
+});
 LoadingOverlay.displayName = 'LoadingOverlay';

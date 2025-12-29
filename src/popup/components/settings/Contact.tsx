@@ -51,7 +51,7 @@ const createEmailTemplate = (lang: string): string => {
   const sysInfo = getSystemInfo();
 
   const templates = {
-    ko: `문의 종류: [버그 리포트 / 기능 제안 / 개인정보 관련 / 기타]
+    ko: `문의 종류: [버그 리포트 / 기능 제안 / 개인정보 관련 / 번역 문제 / 기타]
 
 문의 내용:
 (자세히 작성해주세요)
@@ -84,7 +84,7 @@ const createEmailTemplate = (lang: string): string => {
 ---
 YouTube Karaoke Extension`,
 
-    en: `Issue Type: [Bug Report / Feature Request / Privacy Concern / Other]
+    en: `Issue Type: [Bug Report / Feature Request / Privacy Concern / Translation Issue / Other]
 
 Issue Description:
 (Please describe in detail)
@@ -117,7 +117,7 @@ System Environment:
 ---
 YouTube Karaoke Extension`,
 
-    ja: `お問い合わせ種類: [バグ報告 / 機能リクエスト / プライバシー関連 / その他]
+    ja: `お問い合わせ種類: [バグ報告 / 機能リクエスト / プライバシー関連 / 翻訳の問題 / その他]
 
 お問い合わせ内容:
 (詳しくご記入ください)
@@ -150,7 +150,7 @@ YouTube Karaoke Extension`,
 ---
 YouTube Karaoke Extension`,
 
-    zh: `咨询类型: [错误报告 / 功能建议 / 隐私相关 / 其他]
+    zh: `咨询类型: [错误报告 / 功能建议 / 隐私相关 / 翻译问题 / 其他]
 
 咨询内容:
 (请详细描述)

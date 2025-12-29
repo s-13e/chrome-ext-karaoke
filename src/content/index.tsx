@@ -1024,9 +1024,10 @@ import {
       // "가사 준비 중..." 오버레이 생성
       loadingOverlay = document.createElement('div');
       loadingOverlay.id = 'lyrics-loading-overlay';
+
       loadingOverlay.style.cssText = `
         position: absolute;
-        top: 60%;
+        top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
         background: rgba(0, 0, 0, 0.8);
@@ -1038,9 +1039,10 @@ import {
         z-index: 9999;
         pointer-events: none;
       `;
-      loadingOverlay.textContent = '🎵 가사 준비 중...';
+      loadingOverlay.textContent = `🎵 ${i18nInstance.t('extLyricsLoading')}`;
 
-      const playerContainer = player.parentElement;
+      // YouTube 플레이어 컨테이너 (#movie_player)에 직접 추가
+      const playerContainer = document.getElementById('movie_player');
       if (playerContainer) {
         playerContainer.style.position = 'relative';
         playerContainer.appendChild(loadingOverlay);

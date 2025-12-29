@@ -510,6 +510,32 @@ export const AcapellaRecording: React.FC<AcapellaRecordingProps> = ({ onBack, ly
    * 기기 확인 완료 및 녹음 준비
    */
   const handleConfirmDevices = async () => {
+    // 0. 선택한 마이크가 실제로 작동하는지 검증
+    if (selectedMicrophone) {
+      try {
+        console.log('[AcapellaRecording] 선택한 마이크 검증 중:', selectedMicrophone);
+        const testStream = await navigator.mediaDevices.getUserMedia({
+          audio: { deviceId: { exact: selectedMicrophone } },
+        });
+
+        // 스트림이 정상적으로 생성되었는지 확인
+        const audioTracks = testStream.getAudioTracks();
+        if (audioTracks.length === 0) {
+          alert('⚠️ ' + t('extAcapellaMicrophoneValidationFailed'));
+          testStream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        // 검증 성공, 스트림 정리
+        console.log('[AcapellaRecording] 마이크 검증 성공:', audioTracks[0]?.label ?? 'Unknown');
+        testStream.getTracks().forEach((track) => track.stop());
+      } catch (error) {
+        console.error('[AcapellaRecording] 마이크 검증 실패:', error);
+        alert('⚠️ ' + t('extAcapellaMicrophoneConnectionFailed'));
+        return;
+      }
+    }
+
     // 1. 스피커만 있는 경우 차단 (다국어 키워드 지원)
     const hasSpeakerOnly =
       outputDevices.length > 0 &&
