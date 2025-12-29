@@ -178,5 +178,13 @@
   "extChartNoData": "No data available",
   "extChartViews": "views",
   "extPopupStatusOn": "KARAOKE ON",
-  "extPopupStatusOff": "KARAOKE OFF"
+  "extPopupStatusOff": "KARAOKE OFF",
+  "extEmail": "Email",
+  "extEmailDesc": "Feel free to contact us via email if you have any questions.",
+  "extSendEmail": "📧 Send Email",
+  "extGithubIssues": "GitHub Issues",
+  "extGithubIssuesDesc": "For developers or if you prefer public discussion, please use GitHub Issues.",
+  "extOpenGithubIssues": "🐛 Open GitHub Issues",
+  "extDarkMode": "Dark Mode",
+  "extLanguageDesc": "User interface will be provided in the selected language."
 }

@@ -703,3 +703,13 @@
   opacity: 0;
   pointer-events: none;
 }
+
+/* Version info at the bottom */
+.versionInfo {
+  text-align: center;
+  font-size: 11px;
+  padding: 12px 0;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  background: transparent;
+}

@@ -6,3 +6,45 @@
 .libraryItem {
   padding: 5px 0;
 }
+
+/* ExtensionLicense wrapper with scroll */
+.extensionLicenseWrapper {
+  overflow-y: auto;
+  max-height: 100%;
+}
+
+/* 다크모드 스크롤바 */
+.extensionLicenseWrapper.dark::-webkit-scrollbar {
+  width: 8px;
+}
+
+.extensionLicenseWrapper.dark::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+
+.extensionLicenseWrapper.dark::-webkit-scrollbar-thumb {
+  background: #3a3a3a;
+  border-radius: 4px;
+}
+
+.extensionLicenseWrapper.dark::-webkit-scrollbar-thumb:hover {
+  background: #4a4a4a;
+}
+
+/* 라이트모드 스크롤바 */
+.extensionLicenseWrapper.light::-webkit-scrollbar {
+  width: 8px;
+}
+
+.extensionLicenseWrapper.light::-webkit-scrollbar-track {
+  background: #f0f0f0;
+}
+
+.extensionLicenseWrapper.light::-webkit-scrollbar-thumb {
+  background: #cccccc;
+  border-radius: 4px;
+}
+
+.extensionLicenseWrapper.light::-webkit-scrollbar-thumb:hover {
+  background: #b3b3b3;
+}

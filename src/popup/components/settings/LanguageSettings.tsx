@@ -67,7 +67,7 @@ export function LanguageSettings({ isDarkMode }: LanguageSettingsProps) {
   return (
     <div className={styles.settingsContent} style={{ color: isDarkMode ? '#ffffff' : '#000000', padding: '18px 15px' }}>
       <h2 style={{ color: isDarkMode ? '#ffffff' : '#000000' }}>{t('extLanguage')}</h2>
-      <p style={{ color: isDarkMode ? '#ffffff' : '#000000' }}>사용자 인터페이스가 해당 언어로 제공합니다.</p>
+      <p style={{ color: isDarkMode ? '#ffffff' : '#000000' }}>{t('extLanguageDesc')}</p>
       <select value={currentLang} onChange={handleChange} disabled={isChanging} aria-busy={isChanging}>
         {SUPPORTED_LANGUAGES.map((lang) => (
           <option key={lang} value={lang}>

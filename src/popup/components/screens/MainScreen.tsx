@@ -82,6 +82,17 @@ export function MainScreen({ autoDisableState, onOpenSettings, isDarkMode }: Pro
           </div>
         </div>
       )}
+
+      {/* Version Info */}
+      <div
+        className={styles.versionInfo}
+        style={{
+          color: isDarkMode ? '#888888' : '#777777',
+          backgroundColor: isDarkMode ? '#1a1a1a' : '#f5f5f5',
+        }}
+      >
+        v{chrome.runtime.getManifest().version}
+      </div>
     </div>
   );
 }

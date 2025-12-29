@@ -116,7 +116,7 @@ function MainMenu({ onNavigate, isDarkMode }: MainMenuProps) {
           }}
         >
           <span className={styles.toggleLabel} style={{ color: isDarkMode ? '#ffffff' : '#000000' }}>
-            {t('extDarkMode', '다크 모드')}
+            {t('extDarkMode')}
           </span>
           <label className={styles.switch}>
             <input type="checkbox" checked={isDarkMode} onChange={handleDarkModeToggle} />

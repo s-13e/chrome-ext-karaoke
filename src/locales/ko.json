@@ -178,5 +178,13 @@
   "extChartNoData": "데이터가 없습니다",
   "extChartViews": "조회",
   "extPopupStatusOn": "KARAOKE ON",
-  "extPopupStatusOff": "KARAOKE OFF"
+  "extPopupStatusOff": "KARAOKE OFF",
+  "extEmail": "이메일",
+  "extEmailDesc": "궁금한 점이 있으시면 이메일로 문의해주세요.",
+  "extSendEmail": "📧 이메일 보내기",
+  "extGithubIssues": "GitHub 이슈",
+  "extGithubIssuesDesc": "개발자이거나 공개 토론을 선호하시면 GitHub 이슈를 사용해주세요.",
+  "extOpenGithubIssues": "🐛 GitHub 이슈 열기",
+  "extDarkMode": "다크 모드",
+  "extLanguageDesc": "사용자 인터페이스가 해당 언어로 제공됩니다."
 }

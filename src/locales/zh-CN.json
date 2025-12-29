@@ -178,5 +178,13 @@
   "extChartNoData": "无数据",
   "extChartViews": "次观看",
   "extPopupStatusOn": "KARAOKE ON",
-  "extPopupStatusOff": "KARAOKE OFF"
+  "extPopupStatusOff": "KARAOKE OFF",
+  "extEmail": "电子邮件",
+  "extEmailDesc": "如有任何问题，请随时通过电子邮件与我们联系。",
+  "extSendEmail": "📧 发送邮件",
+  "extGithubIssues": "GitHub Issues",
+  "extGithubIssuesDesc": "如果您是开发者或希望公开讨论，请使用GitHub Issues。",
+  "extOpenGithubIssues": "🐛 打开GitHub Issues",
+  "extDarkMode": "深色模式",
+  "extLanguageDesc": "用户界面将以所选语言提供。"
 }

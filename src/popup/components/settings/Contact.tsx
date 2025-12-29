@@ -8,15 +8,50 @@ interface ContactProps {
   isDarkMode: boolean;
 }
 
+// 시스템 정보 수집 함수
+const getSystemInfo = () => {
+  const manifest = chrome.runtime.getManifest();
+  const userAgent = navigator.userAgent;
+
+  // 브라우저 감지
+  let browser = 'Unknown';
+  if (userAgent.includes('Edg/')) {
+    browser = 'Edge';
+  } else if (userAgent.includes('Chrome/')) {
+    browser = 'Chrome';
+  } else if (userAgent.includes('Firefox/')) {
+    browser = 'Firefox';
+  }
+
+  // 브라우저 버전 추출
+  const browserVersionMatch = userAgent.match(/(Chrome|Edg|Firefox)\/(\d+\.\d+\.\d+)/);
+  const browserVersion = browserVersionMatch ? browserVersionMatch[2] : 'Unknown';
+
+  // OS 감지
+  let os = 'Unknown';
+  if (userAgent.includes('Windows')) {
+    os = 'Windows';
+  } else if (userAgent.includes('Mac')) {
+    os = 'macOS';
+  } else if (userAgent.includes('Linux')) {
+    os = 'Linux';
+  }
+
+  return {
+    extensionVersion: manifest.version,
+    browser,
+    browserVersion,
+    os,
+    userAgent,
+  };
+};
+
 // 이메일 템플릿 생성 함수
 const createEmailTemplate = (lang: string): string => {
+  const sysInfo = getSystemInfo();
+
   const templates = {
     ko: `문의 종류: [버그 리포트 / 기능 제안 / 개인정보 관련 / 기타]
-
-브라우저 환경:
-- 브라우저: [Chrome / Edge / 기타]
-- 버전:
-- OS: [Windows / macOS / Linux]
 
 문의 내용:
 (자세히 작성해주세요)
@@ -36,15 +71,20 @@ const createEmailTemplate = (lang: string): string => {
 스크린샷/영상 (선택사항):
 
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+아래 정보는 자동으로 수집되었습니다 (수정 불필요)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+시스템 환경:
+- 확장 버전: ${sysInfo.extensionVersion}
+- 브라우저: ${sysInfo.browser} ${sysInfo.browserVersion}
+- OS: ${sysInfo.os}
+- User Agent: ${sysInfo.userAgent}
+
 ---
 YouTube Karaoke Extension`,
 
     en: `Issue Type: [Bug Report / Feature Request / Privacy Concern / Other]
-
-Browser Environment:
-- Browser: [Chrome / Edge / Other]
-- Version:
-- OS: [Windows / macOS / Linux]
 
 Issue Description:
 (Please describe in detail)
@@ -64,15 +104,20 @@ Actual Behavior:
 Screenshots/Videos (optional):
 
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Auto-collected Information (no edit needed)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+System Environment:
+- Extension Version: ${sysInfo.extensionVersion}
+- Browser: ${sysInfo.browser} ${sysInfo.browserVersion}
+- OS: ${sysInfo.os}
+- User Agent: ${sysInfo.userAgent}
+
 ---
 YouTube Karaoke Extension`,
 
     ja: `お問い合わせ種類: [バグ報告 / 機能リクエスト / プライバシー関連 / その他]
-
-ブラウザ環境:
-- ブラウザ: [Chrome / Edge / その他]
-- バージョン:
-- OS: [Windows / macOS / Linux]
 
 お問い合わせ内容:
 (詳しくご記入ください)
@@ -92,15 +137,20 @@ YouTube Karaoke Extension`,
 スクリーンショット/動画 (任意):
 
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+自動収集された情報 (編集不要)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+システム環境:
+- 拡張機能バージョン: ${sysInfo.extensionVersion}
+- ブラウザ: ${sysInfo.browser} ${sysInfo.browserVersion}
+- OS: ${sysInfo.os}
+- User Agent: ${sysInfo.userAgent}
+
 ---
 YouTube Karaoke Extension`,
 
     zh: `咨询类型: [错误报告 / 功能建议 / 隐私相关 / 其他]
-
-浏览器环境:
-- 浏览器: [Chrome / Edge / 其他]
-- 版本:
-- 操作系统: [Windows / macOS / Linux]
 
 咨询内容:
 (请详细描述)
@@ -119,6 +169,16 @@ YouTube Karaoke Extension`,
 
 截图/视频 (可选):
 
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+自动收集的信息 (无需编辑)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+系统环境:
+- 扩展版本: ${sysInfo.extensionVersion}
+- 浏览器: ${sysInfo.browser} ${sysInfo.browserVersion}
+- 操作系统: ${sysInfo.os}
+- User Agent: ${sysInfo.userAgent}
 
 ---
 YouTube Karaoke Extension`,
