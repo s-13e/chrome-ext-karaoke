@@ -123,6 +123,17 @@ export function extractArtistAndTitleCustom(
     };
   }
 
+  // 0-1. 타이틀 중복 표시 감지: 중첩 괄호가 있고 구분자가 없으면 실패 처리
+  // 예: "HEYA (해야 (HEYA))" → null (fallback으로 채널명 사용)
+  const hasNestedParentheses = /\([^()]*\([^()]*\)[^()]*\)/.test(rawTitle);
+  const hasDelimiter = / - | \/ | \| /.test(rawTitle);
+
+  if (hasNestedParentheses && !hasDelimiter) {
+    // 중첩 괄호만 있고 구분자 없음 → 타이틀 중복 표시로 간주
+    // fallback으로 넘어가서 채널명을 아티스트로 사용
+    return null;
+  }
+
   // 1. 기본 정돈 (괄호/대괄호 제거, 중복 공백 정리 등)
   const cleaned = cleanUp(rawTitle);
 
