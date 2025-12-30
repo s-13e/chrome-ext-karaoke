@@ -32,9 +32,6 @@ export function generateLinearGradientCSS(gradient: LinearGradientOptions): {
   backgroundClip: string;
   WebkitBackgroundClip: string;
   WebkitTextFillColor: string;
-  WebkitTextStroke: string;
-  textShadow: string;
-  filter: string;
   color: string;
 } | null {
   if (!gradient.enabled) {
@@ -52,10 +49,6 @@ export function generateLinearGradientCSS(gradient: LinearGradientOptions): {
     backgroundClip: 'text',
     WebkitBackgroundClip: 'text', // PascalCase로 변경 (React inline style 형식)
     WebkitTextFillColor: 'transparent', // PascalCase로 변경
-    WebkitTextStroke: '0.1px rgba(0, 0, 0, 0.6)', // 얇은 검정 테두리
-    textShadow: 'none', // text-shadow는 gradient를 가리므로 제거
-    // stroke + drop-shadow 조합으로 배경과 확실히 구분
-    filter: 'drop-shadow(rgba(0, 0, 0, 0.6) 0px 0px 4px)',
     color: '#fff', // Full과 동일한 fallback
   };
 }
