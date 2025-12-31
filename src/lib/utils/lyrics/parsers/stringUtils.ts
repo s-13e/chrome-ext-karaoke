@@ -273,6 +273,13 @@ export function removeExtraInfo(str: string): string {
   const extraKeywords = EXTRA_KEYWORDS.slice().sort((a, b) => b.length - a.length); // 긴 키워드 우선
   let result = str;
 
+  // 0-1. 트랙 번호 제거 (구분자 . 만 사용)
+  // 예: "01. REBEL HEART" → "REBEL HEART"
+  // 예: "Track 5. Song Name" → "Song Name"
+  // 정상 타이틀 보호: "24K Magic", "7 Rings", "3005" 등은 영향 없음
+  result = result.replace(/^\d{1,3}\.\s*/, '').trim(); // 숫자 1~3자리 + . + 공백(선택)
+  result = result.replace(/^Track\s+\d+\.\s*/i, '').trim(); // Track + 숫자 + . + 공백(선택)
+
   // 0. 괄호 안에 EXTRA_KEYWORDS만 있는 경우 괄호 전체 제거
   // 예: "Blue Valentine (Inst.)" → "Blue Valentine"
   for (const kw of extraKeywords) {
