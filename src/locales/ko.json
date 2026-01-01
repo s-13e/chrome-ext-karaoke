@@ -96,6 +96,7 @@
   "extAcapellaHeadsetWarning": "스피커로 재생하면 YouTube 오디오가 녹음에 포함됩니다.",
   "extAcapellaMicrophoneLabel": "🎤 마이크 선택:",
   "extAcapellaOutputDeviceLabel": "🔊 출력 기기:",
+  "extAcapellaOutputDeviceRecommendation": "💡 PC 설정에서 헤드셋이나 이어폰을 기본 출력 기기로 변경하는 것을 권장합니다.",
   "extAcapellaNoOutputDevices": "출력 기기를 찾을 수 없습니다.",
   "extAcapellaConfirmButton": "확인 및 녹음 준비",
   "extAcapellaReadyDescription": "녹음 준비가 완료되었습니다!",

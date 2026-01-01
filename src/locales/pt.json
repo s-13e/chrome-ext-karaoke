@@ -96,6 +96,7 @@
   "extAcapellaHeadsetWarning": "Reproduzir através de alto-falantes incluirá o áudio do YouTube na gravação.",
   "extAcapellaMicrophoneLabel": "🎤 Selecionar microfone:",
   "extAcapellaOutputDeviceLabel": "🔊 Dispositivos de saída:",
+  "extAcapellaOutputDeviceRecommendation": "💡 Recomendamos configurar fones de ouvido como dispositivo de saída padrão nas configurações do PC.",
   "extAcapellaNoOutputDevices": "Nenhum dispositivo de saída encontrado.",
   "extAcapellaConfirmButton": "Confirmar e preparar gravação",
   "extAcapellaReadyDescription": "A gravação está pronta!",

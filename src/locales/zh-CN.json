@@ -96,6 +96,7 @@
   "extAcapellaHeadsetWarning": "使用扬声器播放会将YouTube音频包含在录音中。",
   "extAcapellaMicrophoneLabel": "🎤 选择麦克风:",
   "extAcapellaOutputDeviceLabel": "🔊 输出设备:",
+  "extAcapellaOutputDeviceRecommendation": "💡 我们建议在PC设置中将耳机或耳塞设置为默认输出设备。",
   "extAcapellaNoOutputDevices": "未找到输出设备。",
   "extAcapellaConfirmButton": "确认并准备录音",
   "extAcapellaReadyDescription": "录音准备就绪！",

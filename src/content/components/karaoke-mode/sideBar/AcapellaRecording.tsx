@@ -127,14 +127,25 @@ export const AcapellaRecording: React.FC<AcapellaRecordingProps> = ({ onBack, ly
     console.log('[AcapellaRecording] 파일 저장');
 
     if (recordedAudioUrl) {
-      const timestamp = new Date().getTime();
+      const now = new Date();
+      const timestamp = now.getTime();
+
+      // 날짜/시간 형식: YYYYMMDD_HHMMSS
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      const dateTimeString = `${year}${month}${day}_${hours}${minutes}${seconds}`;
+
       // YouTube 제목을 파일명에 포함 (모든 언어의 문자, 숫자, 공백, 하이픈 허용)
       const sanitizedTitle = videoTitle
         .replace(/[^\p{L}\p{N}\s-]/gu, '')
         .substring(0, RECORDING_CONFIG.MAX_FILENAME_LENGTH);
       const filename = sanitizedTitle
-        ? `${sanitizedTitle}-${timestamp}${RECORDING_FILE_CONFIG.FILE_EXTENSION}`
-        : `${RECORDING_FILE_CONFIG.DEFAULT_FILENAME_PREFIX}${timestamp}${RECORDING_FILE_CONFIG.FILE_EXTENSION}`;
+        ? `${sanitizedTitle}_${dateTimeString}${RECORDING_FILE_CONFIG.FILE_EXTENSION}`
+        : `${RECORDING_FILE_CONFIG.DEFAULT_FILENAME_PREFIX}${dateTimeString}${RECORDING_FILE_CONFIG.FILE_EXTENSION}`;
 
       try {
         // Blob을 Base64로 변환
@@ -422,7 +433,7 @@ export const AcapellaRecording: React.FC<AcapellaRecordingProps> = ({ onBack, ly
           kind: device.kind,
         }));
 
-      // 출력 기기 (스피커/헤드셋)
+      // 출력 기기 (스피커/헤드셋) - 기본 출력 기기만 표시
       const audioOutputs = devices
         .filter((device) => device.kind === 'audiooutput')
         .map((device) => ({
@@ -433,8 +444,14 @@ export const AcapellaRecording: React.FC<AcapellaRecordingProps> = ({ onBack, ly
           kind: device.kind,
         }));
 
+      // 실제 활성 출력 기기만 표시 (deviceId가 'default'인 기기 하나만)
+      const defaultOutputDevice = audioOutputs.filter((device) => device.deviceId === 'default');
+
+      // 'default' 기기가 없으면 첫 번째 기기만 표시
+      const filteredOutputs = defaultOutputDevice.length > 0 ? defaultOutputDevice : audioOutputs.slice(0, 1);
+
       setAudioDevices(audioInputs);
-      setOutputDevices(audioOutputs);
+      setOutputDevices(filteredOutputs);
 
       // 기본 마이크 선택
       if (audioInputs.length > 0 && !selectedMicrophone && audioInputs[0]) {
@@ -510,10 +527,11 @@ export const AcapellaRecording: React.FC<AcapellaRecordingProps> = ({ onBack, ly
    * 기기 확인 완료 및 녹음 준비
    */
   const handleConfirmDevices = async () => {
-    // 0. 선택한 마이크가 실제로 작동하는지 검증
+    // 0. 선택한 마이크가 실제로 작동하는지 검증 (기본 연결 확인만)
     if (selectedMicrophone) {
       try {
         console.log('[AcapellaRecording] 선택한 마이크 검증 중:', selectedMicrophone);
+
         const testStream = await navigator.mediaDevices.getUserMedia({
           audio: { deviceId: { exact: selectedMicrophone } },
         });
@@ -536,44 +554,35 @@ export const AcapellaRecording: React.FC<AcapellaRecordingProps> = ({ onBack, ly
       }
     }
 
-    // 1. 스피커만 있는 경우 차단 (다국어 키워드 지원)
-    const hasSpeakerOnly =
+    // 1. 현재 활성 출력 기기(default)가 스피커인지 확인
+    // 출력 기기가 스피커면 유튜브 오디오가 마이크에 들어갈 수 있으므로 차단
+    const isActiveSpeaker =
       outputDevices.length > 0 &&
-      outputDevices.every((device) => {
+      outputDevices.some((device) => {
         const label = device.label.toLowerCase();
-        return (
-          AUDIO_DEVICE_KEYWORDS.SPEAKER.some((keyword) => label.includes(keyword.toLowerCase())) ||
-          device.deviceId === 'default'
-        );
+        return AUDIO_DEVICE_KEYWORDS.SPEAKER.some((keyword) => label.includes(keyword.toLowerCase()));
       });
 
-    if (hasSpeakerOnly) {
+    // 헤드셋 키워드가 있는지 확인
+    const isActiveHeadset =
+      outputDevices.length > 0 &&
+      outputDevices.some((device) => {
+        const label = device.label.toLowerCase();
+        return AUDIO_DEVICE_KEYWORDS.HEADSET.some((keyword) => label.includes(keyword.toLowerCase()));
+      });
+
+    // 스피커로 출력 중이면 차단
+    if (isActiveSpeaker) {
       alert('⚠️ ' + t('extAcapellaHeadsetNotConnected') + '\n\n' + t('extAcapellaHeadsetWarning'));
       return;
     }
 
-    // 2. 헤드셋이 감지되지 않은 경우 경고
-    if (!hasHeadsetConnected) {
+    // 헤드셋 키워드가 없고 스피커도 아닌 경우 경고 (불명확한 출력 기기)
+    if (!isActiveHeadset) {
       const proceed = window.confirm(
         '⚠️ ' + t('extAcapellaHeadsetNotConnected') + '\n\n' + t('extAcapellaHeadsetWarning'),
       );
       if (!proceed) {
-        return;
-      }
-    }
-
-    // 3. 스피커와 헤드셋이 모두 있는 경우 추가 경고
-    const hasBothSpeakerAndHeadset =
-      outputDevices.some((device) => {
-        const label = device.label.toLowerCase();
-        return AUDIO_DEVICE_KEYWORDS.SPEAKER.some((keyword) => label.includes(keyword.toLowerCase()));
-      }) && hasHeadsetConnected;
-
-    if (hasBothSpeakerAndHeadset) {
-      const confirmed = window.confirm(
-        '⚠️ ' + t('extAcapellaHeadsetConnected') + '\n\n' + t('extAcapellaHeadsetCheckConfirm'),
-      );
-      if (!confirmed) {
         return;
       }
     }
@@ -938,6 +947,7 @@ export const AcapellaRecording: React.FC<AcapellaRecordingProps> = ({ onBack, ly
             {/* 출력 기기 목록 */}
             <div className={styles.deviceList}>
               <label className={styles.deviceLabel}>{t('extAcapellaOutputDeviceLabel')}</label>
+              <p className={styles.hint}>{t('extAcapellaOutputDeviceRecommendation')}</p>
               <ul className={styles.deviceItems}>
                 {outputDevices.length > 0 ? (
                   outputDevices.map((device) => (

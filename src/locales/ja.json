@@ -96,6 +96,7 @@
   "extAcapellaHeadsetWarning": "スピーカーで再生すると、YouTube音声が録音に含まれます。",
   "extAcapellaMicrophoneLabel": "🎤 マイク選択:",
   "extAcapellaOutputDeviceLabel": "🔊 出力デバイス:",
+  "extAcapellaOutputDeviceRecommendation": "💡 PC設定でヘッドセットまたはイヤホンをデフォルトの出力デバイスに設定することをお勧めします。",
   "extAcapellaNoOutputDevices": "出力デバイスが見つかりません。",
   "extAcapellaConfirmButton": "確認して録音準備",
   "extAcapellaReadyDescription": "録音準備が完了しました！",

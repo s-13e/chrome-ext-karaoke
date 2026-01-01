@@ -134,8 +134,15 @@ class OverlayManager {
   /** 특정 타입 Overlay container visibility 조절 */
   public setVisibility(type: OverlayType, visible: boolean): void {
     const container = this.getContainer(type);
-    if (!container) return;
+    if (!container) {
+      console.warn(`[OverlayManager] setVisibility 실패: ${type} container가 존재하지 않음 (visible: ${visible})`);
+      return;
+    }
+    const prevDisplay = container.style.display;
     container.style.display = visible ? '' : 'none';
+    console.log(
+      `[OverlayManager] ${type} 가시성 변경: ${visible ? '표시' : '숨김'} (display: "${prevDisplay}" → "${container.style.display}")`,
+    );
   }
 
   // 싱글톤 인스턴스

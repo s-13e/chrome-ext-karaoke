@@ -96,6 +96,7 @@
   "extAcapellaHeadsetWarning": "Playing through speakers will include YouTube audio in recording.",
   "extAcapellaMicrophoneLabel": "🎤 Select Microphone:",
   "extAcapellaOutputDeviceLabel": "🔊 Output Devices:",
+  "extAcapellaOutputDeviceRecommendation": "💡 We recommend setting headset or earphones as the default output device in your PC settings.",
   "extAcapellaNoOutputDevices": "No output devices found.",
   "extAcapellaConfirmButton": "Confirm and Prepare Recording",
   "extAcapellaReadyDescription": "Recording is ready!",
