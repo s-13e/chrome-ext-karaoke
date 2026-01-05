@@ -314,7 +314,10 @@ import {
     removeSongInfoVideoTimeListener();
 
     latestLyrics = [];
-    overlayManager.setVisibility('songInfo', false);
+    // songInfo container가 존재할 때만 숨김 처리
+    if (overlayManager.getContainer('songInfo')) {
+      overlayManager.setVisibility('songInfo', false);
+    }
 
     // 최신 상태 반영 위해 화면 재렌더링
     renderLyricsOverlay(latestLyrics);
@@ -635,8 +638,8 @@ import {
     // 기존 리스너 제거
     removeSongInfoVideoTimeListener();
 
-    overlayManager.setVisibility('songInfo', true);
     overlayManager.renderOverlay('songInfo', <SongInfoOverlay title={title} artist={artist} lyricsSource="LRCLIB" />);
+    overlayManager.setVisibility('songInfo', true);
 
     // 영상 재생 시간 기준으로 자동 숨김 (광고 시간 제외)
     const videoElem = document.querySelector('video');
@@ -771,6 +774,12 @@ import {
           const { offset, lyrics } = message.payload;
           console.log(`[content] APPLY_OFFSET_LYRICS 수신 → offset: ${offset}, 가사 길이: ${lyrics.length}`);
           onLyricsUpdated(lyrics);
+          break;
+        }
+        case 'RESET_OFFSET_TO_ORIGINAL': {
+          console.log('[content] RESET_OFFSET_TO_ORIGINAL 수신 - 페이지 새로고침하여 원본 가사 복원');
+          // 페이지 새로고침하여 원본 가사 로드 (가장 안전하고 간단한 방법)
+          window.location.reload();
           break;
         }
       }
@@ -1298,9 +1307,23 @@ import {
 
       renderSongInfo(finalLyricsResult.title || 'Unknown', finalLyricsResult.artist || 'Unknown');
 
-      // 5) 광고 종료 후 즉시 가사 렌더링
-      onLyricsUpdated(parsedLyrics);
-      await analyzeAudioAndRender(videoElem, meta, effectiveLyricsDuration, parsedLyrics);
+      // 5) 저장된 오프셋 확인 및 자동 적용
+      const { getVideoOffset } = await import('@lib/utils/storage/videoOffsetStorage');
+      const { applyOffsetToLyrics } = await import('@lib/utils/lyrics/display/lyricsOffset');
+
+      const savedData = await getVideoOffset(videoId);
+      let finalParsedLyrics = parsedLyrics;
+
+      if (savedData && savedData.offset !== 0) {
+        console.log(`[AutoOffset] 저장된 오프셋 발견 (videoId: ${videoId}, offset: ${savedData.offset}초) - 자동 적용`);
+        finalParsedLyrics = applyOffsetToLyrics(parsedLyrics, savedData.offset, 0);
+      } else {
+        console.log(`[AutoOffset] 저장된 오프셋 없음 - 원본 가사 사용`);
+      }
+
+      // 6) 광고 종료 후 즉시 가사 렌더링 (오프셋 적용된 가사)
+      onLyricsUpdated(finalParsedLyrics);
+      await analyzeAudioAndRender(videoElem, meta, effectiveLyricsDuration, finalParsedLyrics);
 
       contentLogger.info('Lyrics rendering completed', {
         videoId,

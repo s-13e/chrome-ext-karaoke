@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AcapellaRecording } from './sideBar/AcapellaRecording';
 import { RecordingsList } from './sideBar/RecordingsList';
+import { SyncOffsetList } from './sideBar/SyncOffsetList';
 import { ChartCategoryMenu } from './sideBar/ChartCategoryMenu';
 import { PopularChart } from './sideBar/PopularChart';
 import { Line } from '@lib/types/lyrics';
@@ -19,6 +20,7 @@ type SidebarView =
   | 'chart-list' // 특정 차트의 곡 목록
   | 'acapella'
   | 'recordings-list'
+  | 'sync-offset-list' // 싱크셋 목록
   | 'analysis';
 
 interface SidebarContainerProps {
@@ -75,6 +77,9 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, widt
           <button className={styles.sidebarButton} onClick={() => handleMenuClick('recordings-list')}>
             {t('extSidebarRecordingsList')}
           </button>
+          <button className={styles.sidebarButton} onClick={() => handleMenuClick('sync-offset-list')}>
+            {t('extSidebarSyncOffsetList')}
+          </button>
         </div>
       </div>
     );
@@ -94,6 +99,15 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, widt
     return (
       <div className={styles.sidebarContainer} style={sidebarStyle}>
         <RecordingsList onBack={handleBackToMain} />
+      </div>
+    );
+  }
+
+  // 싱크셋 목록 화면
+  if (currentView === 'sync-offset-list') {
+    return (
+      <div className={styles.sidebarContainer} style={sidebarStyle}>
+        <SyncOffsetList onBack={handleBackToMain} />
       </div>
     );
   }

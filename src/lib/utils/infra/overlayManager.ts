@@ -140,9 +140,27 @@ class OverlayManager {
     }
     const prevDisplay = container.style.display;
     container.style.display = visible ? '' : 'none';
+
+    // 추가 디버깅: 실제 DOM 상태 확인
+    const computedStyle = window.getComputedStyle(container);
+    const isInDOM = document.body.contains(container);
+    const childCount = container.children.length;
+
     console.log(
       `[OverlayManager] ${type} 가시성 변경: ${visible ? '표시' : '숨김'} (display: "${prevDisplay}" → "${container.style.display}")`,
     );
+
+    if (visible) {
+      console.log(
+        `[OverlayManager] ${type} 상태 확인:`,
+        `DOM 존재: ${isInDOM},`,
+        `자식 요소: ${childCount}개,`,
+        `computed display: "${computedStyle.display}",`,
+        `visibility: "${computedStyle.visibility}",`,
+        `opacity: "${computedStyle.opacity}",`,
+        `z-index: "${computedStyle.zIndex}"`,
+      );
+    }
   }
 
   // 싱글톤 인스턴스
