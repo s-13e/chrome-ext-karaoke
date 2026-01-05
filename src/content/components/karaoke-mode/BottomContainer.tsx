@@ -22,6 +22,9 @@ import { useTranslation } from 'react-i18next';
 import { Line } from '@lib/types/lyrics';
 import { applyOffsetToLyrics } from '@lib/utils/lyrics/display/lyricsOffset';
 import { TextEffectsModal } from './TextEffectsModal';
+import { extractVideoIdFromUrl } from '@lib/utils/platform/videoDetection';
+import { saveVideoOffset, getVideoOffset } from '@lib/utils/storage/videoOffsetStorage';
+import { Toast } from '../common/Toast';
 
 // 아이콘 공통 스타일 상수
 const ICON_SIZE = 28;
@@ -107,6 +110,9 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
   const [calculatedOffset, setCalculatedOffset] = React.useState<number>(0);
   const [syncStarted, setSyncStarted] = React.useState<boolean>(false); // 시작 버튼을 눌렀는지 추적
 
+  // Toast 알림 상태
+  const [showSyncSavedToast, setShowSyncSavedToast] = React.useState<boolean>(false);
+
   // 원본 가사 보관 (초기화용) - lyrics prop이 변경될 때만 업데이트
   const originalLyricsRef = React.useRef<Line[]>(lyrics);
   React.useEffect(() => {
@@ -116,6 +122,71 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
       console.log('[BottomContainer] 원본 가사 업데이트:', lyrics.length, '줄');
     }
   }, [lyrics]);
+
+  // 페이지 로드 시 저장된 오프셋 자동 적용
+  React.useEffect(() => {
+    const loadSavedOffset = async () => {
+      const videoId = extractVideoIdFromUrl(window.location.href);
+      if (!videoId || lyrics.length === 0) {
+        return;
+      }
+
+      const savedData = await getVideoOffset(videoId);
+      if (savedData && savedData.offset !== 0) {
+        console.log(`[BottomContainer] 저장된 오프셋 발견 (videoId: ${videoId}, offset: ${savedData.offset}초)`);
+
+        // 원본 가사를 기준으로 오프셋 적용 (lyrics prop이 아닌 originalLyricsRef 사용)
+        const originalLyrics = originalLyricsRef.current;
+        const appliedLyrics = applyOffsetToLyrics(originalLyrics, savedData.offset, 0);
+        setCurrentOffset(savedData.offset);
+        onOffsetChange?.(savedData.offset, appliedLyrics);
+
+        // content script에 메시지 전송하여 즉시 반영
+        chrome.runtime.sendMessage(
+          {
+            type: 'APPLY_OFFSET_LYRICS',
+            payload: { offset: savedData.offset, lyrics: appliedLyrics },
+          },
+          () => {
+            if (chrome.runtime.lastError) {
+              console.warn('[BottomContainer] 저장된 오프셋 적용 실패:', chrome.runtime.lastError.message);
+            } else {
+              console.log(`[BottomContainer] 저장된 오프셋 자동 적용 완료 (offset: ${savedData.offset}초)`);
+            }
+          },
+        );
+      }
+    };
+
+    loadSavedOffset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lyrics.length]);
+
+  // 외부(SyncOffsetList 등)에서 APPLY_OFFSET_LYRICS 메시지 수신 시 state 업데이트
+  React.useEffect(() => {
+    const handleOffsetMessage = (
+      message: { type: string; payload?: { offset: number; lyrics: Line[] } },
+      _sender: chrome.runtime.MessageSender,
+      sendResponse: (response?: unknown) => void,
+    ) => {
+      if (message.type === 'APPLY_OFFSET_LYRICS' && message.payload) {
+        const { offset, lyrics: appliedLyrics } = message.payload;
+        console.log(`[BottomContainer] APPLY_OFFSET_LYRICS 메시지 수신 (offset: ${offset}초)`);
+
+        // BottomContainer의 state 업데이트
+        setCurrentOffset(offset);
+        onOffsetChange?.(offset, appliedLyrics);
+
+        sendResponse({ success: true });
+      }
+    };
+
+    chrome.runtime.onMessage.addListener(handleOffsetMessage);
+
+    return () => {
+      chrome.runtime.onMessage.removeListener(handleOffsetMessage);
+    };
+  }, [onOffsetChange]);
 
   /**
    * YouTube 동영상 플레이어 제어
@@ -691,7 +762,7 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
   /**
    * 오프셋 적용 버튼
    */
-  const handleApplyOffset = () => {
+  const handleApplyOffset = async () => {
     const finalOffset = calculatedOffset;
 
     // 원본 가사를 기준으로 오프셋 적용
@@ -717,6 +788,20 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
       },
     );
 
+    // Chrome storage에 오프셋 저장
+    const videoId = extractVideoIdFromUrl(window.location.href);
+    if (videoId) {
+      const videoTitle = document.querySelector('h1.ytd-watch-metadata yt-formatted-string')?.textContent || 'Unknown';
+      await saveVideoOffset({
+        videoId,
+        title: videoTitle.trim(),
+        offset: finalOffset,
+        thumbnail: `https://i.ytimg.com/vi/${videoId}/default.jpg`,
+        lastModified: Date.now(),
+      });
+      console.log(`[BottomContainer] 오프셋 storage 저장 완료 (videoId: ${videoId}, offset: ${finalOffset}초)`);
+    }
+
     // 영상을 0초로 이동하고 재생하여 적용된 오프셋 확인
     playVideoFromStart();
     console.log('[BottomContainer] 적용 후 영상 0초부터 재생');
@@ -726,12 +811,15 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
     setIsSyncRecording(false);
     setUserClickTime(null);
     setCalculatedOffset(0);
+
+    // Toast 알림 표시
+    setShowSyncSavedToast(true);
   };
 
   /**
    * 오프셋 초기화 버튼 - offset = 0 (원본 가사 타임스탬프)으로 되돌리기
    */
-  const handleResetOffset = () => {
+  const handleResetOffset = async () => {
     const resetOffset = 0;
 
     // 원본 가사를 그대로 사용 (offset 0 적용 - 원본 타임스탬프 그대로)
@@ -756,6 +844,20 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
         }
       },
     );
+
+    // Chrome storage에 오프셋 0으로 업데이트 (삭제하지 않고 0으로 저장)
+    const videoId = extractVideoIdFromUrl(window.location.href);
+    if (videoId) {
+      const videoTitle = document.querySelector('h1.ytd-watch-metadata yt-formatted-string')?.textContent || 'Unknown';
+      await saveVideoOffset({
+        videoId,
+        title: videoTitle.trim(),
+        offset: resetOffset,
+        thumbnail: `https://i.ytimg.com/vi/${videoId}/default.jpg`,
+        lastModified: Date.now(),
+      });
+      console.log(`[BottomContainer] 오프셋 초기화 storage 저장 완료 (videoId: ${videoId}, offset: 0초)`);
+    }
 
     // 영상을 0초로 이동하고 재생하여 초기화된 오프셋 확인
     playVideoFromStart();
@@ -1078,6 +1180,11 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* 싱크셋 저장 완료 Toast 알림 */}
+      {showSyncSavedToast && (
+        <Toast message={t('extKaraokeSyncSaved')} duration={3000} onClose={() => setShowSyncSavedToast(false)} />
       )}
     </>
   );

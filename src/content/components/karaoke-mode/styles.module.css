@@ -193,8 +193,9 @@
   color: #e0e0e0;
   font-size: 13px;
   margin: 0;
-  text-align: center;
+  text-align: left;
   line-height: 1.4;
+  white-space: pre-line;
 }
 
 /* 확인 문구 */
