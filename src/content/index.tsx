@@ -1802,6 +1802,22 @@ import {
         contentLogger.info('Content app initialization completed successfully');
       }
 
+      // 수동 가사 검색으로 가사 선택 시 이벤트 리스너
+      window.addEventListener('manual-lyrics-selected', (event: Event) => {
+        const customEvent = event as CustomEvent<{ lyrics: Line[] }>;
+        const newLyrics = customEvent.detail.lyrics;
+        console.log('[Index] 수동 가사 검색으로 가사 선택됨:', newLyrics.length, '줄');
+
+        // 가사 업데이트
+        karaokeModeManager.setLyrics(newLyrics);
+
+        // 가사 오버레이 렌더링
+        renderLyricsOverlay(newLyrics);
+
+        // 광고 모니터링 시작
+        startLyricsAdMonitoringIfNeeded();
+      });
+
       // 온체인지 리스너
       chrome.storage.onChanged.addListener((changes, area) => {
         if (area === 'sync' && STORAGE_KEYS.CONTENT_ENABLED in changes) {

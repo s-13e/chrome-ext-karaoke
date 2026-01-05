@@ -8,19 +8,21 @@ import { RecordingsList } from './sideBar/RecordingsList';
 import { SyncOffsetList } from './sideBar/SyncOffsetList';
 import { ChartCategoryMenu } from './sideBar/ChartCategoryMenu';
 import { PopularChart } from './sideBar/PopularChart';
+import { ManualLyricsSearch } from './sideBar/ManualLyricsSearch';
 import { Line } from '@lib/types/lyrics';
 import { ChartCategory } from '@lib/types/chart';
 import styles from './styles.module.css';
 
 type SidebarView =
   | 'main'
-  | 'reservation'
-  | 'queue'
+  | 'reservation' // 예약
+  | 'queue' // 예약 전환
   | 'chart-category' // 차트 카테고리 선택
   | 'chart-list' // 특정 차트의 곡 목록
   | 'acapella'
   | 'recordings-list'
   | 'sync-offset-list' // 싱크셋 목록
+  | 'manual-lyrics-search' // 수동 가사 검색
   | 'analysis';
 
 interface SidebarContainerProps {
@@ -63,11 +65,24 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, widt
     setCurrentView('chart-category');
   };
 
+  const handleLyricsSelected = (newLyrics: Line[]) => {
+    console.log('[SidebarContainer] 수동 검색으로 가사 선택:', newLyrics.length, '줄');
+    // 커스텀 이벤트로 가사 업데이트 요청
+    window.dispatchEvent(
+      new CustomEvent('manual-lyrics-selected', {
+        detail: { lyrics: newLyrics },
+      }),
+    );
+  };
+
   // 메인 메뉴 화면
   if (currentView === 'main') {
     return (
       <div className={styles.sidebarContainer} style={sidebarStyle}>
         <div className={styles.sidebarContent}>
+          <button className={styles.sidebarButton} onClick={() => handleMenuClick('manual-lyrics-search')}>
+            {t('extManualSearchTitle')}
+          </button>
           <button className={styles.sidebarButton} onClick={() => handleMenuClick('chart-category')}>
             {t('extSidebarPopularChart')}
           </button>
@@ -130,17 +145,19 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, widt
     );
   }
 
+  // 수동 가사 검색 화면
+  if (currentView === 'manual-lyrics-search') {
+    return (
+      <div className={styles.sidebarContainer} style={sidebarStyle}>
+        <ManualLyricsSearch onBack={handleBackToMain} onLyricsSelected={handleLyricsSelected} />
+      </div>
+    );
+  }
+
   // 다른 메뉴들은 아직 구현 전
   return (
     <div className={styles.sidebarContainer} style={sidebarStyle}>
-      <div className={styles.sidebarContent}>
-        <button className={styles.sidebarButton} onClick={handleBackToMain}>
-          {t('extSidebarBackButton')}
-        </button>
-        <p style={{ color: '#fff', textAlign: 'center', marginTop: '20px' }}>
-          {currentView} {t('extSidebarComingSoon')}
-        </p>
-      </div>
+      <div className={styles.sidebarContent}>{/* 구현 예정 메시지 */}</div>
     </div>
   );
 };

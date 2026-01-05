@@ -34,12 +34,13 @@ export interface ChartCategoryInfo {
  */
 export interface ChartItem {
   rank: number; // 순위
-  videoId: string; // YouTube 비디오 ID
+  videoId: string; // YouTube 비디오 ID (MV)
   title: string; // 곡 제목
   artist: string; // 아티스트명
   thumbnailUrl: string; // 썸네일 URL
   viewCount?: number; // 조회수 (옵션)
   publishedAt?: string; // 발행일 (옵션)
+  mrVideoId?: string; // MR (반주) 비디오 ID (있으면 MR 버튼 활성화)
 }
 
 /**

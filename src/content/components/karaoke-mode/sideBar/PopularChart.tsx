@@ -77,10 +77,9 @@ export const PopularChart: React.FC<PopularChartProps> = ({ category, onBackToCa
     window.location.href = `https://www.youtube.com/watch?v=${videoId}`;
   };
 
-  const handlePlayMR = (videoId: string) => {
-    // MR (반주) 재생 - 추후 구현
-    console.log(`[PopularChart] MR 재생 요청: ${videoId}`);
-    // TODO: MR 링크 연결 로직 추가
+  const handlePlayMR = (mrVideoId: string) => {
+    // MR (반주) 재생 - YouTube 영상 페이지로 이동
+    window.location.href = `https://www.youtube.com/watch?v=${mrVideoId}`;
   };
 
   return (
@@ -176,8 +175,8 @@ export const PopularChart: React.FC<PopularChartProps> = ({ category, onBackToCa
                   </p>
                 </div>
 
-                {/* MV/MR 버튼 그룹 */}
-                <div style={{ display: 'flex', gap: '6px', marginLeft: '8px' }}>
+                {/* MV/MR 버튼 그룹 - 수직 배치 */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginLeft: '8px' }}>
                   {/* MV 버튼 */}
                   <button
                     onClick={(e) => {
@@ -205,29 +204,43 @@ export const PopularChart: React.FC<PopularChartProps> = ({ category, onBackToCa
                     MV
                   </button>
 
-                  {/* MR 버튼 */}
+                  {/* MR 버튼 - mrVideoId 있으면 활성화, 없으면 비활성화 */}
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handlePlayMR(item.videoId);
-                    }}
+                    onClick={
+                      item.mrVideoId
+                        ? (e) => {
+                            e.stopPropagation();
+                            handlePlayMR(item.mrVideoId!);
+                          }
+                        : undefined
+                    }
+                    disabled={!item.mrVideoId}
                     style={{
                       padding: '6px 12px',
-                      backgroundColor: SIDEBAR_COLORS.primary,
-                      color: SIDEBAR_COLORS.textPrimary,
+                      backgroundColor: item.mrVideoId ? SIDEBAR_COLORS.primary : '#666666',
+                      color: item.mrVideoId ? SIDEBAR_COLORS.textPrimary : '#999999',
                       border: 'none',
                       borderRadius: '4px',
                       fontSize: '11px',
                       fontWeight: 'bold',
-                      cursor: 'pointer',
+                      cursor: item.mrVideoId ? 'pointer' : 'not-allowed',
+                      opacity: item.mrVideoId ? 1 : 0.6,
                       transition: 'background-color 0.2s',
                     }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = SIDEBAR_COLORS.primaryHover;
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = SIDEBAR_COLORS.primary;
-                    }}
+                    onMouseEnter={
+                      item.mrVideoId
+                        ? (e) => {
+                            e.currentTarget.style.backgroundColor = SIDEBAR_COLORS.primaryHover;
+                          }
+                        : undefined
+                    }
+                    onMouseLeave={
+                      item.mrVideoId
+                        ? (e) => {
+                            e.currentTarget.style.backgroundColor = SIDEBAR_COLORS.primary;
+                          }
+                        : undefined
+                    }
                   >
                     MR
                   </button>
