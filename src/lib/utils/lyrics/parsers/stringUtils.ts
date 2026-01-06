@@ -378,7 +378,11 @@ function preprocessTitleOrArtist(str: string): string {
   const noDiacritics = removeDiacritics(normalized);
 
   // 3) 악센트 제거된 문자열 넘겨서 영어 추출 및 특수문자 정리
-  return extractEnglishOnly(noDiacritics);
+  const result = extractEnglishOnly(noDiacritics);
+
+  // 4) 한글이 포함된 경우 NFC로 재정규화 (removeDiacritics가 NFD로 변환하므로)
+  //    URL 인코딩 시 NFD는 자소 분리되어 API 검색 실패함
+  return result.normalize('NFC');
 }
 
 function extractEnglishOnly(str: string): string {
