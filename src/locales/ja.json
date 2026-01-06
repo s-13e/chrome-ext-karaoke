@@ -206,5 +206,18 @@
   "extManualSearchNoResults": "検索結果がありません。",
   "extManualSearchNoSyncedLyrics": "同期された歌詞がありません。",
   "extManualSearchApiError": "検索中にエラーが発生しました。もう一度お試しください。",
-  "extManualSearchParseError": "歌詞の解析に失敗しました。"
+  "extManualSearchParseError": "歌詞の解析に失敗しました。",
+  "extLyricsSyncMismatchTitle": "歌詞の同期が合っていませんか？",
+  "extLyricsSyncMismatchDescription": "下部の同期ボタンをお試しください。",
+  "extLyricsSyncMismatchAction": "同期を開く",
+  "extLyricsNotFoundTitle": "歌詞が表示されませんか？",
+  "extLyricsNotFoundDescription": "手動検索で歌詞を探してみてください。",
+  "extLyricsNotFoundAction": "手動検索",
+  "extSyncOffsetListTitle": "同期オフセットリスト",
+  "extSyncOffsetListEmpty": "保存されたオフセットがありません。",
+  "extSyncOffsetLabel": "オフセット",
+  "extSyncOffsetLastModified": "最終更新",
+  "extSyncOffsetDeleteConfirm": "「{{title}}」のオフセットを削除してもよろしいですか？",
+  "extSyncOffsetInvalidValue": "有効な数値を入力してください。",
+  "extSidebarSyncOffsetList": "同期オフセットリスト"
 }

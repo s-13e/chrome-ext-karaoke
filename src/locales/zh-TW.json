@@ -206,5 +206,18 @@
   "extManualSearchNoResults": "未找到結果。",
   "extManualSearchNoSyncedLyrics": "沒有可用的同步歌詞。",
   "extManualSearchApiError": "搜尋時發生錯誤。請重試。",
-  "extManualSearchParseError": "歌詞解析失敗。"
+  "extManualSearchParseError": "歌詞解析失敗。",
+  "extLyricsSyncMismatchTitle": "歌詞同步不匹配？",
+  "extLyricsSyncMismatchDescription": "嘗試使用底部的同步按鈕。",
+  "extLyricsSyncMismatchAction": "打開同步",
+  "extLyricsNotFoundTitle": "看不到歌詞？",
+  "extLyricsNotFoundDescription": "嘗試手動搜尋來查找歌詞。",
+  "extLyricsNotFoundAction": "手動搜尋",
+  "extSyncOffsetListTitle": "同步偏移列表",
+  "extSyncOffsetListEmpty": "沒有保存的偏移。",
+  "extSyncOffsetLabel": "偏移",
+  "extSyncOffsetLastModified": "最後修改",
+  "extSyncOffsetDeleteConfirm": "您確定要刪除「{{title}}」的偏移嗎？",
+  "extSyncOffsetInvalidValue": "請輸入有效數字。",
+  "extSidebarSyncOffsetList": "同步偏移列表"
 }
