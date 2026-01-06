@@ -268,6 +268,20 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
     };
   }, [showOffsetModal, handleCloseOffsetModal, t]);
 
+  // ActionableToast에서 show-sync-panel 이벤트 수신
+  React.useEffect(() => {
+    const handleShowSyncPanel = () => {
+      console.log('[BottomContainer] show-sync-panel 이벤트 수신 - 싱크셋 모달 열기');
+      setShowOffsetModal(true);
+    };
+
+    window.addEventListener('show-sync-panel', handleShowSyncPanel);
+
+    return () => {
+      window.removeEventListener('show-sync-panel', handleShowSyncPanel);
+    };
+  }, []);
+
   // 텍스트 효과 모달 외부 클릭 감지
   React.useEffect(() => {
     if (!showTextEffectsModal) return;

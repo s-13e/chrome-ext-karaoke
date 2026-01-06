@@ -1,7 +1,7 @@
 // SidebarContainer.tsx
 // 가라오케 모드 오른쪽 사이드바 컨테이너
 // 가라오케 확장의 다양한 서비스 제공
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AcapellaRecording } from './sideBar/AcapellaRecording';
 import { RecordingsList } from './sideBar/RecordingsList';
@@ -74,6 +74,29 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, widt
       }),
     );
   };
+
+  // ActionableToast에서 발생하는 이벤트 리스너 등록
+  useEffect(() => {
+    const handleOpenManualSearch = () => {
+      console.log('[SidebarContainer] open-manual-search 이벤트 수신');
+      setCurrentView('manual-lyrics-search');
+    };
+
+    const handleOpenSyncSettings = () => {
+      console.log('[SidebarContainer] open-sync-settings 이벤트 수신');
+      // 싱크셋 기능은 BottomContainer에 있으므로, 해당 이벤트를 전달
+      // BottomContainer에서 처리하도록 이벤트 재전송
+      window.dispatchEvent(new CustomEvent('show-sync-panel'));
+    };
+
+    window.addEventListener('open-manual-search', handleOpenManualSearch);
+    window.addEventListener('open-sync-settings', handleOpenSyncSettings);
+
+    return () => {
+      window.removeEventListener('open-manual-search', handleOpenManualSearch);
+      window.removeEventListener('open-sync-settings', handleOpenSyncSettings);
+    };
+  }, []);
 
   // 메인 메뉴 화면
   if (currentView === 'main') {

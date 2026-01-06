@@ -33,6 +33,7 @@ const getSidebarWidth = () => {
 
 export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visible, lyrics }) => {
   const [isFullscreen, setIsFullscreen] = React.useState(false);
+  const [sidebarWidth, setSidebarWidth] = React.useState(getSidebarWidth());
 
   // 전체화면 상태 감지 및 처리
   useEffect(() => {
@@ -232,13 +233,36 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
       theaterModeButton.addEventListener('click', handleTheaterModeButtonClick);
     }
 
-    // 윈도우 리사이즈 시 플레이어 크기 재조정
+    // 윈도우 리사이즈 시 플레이어 크기 및 사이드바 너비 재조정
     const handleResize = () => {
+      const newSidebarWidth = getSidebarWidth();
+
+      // 사이드바 너비가 실제로 변경된 경우에만 상태 업데이트
+      setSidebarWidth((prevWidth) => {
+        if (prevWidth !== newSidebarWidth) {
+          console.log('[KaraokeModeContainer] 사이드바 너비 변경:', prevWidth, '→', newSidebarWidth);
+          return newSidebarWidth;
+        }
+        return prevWidth;
+      });
+
       const fullBleedContainer = document.querySelector<HTMLElement>('#full-bleed-container');
       if (fullBleedContainer) {
-        const SIDEBAR_WIDTH = getSidebarWidth();
-        fullBleedContainer.style.setProperty('width', `calc(100vw - ${SIDEBAR_WIDTH}px)`, 'important');
-        fullBleedContainer.style.setProperty('max-width', `calc(100vw - ${SIDEBAR_WIDTH}px)`, 'important');
+        // 너비 재조정
+        fullBleedContainer.style.setProperty('width', `calc(100vw - ${newSidebarWidth}px)`, 'important');
+        fullBleedContainer.style.setProperty('max-width', `calc(100vw - ${newSidebarWidth}px)`, 'important');
+
+        // 높이 재조정 (창 높이 변경 시 대응)
+        fullBleedContainer.style.setProperty(
+          'height',
+          `calc(100vh - ${YOUTUBE_TOOLBAR + BOTTOM_BAR_HEIGHT}px)`,
+          'important',
+        );
+        fullBleedContainer.style.setProperty(
+          'max-height',
+          `calc(100vh - ${YOUTUBE_TOOLBAR + BOTTOM_BAR_HEIGHT}px)`,
+          'important',
+        );
       }
     };
 
@@ -282,12 +306,9 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
   // 전체화면일 때는 커스텀 컨테이너들 숨김
   if (isFullscreen) return null;
 
-  // 현재 사이드바 너비 계산 (반응형)
-  const currentSidebarWidth = getSidebarWidth();
-
   return (
     <>
-      <SidebarContainer lyrics={lyrics} width={currentSidebarWidth} />
+      <SidebarContainer lyrics={lyrics} width={sidebarWidth} />
       <BottomContainer lyrics={lyrics} />
     </>
   );

@@ -1,4 +1,5 @@
 // ./index.tsx
+import React from 'react';
 import { App } from './App';
 import { i18nInstance, initializeI18n } from '@services/i18n';
 import { ErrorFallback } from '@components/common/ErrorFallback';
@@ -56,6 +57,7 @@ import {
   disableAutoDisable,
   shouldAutoDisable,
 } from '@lib/utils/storage/autoDisableStorage';
+import { ActionableToast } from './components/common/ActionableToast';
 
 (() => {
   // 전역 에러 핸들러 설정 (최상단)
@@ -415,6 +417,55 @@ import {
   }
 
   /**
+   * ActionableToast 렌더링 (React 기반)
+   */
+  let actionableToastRoot: ReactDOM.Root | null = null;
+
+  function showActionableToast(
+    title: string,
+    description: string,
+    actionText: string,
+    onAction: () => void,
+    icon?: React.ReactNode,
+  ) {
+    // 기존 토스트 제거
+    const existingContainer = document.getElementById('actionable-toast-container');
+    if (existingContainer) {
+      existingContainer.remove();
+      actionableToastRoot = null;
+    }
+
+    // 새 컨테이너 생성
+    const container = document.createElement('div');
+    container.id = 'actionable-toast-container';
+    container.style.position = 'fixed';
+    container.style.zIndex = '999999';
+    container.style.pointerEvents = 'none'; // 컨테이너는 클릭 차단 안 함
+    document.body.appendChild(container);
+
+    // React Root 생성 및 렌더링
+    actionableToastRoot = ReactDOM.createRoot(container);
+    actionableToastRoot.render(
+      <ActionableToast
+        title={title}
+        description={description}
+        actionText={actionText}
+        onAction={onAction}
+        icon={icon}
+        onClose={() => {
+          if (actionableToastRoot) {
+            actionableToastRoot.unmount();
+            actionableToastRoot = null;
+          }
+          if (container.parentNode) {
+            container.remove();
+          }
+        }}
+      />,
+    );
+  }
+
+  /**
    * MusicNoteButton 상태 업데이트 (DOM 직접 조작)
    */
   function updateMusicNoteButtonState(isVisible: boolean) {
@@ -660,6 +711,32 @@ import {
 
     // 가사 오버레이 제거
     overlayManager.cleanupOverlay('lyrics');
+
+    // 가사 없음 에러인 경우 ActionableToast 표시 (수동 검색 유도)
+    if (error.code === LyricsErrorCode.LRCLIB_NOT_FOUND) {
+      console.log('[Lyrics Error] 가사 없음 감지 - ActionableToast 표시');
+
+      showActionableToast(
+        i18nInstance.t('extLyricsNotFoundTitle'),
+        i18nInstance.t('extLyricsNotFoundDescription'),
+        i18nInstance.t('extLyricsNotFoundAction'),
+        () => {
+          // 수동 검색 버튼 클릭 액션
+          console.log('[ActionableToast] 수동 검색 버튼 클릭됨');
+
+          // 가라오케 모드가 활성화되어 있지 않다면 먼저 활성화
+          if (!karaokeModeManager.isVisible()) {
+            karaokeModeManager.toggleKaraokeMode();
+          }
+
+          // 수동 검색 패널 열기 이벤트 발생
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('open-manual-search'));
+          }, 500); // 가라오케 모드 활성화 대기
+        },
+        React.createElement('span', { style: { fontSize: '20px' } }, '🔍'),
+      );
+    }
 
     // 오류 UI 렌더링
     overlayManager.renderOverlay(
@@ -1296,12 +1373,36 @@ import {
         }
       }
 
-      const durationDiff = videoDurationSec - effectiveLyricsDuration;
-      if (durationDiff > 0 && durationDiff < 4) {
-        console.log('싱크 오류 가능성 있음, 추가 분석 진행');
+      const durationDiff = Math.abs(videoDurationSec - effectiveLyricsDuration);
+
+      // 가사 싱크 불일치 감지 (±3초 이상 차이)
+      if (durationDiff >= 3) {
+        console.log(`[Lyrics Sync] 싱크 불일치 감지 - 차이: ${durationDiff.toFixed(1)}초`);
+
+        // ActionableToast 표시 (싱크셋 유도)
+        showActionableToast(
+          i18nInstance.t('extLyricsSyncMismatchTitle'),
+          i18nInstance.t('extLyricsSyncMismatchDescription'),
+          i18nInstance.t('extLyricsSyncMismatchAction'),
+          () => {
+            // 싱크셋 버튼 클릭 액션
+            console.log('[ActionableToast] 싱크셋 버튼 클릭됨');
+
+            // 가라오케 모드가 활성화되어 있지 않다면 먼저 활성화
+            if (!karaokeModeManager.isVisible()) {
+              karaokeModeManager.toggleKaraokeMode();
+            }
+
+            // 싱크셋 패널 열기 이벤트 발생
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('open-sync-settings'));
+            }, 500); // 가라오케 모드 활성화 대기
+          },
+          React.createElement('span', { style: { fontSize: '20px' } }, '⚠️'),
+        );
       } else {
         console.debug(
-          `영상 길이 (${videoDurationSec}s)와 가사 길이 (${effectiveLyricsDuration}s) 차이: ${durationDiff}s`,
+          `[Lyrics Sync] 영상 길이 (${videoDurationSec}s)와 가사 길이 (${effectiveLyricsDuration}s) 차이: ${durationDiff.toFixed(1)}s - 정상 범위`,
         );
       }
 
