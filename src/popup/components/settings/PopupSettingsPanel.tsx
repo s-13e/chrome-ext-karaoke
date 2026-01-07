@@ -140,7 +140,8 @@ function MainMenu({ onNavigate, isDarkMode }: MainMenuProps) {
         <div className={styles.sectionLabel} style={{ color: isDarkMode ? '#888888' : '#666666' }}>
           {t('extGeneralSettings')}
         </div>
-        <button
+        {/* TODO: Re-enable FAQ after launch when actual user questions are collected */}
+        {/* <button
           className={styles.settingsButton}
           onClick={() => onNavigate('faq')}
           style={{
@@ -150,7 +151,7 @@ function MainMenu({ onNavigate, isDarkMode }: MainMenuProps) {
           }}
         >
           {t('extFAQ')}
-        </button>
+        </button> */}
         <button
           className={styles.settingsButton}
           onClick={() => onNavigate('contact')}
