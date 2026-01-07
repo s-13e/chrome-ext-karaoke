@@ -15,6 +15,7 @@
   "extGeneralSettings": "General Settings",
   "extBack": "Back",
   "extCancel": "Cancel",
+  "extConfirm": "Confirm",
   "extSave": "Save",
   "extDontSave": "Don't Save",
   "extPlay": "Play",
@@ -219,5 +220,14 @@
   "extManualSearchNoResults": "No results found.",
   "extManualSearchNoSyncedLyrics": "No synced lyrics available.",
   "extManualSearchApiError": "An error occurred during search. Please try again.",
-  "extManualSearchParseError": "Failed to parse lyrics."
+  "extManualSearchParseError": "Failed to parse lyrics.",
+  "extDebugTools": "Debug Tools",
+  "extViewLogs": "View Logs",
+  "extExportLogs": "Export Logs",
+  "extClearLogs": "Clear Logs",
+  "extLogsClearedSuccess": "All logs have been cleared.",
+  "extLogsViewedSuccess": "Logs copied to clipboard!",
+  "extLogsExportedSuccess": "Logs downloaded as JSON file and copied to clipboard!",
+  "extClearLogsConfirm": "Are you sure you want to clear all error logs?",
+  "extNoLogsToView": "No logs to view."
 }

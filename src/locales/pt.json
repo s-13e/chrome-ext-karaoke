@@ -15,6 +15,7 @@
   "extGeneralSettings": "Configurações gerais",
   "extBack": "Voltar",
   "extCancel": "Cancelar",
+  "extConfirm": "Confirmar",
   "extSave": "Salvar",
   "extDontSave": "Não salvar",
   "extPlay": "Reproduzir",
@@ -219,5 +220,14 @@
   "extGithubIssuesDesc": "Para desenvolvedores ou se preferir discussão pública, use o GitHub Issues.",
   "extOpenGithubIssues": "🐛 Abrir Problemas do GitHub",
   "extDarkMode": "Modo Escuro",
-  "extLanguageDesc": "A interface do usuário será fornecida no idioma selecionado."
+  "extLanguageDesc": "A interface do usuário será fornecida no idioma selecionado.",
+  "extDebugTools": "Ferramentas de depuração",
+  "extViewLogs": "Ver registros",
+  "extExportLogs": "Exportar registros",
+  "extClearLogs": "Limpar registros",
+  "extLogsClearedSuccess": "Todos os registros foram limpos.",
+  "extLogsViewedSuccess": "Registros copiados para a área de transferência!",
+  "extLogsExportedSuccess": "Registros baixados como arquivo JSON e copiados para a área de transferência!",
+  "extClearLogsConfirm": "Tem certeza de que deseja limpar todos os registros de erros?",
+  "extNoLogsToView": "Nenhum registro para visualizar."
 }

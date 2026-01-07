@@ -15,6 +15,7 @@
   "extGeneralSettings": "一般設定",
   "extBack": "戻る",
   "extCancel": "キャンセル",
+  "extConfirm": "確認",
   "extSave": "保存",
   "extDontSave": "保存しない",
   "extPlay": "再生",
@@ -219,5 +220,14 @@
   "extSyncOffsetLastModified": "最終更新",
   "extSyncOffsetDeleteConfirm": "「{{title}}」のオフセットを削除してもよろしいですか？",
   "extSyncOffsetInvalidValue": "有効な数値を入力してください。",
-  "extSidebarSyncOffsetList": "同期オフセットリスト"
+  "extSidebarSyncOffsetList": "同期オフセットリスト",
+  "extDebugTools": "デバッグツール",
+  "extViewLogs": "ログを表示",
+  "extExportLogs": "ログをエクスポート",
+  "extClearLogs": "ログを削除",
+  "extLogsClearedSuccess": "すべてのログが削除されました。",
+  "extLogsViewedSuccess": "ログがクリップボードにコピーされました！",
+  "extLogsExportedSuccess": "ログがJSONファイルとしてダウンロードされ、クリップボードにコピーされました！",
+  "extClearLogsConfirm": "すべてのエラーログを削除してもよろしいですか？",
+  "extNoLogsToView": "表示するログがありません。"
 }

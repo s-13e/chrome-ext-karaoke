@@ -15,6 +15,7 @@
   "extGeneralSettings": "常规设置",
   "extBack": "返回",
   "extCancel": "取消",
+  "extConfirm": "确认",
   "extSave": "保存",
   "extDontSave": "不保存",
   "extPlay": "播放",
@@ -219,5 +220,14 @@
   "extSyncOffsetLastModified": "最后修改",
   "extSyncOffsetDeleteConfirm": "您确定要删除\"{{title}}\"的偏移吗？",
   "extSyncOffsetInvalidValue": "请输入有效数字。",
-  "extSidebarSyncOffsetList": "同步偏移列表"
+  "extSidebarSyncOffsetList": "同步偏移列表",
+  "extDebugTools": "调试工具",
+  "extViewLogs": "查看日志",
+  "extExportLogs": "导出日志",
+  "extClearLogs": "清除日志",
+  "extLogsClearedSuccess": "所有日志已清除。",
+  "extLogsViewedSuccess": "日志已复制到剪贴板！",
+  "extLogsExportedSuccess": "日志已下载为JSON文件并复制到剪贴板！",
+  "extClearLogsConfirm": "您确定要清除所有错误日志吗？",
+  "extNoLogsToView": "没有要查看的日志。"
 }

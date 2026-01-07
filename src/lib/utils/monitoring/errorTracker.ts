@@ -152,6 +152,104 @@ class ErrorTracker {
   }
 
   /**
+   * Export error logs in human-readable format
+   * 사람이 읽기 쉬운 형식으로 에러 로그 export
+   */
+  static async exportLogsReadable(): Promise<string> {
+    const logs = await ErrorTracker.getAllLogs();
+
+    if (logs.length === 0) {
+      return 'No error logs found.';
+    }
+
+    // Get environment info from the first log (all should be similar)
+    const firstLog = logs[0];
+    const env = firstLog?.environment;
+
+    let output = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+    output += '📋 ERROR LOGS REPORT\n';
+    output += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
+
+    // System Environment (once at the top)
+    output += '🖥️  SYSTEM ENVIRONMENT:\n';
+    output += `   Extension Version: ${env?.extensionVersion || 'Unknown'}\n`;
+    output += `   Browser: ${env?.browserVersion || 'Unknown'}\n`;
+    output += `   Platform: ${env?.platform || 'Unknown'}\n`;
+    output += `   Language: ${env?.language || 'Unknown'}\n`;
+    output += `   Manifest Version: ${env?.manifestVersion || 'Unknown'}\n\n`;
+
+    output += `📊 Total Errors: ${logs.length}\n`;
+    output += `📅 Report Generated: ${new Date().toLocaleString()}\n\n`;
+
+    output += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
+
+    // Group logs by error type
+    const errorGroups = new Map<string, ErrorLog[]>();
+    logs.forEach((log) => {
+      const key = `${log.error.name}: ${log.error.message}`;
+      if (!errorGroups.has(key)) {
+        errorGroups.set(key, []);
+      }
+      errorGroups.get(key)?.push(log);
+    });
+
+    // Output grouped errors
+    let errorNumber = 1;
+    errorGroups.forEach((groupLogs, errorKey) => {
+      const firstError = groupLogs[0];
+      const occurrences = groupLogs.length;
+
+      output += `[${errorNumber}] ${errorKey}\n`;
+      output += `${'─'.repeat(50)}\n`;
+      output += `   Level: ${firstError?.level === 3 ? '🔴 ERROR' : firstError?.level === 4 ? '💀 FATAL' : '⚠️  WARN'}\n`;
+      output += `   Context: ${firstError?.context || 'Unknown'}\n`;
+      output += `   Message: ${firstError?.message || 'No message'}\n`;
+      output += `   Occurrences: ${occurrences}x\n\n`;
+
+      // Show metadata if exists
+      if (firstError?.metadata && Object.keys(firstError.metadata).length > 0) {
+        output += `   📎 Metadata:\n`;
+        Object.entries(firstError.metadata).forEach(([key, value]) => {
+          output += `      ${key}: ${value}\n`;
+        });
+        output += '\n';
+      }
+
+      // Show timestamps for occurrences
+      output += `   ⏰ Occurrences:\n`;
+      groupLogs.forEach((log, idx) => {
+        const date = new Date(log.timestamp);
+        output += `      ${idx + 1}. ${date.toLocaleString()}`;
+        if (log.metadata?.attempt) {
+          output += ` (attempt ${log.metadata.attempt})`;
+        }
+        output += '\n';
+      });
+
+      // Show stack trace (only first occurrence)
+      if (firstError?.error.stack) {
+        output += `\n   📚 Stack Trace (first occurrence):\n`;
+        const stackLines = firstError.error.stack.split('\n').slice(0, 5); // First 5 lines
+        stackLines.forEach((line) => {
+          output += `      ${line.trim()}\n`;
+        });
+        if (firstError.error.stack.split('\n').length > 5) {
+          output += `      ... (truncated)\n`;
+        }
+      }
+
+      output += '\n';
+      errorNumber++;
+    });
+
+    output += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+    output += 'End of Error Report\n';
+    output += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+
+    return output;
+  }
+
+  /**
    * Clear all stored error logs
    * 저장된 모든 에러 로그 삭제
    */

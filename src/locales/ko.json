@@ -15,6 +15,7 @@
   "extGeneralSettings": "일반 설정",
   "extBack": "뒤로가기",
   "extCancel": "취소",
+  "extConfirm": "확인",
   "extSave": "저장",
   "extDontSave": "저장 안 함",
   "extPlay": "재생",
@@ -219,5 +220,14 @@
   "extManualSearchNoResults": "검색 결과가 없습니다.",
   "extManualSearchNoSyncedLyrics": "동기화된 가사가 없습니다.",
   "extManualSearchApiError": "검색 중 오류가 발생했습니다. 다시 시도해주세요.",
-  "extManualSearchParseError": "가사 파싱에 실패했습니다."
+  "extManualSearchParseError": "가사 파싱에 실패했습니다.",
+  "extDebugTools": "디버그 도구",
+  "extViewLogs": "로그 보기",
+  "extExportLogs": "로그 내보내기",
+  "extClearLogs": "로그 삭제",
+  "extLogsClearedSuccess": "모든 로그가 삭제되었습니다.",
+  "extLogsViewedSuccess": "로그가 클립보드에 복사되었습니다!",
+  "extLogsExportedSuccess": "로그가 JSON 파일로 다운로드되고 클립보드에 복사되었습니다!",
+  "extClearLogsConfirm": "모든 에러 로그를 삭제하시겠습니까?",
+  "extNoLogsToView": "표시할 로그가 없습니다."
 }
