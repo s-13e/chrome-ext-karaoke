@@ -5,7 +5,7 @@ const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
 
 module.exports = merge(common, {
   mode: 'production',
-  devtool: false,
+  devtool: false, // Source map 제거 (디버깅은 console로)
 
   // Chrome Extension 전용 최적화 설정
   optimization: {

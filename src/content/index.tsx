@@ -75,6 +75,8 @@ import { ActionableToast } from './components/common/ActionableToast';
         filename: event.filename,
         lineno: event.lineno,
         colno: event.colno,
+        url: window.location.href,
+        videoId: extractVideoIdFromUrl(window.location.href),
       },
     );
   });
@@ -84,6 +86,10 @@ import { ActionableToast } from './components/common/ActionableToast';
       event.reason instanceof Error ? event.reason : new Error(String(event.reason)),
       'Unhandled promise rejection in content script',
       LogLevelEnum.ERROR,
+      {
+        url: window.location.href,
+        videoId: extractVideoIdFromUrl(window.location.href),
+      },
     );
   });
 
@@ -1056,12 +1062,16 @@ import { ActionableToast } from './components/common/ActionableToast';
         // 실제 에러만 console.error 로깅
         console.error('[collectMetadataAndLyrics] 최종 실패:', error);
 
-        // 에러 추적
+        // 에러 추적 (API 에러 상세 정보 포함)
         if (error instanceof Error) {
           contentErrorTracker.captureError(error, 'Failed to collect metadata and lyrics', LogLevelEnum.ERROR, {
             videoId,
             attempt,
+            totalAttempts: API_RETRY_MAX_ATTEMPTS + 1,
             errorCode: error instanceof LyricsError ? error.code : undefined,
+            isTimeout: error instanceof LyricsError && error.code === LyricsErrorCode.API_TIMEOUT,
+            isNetworkError: error instanceof LyricsError && error.code === LyricsErrorCode.NETWORK_ERROR,
+            url: window.location.href,
           });
         }
 
@@ -1143,8 +1153,36 @@ import { ActionableToast } from './components/common/ActionableToast';
       const metaPromise = fetchYouTubeVideoMeta(videoId, process.env.YOUTUBE_API_KEY!);
 
       // 1) 메타데이터 및 기본 정보 수집
-      const meta = await metaPromise;
-      console.log(`[Performance] YouTube Meta 조회 완료 (${(performance.now() - metaStartTime).toFixed(0)}ms)`);
+      let meta;
+      try {
+        meta = await metaPromise;
+        console.log(`[Performance] YouTube Meta 조회 완료 (${(performance.now() - metaStartTime).toFixed(0)}ms)`);
+      } catch (metaError) {
+        // YouTube API 에러 상세 추적
+        const responseTime = performance.now() - metaStartTime;
+        const errorMessage = metaError instanceof Error ? metaError.message : String(metaError);
+        const isHttpError = errorMessage.includes('HTTP');
+        const statusMatch = errorMessage.match(/HTTP (\d+):/);
+        const httpStatus = statusMatch?.[1] ? parseInt(statusMatch[1], 10) : undefined;
+
+        contentErrorTracker.captureError(
+          metaError instanceof Error ? metaError : new Error(errorMessage),
+          'YouTube API fetch failed',
+          LogLevelEnum.ERROR,
+          {
+            videoId,
+            apiEndpoint: 'youtube.googleapis.com/v3/videos',
+            responseTime,
+            httpStatus,
+            isHttpError,
+            attempt,
+            url: window.location.href,
+          },
+        );
+
+        throw metaError;
+      }
+
       if (!meta) {
         contentLogger.warn('YouTube metadata not found', { videoId });
         throw new Error('메타 정보 없음');
