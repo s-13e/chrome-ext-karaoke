@@ -10,17 +10,18 @@ export interface FontWeightOption {
 
 /**
  * 가사 표시에 사용 가능한 폰트 두께 목록
+ * label은 i18n 키로 사용됨
  */
 export const AVAILABLE_FONT_WEIGHTS: FontWeightOption[] = [
-  { label: '얇게 (Thin)', value: 100 },
-  { label: '가늘게 (Extra Light)', value: 200 },
-  { label: '라이트 (Light)', value: 300 },
-  { label: '보통 (Regular)', value: 400 },
-  { label: '중간 (Medium)', value: 500 },
-  { label: '세미볼드 (Semi Bold)', value: 600 },
-  { label: '볼드 (Bold)', value: 700 },
-  { label: '엑스트라 볼드 (Extra Bold)', value: 800 },
-  { label: '블랙 (Black)', value: 900 },
+  { label: 'extFontWeightThin', value: 100 },
+  { label: 'extFontWeightExtraLight', value: 200 },
+  { label: 'extFontWeightLight', value: 300 },
+  { label: 'extFontWeightRegular', value: 400 },
+  { label: 'extFontWeightMedium', value: 500 },
+  { label: 'extFontWeightSemiBold', value: 600 },
+  { label: 'extFontWeightBold', value: 700 },
+  { label: 'extFontWeightExtraBold', value: 800 },
+  { label: 'extFontWeightBlack', value: 900 },
 ];
 
 /**
@@ -42,6 +43,8 @@ export function getFontWeightValue(label: string): number {
 export function getFontWeightLabel(value: number): string {
   const WEIGHT = AVAILABLE_FONT_WEIGHTS.find((w) => w.value === value);
   return (
-    WEIGHT?.label || AVAILABLE_FONT_WEIGHTS.find((w) => w.value === DEFAULT_FONT_WEIGHT)?.label || '보통 (Regular)'
+    WEIGHT?.label ||
+    AVAILABLE_FONT_WEIGHTS.find((w) => w.value === DEFAULT_FONT_WEIGHT)?.label ||
+    'extFontWeightRegular'
   );
 }

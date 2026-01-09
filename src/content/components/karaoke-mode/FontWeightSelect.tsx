@@ -5,6 +5,7 @@
 import React, { useEffect, useRef } from 'react';
 import { AVAILABLE_FONT_WEIGHTS, getFontWeightLabel } from '@constants/fontWeights';
 import styles from './TextEffectsModal.module.css';
+import { useTranslation } from 'react-i18next';
 
 interface FontWeightSelectProps {
   value: number | undefined;
@@ -14,6 +15,7 @@ interface FontWeightSelectProps {
 
 export const FontWeightSelect: React.FC<FontWeightSelectProps> = ({ value, onChange, className }) => {
   const selectRef = useRef<HTMLSelectElement>(null);
+  const { t } = useTranslation();
 
   // value가 숫자인 경우 label로 변환, undefined면 기본값(400) 사용
   const currentLabel = value !== undefined ? getFontWeightLabel(value) : getFontWeightLabel(400);
@@ -58,7 +60,7 @@ export const FontWeightSelect: React.FC<FontWeightSelectProps> = ({ value, onCha
     <select ref={selectRef} className={className || styles.selectInput} value={currentLabel} onChange={handleChange}>
       {AVAILABLE_FONT_WEIGHTS.map((weight) => (
         <option key={weight.value} value={weight.label}>
-          {weight.label}
+          {t(weight.label)}
         </option>
       ))}
     </select>

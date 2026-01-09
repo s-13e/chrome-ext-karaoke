@@ -347,11 +347,11 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
 
   return (
     <div className={styles.settingsPanel}>
-      <p className={styles.panelDescription}>Dual 가사 타입에만 적용됩니다.</p>
+      <p className={styles.panelDescription}>{t('extTextEffectsDualDescription')}</p>
       {/* 기본 스타일 섹션 */}
       <div className={styles.section}>
         <h4 className={styles.sectionTitle}>{t('extTextEffectsSectionDefaultStyle')}</h4>
-        <p className={styles.sectionDescription}>타임스탬프 전 가사 (아직 불리지 않은 가사)</p>
+        <p className={styles.sectionDescription}>{t('extTextEffectsDefaultStyleDescription')}</p>
         <div className={styles.settingRow}>
           <label className={styles.settingLabel}>{t('extTextEffectsLabelTextColor')}</label>
           <ColorPickerInput
@@ -414,7 +414,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
       {/* 하이라이트 스타일 섹션 */}
       <div className={styles.section}>
         <h4 className={styles.sectionTitle}>{t('extTextEffectsSectionHighlightStyle')}</h4>
-        <p className={styles.sectionDescription}>현재 재생 중인 가사</p>
+        <p className={styles.sectionDescription}>{t('extTextEffectsHighlightStyleDescription')}</p>
 
         {/* 텍스트 색상 효과 */}
         <div className={styles.subSection}>
@@ -483,7 +483,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
 
               {/* 방향 선택 */}
               <div className={styles.settingRow}>
-                <label className={styles.settingLabel}>{t('extDirection')}</label>
+                <label className={styles.settingLabel}>{t('extTextEffectsDirectionLabel')}</label>
                 <select
                   className={styles.selectInput}
                   value={config.lyrics?.highlight?.linearGradient?.direction || 'right'}
@@ -492,10 +492,10 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
                     onPreviewUpdate();
                   }}
                 >
-                  <option value="right">→ 오른쪽</option>
-                  <option value="left">← 왼쪽</option>
-                  <option value="down">↓ 아래</option>
-                  <option value="up">↑ 위</option>
+                  <option value="right">{t('extTextEffectsDirectionRight')}</option>
+                  <option value="left">{t('extTextEffectsDirectionLeft')}</option>
+                  <option value="down">{t('extTextEffectsDirectionDown')}</option>
+                  <option value="up">{t('extTextEffectsDirectionUp')}</option>
                 </select>
               </div>
             </>
@@ -506,7 +506,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
       {/* 발음 스타일 섹션 */}
       <div className={styles.section}>
         <h4 className={styles.sectionTitle}>{t('extTextEffectsSectionPronunciationStyle')}</h4>
-        <p className={styles.sectionDescription}>로마자 발음 가사</p>
+        <p className={styles.sectionDescription}>{t('extTextEffectsPronunciationStyleDescription')}</p>
         <div className={styles.settingRow}>
           <label className={styles.settingLabel}>{t('extTextEffectsLabelTextColor')}</label>
           <ColorPickerInput
@@ -588,9 +588,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
             onChange={handlePronunciationHighlightToggle}
           />
         </div>
-        <p className={styles.settingDescription}>
-          💡 현재 가사가 사라져 발음 가사만 남았을 때 하이라이트 효과를 적용합니다
-        </p>
+        <p className={styles.settingDescription}>{t('extTextEffectsPronunciationHighlightHint')}</p>
       </div>
     </div>
   );
@@ -700,11 +698,11 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
   };
   return (
     <div className={styles.settingsPanel}>
-      <p className={styles.panelDescription}>Full 가사 타입에만 적용됩니다.</p>
+      <p className={styles.panelDescription}>{t('extTextEffectsFullDescription')}</p>
       {/* 기본 스타일 섹션 */}
       <div className={styles.section}>
         <h4 className={styles.sectionTitle}>{t('extTextEffectsSectionDefaultStyle')}</h4>
-        <p className={styles.sectionDescription}>현재 재생 중이 아닌 가사</p>
+        <p className={styles.sectionDescription}>{t('extTextEffectsFullDefaultStyleDescription')}</p>
         <div className={styles.settingRow}>
           <label className={styles.settingLabel}>{t('extTextEffectsLabelTextColor')}</label>
           <ColorPickerInput
@@ -776,11 +774,11 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
       {/* 하이라이트 스타일 섹션 */}
       <div className={styles.section}>
         <h4 className={styles.sectionTitle}>{t('extTextEffectsSectionHighlightStyle')}</h4>
-        <p className={styles.sectionDescription}>현재 재생 중인 가사</p>
+        <p className={styles.sectionDescription}>{t('extTextEffectsFullHighlightStyleDescription')}</p>
 
         {/* 색상 모드 선택 */}
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>색상 모드</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsColorModeLabel')}</label>
           <select
             className={styles.selectInput}
             value={colorMode}
@@ -794,7 +792,7 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
         {/* 단색 모드: 하나의 색상 선택 */}
         {colorMode === 'single' && (
           <div className={styles.settingRow}>
-            <label className={styles.settingLabel}>하이라이트 색</label>
+            <label className={styles.settingLabel}>{t('extTextEffectsHighlightColorLabel')}</label>
             <ColorPickerInput
               value={config.lyrics?.highlight?.color || DEFAULT_HIGHLIGHT_COLOR}
               onChange={(value) => updateConfig(['lyrics', 'highlight', 'color'], value)}
@@ -807,7 +805,7 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
         {colorMode === 'multi' && (
           <>
             <div className={styles.settingRow}>
-              <label className={styles.settingLabel}>색상 1</label>
+              <label className={styles.settingLabel}>{t('extTextEffectsColor1Label')}</label>
               <ColorPickerInput
                 value={config.lyrics?.highlight?.linearGradient?.color1 || '#357aff'}
                 onChange={(value) => {
@@ -819,7 +817,7 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
             </div>
 
             <div className={styles.settingRow}>
-              <label className={styles.settingLabel}>색상 2</label>
+              <label className={styles.settingLabel}>{t('extTextEffectsColor2Label')}</label>
               <ColorPickerInput
                 value={config.lyrics?.highlight?.linearGradient?.color2 || '#e91e63'}
                 onChange={(value) => {
@@ -831,7 +829,7 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
             </div>
 
             <div className={styles.settingRow}>
-              <label className={styles.settingLabel}>방향</label>
+              <label className={styles.settingLabel}>{t('extTextEffectsDirectionLabel')}</label>
               <select
                 className={styles.selectInput}
                 value={config.lyrics?.highlight?.linearGradient?.direction || 'right'}
@@ -840,10 +838,10 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
                   onPreviewUpdate();
                 }}
               >
-                <option value="right">→</option>
-                <option value="left">←</option>
-                <option value="down">↓</option>
-                <option value="up">↑</option>
+                <option value="right">{t('extTextEffectsDirectionRight')}</option>
+                <option value="left">{t('extTextEffectsDirectionLeft')}</option>
+                <option value="down">{t('extTextEffectsDirectionDown')}</option>
+                <option value="up">{t('extTextEffectsDirectionUp')}</option>
               </select>
             </div>
           </>
@@ -852,7 +850,7 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
       {/* 발음 스타일 섹션 */}
       <div className={styles.section}>
         <h4 className={styles.sectionTitle}>{t('extTextEffectsSectionPronunciationStyle')}</h4>
-        <p className={styles.sectionDescription}>로마자 발음 가사</p>
+        <p className={styles.sectionDescription}>{t('extTextEffectsPronunciationStyleDescription')}</p>
         <div className={styles.settingRow}>
           <label className={styles.settingLabel}>{t('extTextEffectsLabelTextColor')}</label>
           <ColorPickerInput
@@ -931,9 +929,7 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
             onChange={handlePronunciationHighlightToggle}
           />
         </div>
-        <p className={styles.settingDescription}>
-          💡 현재 가사가 사라져 발음 가사만 남았을 때 하이라이트 효과를 적용합니다
-        </p>
+        <p className={styles.settingDescription}>{t('extTextEffectsPronunciationHighlightHint')}</p>
       </div>
     </div>
   );
@@ -1016,17 +1012,15 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
   };
   return (
     <div className={styles.settingsPanel}>
-      <p className={styles.panelDescription}>
-        Single 가사 타입에만 적용됩니다. Single은 모든 가사가 하이라이트 스타일을 사용합니다.
-      </p>
+      <p className={styles.panelDescription}>{t('extTextEffectsSingleDescription')}</p>
       {/* 가사 스타일 섹션 (기본/하이라이트 구분 없음) */}
       <div className={styles.section}>
         <h4 className={styles.sectionTitle}>{t('extTextEffectsSectionLyricsStyle')}</h4>
-        <p className={styles.sectionDescription}>현재 표시되는 가사 (하이라이트 스타일 적용)</p>
+        <p className={styles.sectionDescription}>{t('extTextEffectsLyricsStyleDescription')}</p>
 
         {/* 색상 모드 선택 */}
         <div className={styles.settingRow}>
-          <label className={styles.settingLabel}>색상 모드</label>
+          <label className={styles.settingLabel}>{t('extTextEffectsColorModeLabel')}</label>
           <select
             className={styles.selectInput}
             value={colorMode}
@@ -1053,7 +1047,7 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
         {colorMode === 'multi' && (
           <>
             <div className={styles.settingRow}>
-              <label className={styles.settingLabel}>색상 1</label>
+              <label className={styles.settingLabel}>{t('extTextEffectsColor1Label')}</label>
               <ColorPickerInput
                 value={config.lyrics?.linearGradient?.color1 || '#357aff'}
                 onChange={(value) => {
@@ -1065,7 +1059,7 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
             </div>
 
             <div className={styles.settingRow}>
-              <label className={styles.settingLabel}>색상 2</label>
+              <label className={styles.settingLabel}>{t('extTextEffectsColor2Label')}</label>
               <ColorPickerInput
                 value={config.lyrics?.linearGradient?.color2 || '#e91e63'}
                 onChange={(value) => {
@@ -1077,7 +1071,7 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
             </div>
 
             <div className={styles.settingRow}>
-              <label className={styles.settingLabel}>방향</label>
+              <label className={styles.settingLabel}>{t('extTextEffectsDirectionLabel')}</label>
               <select
                 className={styles.selectInput}
                 value={config.lyrics?.linearGradient?.direction || 'right'}
@@ -1086,10 +1080,10 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
                   onPreviewUpdate();
                 }}
               >
-                <option value="right">→</option>
-                <option value="left">←</option>
-                <option value="down">↓</option>
-                <option value="up">↑</option>
+                <option value="right">{t('extTextEffectsDirectionRight')}</option>
+                <option value="left">{t('extTextEffectsDirectionLeft')}</option>
+                <option value="down">{t('extTextEffectsDirectionDown')}</option>
+                <option value="up">{t('extTextEffectsDirectionUp')}</option>
               </select>
             </div>
           </>
@@ -1145,7 +1139,7 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
       {/* 발음 스타일 섹션 */}
       <div className={styles.section}>
         <h4 className={styles.sectionTitle}>{t('extTextEffectsSectionPronunciationStyle')}</h4>
-        <p className={styles.sectionDescription}>로마자 발음 가사 (하이라이트 스타일 적용)</p>
+        <p className={styles.sectionDescription}>{t('extTextEffectsSinglePronunciationStyleDescription')}</p>
         <div className={styles.settingRow}>
           <label className={styles.settingLabel}>{t('extTextEffectsLabelTextColor')}</label>
           <ColorPickerInput

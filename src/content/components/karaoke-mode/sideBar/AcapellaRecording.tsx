@@ -1066,7 +1066,7 @@ export const AcapellaRecording: React.FC<AcapellaRecordingProps> = ({ onBack, ly
                 <MdPlayArrow size={24} />
                 {t('extPlay')}
               </button>
-              <button className={styles.primaryButton} onClick={handleSaveToStorage}>
+              <button className={styles.secondaryButton} onClick={handleSaveToStorage}>
                 <MdDownload size={24} />
                 {t('extSave')}
               </button>

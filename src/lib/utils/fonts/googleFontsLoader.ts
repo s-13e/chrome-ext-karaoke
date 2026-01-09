@@ -36,12 +36,6 @@ export function loadGoogleFont(fontFamily: string): void {
   link.rel = 'stylesheet';
   link.crossOrigin = 'anonymous'; // CORS 이슈 방지
 
-  // 로드 완료 이벤트
-  link.onload = () => {
-    // eslint-disable-next-line no-console
-    console.log(`[GoogleFontsLoader] Successfully loaded: ${cleanFontName}`);
-  };
-
   // 로드 실패 이벤트
   link.onerror = () => {
     // eslint-disable-next-line no-console
