@@ -58,6 +58,7 @@ import {
   shouldAutoDisable,
 } from '@lib/utils/storage/autoDisableStorage';
 import { ActionableToast } from './components/common/ActionableToast';
+import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
 
 (() => {
   // 전역 에러 핸들러 설정 (최상단)
@@ -121,7 +122,7 @@ import { ActionableToast } from './components/common/ActionableToast';
   }
 
   // 5초마다 context 유효성 확인 (개발 모드용)
-  setInterval(checkExtensionContext, 5000);
+  let contextCheckInterval: ReturnType<typeof setInterval> | null = setInterval(checkExtensionContext, 5000);
 
   // --- 플래그 및 관리 객체 ---
   let isDetectionActive = false; // 감지 시스템 활성화 여부
@@ -273,12 +274,15 @@ import { ActionableToast } from './components/common/ActionableToast';
     spaObserver: MutationObserver | null;
     lyricsObserver: MutationObserver | null;
     videoElementObserver: MutationObserver | null;
+    miniToBasicObserver: MutationObserver | null;
+    basicToMiniObserver: MutationObserver | null;
   }
   const detectionObserverManager: DetectionObserverManager = {
     spaObserver: null,
     lyricsObserver: null,
     videoElementObserver: null,
-    // ...other observers
+    miniToBasicObserver: null,
+    basicToMiniObserver: null,
   };
 
   //
@@ -290,6 +294,12 @@ import { ActionableToast } from './components/common/ActionableToast';
   const cleanupAllResources = (): void => {
     console.log('[cleanupAllResources] 실행 - tracking Emotion unmounting');
     contentLogger.info('[cleanupAllResources] Cleaning up all resources and unmounting React components');
+
+    // setInterval 정리
+    if (contextCheckInterval !== null) {
+      clearInterval(contextCheckInterval);
+      contextCheckInterval = null;
+    }
 
     listenerManager.removeAll();
     removeAllObservers();
@@ -306,6 +316,8 @@ import { ActionableToast } from './components/common/ActionableToast';
     detectionObserverManager.spaObserver = null;
     detectionObserverManager.lyricsObserver = null;
     detectionObserverManager.videoElementObserver = null;
+    detectionObserverManager.miniToBasicObserver = null;
+    detectionObserverManager.basicToMiniObserver = null;
   };
 
   /**
@@ -637,41 +649,47 @@ import { ActionableToast } from './components/common/ActionableToast';
     if (lyricsMode === 'full') {
       overlayManager.renderOverlay(
         'lyrics',
-        <FullLyrics
-          lyrics={lyrics}
-          offset={offset}
-          fontColor={lyricsFontColorCurrent}
-          pronunciationColor={lyricsFontColorPronunciation}
-          showRealtimeLyrics={showRealtimeLyrics}
-          showPronunciationLyrics={showPronunciationLyrics}
-          styleConfig={lyricsStyleFull}
-        />,
+        <CurrentTimeProvider>
+          <FullLyrics
+            lyrics={lyrics}
+            offset={offset}
+            fontColor={lyricsFontColorCurrent}
+            pronunciationColor={lyricsFontColorPronunciation}
+            showRealtimeLyrics={showRealtimeLyrics}
+            showPronunciationLyrics={showPronunciationLyrics}
+            styleConfig={lyricsStyleFull}
+          />
+        </CurrentTimeProvider>,
       );
     } else if (lyricsMode === 'sync') {
       overlayManager.renderOverlay(
         'lyrics',
-        <DualHighlightLyrics
-          lyrics={lyrics}
-          offset={offset}
-          fontColor={lyricsFontColorCurrent}
-          pronunciationColor={lyricsFontColorPronunciation}
-          showRealtimeLyrics={showRealtimeLyrics}
-          showPronunciationLyrics={showPronunciationLyrics}
-          styleConfig={lyricsStyleDual}
-        />,
+        <CurrentTimeProvider>
+          <DualHighlightLyrics
+            lyrics={lyrics}
+            offset={offset}
+            fontColor={lyricsFontColorCurrent}
+            pronunciationColor={lyricsFontColorPronunciation}
+            showRealtimeLyrics={showRealtimeLyrics}
+            showPronunciationLyrics={showPronunciationLyrics}
+            styleConfig={lyricsStyleDual}
+          />
+        </CurrentTimeProvider>,
       );
     } else if (lyricsMode === 'single') {
       overlayManager.renderOverlay(
         'lyrics',
-        <SingleLineLyrics
-          lyrics={lyrics}
-          offset={offset}
-          fontColor={lyricsFontColorCurrent}
-          pronunciationColor={lyricsFontColorPronunciation}
-          showRealtimeLyrics={showRealtimeLyrics}
-          showPronunciationLyrics={showPronunciationLyrics}
-          styleConfig={lyricsStyleSingle}
-        />,
+        <CurrentTimeProvider>
+          <SingleLineLyrics
+            lyrics={lyrics}
+            offset={offset}
+            fontColor={lyricsFontColorCurrent}
+            pronunciationColor={lyricsFontColorPronunciation}
+            showRealtimeLyrics={showRealtimeLyrics}
+            showPronunciationLyrics={showPronunciationLyrics}
+            styleConfig={lyricsStyleSingle}
+          />
+        </CurrentTimeProvider>,
       );
     } else {
       console.log('[renderLyricsOverlay] else 문으로 overlay cleanup 실행');
@@ -1727,7 +1745,7 @@ import { ActionableToast } from './components/common/ActionableToast';
   // 미니 -> 기본 감지
   function setupMiniToBasicTransitionObserver() {
     const player = document.querySelector(YOUTUBE_MINI_PLAYER_CONTAINER_SELECTOR);
-    if (!player) return;
+    if (!player) return null;
 
     let lastIsMini = YOUTUBE_MINI_PLAYER_CLASSES.some((c) => player.classList.contains(c));
     const observer = new MutationObserver(() => {
@@ -1744,6 +1762,7 @@ import { ActionableToast } from './components/common/ActionableToast';
       lastIsMini = isMini;
     });
     observer.observe(player, { attributes: true, attributeFilter: ['class'] });
+    detectionObserverManager.miniToBasicObserver = observer;
     return observer;
   }
   // 기본 -> 미니 감지
@@ -1766,6 +1785,7 @@ import { ActionableToast } from './components/common/ActionableToast';
     });
 
     observer.observe(player, { attributes: true, attributeFilter: ['class'] });
+    detectionObserverManager.basicToMiniObserver = observer;
 
     return observer;
   }
@@ -1807,6 +1827,16 @@ import { ActionableToast } from './components/common/ActionableToast';
     if (detectionObserverManager.videoElementObserver) {
       detectionObserverManager.videoElementObserver.disconnect();
       detectionObserverManager.videoElementObserver = null;
+    }
+
+    if (detectionObserverManager.miniToBasicObserver) {
+      detectionObserverManager.miniToBasicObserver.disconnect();
+      detectionObserverManager.miniToBasicObserver = null;
+    }
+
+    if (detectionObserverManager.basicToMiniObserver) {
+      detectionObserverManager.basicToMiniObserver.disconnect();
+      detectionObserverManager.basicToMiniObserver = null;
     }
 
     if (!isDetectionActive) {
@@ -1870,8 +1900,15 @@ import { ActionableToast } from './components/common/ActionableToast';
   function startDetectionWorkflow() {
     console.log('[startDetectionWorkflow] 시작');
     initListenersAndState(); // Storage 초기값 및 이벤트 등록
-    setupMiniToBasicTransitionObserver();
-    setupBasicToMiniTransitionObserver();
+
+    // MutationObserver 등록 및 manager에 저장
+    if (!detectionObserverManager.miniToBasicObserver) {
+      detectionObserverManager.miniToBasicObserver = setupMiniToBasicTransitionObserver();
+    }
+    if (!detectionObserverManager.basicToMiniObserver) {
+      detectionObserverManager.basicToMiniObserver = setupBasicToMiniTransitionObserver();
+    }
+
     enableDetection(); // 감지 시스템 활성화 및 옵저버 등록
     detectVideoWithRetry();
   }

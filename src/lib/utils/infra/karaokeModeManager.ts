@@ -78,13 +78,10 @@ export class KaraokeModeManager {
       if (!isExtensionEnabled) {
         // 확장이 비활성화되어 있으면 토스트 메시지 표시 후 차단
         this.callbacks.onShowToast?.('확장 프로그램을 먼저 활성화해주세요 (우측 상단 확장 아이콘 클릭)');
-        console.log('[KaraokeModeManager] 확장 비활성화 상태 - 가라오케 모드 진입 차단');
         return;
       }
 
-      // 카라오케 모드 활성화 시: 영화관 모드로 강제 전환
       enableTheaterMode();
-      console.log('[KaraokeModeManager] 카라오케 모드 활성화 - 영화관 모드로 전환 완료');
     } else {
       // 가라오케 모드를 끄려고 할 때 녹음 중이면 확인
       if (this.recordingState === 'recording' || this.recordingState === 'paused') {

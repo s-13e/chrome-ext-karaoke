@@ -53,7 +53,7 @@ export function startLyricsAdMonitoring(onAdStart: () => void, onAdEnd: () => vo
       }
       lastAdState = currentAdState;
     }
-  }, 500); // 500ms 간격으로 체크
+  }, 1000); // 1초 간격으로 체크 (메모리 최적화: 500ms → 1000ms)
 
   return () => {
     console.log('[LyricsAdMonitoring] 모니터링 중지');

@@ -2,7 +2,7 @@
  * FontWeightSelect - 폰트 두께 선택 컴포넌트
  * 모든 텍스트 효과 패널에서 공통으로 사용
  */
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, memo } from 'react';
 import { AVAILABLE_FONT_WEIGHTS, getFontWeightLabel } from '@constants/fontWeights';
 import styles from './TextEffectsModal.module.css';
 import { useTranslation } from 'react-i18next';
@@ -13,7 +13,7 @@ interface FontWeightSelectProps {
   className?: string;
 }
 
-export const FontWeightSelect: React.FC<FontWeightSelectProps> = ({ value, onChange, className }) => {
+export const FontWeightSelect: React.FC<FontWeightSelectProps> = memo(({ value, onChange, className }) => {
   const selectRef = useRef<HTMLSelectElement>(null);
   const { t } = useTranslation();
 
@@ -65,4 +65,6 @@ export const FontWeightSelect: React.FC<FontWeightSelectProps> = ({ value, onCha
       ))}
     </select>
   );
-};
+});
+
+FontWeightSelect.displayName = 'FontWeightSelect';

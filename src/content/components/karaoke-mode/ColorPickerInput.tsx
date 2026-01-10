@@ -3,7 +3,7 @@
  * IMPORTANT: 드래그 중(연속으로 onChange 발생 중)에는 적용하지 않고, 드래그가 멈춘 후에만 저장 및 미리보기 적용
  * 이유: 드래그 중 onChange가 계속 호출되면서 storage에 계속 저장되면 페이지가 멈추거나 튕길 수 있음
  */
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import styles from './TextEffectsModal.module.css';
 
 interface ColorPickerInputProps {
@@ -11,7 +11,7 @@ interface ColorPickerInputProps {
   onChange: (value: string | undefined) => void;
 }
 
-export const ColorPickerInput: React.FC<ColorPickerInputProps> = ({ value, onChange }) => {
+export const ColorPickerInput: React.FC<ColorPickerInputProps> = memo(({ value, onChange }) => {
   const [tempValue, setTempValue] = useState(value);
   const changeTimeoutRef = useRef<number | null>(null);
   const pendingValueRef = useRef<string | null>(null);
@@ -99,4 +99,6 @@ export const ColorPickerInput: React.FC<ColorPickerInputProps> = ({ value, onCha
       onBlur={handleBlur} // 포커스를 잃을 때 즉시 적용
     />
   );
-};
+});
+
+ColorPickerInput.displayName = 'ColorPickerInput';

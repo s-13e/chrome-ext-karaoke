@@ -1,0 +1,69 @@
+/**
+ * 자동 비활성화 알림 스타일
+ * 메모리 최적화: Emotion CSS-in-JS → CSS Modules
+ */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+}
+
+.notificationContainer {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  z-index: 999999;
+
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 16px 20px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+
+  max-width: 320px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+.notificationContainer.fadeIn {
+  animation: fadeIn 0.4s ease-in-out;
+}
+
+.notificationContainer.fadeOut {
+  animation: fadeOut 0.4s ease-in-out;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.message {
+  font-size: 14px;
+  line-height: 1.5;
+  opacity: 0.95;
+}
+
+.icon {
+  font-size: 20px;
+}

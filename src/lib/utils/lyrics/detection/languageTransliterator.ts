@@ -1,16 +1,12 @@
 // src/lib/utils/lyrics/languageTransliterator.ts
 
-import { chineseRomanizer } from '../romanizers/chineseRomanizer';
-import { japaneseRomanizer } from '../romanizers/japaneseRomanizer';
-import { koreanRomanizer } from '../romanizers/koreanRomanizer';
-import { universalRomanizer } from '../romanizers/universalRomanizer';
-import { thaiRomanizer } from '../romanizers/thaiRomanizer';
-import { arabicRomanizer } from '../romanizers/arabicRomanizer';
-import { hindiRomanizer } from '../romanizers/hindiRomanizer';
 import type { ScriptSpan } from './languageSpanSplitter';
 
+// 로마나이저 캐시 (한 번 로드된 라이브러리는 재사용)
+const romanizerCache: Record<string, (text: string) => Promise<string>> = {};
+
 /**
- * Language code to romanization function mapping
+ * Language code to romanization function mapping (Lazy Loading)
  *
  * Supported languages:
  * - ko: Korean (dedicated library: @daun_jung/korean-romanizer)
@@ -24,23 +20,62 @@ import type { ScriptSpan } from './languageSpanSplitter';
  * - he: Hebrew (직접 구현 매핑 테이블)
  * - hy: Armenian (직접 구현 매핑 테이블)
  */
-const transliterators: Record<string, (text: string) => Promise<string>> = {
-  // Category A: Dedicated libraries (high accuracy)
-  ko: async (text) => Promise.resolve(koreanRomanizer(text)),
-  ja: async (text) => japaneseRomanizer(text),
-  zh: (text) => chineseRomanizer(text),
-  th: async (text) => Promise.resolve(thaiRomanizer(text)), // Thai RTGS
-  ar: async (text) => Promise.resolve(arabicRomanizer(text)), // Arabic IJMES
-  hi: async (text) => Promise.resolve(hindiRomanizer(text)), // Hindi IAST
+const getRomanizer = async (langKey: string): Promise<(text: string) => Promise<string>> => {
+  // 이미 로드된 romanizer가 있으면 캐시에서 반환
+  if (romanizerCache[langKey]) {
+    return romanizerCache[langKey];
+  }
 
-  // Category B: 직접 구현 매핑 테이블 (high accuracy)
-  el: async (text) => Promise.resolve(universalRomanizer(text)), // Greek
-  he: async (text) => Promise.resolve(universalRomanizer(text)), // Hebrew
-  ka: async (text) => Promise.resolve(universalRomanizer(text)), // Georgian
-  hy: async (text) => Promise.resolve(universalRomanizer(text)), // Armenian
+  // 언어별 동적 import (메모리 최적화: 필요한 언어만 로드)
+  let romanizer: (text: string) => Promise<string>;
 
-  // Fallback
-  other: async (text) => Promise.resolve(text),
+  switch (langKey) {
+    case 'ko': {
+      const { koreanRomanizer } = await import('../romanizers/koreanRomanizer');
+      romanizer = async (text) => Promise.resolve(koreanRomanizer(text));
+      break;
+    }
+    case 'ja': {
+      const { japaneseRomanizer } = await import('../romanizers/japaneseRomanizer');
+      romanizer = async (text) => japaneseRomanizer(text);
+      break;
+    }
+    case 'zh': {
+      const { chineseRomanizer } = await import('../romanizers/chineseRomanizer');
+      romanizer = (text) => chineseRomanizer(text);
+      break;
+    }
+    case 'th': {
+      const { thaiRomanizer } = await import('../romanizers/thaiRomanizer');
+      romanizer = async (text) => Promise.resolve(thaiRomanizer(text));
+      break;
+    }
+    case 'ar': {
+      const { arabicRomanizer } = await import('../romanizers/arabicRomanizer');
+      romanizer = async (text) => Promise.resolve(arabicRomanizer(text));
+      break;
+    }
+    case 'hi': {
+      const { hindiRomanizer } = await import('../romanizers/hindiRomanizer');
+      romanizer = async (text) => Promise.resolve(hindiRomanizer(text));
+      break;
+    }
+    case 'el':
+    case 'he':
+    case 'ka':
+    case 'hy': {
+      const { universalRomanizer } = await import('../romanizers/universalRomanizer');
+      romanizer = async (text) => Promise.resolve(universalRomanizer(text));
+      break;
+    }
+    default:
+      // Fallback: 원본 텍스트 반환
+      romanizer = async (text) => Promise.resolve(text);
+  }
+
+  // 캐시에 저장
+  romanizerCache[langKey] = romanizer;
+  return romanizer;
 };
 
 export async function transliterateSpans(spans: ScriptSpan[]): Promise<ScriptSpan[]> {
@@ -48,8 +83,8 @@ export async function transliterateSpans(spans: ScriptSpan[]): Promise<ScriptSpa
     spans.map(async (span) => {
       const langKey = span.lang ?? 'other';
 
-      // 변환 함수가 없으면 기본 async 함수로 원래 텍스트 반환
-      const converter = transliterators[langKey] ?? (async (txt: string) => txt);
+      // 언어별 romanizer를 동적으로 로드
+      const converter = await getRomanizer(langKey);
 
       return {
         lang: span.lang,

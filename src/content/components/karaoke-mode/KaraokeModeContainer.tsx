@@ -5,6 +5,7 @@ import React, { useEffect } from 'react';
 import { SidebarContainer } from './SidebarContainer';
 import { BottomContainer } from './BottomContainer';
 import { Line } from '@lib/types/lyrics';
+import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
 
 /**
  * 레이아웃 상수
@@ -307,9 +308,9 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
   if (isFullscreen) return null;
 
   return (
-    <>
+    <CurrentTimeProvider>
       <SidebarContainer lyrics={lyrics} width={sidebarWidth} />
       <BottomContainer lyrics={lyrics} />
-    </>
+    </CurrentTimeProvider>
   );
 };

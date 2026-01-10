@@ -1,7 +1,7 @@
 // BottomContainer.tsx
 // 가라오케 모드 하단 컨테이너
 // 구간 반복, 싱크셋 등 음악 영상 관련 기능 제공
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import styles from './styles.module.css';
 import { IoRepeat } from 'react-icons/io5';
 import {
@@ -21,10 +21,14 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Line } from '@lib/types/lyrics';
 import { applyOffsetToLyrics } from '@lib/utils/lyrics/display/lyricsOffset';
-import { TextEffectsModal } from './TextEffectsModal';
 import { extractVideoIdFromUrl } from '@lib/utils/platform/videoDetection';
 import { saveVideoOffset, getVideoOffset } from '@lib/utils/storage/videoOffsetStorage';
 import { Toast } from '../common/Toast';
+
+// TextEffectsModal을 lazy loading으로 변경 (메모리 최적화)
+const TextEffectsModal = lazy(() =>
+  import('./TextEffectsModal').then((module) => ({ default: module.TextEffectsModal })),
+);
 
 // 아이콘 공통 스타일 상수
 const ICON_SIZE = 28;
@@ -1091,16 +1095,18 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
         </div>
       </div>
 
-      {/* 텍스트 효과 모달 */}
+      {/* 텍스트 효과 모달 - Lazy Loading */}
       {showTextEffectsModal && (
         <div className={styles.textEffectsModalContainer} ref={textEffectsModalRef}>
-          <TextEffectsModal
-            onClose={() => setShowTextEffectsModal(false)}
-            registerCancel={(fn) => {
-              textEffectsCancelRef.current = fn || null;
-            }}
-            initialTab={lyricsDisplayMode === 'sync' ? 'dual' : lyricsDisplayMode}
-          />
+          <Suspense fallback={<div style={{ padding: '20px', color: '#fff' }}>Loading...</div>}>
+            <TextEffectsModal
+              onClose={() => setShowTextEffectsModal(false)}
+              registerCancel={(fn) => {
+                textEffectsCancelRef.current = fn || null;
+              }}
+              initialTab={lyricsDisplayMode === 'sync' ? 'dual' : lyricsDisplayMode}
+            />
+          </Suspense>
         </div>
       )}
 

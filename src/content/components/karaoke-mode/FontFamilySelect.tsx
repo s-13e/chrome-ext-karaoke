@@ -2,7 +2,7 @@
  * FontFamilySelect - 폰트 패밀리 선택 컴포넌트
  * 모든 텍스트 효과 패널에서 공통으로 사용
  */
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, memo } from 'react';
 import { AVAILABLE_FONTS, getFontLabel } from '@constants/fonts';
 import { loadGoogleFont } from '@lib/utils/fonts/googleFontsLoader';
 import styles from './TextEffectsModal.module.css';
@@ -14,20 +14,21 @@ interface FontFamilySelectProps {
   className?: string;
 }
 
-export const FontFamilySelect: React.FC<FontFamilySelectProps> = ({ value, onChange, onPreview, className }) => {
+export const FontFamilySelect: React.FC<FontFamilySelectProps> = memo(({ value, onChange, onPreview, className }) => {
   const selectRef = useRef<HTMLSelectElement>(null);
 
   // value가 전체 font-family 문자열인 경우 label로 변환, undefined면 기본값(Arial) 사용
   const currentLabel = value ? getFontLabel(value) : AVAILABLE_FONTS[0]?.label || 'Arial';
 
-  // 컴포넌트 마운트 시 모든 폰트를 미리 로드
+  // 현재 선택된 폰트만 로드 (lazy loading)
   useEffect(() => {
-    AVAILABLE_FONTS.forEach((font) => {
-      if (font.requiresLoad) {
-        loadGoogleFont(font.label);
+    if (value) {
+      const currentFont = AVAILABLE_FONTS.find((f) => f.value === value);
+      if (currentFont?.requiresLoad) {
+        loadGoogleFont(currentFont.label);
       }
-    });
-  }, []);
+    }
+  }, [value]);
 
   // Select 열릴 때 option에 폰트 스타일 적용
   useEffect(() => {
@@ -71,7 +72,7 @@ export const FontFamilySelect: React.FC<FontFamilySelectProps> = ({ value, onCha
     }
   };
 
-  // 마우스 호버 시 미리보기
+  // 마우스 호버 시 미리보기 (폰트 lazy load 포함)
   const handleMouseMove = (e: React.MouseEvent<HTMLSelectElement>) => {
     if (!onPreview) return;
 
@@ -84,6 +85,10 @@ export const FontFamilySelect: React.FC<FontFamilySelectProps> = ({ value, onCha
     if (index >= 0 && index < AVAILABLE_FONTS.length) {
       const font = AVAILABLE_FONTS[index];
       if (font) {
+        // Google Fonts인 경우 미리보기 전에 로드
+        if (font.requiresLoad) {
+          loadGoogleFont(font.label);
+        }
         onPreview(font.value);
       }
     }
@@ -104,4 +109,6 @@ export const FontFamilySelect: React.FC<FontFamilySelectProps> = ({ value, onCha
       ))}
     </select>
   );
-};
+});
+
+FontFamilySelect.displayName = 'FontFamilySelect';

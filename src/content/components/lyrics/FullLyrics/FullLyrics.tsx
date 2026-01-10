@@ -1,5 +1,5 @@
 // src/components/lyrics/FullLyricsView/FullLyricsView.tsx
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useMemo, memo } from 'react';
 import styles from './styles.module.css';
 import { Line } from '@lib/types/lyrics';
 import { useCurrentTime } from '@hooks/useCurrentTime';
@@ -20,7 +20,7 @@ interface FullLyricsProps {
   styleConfig?: Partial<FullLyricsStyleConfig>;
 }
 
-export const FullLyrics: React.FC<FullLyricsProps> = ({
+const FullLyricsComponent: React.FC<FullLyricsProps> = ({
   lyrics,
   scrollToCurrent = true,
   fontColor = '#FFFFFF',
@@ -49,6 +49,18 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({
 
   const lyricTexts = useMemo(() => shiftedLyrics.map((line) => line.text), [shiftedLyrics]);
   const pronList = usePronunciations(lyricTexts);
+
+  // 가상화: 보이는 범위 계산 (활성 줄 기준 ±10줄만 렌더링)
+  const RENDER_BUFFER = 10;
+  const visibleRange = useMemo(() => {
+    const center = activeLineIndex >= 0 ? activeLineIndex : 0;
+    const start = Math.max(0, center - RENDER_BUFFER);
+    const end = Math.min(shiftedLyrics.length, center + RENDER_BUFFER + 1);
+    return { start, end };
+  }, [activeLineIndex, shiftedLyrics.length]);
+
+  // 각 가사 줄의 대략적 높이 (px)
+  const ITEM_HEIGHT = 60;
 
   // 현재 줄로 스크롤 (선택사항)
   useEffect(() => {
@@ -133,7 +145,12 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({
 
   return (
     <div className={styles.fullLyricsContainer} ref={containerRef}>
-      {shiftedLyrics.map((line, idx) => {
+      {/* 상단 스페이서: 렌더링하지 않는 위쪽 항목들의 높이만큼 공간 확보 */}
+      <div style={{ height: `${visibleRange.start * ITEM_HEIGHT}px` }} />
+
+      {/* 보이는 범위의 가사만 렌더링 */}
+      {shiftedLyrics.slice(visibleRange.start, visibleRange.end).map((line, sliceIdx) => {
+        const idx = visibleRange.start + sliceIdx;
         const pron = pronList[idx];
         const isActive = idx === activeLineIndex;
 
@@ -174,6 +191,11 @@ export const FullLyrics: React.FC<FullLyricsProps> = ({
           </div>
         );
       })}
+
+      {/* 하단 스페이서: 렌더링하지 않는 아래쪽 항목들의 높이만큼 공간 확보 */}
+      <div style={{ height: `${(shiftedLyrics.length - visibleRange.end) * ITEM_HEIGHT}px` }} />
     </div>
   );
 };
+
+export const FullLyrics = memo(FullLyricsComponent);

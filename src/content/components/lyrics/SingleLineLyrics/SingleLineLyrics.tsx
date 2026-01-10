@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, memo } from 'react';
 import { Line } from '@lib/types/lyrics';
 import { useCurrentTime } from '@hooks/useCurrentTime';
 import { usePronunciations } from '../common/usePronunciation';
@@ -28,7 +28,7 @@ interface SingleLineLyricsProps {
  * - currentTime을 props로 받으면 해당 시간 사용 (싱크셋 미리보기)
  * - currentTime이 없으면 useCurrentTime 훅 사용 (일반 재생)
  */
-export const SingleLineLyrics: React.FC<SingleLineLyricsProps> = ({
+const SingleLineLyricsComponent: React.FC<SingleLineLyricsProps> = ({
   lyrics,
   offset = 0,
   fontColor = '#fff',
@@ -182,3 +182,5 @@ export const SingleLineLyrics: React.FC<SingleLineLyricsProps> = ({
     </div>
   );
 };
+
+export const SingleLineLyrics = memo(SingleLineLyricsComponent);

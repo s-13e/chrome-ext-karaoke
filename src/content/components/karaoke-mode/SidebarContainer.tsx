@@ -1,17 +1,29 @@
 // SidebarContainer.tsx
 // 가라오케 모드 오른쪽 사이드바 컨테이너
 // 가라오케 확장의 다양한 서비스 제공
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AcapellaRecording } from './sideBar/AcapellaRecording';
-import { RecordingsList } from './sideBar/RecordingsList';
-import { SyncOffsetList } from './sideBar/SyncOffsetList';
-import { ChartCategoryMenu } from './sideBar/ChartCategoryMenu';
-import { PopularChart } from './sideBar/PopularChart';
-import { ManualLyricsSearch } from './sideBar/ManualLyricsSearch';
 import { Line } from '@lib/types/lyrics';
 import { ChartCategory } from '@lib/types/chart';
 import styles from './styles.module.css';
+
+// Sidebar 컴포넌트들을 lazy loading으로 변경 (메모리 최적화)
+const AcapellaRecording = lazy(() =>
+  import('./sideBar/AcapellaRecording').then((module) => ({ default: module.AcapellaRecording })),
+);
+const RecordingsList = lazy(() =>
+  import('./sideBar/RecordingsList').then((module) => ({ default: module.RecordingsList })),
+);
+const SyncOffsetList = lazy(() =>
+  import('./sideBar/SyncOffsetList').then((module) => ({ default: module.SyncOffsetList })),
+);
+const ChartCategoryMenu = lazy(() =>
+  import('./sideBar/ChartCategoryMenu').then((module) => ({ default: module.ChartCategoryMenu })),
+);
+const PopularChart = lazy(() => import('./sideBar/PopularChart').then((module) => ({ default: module.PopularChart })));
+const ManualLyricsSearch = lazy(() =>
+  import('./sideBar/ManualLyricsSearch').then((module) => ({ default: module.ManualLyricsSearch })),
+);
 
 type SidebarView =
   | 'main'
@@ -127,7 +139,9 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, widt
   if (currentView === 'acapella') {
     return (
       <div className={styles.sidebarContainer} style={sidebarStyle}>
-        <AcapellaRecording onBack={handleBackToMain} lyrics={lyrics} />
+        <Suspense fallback={<div style={{ padding: '20px', color: '#fff' }}>Loading...</div>}>
+          <AcapellaRecording onBack={handleBackToMain} lyrics={lyrics} />
+        </Suspense>
       </div>
     );
   }
@@ -136,7 +150,9 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, widt
   if (currentView === 'recordings-list') {
     return (
       <div className={styles.sidebarContainer} style={sidebarStyle}>
-        <RecordingsList onBack={handleBackToMain} />
+        <Suspense fallback={<div style={{ padding: '20px', color: '#fff' }}>Loading...</div>}>
+          <RecordingsList onBack={handleBackToMain} />
+        </Suspense>
       </div>
     );
   }
@@ -145,7 +161,9 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, widt
   if (currentView === 'sync-offset-list') {
     return (
       <div className={styles.sidebarContainer} style={sidebarStyle}>
-        <SyncOffsetList onBack={handleBackToMain} />
+        <Suspense fallback={<div style={{ padding: '20px', color: '#fff' }}>Loading...</div>}>
+          <SyncOffsetList onBack={handleBackToMain} />
+        </Suspense>
       </div>
     );
   }
@@ -154,7 +172,9 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, widt
   if (currentView === 'chart-category') {
     return (
       <div className={styles.sidebarContainer} style={sidebarStyle}>
-        <ChartCategoryMenu onBackToMain={handleBackToMain} onSelectCategory={handleSelectCategory} />
+        <Suspense fallback={<div style={{ padding: '20px', color: '#fff' }}>Loading...</div>}>
+          <ChartCategoryMenu onBackToMain={handleBackToMain} onSelectCategory={handleSelectCategory} />
+        </Suspense>
       </div>
     );
   }
@@ -163,7 +183,9 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, widt
   if (currentView === 'chart-list' && selectedChartCategory) {
     return (
       <div className={styles.sidebarContainer} style={sidebarStyle}>
-        <PopularChart category={selectedChartCategory} onBackToCategoryMenu={handleBackToCategoryMenu} />
+        <Suspense fallback={<div style={{ padding: '20px', color: '#fff' }}>Loading...</div>}>
+          <PopularChart category={selectedChartCategory} onBackToCategoryMenu={handleBackToCategoryMenu} />
+        </Suspense>
       </div>
     );
   }
@@ -172,7 +194,9 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, widt
   if (currentView === 'manual-lyrics-search') {
     return (
       <div className={styles.sidebarContainer} style={sidebarStyle}>
-        <ManualLyricsSearch onBack={handleBackToMain} onLyricsSelected={handleLyricsSelected} />
+        <Suspense fallback={<div style={{ padding: '20px', color: '#fff' }}>Loading...</div>}>
+          <ManualLyricsSearch onBack={handleBackToMain} onLyricsSelected={handleLyricsSelected} />
+        </Suspense>
       </div>
     );
   }

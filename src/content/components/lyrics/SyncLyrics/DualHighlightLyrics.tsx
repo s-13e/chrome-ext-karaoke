@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, memo } from 'react';
 import { useCurrentTime } from '@hooks/useCurrentTime';
 import { getDisplayLines } from '@lib/utils/lyrics/display/lyricsDisplay';
 import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/display/lyricsOffset';
@@ -22,7 +22,7 @@ interface DualHighlightLyricsProps {
   // 스타일 커스터마이징
   styleConfig?: Partial<DualHighlightLyricsStyleConfig>;
 }
-export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
+const DualHighlightLyricsComponent: React.FC<DualHighlightLyricsProps> = ({
   lyrics,
   offset,
   fontColor,
@@ -232,3 +232,5 @@ export const DualHighlightLyrics: React.FC<DualHighlightLyricsProps> = ({
     </div>
   );
 };
+
+export const DualHighlightLyrics = memo(DualHighlightLyricsComponent);
