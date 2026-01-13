@@ -5,6 +5,8 @@ import styles from './styles.module.css';
 
 const GITHUB_ISSUES_URL = 'https://github.com/s-13e/chrome-ext-karaoke/issues';
 const SUPPORT_EMAIL_ADDRESS = '13e.personal@gmail.com';
+const BUY_ME_A_COFFEE_URL = 'https://buymeacoffee.com/s.13e';
+const TOSS_DONATION_URL = ''; // TODO: Add Toss donation link when ready
 
 interface ContactProps {
   isDarkMode: boolean;
@@ -691,6 +693,60 @@ export function Contact({ isDarkMode }: ContactProps) {
         >
           {t('extOpenGithubIssues', '🐛 Open GitHub Issues')}
         </button>
+      </div>
+
+      {/* Support This Project Section */}
+      <div
+        style={{
+          marginTop: '24px',
+          paddingTop: '24px',
+          borderTop: isDarkMode ? '1px solid #333333' : '1px solid #e0e0e0',
+        }}
+      >
+        <h4 style={{ color: isDarkMode ? '#ffffff' : '#000000', marginTop: '0px', marginBottom: '8px' }}>
+          {t('extSupportProject', 'Support This Project')}
+        </h4>
+        <p style={{ fontSize: '0.9em', color: isDarkMode ? '#888888' : '#666666', marginBottom: '12px' }}>
+          {t('extSupportProjectDesc', 'If you enjoy this extension, consider supporting my work!')}
+        </p>
+
+        {/* Buy Me a Coffee Button - Official Widget */}
+        <a
+          href={BUY_ME_A_COFFEE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: 'inline-block',
+            textDecoration: 'none',
+            marginBottom: TOSS_DONATION_URL ? '12px' : '0',
+          }}
+        >
+          <img
+            src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
+            alt="Buy Me A Coffee"
+            style={{
+              height: '40px',
+              width: 'auto',
+              borderRadius: '6px',
+            }}
+          />
+        </a>
+
+        {/* Toss Button (only show if URL is set) */}
+        {TOSS_DONATION_URL && (
+          <button
+            className={styles.settingsButton}
+            type="button"
+            onClick={() => window.open(TOSS_DONATION_URL, '_blank', 'noopener,noreferrer')}
+            style={{
+              backgroundColor: isDarkMode ? '#2a2a2a' : '#f5f5f5',
+              color: isDarkMode ? '#ffffff' : '#000000',
+              borderBottom: isDarkMode ? '1px solid #333333' : '1px solid #e0e0e0',
+            }}
+          >
+            {t('extDonateWithToss', '🇰🇷 토스로 후원하기')}
+          </button>
+        )}
       </div>
 
       {/* Confirmation Modal */}
