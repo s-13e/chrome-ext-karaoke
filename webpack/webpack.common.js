@@ -3,6 +3,7 @@ const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyPlugin = require('copy-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
+const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 
 const webpack = require('webpack');
 const dotenv = require('dotenv');
@@ -20,7 +21,6 @@ module.exports = {
   output: {
     filename: '[name]/[name].js',
     path: path.resolve(__dirname, '../dist'),
-    clean: false,
     publicPath: '',
   },
   module: {
@@ -84,6 +84,12 @@ module.exports = {
     },
   },
   plugins: [
+    new CleanWebpackPlugin({
+      cleanOnceBeforeBuildPatterns: [
+        '**/*',
+        '!dict/**', // kuromoji 사전은 보존 (불필요한 재복사 방지)
+      ],
+    }),
     new HtmlWebpackPlugin({
       filename: 'options/options.html',
       template: './src/options/options.html',

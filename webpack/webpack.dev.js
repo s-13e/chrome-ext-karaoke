@@ -3,7 +3,10 @@ const { merge } = require('webpack-merge');
 const common = require('./webpack.common.js');
 const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
 
-module.exports = merge(common, {
+// 번들 분석이 필요할 때만 활성화: ANALYZE=true npm run dev
+const enableBundleAnalyzer = process.env.ANALYZE === 'true';
+
+const devConfig = {
   mode: 'development',
   devtool: 'inline-source-map',
   target: 'web',
@@ -28,13 +31,20 @@ module.exports = merge(common, {
     wasmLoading: false,
   },
 
-  plugins: [
+  plugins: [],
+};
+
+// 번들 분석 활성화 시에만 플러그인 추가
+if (enableBundleAnalyzer) {
+  devConfig.plugins.push(
     new BundleAnalyzerPlugin({
-      analyzerMode: 'static', // 빌드 결과를 HTML 파일로 생성
+      analyzerMode: 'static',
       reportFilename: 'bundle-report.html',
       openAnalyzer: false,
       generateStatsFile: true,
       statsFilename: 'bundle-stats.json',
     }),
-  ],
-});
+  );
+}
+
+module.exports = merge(common, devConfig);
