@@ -9,8 +9,8 @@ import { detectYouTubeVideo, setupSPAObserver } from '@lib/youtube';
 import { debounce } from '@lib/utils/common/common';
 import { contentLogger, contentErrorTracker, LogLevelEnum } from '@lib/utils/monitoring';
 import { STORAGE_KEYS } from '@constants/storageKeys';
-import { fetchYouTubeVideoMeta } from '@background/api/youtube';
 import { isMusicVideo } from '@lib/utils/audio/musicDetection';
+import type { YouTubeVideoMetaFullValue } from '@background/api/youtube';
 import { UIResourceManager } from '@lib/utils/infra/uiResourceManager';
 import { YOUTUBE_MINI_PLAYER_CLASSES, YOUTUBE_MINI_PLAYER_CONTAINER_SELECTOR } from '@constants/youtubeSelectors';
 import { extractArtistAndTitle, fallbackArtistAndTitle } from '@lib/utils/lyrics/meta/artistTitle';
@@ -146,6 +146,26 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
   let lyricsStyleDual: Partial<import('@lib/types/lyricsStyles').DualHighlightLyricsStyleConfig> = {};
   let lyricsStyleFull: Partial<import('@lib/types/lyricsStyles').FullLyricsStyleConfig> = {};
   let lyricsStyleSingle: Partial<import('@lib/types/lyricsStyles').SingleLineLyricsStyleConfig> = {};
+
+  /**
+   * Background script를 통해 YouTube 비디오 메타데이터 조회
+   * (보안: API 키를 content script에 노출하지 않음)
+   */
+  async function fetchYouTubeMetaViaBackground(videoId: string): Promise<YouTubeVideoMetaFullValue | null> {
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage({ type: 'FETCH_YOUTUBE_META', videoId }, (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        if (response?.success) {
+          resolve(response.data);
+        } else {
+          reject(new Error(response?.error || 'YouTube Meta fetch failed'));
+        }
+      });
+    });
+  }
 
   let showRealtimeLyrics = true; // 현재 가사 ui 보이게
   let showPronunciationLyrics = true;
@@ -1168,7 +1188,7 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
 
       // 🚀 Prefetch 전략: 가사 로드를 광고 여부와 무관하게 시작 (백그라운드)
       const metaStartTime = performance.now();
-      const metaPromise = fetchYouTubeVideoMeta(videoId, process.env.YOUTUBE_API_KEY!);
+      const metaPromise = fetchYouTubeMetaViaBackground(videoId);
 
       // 1) 메타데이터 및 기본 정보 수집
       let meta;

@@ -23,7 +23,6 @@ export const ColorPickerInput: React.FC<ColorPickerInputProps> = memo(({ value, 
 
   const applyChange = useCallback(
     (newValue: string) => {
-      // eslint-disable-next-line no-console
       console.log('[ColorPickerInput] applyChange called with:', newValue);
       onChange(newValue || undefined);
       // onPreviewUpdate 제거: onChange에서 이미 storage에 저장하므로 중복 호출 불필요
@@ -33,8 +32,6 @@ export const ColorPickerInput: React.FC<ColorPickerInputProps> = memo(({ value, 
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = (e.target as HTMLInputElement).value;
-    // eslint-disable-next-line no-console
-    console.log('[ColorPickerInput] handleChange:', newValue);
     setTempValue(newValue);
     pendingValueRef.current = newValue;
 

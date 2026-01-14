@@ -249,7 +249,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
       lyrics: dualSize,
       pronunciation: commonSizes.pronunciationDefault,
     };
-  }, []);
+  }, []); // 모달 오픈 시 한 번만 계산
 
   // 색상 변경 핸들러
   const updateConfig = (path: string[], value: string | number | undefined) => {
@@ -605,7 +605,7 @@ interface FullSettingsPanelProps {
 }
 const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig, onPreviewUpdate, t }) => {
   // 현재 뷰포트 기준 계산된 폰트 크기
-  const calculatedSizes = useMemo(() => calculateFullFontSizes(), []);
+  const calculatedSizes = useMemo(() => calculateFullFontSizes(), []); // 모달 오픈 시 한 번만 계산
 
   const updateConfig = (path: string[], value: string | number | undefined) => {
     setConfig((prev) => {
@@ -947,7 +947,7 @@ interface SingleSettingsPanelProps {
 }
 const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setConfig, onPreviewUpdate, t }) => {
   // 현재 뷰포트 기준 계산된 폰트 크기
-  const calculatedSizes = useMemo(() => calculateSingleFontSizes(), []);
+  const calculatedSizes = useMemo(() => calculateSingleFontSizes(), []); // 모달 오픈 시 한 번만 계산
 
   const updateConfig = (path: string[], value: string | number | undefined) => {
     setConfig((prev) => {

@@ -161,11 +161,14 @@ const DualHighlightLyricsComponent: React.FC<DualHighlightLyricsProps> = ({
     if (style.fontFamily) inlineStyle.fontFamily = style.fontFamily;
     if (style.fontWeight) inlineStyle.fontWeight = style.fontWeight;
     if (style.textShadow) inlineStyle.textShadow = style.textShadow;
-    // fontSize가 설정되어 있으면 사용, 없으면 계산된 값 사용 (올림 처리됨)
+    // fontSize: 전체화면에서 자동 배율 적용
     if (style.fontSize) {
-      inlineStyle.fontSize = style.fontSize;
+      const isFullscreen = !!document.fullscreenElement;
+      const baseFontSize = typeof style.fontSize === 'number' ? style.fontSize : parseInt(String(style.fontSize), 10);
+      // Dual은 fullscreen에서 약 2배 배율 (1rem → 2rem 기준)
+      inlineStyle.fontSize = isFullscreen && !isNaN(baseFontSize) ? Math.round(baseFontSize * 2) : style.fontSize;
     } else if (!isForPronunciation) {
-      // 가사는 항상 계산된 fontSize 적용 (CSS clamp 대신)
+      // 가사는 항상 계산된 fontSize 적용 (CSS clamp 대신) - 이미 fullscreen 체크 포함
       inlineStyle.fontSize = calculateDualFontSizes();
     }
     if (style.opacity !== undefined) inlineStyle.opacity = style.opacity;

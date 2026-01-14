@@ -46,34 +46,143 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
 
       const fullBleedContainer = document.querySelector<HTMLElement>('#full-bleed-container');
       const columns = document.querySelector<HTMLElement>('#columns');
+      const ytdApp = document.querySelector<HTMLElement>('ytd-app');
 
       if (isCurrentlyFullscreen) {
-        // 전체화면 진입: 가라오케 모드 스타일 제거 (YouTube 기본 전체화면으로)
-        console.log('[KaraokeModeContainer] 전체화면 진입 - 가라오케 스타일 일시 해제');
+        // 전체화면 진입: 플레이어를 화면 전체로 확장 (하단 여백 제거)
+        console.log('[KaraokeModeContainer] 전체화면 진입 - 전체 화면 스타일 적용');
         if (fullBleedContainer) {
-          fullBleedContainer.style.removeProperty('position');
-          fullBleedContainer.style.removeProperty('top');
-          fullBleedContainer.style.removeProperty('left');
-          fullBleedContainer.style.removeProperty('width');
-          fullBleedContainer.style.removeProperty('height');
-          fullBleedContainer.style.removeProperty('z-index');
-          fullBleedContainer.style.removeProperty('margin');
-          fullBleedContainer.style.removeProperty('padding');
-          fullBleedContainer.style.removeProperty('max-width');
+          // 전체화면에서는 100vh로 화면 전체 채우기 (하단바 공간 없음)
+          fullBleedContainer.style.setProperty('position', 'fixed', 'important');
+          fullBleedContainer.style.setProperty('top', '0', 'important');
+          fullBleedContainer.style.setProperty('left', '0', 'important');
+          fullBleedContainer.style.setProperty('width', '100vw', 'important');
+          fullBleedContainer.style.setProperty('height', '100vh', 'important');
+          fullBleedContainer.style.setProperty('z-index', '2147483647', 'important'); // 최상위
+          fullBleedContainer.style.setProperty('margin', '0', 'important');
+          fullBleedContainer.style.setProperty('padding', '0', 'important');
+          fullBleedContainer.style.setProperty('max-width', '100vw', 'important');
+          fullBleedContainer.style.setProperty('max-height', '100vh', 'important');
         }
         if (columns) {
-          columns.style.removeProperty('display');
+          columns.style.setProperty('display', 'none', 'important');
         }
-        document.body.style.overflow = '';
-        document.documentElement.style.overflow = '';
+        // ytd-app 하단 여백 방지
+        if (ytdApp) {
+          ytdApp.style.setProperty('overflow', 'hidden', 'important');
+          ytdApp.style.setProperty('max-height', '100vh', 'important');
+          ytdApp.style.setProperty('height', '100vh', 'important');
+        }
+        document.body.style.overflow = 'hidden';
+        document.documentElement.style.overflow = 'hidden';
       } else {
-        // 전체화면 종료: 가라오케 모드 스타일 재적용
-        console.log('[KaraokeModeContainer] 전체화면 종료 - 가라오케 스타일 복원');
-        // 잠시 후 스타일 재적용 (전체화면 종료 애니메이션 완료 대기)
-        setTimeout(() => {
-          // 스타일 재적용을 위해 useEffect 재실행 트리거
-          window.dispatchEvent(new CustomEvent('karaoke-restore-styles'));
-        }, 100);
+        // 전체화면 종료: 카라오케 모드가 켜져있으면 스타일 재적용, 꺼져있으면 완전 제거
+        console.log('[KaraokeModeContainer] 전체화면 종료 - 스타일 복원');
+
+        if (!visible) {
+          // 카라오케 모드가 꺼져있으면 모든 스타일 제거
+          if (fullBleedContainer) {
+            fullBleedContainer.style.removeProperty('position');
+            fullBleedContainer.style.removeProperty('top');
+            fullBleedContainer.style.removeProperty('left');
+            fullBleedContainer.style.removeProperty('width');
+            fullBleedContainer.style.removeProperty('height');
+            fullBleedContainer.style.removeProperty('z-index');
+            fullBleedContainer.style.removeProperty('margin');
+            fullBleedContainer.style.removeProperty('padding');
+            fullBleedContainer.style.removeProperty('max-width');
+            fullBleedContainer.style.removeProperty('max-height');
+          }
+          if (columns) {
+            columns.style.removeProperty('display');
+          }
+          if (ytdApp) {
+            ytdApp.style.removeProperty('margin');
+            ytdApp.style.removeProperty('padding');
+            ytdApp.style.removeProperty('overflow');
+            ytdApp.style.removeProperty('max-height');
+            ytdApp.style.removeProperty('height');
+          }
+          document.body.style.overflow = '';
+          document.documentElement.style.overflow = '';
+        } else {
+          // 카라오케 모드가 켜져있으면 가라오케 스타일 재적용
+          setTimeout(() => {
+            // 전체화면에서 변경된 내부 요소 스타일 초기화
+            if (fullBleedContainer) {
+              const playerContainer = fullBleedContainer.querySelector<HTMLElement>('#player-container');
+              const moviePlayer = fullBleedContainer.querySelector<HTMLElement>('#movie_player');
+              const videoContainer = fullBleedContainer.querySelector<HTMLElement>('.html5-video-container');
+              const videoElement = fullBleedContainer.querySelector<HTMLVideoElement>('video.html5-main-video');
+
+              // 모든 스타일 제거 (YouTube 기본값으로 복원 후 재적용)
+              if (playerContainer) {
+                playerContainer.style.removeProperty('width');
+                playerContainer.style.removeProperty('height');
+                playerContainer.style.removeProperty('max-width');
+                playerContainer.style.removeProperty('max-height');
+                playerContainer.style.removeProperty('min-height');
+                playerContainer.style.removeProperty('aspect-ratio');
+                playerContainer.style.removeProperty('left');
+                playerContainer.style.removeProperty('right');
+                playerContainer.style.removeProperty('top');
+                playerContainer.style.removeProperty('bottom');
+                playerContainer.style.removeProperty('transform');
+                playerContainer.style.removeProperty('position');
+              }
+              if (moviePlayer) {
+                moviePlayer.style.removeProperty('width');
+                moviePlayer.style.removeProperty('height');
+                moviePlayer.style.removeProperty('max-width');
+                moviePlayer.style.removeProperty('max-height');
+                moviePlayer.style.removeProperty('min-height');
+                moviePlayer.style.removeProperty('aspect-ratio');
+                moviePlayer.style.removeProperty('left');
+                moviePlayer.style.removeProperty('right');
+                moviePlayer.style.removeProperty('top');
+                moviePlayer.style.removeProperty('bottom');
+                moviePlayer.style.removeProperty('transform');
+              }
+              if (videoContainer) {
+                videoContainer.style.removeProperty('width');
+                videoContainer.style.removeProperty('height');
+                videoContainer.style.removeProperty('max-width');
+                videoContainer.style.removeProperty('max-height');
+                videoContainer.style.removeProperty('aspect-ratio');
+                videoContainer.style.removeProperty('left');
+                videoContainer.style.removeProperty('right');
+                videoContainer.style.removeProperty('top');
+                videoContainer.style.removeProperty('bottom');
+                videoContainer.style.removeProperty('transform');
+              }
+              if (videoElement) {
+                videoElement.style.removeProperty('width');
+                videoElement.style.removeProperty('height');
+                videoElement.style.removeProperty('max-width');
+                videoElement.style.removeProperty('max-height');
+                videoElement.style.removeProperty('object-fit');
+                videoElement.style.removeProperty('object-position');
+                videoElement.style.removeProperty('left');
+                videoElement.style.removeProperty('right');
+                videoElement.style.removeProperty('top');
+                videoElement.style.removeProperty('bottom');
+                videoElement.style.removeProperty('transform');
+              }
+            }
+
+            // 강제 리플로우 (레이아웃 재계산)
+            if (fullBleedContainer) {
+              void fullBleedContainer.offsetHeight;
+            }
+
+            // 사이드바 너비 재계산 (viewport 변경에 대응)
+            const newSidebarWidth = getSidebarWidth();
+            setSidebarWidth(newSidebarWidth);
+
+            // 스타일 재적용을 위해 useEffect 재실행 트리거
+            window.dispatchEvent(new CustomEvent('karaoke-restore-styles'));
+          }, 100);
+        }
       }
     };
 
@@ -101,15 +210,26 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
       // YouTube 페이지 메인 컨테이너들
       const fullBleedContainer = document.querySelector<HTMLElement>('#full-bleed-container');
       const columns = document.querySelector<HTMLElement>('#columns');
+      const ytdApp = document.querySelector<HTMLElement>('ytd-app');
 
       console.log('[KaraokeModeContainer] DOM 요소 확인:', {
         fullBleedContainer: !!fullBleedContainer,
         columns: !!columns,
+        ytdApp: !!ytdApp,
       });
 
       if (!fullBleedContainer) {
         console.error('[KaraokeModeContainer] 영화관 모드 전환 실패 - #full-bleed-container 없음');
         return;
+      }
+
+      // ytd-app 하단 여백 제거 (overflow 숨김 + 높이 제한)
+      if (ytdApp) {
+        ytdApp.style.setProperty('margin', '0', 'important');
+        ytdApp.style.setProperty('padding', '0', 'important');
+        ytdApp.style.setProperty('overflow', 'hidden', 'important');
+        ytdApp.style.setProperty('max-height', '100vh', 'important');
+        ytdApp.style.setProperty('height', '100vh', 'important');
       }
 
       // #columns 숨기기 (영상 설명, 추천/댓글 영역 모두 포함)
@@ -275,6 +395,7 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
 
       const fullBleedContainer = document.querySelector<HTMLElement>('#full-bleed-container');
       const columns = document.querySelector<HTMLElement>('#columns');
+      const ytdApp = document.querySelector<HTMLElement>('ytd-app');
 
       if (fullBleedContainer) {
         fullBleedContainer.style.removeProperty('position');
@@ -289,6 +410,13 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
       }
       if (columns) {
         columns.style.removeProperty('display');
+      }
+      if (ytdApp) {
+        ytdApp.style.removeProperty('margin');
+        ytdApp.style.removeProperty('padding');
+        ytdApp.style.removeProperty('overflow');
+        ytdApp.style.removeProperty('max-height');
+        ytdApp.style.removeProperty('height');
       }
       document.body.style.overflow = '';
       document.documentElement.style.overflow = '';

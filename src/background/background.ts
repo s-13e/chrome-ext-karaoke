@@ -48,6 +48,11 @@ interface FetchYouTubeLyricsMessage {
   videoId: string;
 }
 
+interface FetchYouTubeMetaMessage {
+  type: 'FETCH_YOUTUBE_META';
+  videoId: string;
+}
+
 interface FetchPlaylistItemsMessage {
   type: 'FETCH_PLAYLIST_ITEMS';
   playlistId: string;
@@ -62,6 +67,7 @@ export type ExtensionMessage =
   | FetchYouTubeLRCLibCacheMessage
   | FetchLyricsByIdMessage
   | FetchYouTubeLyricsMessage
+  | FetchYouTubeMetaMessage
   | FetchPlaylistItemsMessage;
 
 // ===== Chrome 확장 이벤트 리스너 =====
@@ -273,6 +279,29 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendRespon
         sendResponse({ success: true, data: result });
       } catch (error) {
         console.error('[background] FETCH_YOUTUBE_LYRICS 실패:', error);
+        sendResponse({ success: false, error: String(error) });
+      }
+    })();
+
+    return true; // 비동기 응답
+  }
+
+  // YouTube 비디오 메타데이터 조회
+  if (msg.type === 'FETCH_YOUTUBE_META') {
+    console.log('[background] FETCH_YOUTUBE_META 요청 수신 - videoId:', msg.videoId);
+
+    (async () => {
+      try {
+        const { fetchYouTubeVideoMeta } = await import('./api/youtube');
+        const apiKey = process.env.YOUTUBE_API_KEY;
+        if (!apiKey) {
+          throw new Error('YouTube API key not configured');
+        }
+        const result = await fetchYouTubeVideoMeta(msg.videoId, apiKey);
+        console.log('[background] FETCH_YOUTUBE_META 응답:', result ? '성공' : '메타데이터 없음');
+        sendResponse({ success: true, data: result });
+      } catch (error) {
+        console.error('[background] FETCH_YOUTUBE_META 실패:', error);
         sendResponse({ success: false, error: String(error) });
       }
     })();

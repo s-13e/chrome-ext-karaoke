@@ -31,18 +31,24 @@ export function calculateClamp(min: number, preferredCalc: string, max: number):
  */
 export function calculateDualFontSizes() {
   // Dual은 CSS에서 rem 단위 사용하므로 실제 rem 값을 동적으로 가져와야 함
-  // clamp(1rem, calc(1.2rem + 1vw), 2.2rem)
+  // 일반: clamp(1rem, calc(1.2rem + 1vw), 2.2rem)
+  // 전체화면: clamp(2rem, calc(2.5rem + 2vw), 4rem)
 
-  // 실제 rem 값 계산 (일반적으로 16px이지만 사용자 설정에 따라 다를 수 있음)
   const remInPx = parseFloat(getComputedStyle(document.documentElement).fontSize);
-
-  const min = remInPx; // 1rem
-  const max = 2.2 * remInPx; // 2.2rem
   const vw = window.innerWidth / 100;
-  const calculated = 1.2 * remInPx + vw; // 1.2rem + 1vw
+  const isFullscreen = !!document.fullscreenElement;
 
-  // Math.ceil로 올림 처리하여 정수로 만듦 (21.9917 -> 22)
-  return Math.ceil(Math.max(min, Math.min(calculated, max)));
+  if (isFullscreen) {
+    const min = 2 * remInPx; // 2rem
+    const max = 4 * remInPx; // 4rem
+    const calculated = 2.5 * remInPx + 2 * vw; // 2.5rem + 2vw
+    return Math.ceil(Math.max(min, Math.min(calculated, max)));
+  } else {
+    const min = remInPx; // 1rem
+    const max = 2.2 * remInPx; // 2.2rem
+    const calculated = 1.2 * remInPx + vw; // 1.2rem + 1vw
+    return Math.ceil(Math.max(min, Math.min(calculated, max)));
+  }
 }
 
 /**
@@ -65,11 +71,13 @@ export function calculateFullFontSizes() {
  * Single 가사 폰트 크기 계산
  */
 export function calculateSingleFontSizes() {
-  // Single 가사는 2vw
   const vw = window.innerWidth / 100;
+  const isFullscreen = !!document.fullscreenElement;
+
   return {
-    lyrics: Math.round(2 * vw),
-    // Single 발음은 common의 .pronunciation CSS 사용: clamp(17px, calc(0.6vw + 0.6vh), 28px)
+    // 전체화면: 3vw, 일반: 1.5vw (CSS styles.module.css와 일치)
+    lyrics: Math.round(isFullscreen ? 3 * vw : 1.5 * vw),
+    // Single 발음은 common의 .pronunciation CSS가 자동으로 전체화면 적용됨
     pronunciation: calculateClamp(17, 'calc(0.6vw + 0.6vh)', 28),
   };
 }

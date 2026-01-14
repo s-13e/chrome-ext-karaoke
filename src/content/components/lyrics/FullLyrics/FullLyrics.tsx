@@ -123,7 +123,12 @@ const FullLyricsComponent: React.FC<FullLyricsProps> = ({
     if (style.fontFamily) inlineStyle.fontFamily = style.fontFamily;
     if (style.fontWeight) inlineStyle.fontWeight = style.fontWeight;
     if (style.textShadow) inlineStyle.textShadow = style.textShadow;
-    if (style.fontSize) inlineStyle.fontSize = style.fontSize;
+    // fontSize: 전체화면에서 자동 배율 적용 (일반 모드 대비 약 1.5배)
+    if (style.fontSize) {
+      const isFullscreen = !!document.fullscreenElement;
+      const baseFontSize = typeof style.fontSize === 'number' ? style.fontSize : parseInt(String(style.fontSize), 10);
+      inlineStyle.fontSize = isFullscreen && !isNaN(baseFontSize) ? Math.round(baseFontSize * 1.5) : style.fontSize;
+    }
     if (style.opacity !== undefined) inlineStyle.opacity = style.opacity;
     if (style.transition) inlineStyle.transition = style.transition;
     if (style.transform) inlineStyle.transform = style.transform;
