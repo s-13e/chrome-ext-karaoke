@@ -865,15 +865,6 @@ export const AcapellaRecording: React.FC<AcapellaRecordingProps> = ({ onBack, ly
     setRecordingTime(0);
   };
 
-  /**
-   * 법적 고지 동의 초기화 (테스트용)
-   */
-  const handleResetLegalAgreement = async () => {
-    await chrome.storage.sync.remove(STORAGE_KEYS.ACAPELLA_LEGAL_AGREEMENT_ACCEPTED);
-    setHasAcceptedLegalNotice(false);
-    alert('법적 고지 동의가 초기화되었습니다.');
-  };
-
   return (
     <div className={styles.container}>
       {/* 헤더: 뒤로가기 버튼 */}
@@ -1077,13 +1068,6 @@ export const AcapellaRecording: React.FC<AcapellaRecordingProps> = ({ onBack, ly
             </div>
           </div>
         )}
-      </div>
-
-      {/* 테스트용 초기화 버튼 */}
-      <div className={styles.testSection}>
-        <button onClick={handleResetLegalAgreement} className={styles.testButton}>
-          녹음 법적 고지 초기화
-        </button>
       </div>
 
       {/* 녹음 저장 확인 모달 */}

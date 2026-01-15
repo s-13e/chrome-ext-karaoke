@@ -44,8 +44,6 @@
       "resources": [
         "_locales/**/*.json",
         "content/style.css",
-        "assets/icons/move.svg",
-        "assets/icons/music_note.png",
         "dict/*"
       ],
       "matches": ["<all_urls>"]
