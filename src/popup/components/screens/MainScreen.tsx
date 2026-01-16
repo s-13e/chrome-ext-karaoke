@@ -68,30 +68,42 @@ export function MainScreen({ autoDisableState, onOpenSettings, isDarkMode }: Pro
             {enabled ? t('extPopupStatusOn') : t('extPopupStatusOff')}
           </div>
         </div>
-      </div>
 
-      {autoDisableState?.autoDisabled && autoDisableState.autoDisabledReason === 'consecutive_non_music' && (
-        <div className="auto-disable-box">
-          <div className="title">💤 {t('extAutoDisableTitle')}</div>
-          <div>{t('extAutoDisableMessage', { count: autoDisableState.threshold })}</div>
-          <div className="count">
-            {t('extAutoDisableCount', {
-              current: autoDisableState.consecutiveNonMusicCount,
-              threshold: autoDisableState.threshold,
-            })}
+        {/* Auto Pause 알림 */}
+        {autoDisableState?.autoDisabled && autoDisableState.autoDisabledReason === 'consecutive_non_music' && (
+          <div
+            className="auto-disable-box"
+            style={{
+              backgroundColor: isDarkMode ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.6)',
+              color: isDarkMode ? '#e0e0e0' : '#333333',
+              padding: '12px 16px',
+              margin: '0 16px',
+              borderRadius: '8px',
+            }}
+          >
+            <div className="title" style={{ color: isDarkMode ? '#ffc107' : '#8b5cf6' }}>
+              💤 {t('extAutoDisableTitle')}
+            </div>
+            <div>{t('extAutoDisableMessage', { count: autoDisableState.threshold })}</div>
+            <div className="count" style={{ color: isDarkMode ? '#888888' : '#666666' }}>
+              {t('extAutoDisableCount', {
+                current: autoDisableState.consecutiveNonMusicCount,
+                threshold: autoDisableState.threshold,
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Version Info */}
-      <div
-        className={styles.versionInfo}
-        style={{
-          color: isDarkMode ? '#888888' : '#777777',
-          backgroundColor: isDarkMode ? '#1a1a1a' : '#f5f5f5',
-        }}
-      >
-        v{chrome.runtime.getManifest().version}
+        {/* Version Info */}
+        <div
+          className={styles.versionInfo}
+          style={{
+            color: isDarkMode ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.4)',
+            paddingBottom: '8px',
+          }}
+        >
+          v{chrome.runtime.getManifest().version}
+        </div>
       </div>
     </div>
   );

@@ -162,9 +162,7 @@ function sendMessageToActiveTab(msg: ExtensionMessage, maxRetries = 3): Promise<
       console.log(`[sendMessageToActiveTab] content로 메시지 전송 시도 (${tries + 1}/${maxRetries}) - tabId: ${tabId}`);
       chrome.tabs.sendMessage(tabId, msg, (res: GetLatestLyricsResponse) => {
         if (chrome.runtime.lastError) {
-          console.warn(`[background] 메시지 전송 실패(${tries + 1}):`, chrome.runtime.lastError.message);
           if (++tries < maxRetries) {
-            console.log(`[sendMessageToActiveTab] 재시도 예정...`);
             setTimeout(() => trySend(resolve, reject), 500);
           } else {
             reject(new Error('Could not establish connection'));
