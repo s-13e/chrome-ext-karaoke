@@ -1,15 +1,14 @@
 // popup/App.tsx
-import { ChangeEvent, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLangLoader } from '@hooks/useLangLoader';
 import { useTranslation } from 'react-i18next';
-import { useChromeStorage } from '@hooks/useChromeStorage';
 import { MESSAGE_TYPES } from '@constants/messageTypes';
 import { ErrorFallback } from '@components/common/ErrorFallback';
 import { LoadingOverlay } from '@components/common/LoadingOverlay';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 import { PopupSettingsPanel } from './components/settings/PopupSettingsPanel';
 import './popup.css';
-import { getAutoDisableState, disableAutoDisable, enableAutoDisable } from '@lib/utils/storage/autoDisableStorage';
+import { getAutoDisableState } from '@lib/utils/storage/autoDisableStorage';
 import { AutoDisableState } from '@lib/types/autoDisable';
 import { MainScreen } from './components/screens/MainScreen';
 
@@ -22,24 +21,23 @@ export function App() {
   const { i18n } = useTranslation();
   const { phase } = useLangLoader();
 
-  const [enabled, setEnabled] = useChromeStorage(STORAGE_KEYS.CONTENT_ENABLED, false);
   const [showSettings, setShowSettings] = useState(false);
   const [autoDisableState, setAutoDisableState] = useState<AutoDisableState | null>(null);
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const [isDarkModeLoaded, setIsDarkModeLoaded] = useState<boolean>(false);
 
   // 다크모드 상태 로드 및 감지
   useEffect(() => {
     const loadDarkMode = async () => {
       const result = await chrome.storage.sync.get(['darkMode']);
-      setIsDarkMode(result.darkMode ?? true);
+      setIsDarkMode(result.darkMode ?? false);
       setIsDarkModeLoaded(true);
     };
     loadDarkMode();
 
     const handleDarkModeChange = (changes: Record<string, chrome.storage.StorageChange>) => {
       if (changes.darkMode) {
-        setIsDarkMode(changes.darkMode.newValue ?? true);
+        setIsDarkMode(changes.darkMode.newValue ?? false);
       }
     };
 
@@ -69,39 +67,6 @@ export function App() {
       chrome.storage.local.onChanged.removeListener(handleStorageChange);
     };
   }, []);
-
-  // 스위치 상태 변경 핸들러
-  const handleToggle = async (e: ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.checked;
-    setEnabled(newValue);
-
-    // 사용자가 수동으로 끈 경우 자동 비활성화 사유 업데이트
-    if (!newValue) {
-      await enableAutoDisable('manual');
-    } else {
-      // 사용자가 수동으로 켠 경우 자동 비활성화 해제
-      await disableAutoDisable();
-    }
-
-    // 현재 활성 탭에 메시지 전송 (content script가 없을 수 있으므로 에러 무시)
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]?.id) {
-        chrome.tabs.sendMessage(
-          tabs[0].id,
-          {
-            type: MESSAGE_TYPES.TOGGLE_CONTENT,
-            enabled: newValue,
-          },
-          () => {
-            // chrome.runtime.lastError 체크하여 에러 무시
-            if (chrome.runtime.lastError) {
-              console.log('[Popup] Content script not ready:', chrome.runtime.lastError.message);
-            }
-          },
-        );
-      }
-    });
-  };
 
   useEffect(() => {
     console.log('[Popup] Setting up language listeners');
@@ -158,8 +123,6 @@ export function App() {
   return (
     <div className="popup-wrapper">
       <MainScreen
-        enabled={enabled}
-        onToggle={handleToggle}
         autoDisableState={autoDisableState}
         onOpenSettings={() => setShowSettings(true)}
         isDarkMode={isDarkMode}

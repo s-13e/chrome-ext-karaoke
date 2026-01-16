@@ -1,16 +1,14 @@
 // popup/screens/MainScreen.tsx
-import { ChangeEvent, useCallback } from 'react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { IoSettingsOutline } from 'react-icons/io5';
 import { AutoDisableState } from '@lib/types/autoDisable';
-import { DiscoBall } from '../disco/DiscoBall';
 import { useChromeStorage } from '@hooks/useChromeStorage';
 import { STORAGE_KEYS } from '@constants/storageKeys';
+import { enableAutoDisable, disableAutoDisable } from '@lib/utils/storage/autoDisableStorage';
 import styles from './MainScreen.module.css';
 
 interface Props {
-  enabled: boolean;
-  onToggle: (e: ChangeEvent<HTMLInputElement>) => void;
   autoDisableState: AutoDisableState | null;
   onOpenSettings: () => void;
   isDarkMode: boolean;
@@ -20,9 +18,16 @@ export function MainScreen({ autoDisableState, onOpenSettings, isDarkMode }: Pro
   const { t } = useTranslation();
   const [enabled, setEnabled] = useChromeStorage(STORAGE_KEYS.CONTENT_ENABLED, false);
 
-  const handleToggle = useCallback(() => {
+  const handleToggle = useCallback(async () => {
     const next = !enabled;
     setEnabled(next);
+
+    // 자동 비활성화 상태 업데이트
+    if (!next) {
+      await enableAutoDisable('manual');
+    } else {
+      await disableAutoDisable();
+    }
 
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]?.id) {
@@ -33,6 +38,7 @@ export function MainScreen({ autoDisableState, onOpenSettings, isDarkMode }: Pro
       }
     });
   }, [enabled, setEnabled]);
+
   return (
     <div className={styles.mainScreenContainer}>
       <div className="popup-header" style={{ backgroundColor: isDarkMode ? '#1a1a1a' : '#f5f5f5' }}>
@@ -43,49 +49,42 @@ export function MainScreen({ autoDisableState, onOpenSettings, isDarkMode }: Pro
       </div>
 
       <div
-        className={`${styles.discoSection} ${enabled ? styles.discoSectionOn : ''}`}
+        className={styles.mainContent}
         style={{
           background: isDarkMode
-            ? 'linear-gradient(135deg, #0a0a0f 0%, #0d0d15 50%, #050508 100%)'
-            : 'linear-gradient(135deg, #f0f0f5 0%, #e8e8f0 50%, #f5f5fa 100%)',
+            ? 'linear-gradient(180deg, #1a1a2e 0%, #16213e 100%)'
+            : 'linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%)',
         }}
       >
-        {/* 디스코볼 빛 효과 - ON 상태일 때만 표시 */}
-        {enabled && (
-          <div className={styles.fireflies}>
-            {Array.from({ length: 80 }).map((_, i) => (
-              <div key={i} className={styles.firefly} style={{ animationDelay: `${i * 0.15}s` }} />
-            ))}
-          </div>
-        )}
-
-        {/* 디스코볼 토글 */}
-        <DiscoBall enabled={enabled} onToggle={handleToggle} />
-
-        {/* 네온 사인 스타일 ON/OFF */}
-        <div className={styles.neonSignContainer}>
-          <div className={`${styles.neonSign} ${enabled ? styles.neonOn : styles.neonOff}`}>
-            {enabled ? t('extPopupStatusOn') : t('extPopupStatusOff')}
-          </div>
-        </div>
+        {/* 토글 버튼 */}
+        <button
+          className={`${styles.toggleButton} ${enabled ? styles.toggleOn : styles.toggleOff}`}
+          onClick={handleToggle}
+          style={{
+            background: enabled
+              ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+              : isDarkMode
+                ? 'linear-gradient(135deg, #2d3748 0%, #1a202c 100%)'
+                : 'linear-gradient(135deg, #cbd5e0 0%, #a0aec0 100%)',
+          }}
+        >
+          <span className={styles.toggleText}>{enabled ? t('extPopupStatusOn') : t('extPopupStatusOff')}</span>
+        </button>
 
         {/* Auto Pause 알림 */}
         {autoDisableState?.autoDisabled && autoDisableState.autoDisabledReason === 'consecutive_non_music' && (
           <div
-            className="auto-disable-box"
+            className={styles.autoPauseBox}
             style={{
-              backgroundColor: isDarkMode ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.6)',
+              backgroundColor: isDarkMode ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.05)',
               color: isDarkMode ? '#e0e0e0' : '#333333',
-              padding: '12px 16px',
-              margin: '0 16px',
-              borderRadius: '8px',
             }}
           >
-            <div className="title" style={{ color: isDarkMode ? '#ffc107' : '#8b5cf6' }}>
+            <div className={styles.autoPauseTitle} style={{ color: isDarkMode ? '#ffc107' : '#8b5cf6' }}>
               💤 {t('extAutoDisableTitle')}
             </div>
             <div>{t('extAutoDisableMessage', { count: autoDisableState.threshold })}</div>
-            <div className="count" style={{ color: isDarkMode ? '#888888' : '#666666' }}>
+            <div className={styles.autoPauseCount} style={{ color: isDarkMode ? '#888888' : '#666666' }}>
               {t('extAutoDisableCount', {
                 current: autoDisableState.consecutiveNonMusicCount,
                 threshold: autoDisableState.threshold,
@@ -98,8 +97,7 @@ export function MainScreen({ autoDisableState, onOpenSettings, isDarkMode }: Pro
         <div
           className={styles.versionInfo}
           style={{
-            color: isDarkMode ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.4)',
-            paddingBottom: '8px',
+            color: isDarkMode ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)',
           }}
         >
           v{chrome.runtime.getManifest().version}
