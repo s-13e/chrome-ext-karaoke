@@ -263,5 +263,16 @@
   "extTextEffectsDirectionLeft": "← Left",
   "extTextEffectsDirectionDown": "↓ Down",
   "extTextEffectsDirectionUp": "↑ Up",
-  "extTextEffectsPronunciationHighlightHint": "💡 Applies highlight effect when current lyrics disappear and only pronunciation lyrics remain"
+  "extTextEffectsPronunciationHighlightHint": "💡 Applies highlight effect when current lyrics disappear and only pronunciation lyrics remain",
+  "extEdit": "Edit",
+  "extOnboardingWelcome": "Please select the language of the music videos you listen to most often",
+  "extOnboardingIncludedLanguages": "Languages included by default",
+  "extOnboardingIncludedHint": "These languages are already included and do not require additional downloads.",
+  "extOnboardingOptionalLanguages": "Additional libraries for high-accuracy romanization",
+  "extOnboardingOptionalHint": "Basic romanization is provided for unselected languages. (Accuracy may be lower)",
+  "extOnboardingSelectedCount": "Selected languages",
+  "extOnboardingDownloadSize": "Additional download size",
+  "extOnboardingContinue": "Continue",
+  "extOnboardingSkip": "Skip (Use basic romanization)",
+  "extIncludeDebugLogs": "Include debug logs"
 }

@@ -263,5 +263,16 @@
   "extTextEffectsDirectionLeft": "← 左",
   "extTextEffectsDirectionDown": "↓ 下",
   "extTextEffectsDirectionUp": "↑ 上",
-  "extTextEffectsPronunciationHighlightHint": "💡 現在の歌詞が消えて発音歌詞だけが残ったときにハイライト効果を適用します"
+  "extTextEffectsPronunciationHighlightHint": "💡 現在の歌詞が消えて発音歌詞だけが残ったときにハイライト効果を適用します",
+  "extEdit": "編集",
+  "extOnboardingWelcome": "よく聴く音楽動画の言語を選択してください",
+  "extOnboardingIncludedLanguages": "デフォルトで含まれる言語",
+  "extOnboardingIncludedHint": "これらの言語はすでに含まれており、追加のダウンロードは不要です。",
+  "extOnboardingOptionalLanguages": "高精度ローマ字変換のための追加ライブラリ",
+  "extOnboardingOptionalHint": "選択されていない言語も基本的なローマ字変換が提供されます。（精度は低い場合があります）",
+  "extOnboardingSelectedCount": "選択された言語",
+  "extOnboardingDownloadSize": "追加ダウンロードサイズ",
+  "extOnboardingContinue": "続ける",
+  "extOnboardingSkip": "スキップ（基本ローマ字変換を使用）",
+  "extIncludeDebugLogs": "デバッグログを含める"
 }

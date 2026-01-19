@@ -263,5 +263,16 @@
   "extTextEffectsDirectionLeft": "← 左",
   "extTextEffectsDirectionDown": "↓ 下",
   "extTextEffectsDirectionUp": "↑ 上",
-  "extTextEffectsPronunciationHighlightHint": "💡 當前歌詞消失，僅剩發音歌詞時應用高亮效果"
+  "extTextEffectsPronunciationHighlightHint": "💡 當前歌詞消失，僅剩發音歌詞時應用高亮效果",
+  "extEdit": "編輯",
+  "extOnboardingWelcome": "請選擇您最常聽的音樂影片的語言",
+  "extOnboardingIncludedLanguages": "預設包含的語言",
+  "extOnboardingIncludedHint": "這些語言已包含在內，無需額外下載。",
+  "extOnboardingOptionalLanguages": "用於高精度羅馬字轉換的附加庫",
+  "extOnboardingOptionalHint": "未選擇的語言也提供基本羅馬字轉換。（準確度可能較低）",
+  "extOnboardingSelectedCount": "已選擇的語言",
+  "extOnboardingDownloadSize": "額外下載大小",
+  "extOnboardingContinue": "繼續",
+  "extOnboardingSkip": "跳過（使用基本羅馬字轉換）",
+  "extIncludeDebugLogs": "包含偵錯記錄"
 }

@@ -263,5 +263,16 @@
   "extTextEffectsDirectionLeft": "← Esquerda",
   "extTextEffectsDirectionDown": "↓ Abaixo",
   "extTextEffectsDirectionUp": "↑ Acima",
-  "extTextEffectsPronunciationHighlightHint": "💡 Aplica efeito de destaque quando as letras atuais desaparecem e apenas as letras de pronúncia permanecem"
+  "extTextEffectsPronunciationHighlightHint": "💡 Aplica efeito de destaque quando as letras atuais desaparecem e apenas as letras de pronúncia permanecem",
+  "extEdit": "Editar",
+  "extOnboardingWelcome": "Selecione o idioma dos vídeos musicais que você mais ouve",
+  "extOnboardingIncludedLanguages": "Idiomas incluídos por padrão",
+  "extOnboardingIncludedHint": "Estes idiomas já estão incluídos e não requerem downloads adicionais.",
+  "extOnboardingOptionalLanguages": "Bibliotecas adicionais para romanização de alta precisão",
+  "extOnboardingOptionalHint": "Romanização básica é fornecida para idiomas não selecionados. (A precisão pode ser menor)",
+  "extOnboardingSelectedCount": "Idiomas selecionados",
+  "extOnboardingDownloadSize": "Tamanho de download adicional",
+  "extOnboardingContinue": "Continuar",
+  "extOnboardingSkip": "Pular (Usar romanização básica)",
+  "extIncludeDebugLogs": "Incluir registros de depuração"
 }
