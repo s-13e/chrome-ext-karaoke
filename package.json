@@ -1,4 +1,7 @@
 {
+  "name": "youtube-karaoke",
+  "version": "1.0.0",
+  "description": "Chrome extension that provides karaoke lyrics overlay for YouTube videos",
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
     "@eslint/js": "^9.26.0",
@@ -54,7 +57,12 @@
     "prepare": "husky",
     "clean": "rimraf dist",
     "generate-licenses": "node scripts/generate-licenses.js",
-    "prebuild": "npm run generate-licenses"
+    "prebuild": "npm run generate-licenses",
+    "version:patch": "node scripts/bump-version.js patch",
+    "version:minor": "node scripts/bump-version.js minor",
+    "version:major": "node scripts/bump-version.js major",
+    "package": "node scripts/package-extension.js",
+    "validate:i18n": "node scripts/validate-i18n.js"
   },
   "dependencies": {
     "@daun_jung/korean-romanizer": "^1.0.1",
