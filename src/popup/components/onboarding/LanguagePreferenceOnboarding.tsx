@@ -133,12 +133,12 @@ export function LanguagePreferenceOnboarding({ onComplete }: LanguagePreferenceO
       <div className={styles.content}>
         <div className={styles.header}>
           <h1 className={styles.title}>🎵 {t('extName')}</h1>
-          <p className={styles.subtitle}>{t('onboardingWelcome', '자주 듣는 음악 영상의 언어를 선택해주세요')}</p>
+          <p className={styles.subtitle}>{t('extOnboardingWelcome')}</p>
         </div>
 
         {/* Category A: 기본 포함 언어 */}
         <div className={styles.section}>
-          <h3 className={styles.sectionTitle}>✅ {t('onboardingIncludedLanguages', '기본으로 포함된 언어')}</h3>
+          <h3 className={styles.sectionTitle}>✅ {t('extOnboardingIncludedLanguages')}</h3>
           <div className={styles.chipContainer}>
             {INCLUDED_LANGUAGES.map((lang) => (
               <span key={lang.nameEn} className={styles.chipDisabled}>
@@ -146,16 +146,12 @@ export function LanguagePreferenceOnboarding({ onComplete }: LanguagePreferenceO
               </span>
             ))}
           </div>
-          <p className={styles.hint}>
-            {t('onboardingIncludedHint', '위 언어들은 이미 포함되어 있어 추가 다운로드가 필요하지 않습니다.')}
-          </p>
+          <p className={styles.hint}>{t('extOnboardingIncludedHint')}</p>
         </div>
 
         {/* Category B: 선택 다운로드 언어 */}
         <div className={styles.section}>
-          <h3 className={styles.sectionTitle}>
-            ⬇️ {t('onboardingOptionalLanguages', '고정확도 로마자 변환을 위한 추가 라이브러리')}
-          </h3>
+          <h3 className={styles.sectionTitle}>⬇️ {t('extOnboardingOptionalLanguages')}</h3>
           <div className={styles.chipContainer}>
             {ROMANIZATION_LANGUAGE_OPTIONS.map((lang) => (
               <label key={lang.code} className={styles.chipSelectable}>
@@ -171,19 +167,17 @@ export function LanguagePreferenceOnboarding({ onComplete }: LanguagePreferenceO
               </label>
             ))}
           </div>
-          <p className={styles.hint}>
-            {t('onboardingOptionalHint', '선택하지 않은 언어도 기본 로마자 변환이 제공됩니다. (정확도는 낮을 수 있음)')}
-          </p>
+          <p className={styles.hint}>{t('extOnboardingOptionalHint')}</p>
         </div>
 
         {/* 요약 정보 */}
         <div className={styles.summary}>
           <p>
-            {t('onboardingSelectedCount', '선택된 언어')}: <strong>{selectedLanguages.length}</strong>
+            {t('extOnboardingSelectedCount')}: <strong>{selectedLanguages.length}</strong>
           </p>
           {totalSize > 0 && (
             <p>
-              {t('onboardingDownloadSize', '추가 다운로드 크기')}: <strong>{totalSize} KB</strong>
+              {t('extOnboardingDownloadSize')}: <strong>{totalSize} KB</strong>
             </p>
           )}
         </div>
@@ -191,10 +185,10 @@ export function LanguagePreferenceOnboarding({ onComplete }: LanguagePreferenceO
         {/* 버튼 */}
         <div className={styles.buttonContainer}>
           <button onClick={handleContinue} className={styles.primaryButton}>
-            {t('onboardingContinue', '계속')}
+            {t('extOnboardingContinue')}
           </button>
           <button onClick={handleSkip} className={styles.secondaryButton}>
-            {t('onboardingSkip', '건너뛰기 (기본 로마자 변환 사용)')}
+            {t('extOnboardingSkip')}
           </button>
         </div>
       </div>

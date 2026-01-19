@@ -1,5 +1,4 @@
 import React from 'react';
-import { useTranslation } from 'react-i18next';
 import styles from './styles.module.css';
 
 interface ExtensionLicenseProps {
@@ -7,14 +6,13 @@ interface ExtensionLicenseProps {
 }
 
 export const ExtensionLicense: React.FC<ExtensionLicenseProps> = ({ isDarkMode }) => {
-  const { t } = useTranslation();
   const manifest = chrome.runtime.getManifest();
 
   return (
     <div className={`${styles.extensionLicenseWrapper} ${isDarkMode ? styles.dark : styles.light}`}>
       <div style={{ color: isDarkMode ? '#ffffff' : '#000000', padding: '18px 15px' }}>
         <h2 style={{ color: isDarkMode ? '#ffffff' : '#000000', marginTop: '0px', marginBottom: '16px' }}>
-          {t('extExtensionLicense', 'Extension License')}
+          Extension License
         </h2>
 
         <div
