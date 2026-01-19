@@ -13,7 +13,7 @@ interface BackButtonProps {
 
 export const BackButton: React.FC<BackButtonProps> = ({
   onClick,
-  ariaLabel = '뒤로',
+  ariaLabel = 'Back',
   className = '',
   flip = false,
   arrowColor = '#fff',
