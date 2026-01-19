@@ -25,9 +25,14 @@ export const AVAILABLE_FONT_WEIGHTS: FontWeightOption[] = [
 ];
 
 /**
- * 기본 폰트 두께
+ * 기본 폰트 두께 - 가사용 (bold)
  */
-export const DEFAULT_FONT_WEIGHT = 400;
+export const DEFAULT_FONT_WEIGHT = 700;
+
+/**
+ * 기본 폰트 두께 - 발음용 (regular)
+ */
+export const DEFAULT_PRONUNCIATION_FONT_WEIGHT = 400;
 
 /**
  * 폰트 weight label로 실제 CSS value 찾기

@@ -9,6 +9,7 @@ import {
   LinearGradientOptions,
 } from '@lib/types/lyricsStyles';
 import { DEFAULT_LYRICS_COLOR, DEFAULT_HIGHLIGHT_COLOR, DEFAULT_PRONUNCIATION_COLOR } from '@constants/lyricsStyles';
+import { DEFAULT_PRONUNCIATION_FONT_WEIGHT } from '@constants/fontWeights';
 import { useTranslation } from 'react-i18next';
 import {
   calculateDualFontSizes,
@@ -541,6 +542,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
               updateConfig(['pronunciation', 'default', 'fontWeight'], value);
               updateConfig(['pronunciation', 'highlight', 'fontWeight'], value);
             }}
+            defaultValue={DEFAULT_PRONUNCIATION_FONT_WEIGHT}
           />
         </div>
 
@@ -883,6 +885,7 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
               updateConfig(['pronunciation', 'default', 'fontWeight'], value);
               updateConfig(['pronunciation', 'highlight', 'fontWeight'], value);
             }}
+            defaultValue={DEFAULT_PRONUNCIATION_FONT_WEIGHT}
           />
         </div>
         <div className={styles.settingRow}>
@@ -1162,6 +1165,7 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
           <FontWeightSelect
             value={typeof config.pronunciation?.fontWeight === 'number' ? config.pronunciation.fontWeight : undefined}
             onChange={(value) => updateConfig(['pronunciation', 'fontWeight'], value)}
+            defaultValue={DEFAULT_PRONUNCIATION_FONT_WEIGHT}
           />
         </div>
 

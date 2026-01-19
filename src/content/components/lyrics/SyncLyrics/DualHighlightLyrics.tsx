@@ -10,6 +10,7 @@ import { DualHighlightLyricsStyleConfig } from '@lib/types/lyricsStyles';
 import { mergeDualHighlightStyles } from '@lib/utils/lyrics/styles/lyricsStyleMerger';
 import { DEFAULT_COUNTDOWN_COLORS } from '@constants/lyricsStyles';
 import { calculateDualFontSizes } from '@lib/utils/lyrics/styles/fontSizeCalculator';
+import { DEFAULT_FONT_WEIGHT, DEFAULT_PRONUNCIATION_FONT_WEIGHT } from '@constants/fontWeights';
 import styles from './styles.module.css';
 
 interface DualHighlightLyricsProps {
@@ -159,7 +160,8 @@ const DualHighlightLyricsComponent: React.FC<DualHighlightLyricsProps> = ({
     const inlineStyle: React.CSSProperties = {};
 
     if (style.fontFamily) inlineStyle.fontFamily = style.fontFamily;
-    if (style.fontWeight) inlineStyle.fontWeight = style.fontWeight;
+    inlineStyle.fontWeight =
+      style.fontWeight ?? (isForPronunciation ? DEFAULT_PRONUNCIATION_FONT_WEIGHT : DEFAULT_FONT_WEIGHT);
     if (style.textShadow) inlineStyle.textShadow = style.textShadow;
     // fontSize: 전체화면에서 자동 배율 적용
     if (style.fontSize) {

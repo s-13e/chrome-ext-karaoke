@@ -7,6 +7,7 @@ import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/display/lyricsOffset';
 import { usePronunciations } from '../common/usePronunciation';
 import { FullLyricsStyleConfig } from '@lib/types/lyricsStyles';
 import { mergeFullLyricsStyles } from '@lib/utils/lyrics/styles/lyricsStyleMerger';
+import { DEFAULT_FONT_WEIGHT, DEFAULT_PRONUNCIATION_FONT_WEIGHT } from '@constants/fontWeights';
 
 interface FullLyricsProps {
   lyrics: Line[];
@@ -121,7 +122,8 @@ const FullLyricsComponent: React.FC<FullLyricsProps> = ({
     const inlineStyle: React.CSSProperties = {};
 
     if (style.fontFamily) inlineStyle.fontFamily = style.fontFamily;
-    if (style.fontWeight) inlineStyle.fontWeight = style.fontWeight;
+    inlineStyle.fontWeight =
+      style.fontWeight ?? (isForPronunciation ? DEFAULT_PRONUNCIATION_FONT_WEIGHT : DEFAULT_FONT_WEIGHT);
     if (style.textShadow) inlineStyle.textShadow = style.textShadow;
     // fontSize: 전체화면에서 자동 배율 적용 (일반 모드 대비 약 1.5배)
     if (style.fontSize) {

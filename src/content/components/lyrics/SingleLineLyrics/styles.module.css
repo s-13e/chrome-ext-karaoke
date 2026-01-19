@@ -3,8 +3,7 @@
   bottom: 50px; /* 유튜브 플레이어 하단 바 위쪽 적절 위치, 필요시 조정 */
   width: 100%;
   text-align: center;
-  font-size: 1.5vw;
-  font-weight: 600;
+  font-size: 1.7vw;
   pointer-events: none;
   user-select: none;
   white-space: nowrap;

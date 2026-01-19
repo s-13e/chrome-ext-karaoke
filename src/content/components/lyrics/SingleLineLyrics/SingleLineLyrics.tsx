@@ -8,6 +8,7 @@ import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/display/lyricsOffset';
 import { SingleLineLyricsStyleConfig } from '@lib/types/lyricsStyles';
 import { mergeSingleLineStyles } from '@lib/utils/lyrics/styles/lyricsStyleMerger';
 import { DEFAULT_COUNTDOWN_COLORS } from '@constants/lyricsStyles';
+import { DEFAULT_FONT_WEIGHT, DEFAULT_PRONUNCIATION_FONT_WEIGHT } from '@constants/fontWeights';
 import styles from './styles.module.css';
 
 interface SingleLineLyricsProps {
@@ -128,7 +129,8 @@ const SingleLineLyricsComponent: React.FC<SingleLineLyricsProps> = ({
     const inlineStyle: React.CSSProperties = {};
 
     if (style.fontFamily) inlineStyle.fontFamily = style.fontFamily;
-    if (style.fontWeight) inlineStyle.fontWeight = style.fontWeight;
+    inlineStyle.fontWeight =
+      style.fontWeight ?? (isForPronunciation ? DEFAULT_PRONUNCIATION_FONT_WEIGHT : DEFAULT_FONT_WEIGHT);
     if (style.textShadow) inlineStyle.textShadow = style.textShadow;
     // fontSize: 전체화면에서 자동 배율 적용 (일반 모드 대비 2배: 1.5vw → 3vw)
     if (style.fontSize) {

@@ -11,7 +11,7 @@
   z-index: 1;
   position: relative;
   margin-bottom: 0; /* 발음이 있으면 붙이고 */
-  font-weight: bold;
+  /* font-weight는 JS에서 DEFAULT_FONT_WEIGHT 상수로 관리 */
   display: inline-block; /* background-clip: text가 작동하려면 필요 */
   /* drop-shadow로 얇은 테두리 효과 - 착시 보정 및 겹침 최소화 */
   filter:
@@ -31,7 +31,7 @@
   position: relative;
   font-size: clamp(17px, calc(0.6vw + 0.6vh), 28px);
   opacity: 0.85;
-  font-weight: 400;
+  /* font-weight는 JS에서 DEFAULT_PRONUNCIATION_FONT_WEIGHT 상수로 관리 */
   transition:
     font-size 0.15s ease,
     font-weight 0.15s ease,
@@ -61,13 +61,13 @@
 /* 발음만 있는 경우 (일반 모드) */
 .lyricItem:not(:has(.lyricLine)) .pronunciation {
   font-size: clamp(20px, calc(1vw + 1vh), 36px);
-  font-weight: 600; /* 단독일 때 굵게 */
+  /* font-weight는 JS에서 관리 */
 }
 
 /* pronunciationAsMain: 발음이 메인 가사를 대체하는 경우 - 가사 라인과 동일한 스타일 적용 */
 .lyricItem.pronunciationAsMain .pronunciation {
   font-size: inherit !important; /* 인라인 스타일 또는 가사 크기 상속 */
-  font-weight: bold !important; /* 가사와 동일하게 굵게 */
+  /* font-weight는 JS에서 관리 */
   opacity: 1 !important; /* 완전 불투명 */
 }
 
