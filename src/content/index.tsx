@@ -1681,7 +1681,10 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
     // 영상 -> 영상, videoId가 있는 곳으로 url 변경된 상황
     if (videoIdChanged || (urlChanged && watchPageChanged)) {
       spaObserverShouldTriggerDetection = false;
-      resetLyricsData();
+      // videoId가 바뀔 때만 가사 데이터 초기화 (같은 영상 내 URL 변경 시 가사 유지)
+      if (videoIdChanged) {
+        resetLyricsData();
+      }
       handleUrlChangeGuarded(url);
       setTimeout(() => {
         spaObserverShouldTriggerDetection = true;
