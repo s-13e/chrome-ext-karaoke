@@ -756,40 +756,13 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
     // 가사 오버레이 제거
     overlayManager.cleanupOverlay('lyrics');
 
-    // 가사 없음 에러인 경우 ActionableToast 표시 (수동 검색 유도)
-    if (error.code === LyricsErrorCode.LRCLIB_NOT_FOUND) {
-      console.log('[Lyrics Error] 가사 없음 감지 - ActionableToast 표시');
-
-      showActionableToast(
-        i18nInstance.t('extLyricsNotFoundTitle'),
-        i18nInstance.t('extLyricsNotFoundDescription'),
-        i18nInstance.t('extLyricsNotFoundAction'),
-        () => {
-          // 수동 검색 버튼 클릭 액션
-          console.log('[ActionableToast] 수동 검색 버튼 클릭됨');
-
-          // 가라오케 모드가 활성화되어 있지 않다면 먼저 활성화
-          if (!karaokeModeManager.isVisible()) {
-            karaokeModeManager.toggleKaraokeMode();
-          }
-
-          // 수동 검색 패널 열기 이벤트 발생
-          setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('open-manual-search'));
-          }, 500); // 가라오케 모드 활성화 대기
-        },
-        React.createElement('span', { style: { fontSize: '20px' } }, '🔍'),
-      );
-    }
-
-    // 오류 UI 렌더링
+    // 오류 UI 렌더링 (플레이어 중앙에 표시)
     overlayManager.renderOverlay(
       'lyricsError',
       <LyricsErrorDisplay
         error={error}
         onRetry={() => handleLyricsErrorRetry()}
         onManualSearch={() => handleLyricsErrorManualSearch()}
-        onUploadLyrics={() => handleLyricsErrorUploadLyrics()}
         onIgnore={() => handleLyricsErrorIgnore()}
       />,
     );
@@ -811,14 +784,19 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
 
   function handleLyricsErrorManualSearch() {
     console.log('[handleLyricsErrorManualSearch] 수동 검색 요청');
-    // TODO: 수동 검색 UI 구현
-    alert('수동 검색 기능은 추후 구현 예정입니다.');
-  }
 
-  function handleLyricsErrorUploadLyrics() {
-    console.log('[handleLyricsErrorUploadLyrics] 가사 업로드 요청');
-    // TODO: 가사 업로드 UI 구현
-    alert('가사 업로드 기능은 추후 구현 예정입니다.');
+    // 에러 UI 닫기
+    overlayManager.cleanupOverlay('lyricsError');
+
+    // 가라오케 모드가 활성화되어 있지 않다면 먼저 활성화
+    if (!karaokeModeManager.isVisible()) {
+      karaokeModeManager.toggleKaraokeMode();
+    }
+
+    // 수동 검색 패널 열기 이벤트 발생
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('open-manual-search'));
+    }, 500); // 가라오케 모드 활성화 대기
   }
 
   function handleLyricsErrorIgnore() {

@@ -6,7 +6,6 @@ interface LyricsErrorDisplayProps {
   error: LyricsError;
   onRetry?: () => void;
   onManualSearch?: () => void;
-  onUploadLyrics?: () => void;
   onIgnore?: () => void;
   className?: string;
 }
@@ -15,7 +14,6 @@ export const LyricsErrorDisplay: React.FC<LyricsErrorDisplayProps> = ({
   error,
   onRetry,
   onManualSearch,
-  onUploadLyrics,
   onIgnore,
   className = '',
 }) => {
@@ -70,8 +68,6 @@ export const LyricsErrorDisplay: React.FC<LyricsErrorDisplayProps> = ({
         return 'extLyricsActionRetry';
       case 'manual_search':
         return 'extLyricsActionManualSearch';
-      case 'upload_lyrics':
-        return 'extLyricsActionUploadLyrics';
       case 'ignore':
         return 'extLyricsActionIgnore';
       default:
@@ -86,9 +82,6 @@ export const LyricsErrorDisplay: React.FC<LyricsErrorDisplayProps> = ({
         break;
       case 'manual_search':
         onManualSearch?.();
-        break;
-      case 'upload_lyrics':
-        onUploadLyrics?.();
         break;
       case 'ignore':
         onIgnore?.();
@@ -167,14 +160,15 @@ export const LyricsErrorDisplay: React.FC<LyricsErrorDisplayProps> = ({
 
       <style>{`
         .lyrics-error-display {
-          background: rgba(255, 107, 107, 0.1);
-          border: 1px solid rgba(255, 107, 107, 0.3);
-          border-radius: 8px;
-          padding: 16px;
-          margin: 12px 0;
+          background: rgba(0, 0, 0, 0.85);
+          border: 1px solid rgba(255, 107, 107, 0.5);
+          border-radius: 12px;
+          padding: 20px 24px;
           color: #fff;
           font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
           max-width: 400px;
+          pointer-events: auto;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
         }
 
         .error-header {
@@ -250,15 +244,6 @@ export const LyricsErrorDisplay: React.FC<LyricsErrorDisplayProps> = ({
 
         .error-action-btn.manual_search:hover {
           background: #51cf66;
-        }
-
-        .error-action-btn.upload_lyrics {
-          background: #ffd43b;
-          color: #333;
-        }
-
-        .error-action-btn.upload_lyrics:hover {
-          background: #ffcc02;
         }
 
         .error-action-btn.ignore {

@@ -36,26 +36,26 @@ export enum LyricsErrorCode {
 }
 
 export interface LyricsErrorAction {
-  type: 'retry' | 'manual_search' | 'upload_lyrics' | 'ignore';
+  type: 'retry' | 'manual_search' | 'ignore';
 }
 
 export const LYRICS_ERROR_ACTIONS: Record<LyricsErrorCode, LyricsErrorAction[]> = {
   [LyricsErrorCode.VIDEO_INFO_MISSING]: [{ type: 'retry' }],
-  [LyricsErrorCode.ARTIST_TITLE_EXTRACT_FAILED]: [{ type: 'manual_search' }, { type: 'upload_lyrics' }],
+  [LyricsErrorCode.ARTIST_TITLE_EXTRACT_FAILED]: [{ type: 'manual_search' }],
   [LyricsErrorCode.INVALID_VIDEO_DURATION]: [{ type: 'retry' }],
   [LyricsErrorCode.NOT_MUSIC_VIDEO]: [{ type: 'ignore' }],
   [LyricsErrorCode.NETWORK_ERROR]: [{ type: 'retry' }],
   [LyricsErrorCode.API_TIMEOUT]: [{ type: 'retry' }],
   [LyricsErrorCode.API_RATE_LIMITED]: [{ type: 'retry' }],
   [LyricsErrorCode.API_SERVER_ERROR]: [{ type: 'retry' }],
-  [LyricsErrorCode.LRCLIB_NOT_FOUND]: [{ type: 'manual_search' }, { type: 'upload_lyrics' }, { type: 'ignore' }],
+  [LyricsErrorCode.LRCLIB_NOT_FOUND]: [{ type: 'manual_search' }, { type: 'ignore' }],
   [LyricsErrorCode.MUSICBRAINZ_NOT_FOUND]: [{ type: 'manual_search' }],
   [LyricsErrorCode.INVALID_RESPONSE]: [{ type: 'retry' }],
-  [LyricsErrorCode.EMPTY_SEARCH_RESULTS]: [{ type: 'manual_search' }, { type: 'upload_lyrics' }],
-  [LyricsErrorCode.LYRICS_PARSE_ERROR]: [{ type: 'retry' }, { type: 'upload_lyrics' }],
-  [LyricsErrorCode.LYRICS_SYNC_INVALID]: [{ type: 'ignore' }, { type: 'upload_lyrics' }],
-  [LyricsErrorCode.LYRICS_EMPTY]: [{ type: 'manual_search' }, { type: 'upload_lyrics' }],
-  [LyricsErrorCode.LYRICS_FORMAT_UNSUPPORTED]: [{ type: 'upload_lyrics' }],
+  [LyricsErrorCode.EMPTY_SEARCH_RESULTS]: [{ type: 'manual_search' }],
+  [LyricsErrorCode.LYRICS_PARSE_ERROR]: [{ type: 'retry' }],
+  [LyricsErrorCode.LYRICS_SYNC_INVALID]: [{ type: 'ignore' }],
+  [LyricsErrorCode.LYRICS_EMPTY]: [{ type: 'manual_search' }],
+  [LyricsErrorCode.LYRICS_FORMAT_UNSUPPORTED]: [{ type: 'manual_search' }],
   [LyricsErrorCode.CACHE_READ_ERROR]: [{ type: 'retry' }],
   [LyricsErrorCode.CACHE_WRITE_ERROR]: [{ type: 'ignore' }],
   [LyricsErrorCode.UNKNOWN_ERROR]: [{ type: 'retry' }],
