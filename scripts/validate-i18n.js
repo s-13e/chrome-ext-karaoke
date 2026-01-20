@@ -24,9 +24,7 @@ const SOURCE_LANG = 'en';
  */
 function getLanguages() {
   const files = fs.readdirSync(LOCALES_DIR);
-  return files
-    .filter((file) => file.endsWith('.json'))
-    .map((file) => file.replace('.json', ''));
+  return files.filter((file) => file.endsWith('.json')).map((file) => file.replace('.json', ''));
 }
 
 /**
@@ -101,10 +99,7 @@ function extractUsedKeys() {
   // Patterns to match:
   // t('key'), t("key"), t(`key`)
   // i18n.t('key'), i18nInstance.t('key')
-  const patterns = [
-    /\.t\(\s*['"`]([a-zA-Z0-9_]+)['"`]/g,
-    /\Wt\(\s*['"`]([a-zA-Z0-9_]+)['"`]/g,
-  ];
+  const patterns = [/\.t\(\s*['"`]([a-zA-Z0-9_]+)['"`]/g, /\Wt\(\s*['"`]([a-zA-Z0-9_]+)['"`]/g];
 
   for (const file of sourceFiles) {
     const content = fs.readFileSync(file, 'utf-8');
@@ -176,9 +171,7 @@ function main() {
   const unusedKeys = [...sourceKeys].filter((key) => !usedKeys.has(key));
 
   // Find missing keys (in code but not in translation)
-  const missingInTranslation = [...usedKeys].filter(
-    (key) => !sourceKeys.has(key),
-  );
+  const missingInTranslation = [...usedKeys].filter((key) => !sourceKeys.has(key));
 
   if (missingInTranslation.length > 0) {
     console.log(`\nKeys used in code but missing from ${SOURCE_LANG}.json:`);

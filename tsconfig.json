@@ -25,7 +25,7 @@
       "@services/*": ["src/services/*"],
       "@lib/*": ["src/lib/*"]
     },
-    "types": ["chrome", "jest"],
+    "types": ["chrome", "jest", "node"],
     "allowJs": false,
     "noUncheckedIndexedAccess": true, // 인덱스 접근 시 undefined 체크 강제화
     "forceConsistentCasingInFileNames": true,
