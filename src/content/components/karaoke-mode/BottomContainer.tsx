@@ -24,6 +24,7 @@ import { applyOffsetToLyrics } from '@lib/utils/lyrics/display/lyricsOffset';
 import { extractVideoIdFromUrl } from '@lib/utils/platform/videoDetection';
 import { saveVideoOffset, getVideoOffset } from '@lib/utils/storage/videoOffsetStorage';
 import { Toast } from '../common/Toast';
+import { canExecuteThrottled, THROTTLE_DELAYS } from '@lib/utils/common/common';
 
 // TextEffectsModal을 lazy loading으로 변경 (메모리 최적화)
 const TextEffectsModal = lazy(() =>
@@ -116,6 +117,9 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
 
   // Toast 알림 상태
   const [showSyncSavedToast, setShowSyncSavedToast] = React.useState<boolean>(false);
+
+  // 버튼 쓰로틀링을 위한 refs
+  const lastButtonClickRef = React.useRef<number>(0);
 
   // 원본 가사 보관 (초기화용) - lyrics prop이 변경될 때만 업데이트
   const originalLyricsRef = React.useRef<Line[]>(lyrics);
@@ -528,6 +532,7 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
    * 노래 처음으로 (0:00으로 이동)
    */
   const handleRestartSong = () => {
+    if (!canExecuteThrottled(lastButtonClickRef, THROTTLE_DELAYS.UI_INTERACTION)) return;
     const videoElement = getYouTubePlayer();
     if (videoElement) {
       videoElement.currentTime = 0;
@@ -542,6 +547,7 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
    * off → once(1번) → triple(3번) → infinite(무한) → off
    */
   const handleLoopToggle = () => {
+    if (!canExecuteThrottled(lastButtonClickRef, THROTTLE_DELAYS.UI_INTERACTION)) return;
     setLoopMode((prev: LoopMode): LoopMode => {
       const modes: LoopMode[] = ['off', 'once', 'triple', 'infinite'];
       const currentIndex = modes.indexOf(prev);
@@ -587,6 +593,7 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
    * 자동 간주 점프 토글
    */
   const handleAutoSkipToggle = () => {
+    if (!canExecuteThrottled(lastButtonClickRef, THROTTLE_DELAYS.UI_INTERACTION)) return;
     setAutoSkipEnabled((prev) => {
       const newState = !prev;
       // chrome.storage에 상태 저장
@@ -607,6 +614,7 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
    * 이전 가사 타임스탬프로 이동
    */
   const handlePrevLyric = () => {
+    if (!canExecuteThrottled(lastButtonClickRef, THROTTLE_DELAYS.UI_INTERACTION)) return;
     console.log('[BottomContainer] handlePrevLyric 호출');
     const videoElement = getYouTubePlayer();
     if (!videoElement || lyrics.length === 0) {
@@ -636,6 +644,7 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
    * 다음 가사 타임스탬프로 이동
    */
   const handleNextLyric = () => {
+    if (!canExecuteThrottled(lastButtonClickRef, THROTTLE_DELAYS.UI_INTERACTION)) return;
     console.log('[BottomContainer] handleNextLyric 호출');
     const videoElement = getYouTubePlayer();
     if (!videoElement || lyrics.length === 0) {
@@ -670,6 +679,7 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
    * - 간주가 짧으면 다음 가사 정확한 시간으로 이동
    */
   const handleSkipIntro = () => {
+    if (!canExecuteThrottled(lastButtonClickRef, THROTTLE_DELAYS.UI_INTERACTION)) return;
     console.log('[BottomContainer] handleSkipIntro 호출');
     const videoElement = getYouTubePlayer();
     if (!videoElement || lyrics.length === 0) {
@@ -718,6 +728,7 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
    * 싱크셋 버튼 - 오프셋 조정 모달 토글
    */
   const handleSyncSettings = () => {
+    if (!canExecuteThrottled(lastButtonClickRef, THROTTLE_DELAYS.UI_INTERACTION)) return;
     if (showOffsetModal) {
       // 이미 모달이 열려있으면 닫기 (같은 버튼 재클릭)
       handleCloseOffsetModal();
@@ -893,6 +904,7 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
    * sync(기본) → single(싱글) → full(전체) → sync
    */
   const handleLyricsDisplayModeToggle = () => {
+    if (!canExecuteThrottled(lastButtonClickRef, THROTTLE_DELAYS.UI_INTERACTION)) return;
     setLyricsDisplayMode((prev: LyricsDisplayMode): LyricsDisplayMode => {
       const modes: LyricsDisplayMode[] = ['sync', 'single', 'full'];
       const currentIndex = modes.indexOf(prev);
@@ -911,6 +923,7 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
    * 현재 가사 On/Off 토글
    */
   const handleCurrentLyricsToggle = () => {
+    if (!canExecuteThrottled(lastButtonClickRef, THROTTLE_DELAYS.UI_INTERACTION)) return;
     setShowCurrentLyrics((prev) => {
       const newState = !prev;
       chrome.storage.sync.set({ realtimeLyrics: newState });
@@ -923,6 +936,7 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
    * 발음 가사 On/Off 토글
    */
   const handlePronunciationToggle = () => {
+    if (!canExecuteThrottled(lastButtonClickRef, THROTTLE_DELAYS.UI_INTERACTION)) return;
     setShowPronunciation((prev) => {
       const newState = !prev;
       chrome.storage.sync.set({ announceLyrics: newState });
@@ -965,6 +979,7 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
    * 텍스트 효과 버튼 클릭
    */
   const handleTextEffectsToggle = () => {
+    if (!canExecuteThrottled(lastButtonClickRef, THROTTLE_DELAYS.UI_INTERACTION)) return;
     // 이미 모달이 열려있으면 모달의 취소 콜백을 호출하여 원본 복구 후 닫기
     if (showTextEffectsModal) {
       if (textEffectsCancelRef.current) {
