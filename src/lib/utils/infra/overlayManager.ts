@@ -50,6 +50,39 @@ class OverlayManager {
           document.body.appendChild(container);
         }
       }
+    } else if (type === 'lyricsError') {
+      container = document.getElementById('lyrics-error-overlay-container');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'lyrics-error-overlay-container';
+        container.style.cssText = `
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          pointer-events: none;
+          z-index: 9999;
+        `;
+
+        // YouTube 플레이어 컨테이너에 추가
+        const playerContainer = document.getElementById('movie_player');
+        if (playerContainer) {
+          playerContainer.appendChild(container);
+        } else {
+          // 폴백: lyrics-cc-overlay에 추가
+          const lyricsOverlayRoot = document.getElementById('lyrics-cc-overlay');
+          if (lyricsOverlayRoot) {
+            lyricsOverlayRoot.appendChild(container);
+          } else {
+            console.warn('[OverlayManager] player container not found, appending lyrics-error container to body');
+            document.body.appendChild(container);
+          }
+        }
+      }
     } else {
       container = document.getElementById(`${type}-overlay-container`);
       if (!container) {
