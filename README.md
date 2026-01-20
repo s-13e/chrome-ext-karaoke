@@ -54,6 +54,28 @@ npm run format
 npm test
 ```
 
+### Utility Scripts
+
+```bash
+# Bump version (syncs package.json and manifest.json)
+# When: Before each release
+node scripts/bump-version.js patch   # 1.0.0 -> 1.0.1
+node scripts/bump-version.js minor   # 1.0.0 -> 1.1.0
+node scripts/bump-version.js major   # 1.0.0 -> 2.0.0
+
+# Package extension for Chrome Web Store
+# When: After production build, before store submission
+node scripts/package-extension.js    # Creates youtube-karaoke-v{version}.zip
+
+# Validate i18n translation files
+# When: After adding/modifying translation keys
+node scripts/validate-i18n.js        # Checks for missing/unused translation keys
+
+# Generate license information
+# When: After adding/removing npm dependencies
+node scripts/generate-licenses.js    # Updates src/constants/generatedLicenses.ts
+```
+
 ## License
 
 Third-party licenses and credits are available in the extension settings under the License tab.
