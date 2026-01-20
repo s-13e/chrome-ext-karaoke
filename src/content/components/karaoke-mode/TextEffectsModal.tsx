@@ -20,8 +20,14 @@ import {
 import { FontFamilySelect } from './FontFamilySelect';
 import { FontWeightSelect } from './FontWeightSelect';
 import { ColorPickerInput } from './ColorPickerInput';
+import { canExecuteThrottled, THROTTLE_DELAYS } from '@lib/utils/common/common';
 
 type TabType = 'dual' | 'full' | 'single';
+// TabType을 lyricsMode로 변환 (dual -> sync)
+const tabToLyricsMode = (tab: TabType): 'sync' | 'single' | 'full' => {
+  return tab === 'dual' ? 'sync' : tab;
+};
+
 interface TextEffectsModalProps {
   onClose: () => void;
   // 부모가 모달의 '취소(원본 복구)' 콜백을 등록할 수 있도록 함
@@ -33,9 +39,14 @@ interface TextEffectsModalProps {
  * 텍스트 효과 설정 모달
  * - 개별 설정(Dual/Full/Single): 특정 가사 타입에만 적용
  * - 각 탭은 기본 스타일, 하이라이트 스타일, 발음 스타일 섹션으로 구성
+ * - 탭 변경 시 실제 가사 오버레이도 해당 모드로 변경되어 미리보기 가능
  */
 export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, registerCancel, initialTab = 'dual' }) => {
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
+  // 모달 열기 전 원래 lyricsMode 저장 (닫을 때 복구용)
+  const originalLyricsModeRef = useRef<'sync' | 'single' | 'full'>('sync');
+  // 탭 변경 쓰로틀링
+  const lastTabChangeRef = useRef<number>(0);
   // 개별 설정 상태
   const [dualConfig, setDualConfig] = useState<Partial<DualHighlightLyricsStyleConfig>>({});
   const [fullConfig, setFullConfig] = useState<Partial<FullLyricsStyleConfig>>({});
@@ -54,7 +65,7 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, reg
 
   // chrome.storage에서 초기값 로드
   useEffect(() => {
-    chrome.storage.sync.get(['lyricsStyleDual', 'lyricsStyleFull', 'lyricsStyleSingle'], (items) => {
+    chrome.storage.sync.get(['lyricsStyleDual', 'lyricsStyleFull', 'lyricsStyleSingle', 'lyricsMode'], (items) => {
       const dual = items.lyricsStyleDual || {};
       const full = items.lyricsStyleFull || {};
       const single = items.lyricsStyleSingle || {};
@@ -68,8 +79,23 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, reg
         full: JSON.parse(JSON.stringify(full)),
         single: JSON.parse(JSON.stringify(single)),
       };
+
+      // 원래 lyricsMode 저장
+      if (items.lyricsMode && ['sync', 'single', 'full'].includes(items.lyricsMode)) {
+        originalLyricsModeRef.current = items.lyricsMode;
+      }
+
+      // 초기 탭에 맞춰 lyricsMode 변경 (미리보기용)
+      chrome.storage.sync.set({ lyricsMode: tabToLyricsMode(initialTab) });
     });
-  }, []);
+  }, [initialTab]);
+
+  // 탭 변경 시 lyricsMode도 변경 (실시간 미리보기) - 쓰로틀링 적용
+  const handleTabChange = (tab: TabType) => {
+    if (!canExecuteThrottled(lastTabChangeRef, THROTTLE_DELAYS.UI_INTERACTION)) return;
+    setActiveTab(tab);
+    chrome.storage.sync.set({ lyricsMode: tabToLyricsMode(tab) });
+  };
   // 실시간 미리보기를 위한 임시 storage 저장
   const handlePreviewUpdate = () => {
     // 실시간 미리보기: storage에 임시로 저장 (적용 전까지는 확정 아님)
@@ -100,6 +126,8 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, reg
       lyricsStyleDual: dualConfig,
       lyricsStyleFull: fullConfig,
       lyricsStyleSingle: singleConfig,
+      // 현재 activeTab의 lyricsMode로 설정
+      lyricsMode: tabToLyricsMode(activeTab),
     });
     // 원본 업데이트 (다음 취소 시 현재 상태가 기준이 됨)
     originalConfigsRef.current = {
@@ -107,6 +135,8 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, reg
       full: JSON.parse(JSON.stringify(fullConfig)),
       single: JSON.parse(JSON.stringify(singleConfig)),
     };
+    // 원래 lyricsMode도 현재 탭으로 업데이트
+    originalLyricsModeRef.current = tabToLyricsMode(activeTab);
     onClose();
   };
   // 취소/모달 닫기 공통 로직
@@ -116,15 +146,17 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, reg
     setFullConfig(originalConfigsRef.current.full);
     setSingleConfig(originalConfigsRef.current.single);
 
-    // 즉시 원본 설정을 storage에 복구
+    // 즉시 원본 설정을 storage에 복구 + 현재 activeTab의 lyricsMode로 설정
     chrome.storage.sync.set({
       lyricsStyleDual: originalConfigsRef.current.dual,
       lyricsStyleFull: originalConfigsRef.current.full,
       lyricsStyleSingle: originalConfigsRef.current.single,
+      // 취소해도 현재 보고 있던 탭의 lyricsMode로 유지
+      lyricsMode: tabToLyricsMode(activeTab),
     });
 
     onClose();
-  }, [onClose]);
+  }, [onClose, activeTab]);
 
   // 부모 컴포넌트가 이 모달의 취소 콜백을 받을 수 있게 등록해줌
   useEffect(() => {
@@ -149,6 +181,7 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, reg
         lyricsStyleDual: originalConfigsRef.current.dual,
         lyricsStyleFull: originalConfigsRef.current.full,
         lyricsStyleSingle: originalConfigsRef.current.single,
+        lyricsMode: originalLyricsModeRef.current,
       });
     };
 
@@ -169,19 +202,19 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, reg
       <div className={styles.tabNav}>
         <button
           className={`${styles.tabButton} ${activeTab === 'dual' ? styles.active : ''}`}
-          onClick={() => setActiveTab('dual')}
+          onClick={() => handleTabChange('dual')}
         >
           Dual
         </button>
         <button
           className={`${styles.tabButton} ${activeTab === 'single' ? styles.active : ''}`}
-          onClick={() => setActiveTab('single')}
+          onClick={() => handleTabChange('single')}
         >
           Single
         </button>
         <button
           className={`${styles.tabButton} ${activeTab === 'full' ? styles.active : ''}`}
-          onClick={() => setActiveTab('full')}
+          onClick={() => handleTabChange('full')}
         >
           Full
         </button>
