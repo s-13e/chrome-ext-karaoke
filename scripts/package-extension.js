@@ -41,15 +41,27 @@ function validateDistFolder() {
 }
 
 /**
+ * Removes all existing youtube-karaoke zip files
+ */
+function removeOldZips() {
+  const files = fs.readdirSync(ROOT_DIR);
+  const zipPattern = /^youtube-karaoke-v[\d.]+\.zip$/;
+
+  files.forEach((file) => {
+    if (zipPattern.test(file)) {
+      fs.unlinkSync(path.join(ROOT_DIR, file));
+      console.log(`Removed old zip: ${file}`);
+    }
+  });
+}
+
+/**
  * Creates zip file using PowerShell (Windows) or zip command (Unix)
  * @param {string} outputPath - Path for the output zip file
  */
 function createZip(outputPath) {
-  // Remove existing zip if present
-  if (fs.existsSync(outputPath)) {
-    fs.unlinkSync(outputPath);
-    console.log(`Removed existing: ${path.basename(outputPath)}`);
-  }
+  // Remove all existing zip files
+  removeOldZips();
 
   const isWindows = process.platform === 'win32';
 
