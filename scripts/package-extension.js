@@ -57,22 +57,22 @@ function removeOldZips() {
 
 /**
  * Creates zip file using PowerShell (Windows) or zip command (Unix)
- * @param {string} outputPath - Path for the output zip file
+ * @param {string} zipFileName - Name of the output zip file
  */
-function createZip(outputPath) {
+function createZip(zipFileName) {
   // Remove all existing zip files
   removeOldZips();
 
   const isWindows = process.platform === 'win32';
 
   if (isWindows) {
-    // Use PowerShell's Compress-Archive on Windows
-    const command = `powershell -Command "Compress-Archive -Path '${DIST_DIR}\\*' -DestinationPath '${outputPath}' -Force"`;
-    execSync(command, { stdio: 'inherit' });
+    // Use relative paths to avoid issues with non-ASCII characters in path
+    const command = `powershell -Command "Compress-Archive -Path 'dist\\*' -DestinationPath '${zipFileName}' -Force"`;
+    execSync(command, { stdio: 'inherit', cwd: ROOT_DIR });
   } else {
     // Use zip command on Unix-like systems
-    const command = `cd "${DIST_DIR}" && zip -r "${outputPath}" .`;
-    execSync(command, { stdio: 'inherit', shell: '/bin/bash' });
+    const command = `cd dist && zip -r "../${zipFileName}" .`;
+    execSync(command, { stdio: 'inherit', shell: '/bin/bash', cwd: ROOT_DIR });
   }
 }
 
@@ -96,7 +96,7 @@ function main() {
 
   // Create zip
   console.log(`Creating ${zipFileName}...`);
-  createZip(outputPath);
+  createZip(zipFileName);
 
   // Verify and show result
   if (fs.existsSync(outputPath)) {

@@ -9,6 +9,14 @@ import { Line } from '@lib/types/lyrics';
 const activeTabs = new Set<number>();
 let lastInjectedUrl = '';
 
+// ===== 플레이리스트 캐시 (메모리 캐시 + TTL) =====
+interface PlaylistCacheEntry {
+  data: unknown[];
+  timestamp: number;
+}
+const playlistCache = new Map<string, PlaylistCacheEntry>();
+const PLAYLIST_CACHE_TTL = 60 * 60 * 1000; // 1시간 (밀리초)
+
 // ===== 타입 정의 =====
 interface GetLatestLyricsResponse {
   lyrics: Line[];
@@ -307,12 +315,23 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendRespon
     return true; // 비동기 응답
   }
 
-  // YouTube 플레이리스트 항목 조회
+  // YouTube 플레이리스트 항목 조회 (메모리 캐시 적용)
   if (msg.type === 'FETCH_PLAYLIST_ITEMS') {
     console.log('[background] FETCH_PLAYLIST_ITEMS 요청 수신 - playlistId:', msg.playlistId);
 
     (async () => {
       try {
+        // 캐시 확인
+        const cached = playlistCache.get(msg.playlistId);
+        const now = Date.now();
+
+        if (cached && now - cached.timestamp < PLAYLIST_CACHE_TTL) {
+          console.log('[background] FETCH_PLAYLIST_ITEMS 캐시 히트 - playlistId:', msg.playlistId);
+          sendResponse({ success: true, data: cached.data });
+          return;
+        }
+
+        // 캐시 미스 또는 만료 → API 호출
         const { fetchPlaylistItems } = await import('./api/youtube');
         const apiKey = process.env.YOUTUBE_API_KEY;
         console.log('[background] API 키 확인:', apiKey ? `존재 (길이: ${apiKey.length})` : '없음');
@@ -321,6 +340,11 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendRespon
         }
         const result = await fetchPlaylistItems(msg.playlistId, apiKey, msg.maxResults);
         console.log('[background] FETCH_PLAYLIST_ITEMS 응답:', result.length, '개 항목');
+
+        // 캐시에 저장
+        playlistCache.set(msg.playlistId, { data: result, timestamp: now });
+        console.log('[background] FETCH_PLAYLIST_ITEMS 캐시 저장 완료 - playlistId:', msg.playlistId);
+
         sendResponse({ success: true, data: result });
       } catch (error) {
         console.error('[background] FETCH_PLAYLIST_ITEMS 실패:', error);
