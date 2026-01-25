@@ -55,11 +55,6 @@ export const AVAILABLE_FONTS: FontOption[] = [
     requiresLoad: true,
   },
   {
-    label: 'East Sea Dokdo',
-    value: '"East Sea Dokdo", "Noto Sans KR", "Noto Sans JP", "Noto Sans SC", cursive',
-    requiresLoad: true,
-  },
-  {
     label: 'Gasoek One',
     value: '"Gasoek One", "Noto Sans KR", "Noto Sans JP", "Noto Sans SC", sans-serif',
     requiresLoad: true,
