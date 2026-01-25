@@ -31,7 +31,6 @@ export const MusicNoteButton: React.FC<Props> = ({ icon, contentEnabled, menuVis
 
       // 전체화면 진입 시 버튼 제거
       if (isCurrentlyFullscreen && btnRef.current) {
-        console.log('[MusicNoteButton] 전체화면 진입 - 버튼 제거');
         btnRef.current.remove();
         btnRef.current = null;
       }
@@ -63,7 +62,6 @@ export const MusicNoteButton: React.FC<Props> = ({ icon, contentEnabled, menuVis
   const insertButton = useCallback(() => {
     // 전체화면 모드일 때는 버튼 삽입하지 않음
     if (isFullscreen) {
-      console.log('[MusicNoteButton] 전체화면 모드 - 버튼 삽입 스킵');
       return;
     }
 

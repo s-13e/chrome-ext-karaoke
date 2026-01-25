@@ -99,9 +99,9 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
           if (ytdApp) {
             ytdApp.style.removeProperty('margin');
             ytdApp.style.removeProperty('padding');
-            ytdApp.style.removeProperty('overflow');
-            ytdApp.style.removeProperty('max-height');
-            ytdApp.style.removeProperty('height');
+            ytdApp.style.removeProperty('min-height');
+            // 전체화면 관련 스타일(position, top, left, width, height, max-height, overflow)은
+            // index.tsx의 fullscreenchange 핸들러에서 관리하므로 여기서는 제거하지 않음
           }
           document.body.style.overflow = '';
           document.documentElement.style.overflow = '';
@@ -414,12 +414,11 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
       if (ytdApp) {
         ytdApp.style.removeProperty('margin');
         ytdApp.style.removeProperty('padding');
-        ytdApp.style.removeProperty('overflow');
-        ytdApp.style.removeProperty('max-height');
-        ytdApp.style.removeProperty('height');
+        ytdApp.style.removeProperty('min-height');
+        // 전체화면 관련 스타일(position, top, left, width, height, max-height, overflow)은
+        // index.tsx의 fullscreenchange 핸들러에서 관리하므로 여기서는 제거하지 않음
       }
-      document.body.style.overflow = '';
-      document.documentElement.style.overflow = '';
+      // body/documentElement overflow도 fullscreen 핸들러에서 관리
 
       // 이벤트 리스너 제거
       window.removeEventListener('resize', handleResize);

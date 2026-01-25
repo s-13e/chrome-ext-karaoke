@@ -38,10 +38,7 @@
   /* 가벼운 그림자 효과 */
   filter: drop-shadow(1px 1px 4px black);
 }
-.active .lyricLine {
-  font-size: clamp(18px, calc(1vw + 1vh), 32px);
-  /* highlight rendering (color/gradient/weight) is applied via inline styles from JS */
-}
+
 .pronunciation {
   z-index: 0;
   position: relative;
@@ -55,7 +52,6 @@
   -webkit-text-fill-color: initial; /* preserve non-gradient rendering */
   background: none; /* gradient removal left for JS when needed */
   opacity: 0.85;
-  font-size: clamp(11px, calc(0.65vw + 0.65vh), 22px);
 }
 
 /* pronunciationAsMain: 발음이 메인 가사를 대체하는 경우 - 가사 라인과 동일한 크기 */

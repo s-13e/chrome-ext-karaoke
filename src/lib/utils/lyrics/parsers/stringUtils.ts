@@ -61,14 +61,44 @@ export function cleanTopicName(name: string): string {
   return result.trim();
 }
 /**
+ * 중복 괄호 패턴 제거
+ * 괄호 안의 내용이 괄호 앞의 내용과 동일하거나 유사하면 괄호 부분 제거
+ * 예: "Kitsch (Kitsch)" → "Kitsch"
+ * 예: "HEYA (HEYA)" → "HEYA"
+ * 예: "Love (Love Song)" → "Love (Love Song)" (유지 - 다른 내용)
+ */
+function removeDuplicateParentheses(str: string): string {
+  // 패턴: "텍스트 (괄호내용)" 형태에서 괄호 앞 텍스트와 괄호 안 내용 비교
+  const pattern = /^(.+?)\s*\(([^)]+)\)\s*$/;
+  const match = str.match(pattern);
+
+  if (match && match[1] && match[2]) {
+    const outside = match[1].trim().toLowerCase();
+    const inside = match[2].trim().toLowerCase();
+
+    // 괄호 안 내용이 바깥 내용과 동일하면 괄호 제거
+    if (outside === inside) {
+      return match[1].trim();
+    }
+  }
+
+  return str;
+}
+
+/**
  * 문자열에서 부가정보(괄호, 대괄호, 파이프 등)를 제거합니다.
  */
 export function cleanUp(str: string): string {
-  return str
+  let result = str
     .replace(/[「」『』]/g, ' ') // 일본어 쌍따옴표를 공백으로 변환
     .replace(/\[.*?\]/g, '') // 대괄호 제거
     .replace(/\\s{2,}/g, ' ') // 이중 공백 정리
     .trim();
+
+  // 중복 괄호 제거 (예: "Kitsch (Kitsch)" → "Kitsch")
+  result = removeDuplicateParentheses(result);
+
+  return result;
 }
 
 /**

@@ -17,6 +17,6 @@
 }
 :fullscreen .dual-highlight-subtitle,
 :-webkit-full-screen .dual-highlight-subtitle {
-  /* 전체화면에서는 더 크게! */
-  font-size: clamp(2rem, calc(2.5rem + 2vw), 4rem);
+  /* 전체화면에서는 더 크게! (기존 대비 약 20% 증가) */
+  font-size: clamp(2.4rem, calc(2.6rem + 2.5vw), 4.6rem);
 }

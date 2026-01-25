@@ -79,9 +79,9 @@ export function isAdPlaying(): boolean {
   // 광고 상태 클래스 우선 판별
   const playerAdState = player && player.classList.contains(PLAYER_AD_CLASS);
   // 개별 요소 로그 출력
-  if (playerAdState) {
-    console.log('[isAdPlaying] player에 ad-showing 클래스 감지됨');
-  }
+  // if (playerAdState) {
+  //   console.log('[isAdPlaying] player에 ad-showing 클래스 감지됨');
+  // }
   if (adOverlay) {
     console.log('[isAdPlaying] adOverlay 요소 감지됨:', adOverlay);
   }
@@ -96,9 +96,7 @@ export function isAdPlaying(): boolean {
   }
   // 광고 오버레이/컨테이너 중 하나라도 있으면 광고 중으로 판정
   const domAdsExist = !!adOverlay || !!adText || !!adSkip || !!adIndicator;
-  if (playerAdState || domAdsExist) {
-    console.log('[isAdPlaying] 광고 상태 감지됨');
-  }
+
   // 광고 상태 포괄적 OR조건
   return !!playerAdState || domAdsExist;
 }

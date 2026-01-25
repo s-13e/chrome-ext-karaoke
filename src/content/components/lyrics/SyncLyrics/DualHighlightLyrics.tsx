@@ -1,5 +1,6 @@
-import React, { useMemo, useState, useEffect, memo } from 'react';
+import React, { useMemo, useState, useEffect, useCallback, memo } from 'react';
 import { useCurrentTime } from '@hooks/useCurrentTime';
+import { useFullscreenState } from '@hooks/useFullscreenState';
 import { getDisplayLines } from '@lib/utils/lyrics/display/lyricsDisplay';
 import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/display/lyricsOffset';
 import { usePronunciations } from '../common/usePronunciation';
@@ -32,6 +33,9 @@ const DualHighlightLyricsComponent: React.FC<DualHighlightLyricsProps> = ({
   showPronunciationLyrics,
   styleConfig,
 }) => {
+  // 전체화면 상태 감지 (상태 변경 시 리렌더링 트리거)
+  const isFullscreen = useFullscreenState();
+
   // 스타일 병합
   const mergedStyles = useMemo(() => {
     const merged = mergeDualHighlightStyles(styleConfig);
@@ -140,57 +144,60 @@ const DualHighlightLyricsComponent: React.FC<DualHighlightLyricsProps> = ({
   };
 
   // 인라인 스타일 생성 (CSS 모듈로 처리할 수 없는 동적 스타일)
-  const getInlineStyle = (isHighlight: boolean, isForPronunciation: boolean) => {
-    let style;
-    if (isForPronunciation && pronunciationAsMain) {
-      // 발음이 메인을 대체하는 경우: 발음 텍스트에 lyrics 스타일 적용
-      style =
-        isHighlight && mergedStyles.pronunciationAsMainHighlight
-          ? mergedStyles.lyrics.highlight
-          : mergedStyles.lyrics.default;
-    } else if (isForPronunciation) {
-      // 일반 발음 스타일
-      style = isHighlight ? mergedStyles.pronunciation.highlight : mergedStyles.pronunciation.default;
-    } else {
-      // 가사 텍스트 스타일
-      style = isHighlight ? mergedStyles.lyrics.highlight : mergedStyles.lyrics.default;
-    }
-    if (!style) return {};
+  // useCallback으로 감싸서 isFullscreen 상태 변경 시 새로운 스타일 반환
+  const getInlineStyle = useCallback(
+    (isHighlight: boolean, isForPronunciation: boolean) => {
+      let style;
+      if (isForPronunciation && pronunciationAsMain) {
+        // 발음이 메인을 대체하는 경우: 발음 텍스트에 lyrics 스타일 적용
+        style =
+          isHighlight && mergedStyles.pronunciationAsMainHighlight
+            ? mergedStyles.lyrics.highlight
+            : mergedStyles.lyrics.default;
+      } else if (isForPronunciation) {
+        // 일반 발음 스타일
+        style = isHighlight ? mergedStyles.pronunciation.highlight : mergedStyles.pronunciation.default;
+      } else {
+        // 가사 텍스트 스타일
+        style = isHighlight ? mergedStyles.lyrics.highlight : mergedStyles.lyrics.default;
+      }
+      if (!style) return {};
 
-    const inlineStyle: React.CSSProperties = {};
+      const inlineStyle: React.CSSProperties = {};
 
-    if (style.fontFamily) inlineStyle.fontFamily = style.fontFamily;
-    inlineStyle.fontWeight =
-      style.fontWeight ?? (isForPronunciation ? DEFAULT_PRONUNCIATION_FONT_WEIGHT : DEFAULT_FONT_WEIGHT);
-    if (style.textShadow) inlineStyle.textShadow = style.textShadow;
-    // fontSize: 전체화면에서 자동 배율 적용
-    if (style.fontSize) {
-      const isFullscreen = !!document.fullscreenElement;
-      const baseFontSize = typeof style.fontSize === 'number' ? style.fontSize : parseInt(String(style.fontSize), 10);
-      // Dual은 fullscreen에서 약 2배 배율 (1rem → 2rem 기준)
-      inlineStyle.fontSize = isFullscreen && !isNaN(baseFontSize) ? Math.round(baseFontSize * 2) : style.fontSize;
-    } else if (!isForPronunciation) {
-      // 가사는 항상 계산된 fontSize 적용 (CSS clamp 대신) - 이미 fullscreen 체크 포함
-      inlineStyle.fontSize = calculateDualFontSizes();
-    }
-    if (style.opacity !== undefined) inlineStyle.opacity = style.opacity;
-    if (style.transition) inlineStyle.transition = style.transition;
-    if (style.transform) inlineStyle.transform = style.transform;
-    if (style.background) inlineStyle.background = style.background;
-    if (style.backgroundImage) inlineStyle.backgroundImage = style.backgroundImage;
-    if (style.backgroundClip) inlineStyle.backgroundClip = style.backgroundClip;
-    if (style.WebkitBackgroundClip) inlineStyle.WebkitBackgroundClip = style.WebkitBackgroundClip;
-    if (style.WebkitTextFillColor) inlineStyle.WebkitTextFillColor = style.WebkitTextFillColor;
-    if (style.WebkitTextStroke) inlineStyle.WebkitTextStroke = style.WebkitTextStroke;
-    if (style.filter) inlineStyle.filter = style.filter;
+      if (style.fontFamily) inlineStyle.fontFamily = style.fontFamily;
+      inlineStyle.fontWeight =
+        style.fontWeight ?? (isForPronunciation ? DEFAULT_PRONUNCIATION_FONT_WEIGHT : DEFAULT_FONT_WEIGHT);
+      if (style.textShadow) inlineStyle.textShadow = style.textShadow;
+      // fontSize: 전체화면에서 자동 배율 적용 (isFullscreen은 useFullscreenState에서 관리)
+      if (style.fontSize) {
+        const baseFontSize = typeof style.fontSize === 'number' ? style.fontSize : parseInt(String(style.fontSize), 10);
+        // Dual은 fullscreen에서 약 2배 배율 (1rem → 2rem 기준)
+        inlineStyle.fontSize = isFullscreen && !isNaN(baseFontSize) ? Math.round(baseFontSize * 2) : style.fontSize;
+      } else if (!isForPronunciation) {
+        // 가사는 항상 계산된 fontSize 적용 (CSS clamp 대신)
+        inlineStyle.fontSize = calculateDualFontSizes();
+      }
+      if (style.opacity !== undefined) inlineStyle.opacity = style.opacity;
+      if (style.transition) inlineStyle.transition = style.transition;
+      if (style.transform) inlineStyle.transform = style.transform;
+      if (style.background) inlineStyle.background = style.background;
+      if (style.backgroundImage) inlineStyle.backgroundImage = style.backgroundImage;
+      if (style.backgroundClip) inlineStyle.backgroundClip = style.backgroundClip;
+      if (style.WebkitBackgroundClip) inlineStyle.WebkitBackgroundClip = style.WebkitBackgroundClip;
+      if (style.WebkitTextFillColor) inlineStyle.WebkitTextFillColor = style.WebkitTextFillColor;
+      if (style.WebkitTextStroke) inlineStyle.WebkitTextStroke = style.WebkitTextStroke;
+      if (style.filter) inlineStyle.filter = style.filter;
 
-    // pronunciationAsMain일 때는 CSS의 기본 opacity 덮어쓰기
-    if (isForPronunciation && pronunciationAsMain && style.opacity === undefined) {
-      inlineStyle.opacity = 1;
-    }
+      // pronunciationAsMain일 때는 CSS의 기본 opacity 덮어쓰기
+      if (isForPronunciation && pronunciationAsMain && style.opacity === undefined) {
+        inlineStyle.opacity = 1;
+      }
 
-    return inlineStyle;
-  };
+      return inlineStyle;
+    },
+    [isFullscreen, mergedStyles, pronunciationAsMain],
+  );
 
   return (
     <div className={styles.dualHighlightSubtitle} style={{ color: fontColor }}>

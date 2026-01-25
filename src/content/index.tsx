@@ -733,7 +733,10 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
     // 기존 리스너 제거
     removeSongInfoVideoTimeListener();
 
-    overlayManager.renderOverlay('songInfo', <SongInfoOverlay title={title} artist={artist} lyricsSource="LRCLIB" />);
+    overlayManager.renderOverlay(
+      'songInfo',
+      <SongInfoOverlay title={title} artist={artist} lyricsSource="LRCLIB" lyricsMode={lyricsMode} />,
+    );
     overlayManager.setVisibility('songInfo', true);
 
     // 영상 재생 시간 기준으로 자동 숨김 (광고 시간 제외)
@@ -1282,6 +1285,11 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
 
           // 1차: get-artist-title 라이브러리
           let parsed = extractArtistAndTitle(cleanedTitle);
+          if (parsed) {
+            // 1차 파싱 결과에도 removeExtraInfo 적용
+            parsed.title = removeExtraInfo(parsed.title);
+            parsed.artist = removeExtraInfo(parsed.artist);
+          }
           console.log('[TITLE PARSE] 1차(라이브러리) 결과:', parsed);
 
           // 2차: 커스텀 파서 (일본어 쌍따옴표 등 특수 패턴)
@@ -1966,6 +1974,66 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
       // 비동기로 버튼 렌더링 시도
       waitForYouTubePlayer();
 
+      // 전체화면 시 ytd-app 하단 여백 제거 (인라인 스타일 방식)
+      // CSS :fullscreen 셀렉터는 인라인 스타일보다 우선순위가 낮아서 직접 적용
+      // 주의: video와 videoContainer는 YouTube가 자체적으로 처리하므로 건드리지 않음
+      const handleFullscreenChange = () => {
+        const isFullscreen = !!document.fullscreenElement;
+        const ytdApp = document.querySelector<HTMLElement>('ytd-app');
+        // 영화관 모드 여부 확인: full-bleed-container가 표시되어 있으면 영화관 모드
+        const fullBleedContainer = document.querySelector<HTMLElement>('#full-bleed-container');
+        const isTheaterMode = fullBleedContainer && getComputedStyle(fullBleedContainer).display !== 'none';
+
+        if (isFullscreen) {
+          // 전체화면 진입: 하단 공백 제거
+          if (ytdApp) {
+            ytdApp.style.setProperty('position', 'fixed', 'important');
+            ytdApp.style.setProperty('top', '0', 'important');
+            ytdApp.style.setProperty('left', '0', 'important');
+            ytdApp.style.setProperty('width', '100vw', 'important');
+            ytdApp.style.setProperty('height', '100vh', 'important');
+            ytdApp.style.setProperty('max-height', '100vh', 'important');
+            ytdApp.style.setProperty('overflow', 'hidden', 'important');
+          }
+          // 영화관 모드일 때만 full-bleed-container 스타일 적용
+          if (isTheaterMode && fullBleedContainer) {
+            fullBleedContainer.style.setProperty('position', 'fixed', 'important');
+            fullBleedContainer.style.setProperty('top', '0', 'important');
+            fullBleedContainer.style.setProperty('left', '0', 'important');
+            fullBleedContainer.style.setProperty('width', '100vw', 'important');
+            fullBleedContainer.style.setProperty('height', '100vh', 'important');
+            fullBleedContainer.style.setProperty('max-height', '100vh', 'important');
+          }
+          document.body.style.overflow = 'hidden';
+          document.documentElement.style.overflow = 'hidden';
+        } else {
+          // 전체화면 종료: 스타일 복원
+          if (ytdApp) {
+            ytdApp.style.removeProperty('position');
+            ytdApp.style.removeProperty('top');
+            ytdApp.style.removeProperty('left');
+            ytdApp.style.removeProperty('width');
+            ytdApp.style.removeProperty('height');
+            ytdApp.style.removeProperty('max-height');
+            ytdApp.style.removeProperty('overflow');
+          }
+          // 영화관 모드였을 때만 full-bleed-container 스타일 복원
+          if (fullBleedContainer) {
+            fullBleedContainer.style.removeProperty('position');
+            fullBleedContainer.style.removeProperty('top');
+            fullBleedContainer.style.removeProperty('left');
+            fullBleedContainer.style.removeProperty('width');
+            fullBleedContainer.style.removeProperty('height');
+            fullBleedContainer.style.removeProperty('max-height');
+          }
+          document.body.style.overflow = '';
+          document.documentElement.style.overflow = '';
+        }
+      };
+
+      document.addEventListener('fullscreenchange', handleFullscreenChange);
+      document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+
       // contentEnabled 상태를 chrome.storage.sync에서 읽어옴
       const result = await chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED]);
       contentEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
@@ -1985,14 +2053,8 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
         const newLyrics = customEvent.detail.lyrics;
         console.log('[Index] 수동 가사 검색으로 가사 선택됨:', newLyrics.length, '줄');
 
-        // 가사 업데이트
-        karaokeModeManager.setLyrics(newLyrics);
-
-        // 가사 오버레이 렌더링
-        renderLyricsOverlay(newLyrics);
-
-        // 광고 모니터링 시작
-        startLyricsAdMonitoringIfNeeded();
+        // onLyricsUpdated를 사용하여 latestLyrics 업데이트 및 모든 설정 적용
+        onLyricsUpdated(newLyrics);
       });
 
       // 온체인지 리스너

@@ -34,6 +34,7 @@ export const MUSIC_KEYWORDS = [
 export const EXTRA_KEYWORDS = [
   ...MUSIC_KEYWORDS,
   // 영어
+  'official audio',
   'animation',
   'League of Legends',
   'kbs',

@@ -71,10 +71,10 @@
   opacity: 1 !important; /* 완전 불투명 */
 }
 
-/* 전체화면 - 발음 가사 (가사의 55~60% 비율 유지) */
+/* 전체화면 - 발음 가사 (가사의 45~50% 비율 유지) */
 :fullscreen .pronunciation,
 :-webkit-full-screen .pronunciation {
-  font-size: clamp(20px, calc(1.5vw + 2vh), 35px);
+  font-size: clamp(16px, calc(1vw + 1.2vh), 26px);
 }
 
 /* 전체화면 - 발음만 있는 경우 (가사와 동일하게) */
