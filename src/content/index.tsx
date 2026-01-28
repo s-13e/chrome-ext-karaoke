@@ -146,6 +146,7 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
   let lyricsStyleDual: Partial<import('@lib/types/lyricsStyles').DualHighlightLyricsStyleConfig> = {};
   let lyricsStyleFull: Partial<import('@lib/types/lyricsStyles').FullLyricsStyleConfig> = {};
   let lyricsStyleSingle: Partial<import('@lib/types/lyricsStyles').SingleLineLyricsStyleConfig> = {};
+  let lyricsStyleGeneral: Partial<import('@lib/types/lyricsStyles').GeneralLyricsSettings> = {};
 
   /**
    * Background script를 통해 YouTube 비디오 메타데이터 조회
@@ -678,6 +679,7 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
             showRealtimeLyrics={showRealtimeLyrics}
             showPronunciationLyrics={showPronunciationLyrics}
             styleConfig={lyricsStyleFull}
+            generalSettings={lyricsStyleGeneral}
           />
         </CurrentTimeProvider>,
       );
@@ -693,6 +695,7 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
             showRealtimeLyrics={showRealtimeLyrics}
             showPronunciationLyrics={showPronunciationLyrics}
             styleConfig={lyricsStyleDual}
+            generalSettings={lyricsStyleGeneral}
           />
         </CurrentTimeProvider>,
       );
@@ -708,6 +711,7 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
             showRealtimeLyrics={showRealtimeLyrics}
             showPronunciationLyrics={showPronunciationLyrics}
             styleConfig={lyricsStyleSingle}
+            generalSettings={lyricsStyleGeneral}
           />
         </CurrentTimeProvider>,
       );
@@ -820,6 +824,7 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
           'lyricsStyleDual',
           'lyricsStyleFull',
           'lyricsStyleSingle',
+          'lyricsStyleGeneral',
         ],
         (items) => {
           if (typeof items.lyricsFontColorCurrent === 'string') {
@@ -845,6 +850,9 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
           }
           if (items.lyricsStyleSingle) {
             lyricsStyleSingle = items.lyricsStyleSingle;
+          }
+          if (items.lyricsStyleGeneral) {
+            lyricsStyleGeneral = items.lyricsStyleGeneral;
           }
 
           // 스타일에서 폰트 로드 (페이지 로드 시)
@@ -938,6 +946,11 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
         lyricsStyleSingle = changes.lyricsStyleSingle.newValue || {};
         console.log('[Storage] lyricsStyleSingle 변경 감지:', lyricsStyleSingle);
         loadFontsFromStyleConfigs();
+        needRerender = true;
+      }
+      if ('lyricsStyleGeneral' in changes) {
+        lyricsStyleGeneral = changes.lyricsStyleGeneral.newValue || {};
+        console.log('[Storage] lyricsStyleGeneral 변경 감지:', lyricsStyleGeneral);
         needRerender = true;
       }
 

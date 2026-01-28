@@ -10,6 +10,8 @@ import {
   DualHighlightLyricsStyleConfig,
   FullLyricsStyleConfig,
   SingleLineLyricsStyleConfig,
+  GeneralLyricsSettings,
+  LyricsPreset,
 } from '@lib/types/lyricsStyles';
 
 /**
@@ -103,3 +105,35 @@ export const DEFAULT_COUNTDOWN_COLORS = {
   // 아카펠라 녹음 카운트다운 색상
   acapella: '#FFEB3B',
 };
+
+/**
+ * General 설정 기본값
+ */
+export const DEFAULT_GENERAL_SETTINGS: GeneralLyricsSettings = {
+  countdown: {
+    enabled: true,
+    color: '#ffcc00',
+    fontSize: 180,
+  },
+  position: {
+    dual: { bottom: 70 },
+    single: { bottom: 50 },
+  },
+  fullBackground: {
+    opacity: 0.6,
+  },
+};
+
+/**
+ * 기본 프리셋 목록
+ * Basic: 모든 설정을 기본값으로 초기화
+ */
+export const DEFAULT_PRESETS: LyricsPreset[] = [
+  {
+    name: 'Basic',
+    dual: {},
+    single: {},
+    full: {},
+    general: {},
+  },
+];
