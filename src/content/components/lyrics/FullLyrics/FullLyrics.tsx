@@ -6,9 +6,10 @@ import { useCurrentTime } from '@hooks/useCurrentTime';
 import { useFullscreenState } from '@hooks/useFullscreenState';
 import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/display/lyricsOffset';
 import { usePronunciations } from '../common/usePronunciation';
-import { FullLyricsStyleConfig } from '@lib/types/lyricsStyles';
+import { FullLyricsStyleConfig, GeneralLyricsSettings } from '@lib/types/lyricsStyles';
 import { mergeFullLyricsStyles } from '@lib/utils/lyrics/styles/lyricsStyleMerger';
 import { DEFAULT_FONT_WEIGHT, DEFAULT_PRONUNCIATION_FONT_WEIGHT } from '@constants/fontWeights';
+import { DEFAULT_GENERAL_SETTINGS } from '@constants/lyricsStyles';
 
 interface FullLyricsProps {
   lyrics: Line[];
@@ -20,6 +21,8 @@ interface FullLyricsProps {
   showPronunciationLyrics?: boolean;
   // 스타일 커스터마이징
   styleConfig?: Partial<FullLyricsStyleConfig>;
+  // General 설정
+  generalSettings?: Partial<GeneralLyricsSettings>;
 }
 
 const FullLyricsComponent: React.FC<FullLyricsProps> = ({
@@ -30,6 +33,7 @@ const FullLyricsComponent: React.FC<FullLyricsProps> = ({
   showRealtimeLyrics = true,
   showPronunciationLyrics = true,
   styleConfig,
+  generalSettings,
 }) => {
   // 스타일 병합
   const mergedStyles = useMemo(() => {
@@ -156,8 +160,15 @@ const FullLyricsComponent: React.FC<FullLyricsProps> = ({
     [isFullscreen, mergedStyles, pronunciationAsMain],
   );
 
+  // General 설정에서 배경 투명도 추출
+  const backgroundOpacity = generalSettings?.fullBackground?.opacity ?? DEFAULT_GENERAL_SETTINGS.fullBackground.opacity;
+
   return (
-    <div className={styles.fullLyricsContainer} ref={containerRef}>
+    <div
+      className={styles.fullLyricsContainer}
+      ref={containerRef}
+      style={{ background: `rgba(24, 24, 24, ${backgroundOpacity})` }}
+    >
       {/* 상단 스페이서: 렌더링하지 않는 위쪽 항목들의 높이만큼 공간 확보 */}
       <div style={{ height: `${visibleRange.start * ITEM_HEIGHT}px` }} />
 

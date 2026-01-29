@@ -51,6 +51,10 @@ export const EXTRA_KEYWORDS = [
   'inst.', // 점 포함 버전은 다른 단어와 겹칠 위험 없음
   'ver.', // 점 포함 버전은 안전
   'version', // version은 전체 단어 매칭이므로 안전
+  // 사운드트랙/영화 관련
+  'soundtrack',
+  'motion picture',
+  'original soundtrack',
   // 한국어
   '뮤직뱅크',
   '음악중심',

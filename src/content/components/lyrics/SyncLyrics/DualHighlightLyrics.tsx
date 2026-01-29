@@ -7,9 +7,9 @@ import { usePronunciations } from '../common/usePronunciation';
 import { Line } from '@lib/types/lyrics';
 import { LyricLine } from '../common/LyricLine';
 import { CountdownOverlay } from '../common/CountdownOverlay';
-import { DualHighlightLyricsStyleConfig } from '@lib/types/lyricsStyles';
+import { DualHighlightLyricsStyleConfig, GeneralLyricsSettings } from '@lib/types/lyricsStyles';
 import { mergeDualHighlightStyles } from '@lib/utils/lyrics/styles/lyricsStyleMerger';
-import { DEFAULT_COUNTDOWN_COLORS } from '@constants/lyricsStyles';
+import { DEFAULT_COUNTDOWN_COLORS, DEFAULT_GENERAL_SETTINGS } from '@constants/lyricsStyles';
 import { calculateDualFontSizes } from '@lib/utils/lyrics/styles/fontSizeCalculator';
 import { DEFAULT_FONT_WEIGHT, DEFAULT_PRONUNCIATION_FONT_WEIGHT } from '@constants/fontWeights';
 import styles from './styles.module.css';
@@ -23,6 +23,8 @@ interface DualHighlightLyricsProps {
   showPronunciationLyrics: boolean;
   // 스타일 커스터마이징
   styleConfig?: Partial<DualHighlightLyricsStyleConfig>;
+  // General 설정
+  generalSettings?: Partial<GeneralLyricsSettings>;
 }
 const DualHighlightLyricsComponent: React.FC<DualHighlightLyricsProps> = ({
   lyrics,
@@ -32,6 +34,7 @@ const DualHighlightLyricsComponent: React.FC<DualHighlightLyricsProps> = ({
   showRealtimeLyrics,
   showPronunciationLyrics,
   styleConfig,
+  generalSettings,
 }) => {
   // 전체화면 상태 감지 (상태 변경 시 리렌더링 트리거)
   const isFullscreen = useFullscreenState();
@@ -199,21 +202,29 @@ const DualHighlightLyricsComponent: React.FC<DualHighlightLyricsProps> = ({
     [isFullscreen, mergedStyles, pronunciationAsMain],
   );
 
+  // General 설정에서 카운트다운 및 위치 추출
+  const countdownEnabled = generalSettings?.countdown?.enabled ?? DEFAULT_GENERAL_SETTINGS.countdown.enabled;
+  const countdownColor = generalSettings?.countdown?.color ?? DEFAULT_GENERAL_SETTINGS.countdown.color;
+  const countdownFontSize = generalSettings?.countdown?.fontSize ?? DEFAULT_GENERAL_SETTINGS.countdown.fontSize;
+  const positionBottom = generalSettings?.position?.dual?.bottom ?? DEFAULT_GENERAL_SETTINGS.position.dual.bottom;
+
   return (
-    <div className={styles.dualHighlightSubtitle} style={{ color: fontColor }}>
+    <div className={styles.dualHighlightSubtitle} style={{ color: fontColor, bottom: `${positionBottom}px` }}>
       {/* 카운트다운 오버레이 (첫 가사 또는 아카펠라 녹음) */}
-      {firstLyricTime !== null && !acapellaCountdownStart && (
+      {countdownEnabled && firstLyricTime !== null && !acapellaCountdownStart && (
         <CountdownOverlay
           startTime={firstLyricTime}
           currentTime={adjustedTime}
-          fontColor={DEFAULT_COUNTDOWN_COLORS.firstLyric}
+          fontColor={countdownColor}
+          fontSize={countdownFontSize}
         />
       )}
-      {acapellaCountdownStart !== null && (
+      {countdownEnabled && acapellaCountdownStart !== null && (
         <CountdownOverlay
           startTime={acapellaCountdownStart}
           currentTime={currentTime}
           fontColor={DEFAULT_COUNTDOWN_COLORS.acapella}
+          fontSize={countdownFontSize}
         />
       )}
 

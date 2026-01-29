@@ -24,10 +24,7 @@ export const SongInfoOverlay: React.FC<SongInfoOverlayProps> = ({
 
   // Chrome storage 변경 구독하여 lyricsMode 실시간 업데이트
   useEffect(() => {
-    const handleStorageChange = (
-      changes: { [key: string]: chrome.storage.StorageChange },
-      areaName: string,
-    ) => {
+    const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
       if (areaName === 'sync' && changes.lyricsMode) {
         setCurrentLyricsMode(changes.lyricsMode.newValue as 'sync' | 'single' | 'full');
       }

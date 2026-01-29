@@ -7,7 +7,6 @@ import { Line } from '@lib/types/lyrics';
 
 // ===== 전역 변수 및 상태 =====
 const activeTabs = new Set<number>();
-let lastInjectedUrl = '';
 
 // ===== 플레이리스트 캐시 (메모리 캐시 + TTL) =====
 interface PlaylistCacheEntry {
@@ -133,13 +132,7 @@ function injectContentScript(tabId: number, url: string, config: DetectionConfig
     return;
   }
 
-  if (url === lastInjectedUrl) {
-    console.log(`[injectContentScript] 마지막 주입 URL과 동일 - 주입 생략`);
-    return;
-  }
-
   activeTabs.add(tabId);
-  lastInjectedUrl = url;
 
   console.log(`[injectContentScript] Content Script 주입 시작 - ${PATHS.CONTENT_SCRIPT}`);
   chrome.scripting
@@ -360,6 +353,11 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendRespon
 
 // ===== 확장 프로그램 설치/업데이트 시 content script 재주입 =====
 chrome.runtime.onInstalled.addListener(async (details) => {
+  // 확장 프로그램 삭제 시 피드백 폼으로 이동
+  chrome.runtime.setUninstallURL(
+    'https://docs.google.com/forms/d/e/1FAIpQLScX5c-B9-euAGkGFqWqfbeWpd895f4knUrO94LcQ62mwdzjMA/viewform',
+  );
+
   if (details.reason === 'install') {
     console.log('[Background] Extension installed');
   } else if (details.reason === 'update') {
