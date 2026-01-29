@@ -61,14 +61,44 @@ export function cleanTopicName(name: string): string {
   return result.trim();
 }
 /**
+ * 중복 괄호 패턴 제거
+ * 괄호 안의 내용이 괄호 앞의 내용과 동일하거나 유사하면 괄호 부분 제거
+ * 예: "Kitsch (Kitsch)" → "Kitsch"
+ * 예: "HEYA (HEYA)" → "HEYA"
+ * 예: "Love (Love Song)" → "Love (Love Song)" (유지 - 다른 내용)
+ */
+function removeDuplicateParentheses(str: string): string {
+  // 패턴: "텍스트 (괄호내용)" 형태에서 괄호 앞 텍스트와 괄호 안 내용 비교
+  const pattern = /^(.+?)\s*\(([^)]+)\)\s*$/;
+  const match = str.match(pattern);
+
+  if (match && match[1] && match[2]) {
+    const outside = match[1].trim().toLowerCase();
+    const inside = match[2].trim().toLowerCase();
+
+    // 괄호 안 내용이 바깥 내용과 동일하면 괄호 제거
+    if (outside === inside) {
+      return match[1].trim();
+    }
+  }
+
+  return str;
+}
+
+/**
  * 문자열에서 부가정보(괄호, 대괄호, 파이프 등)를 제거합니다.
  */
 export function cleanUp(str: string): string {
-  return str
+  let result = str
     .replace(/[「」『』]/g, ' ') // 일본어 쌍따옴표를 공백으로 변환
     .replace(/\[.*?\]/g, '') // 대괄호 제거
     .replace(/\\s{2,}/g, ' ') // 이중 공백 정리
     .trim();
+
+  // 중복 괄호 제거 (예: "Kitsch (Kitsch)" → "Kitsch")
+  result = removeDuplicateParentheses(result);
+
+  return result;
 }
 
 /**
@@ -121,6 +151,17 @@ export function extractArtistAndTitleCustom(
       artist: japaneseQuoteMatch[1].trim(),
       title: japaneseQuoteMatch[2].trim(),
     };
+  }
+
+  // 0-0.5. 따옴표로 시작하는 타이틀 패턴 감지 → null 반환 (채널명 fallback 유도)
+  // 예: "Your Idol" | Official Song Clip | KPop Demon Hunters | Sony Animation
+  // 이 형식에서는 아티스트 정보를 신뢰할 수 없으므로 파싱 실패로 처리
+  // Quote characters: ' " ' ' " " (U+0027, U+0022, U+2018, U+2019, U+201C, U+201D)
+  const leadingQuotePattern =
+    /^['"\u2018\u2019\u201C\u201D]([^'"\u2018\u2019\u201C\u201D]+)['"\u2018\u2019\u201C\u201D]?\s*[|/-]/;
+  if (leadingQuotePattern.test(rawTitle)) {
+    console.log('[stringUtils] 따옴표로 시작하는 타이틀 감지, 파싱 실패 처리 (채널명 fallback)');
+    return null;
   }
 
   // 0-1. 타이틀 중복 표시 감지: 중첩 괄호가 있고 구분자가 없으면 실패 처리
@@ -279,6 +320,20 @@ export function removeExtraInfo(str: string): string {
   // 정상 타이틀 보호: "24K Magic", "7 Rings", "3005" 등은 영향 없음
   result = result.replace(/^\d{1,3}\.\s*/, '').trim(); // 숫자 1~3자리 + . + 공백(선택)
   result = result.replace(/^Track\s+\d+\.\s*/i, '').trim(); // Track + 숫자 + . + 공백(선택)
+
+  // 0-2. 사운드트랙 참조 제거: (From "Movie Name"), (From 'Movie Name'), (From Movie Name)
+  // 예: "Zoo (From "Zootopia 2")" → "Zoo"
+  // 예: "Zoo (From Zootopia 2)" → "Zoo"
+  result = result.replace(/\s*\(From\s+["'"][^"'"]+["'"]\)/gi, '').trim(); // 따옴표 있는 경우
+  result = result.replace(/\s*\[From\s+["'"][^"'"]+["'"]\]/gi, '').trim(); // 대괄호 + 따옴표
+  result = result.replace(/\s*\(From\s+[^)]+\)/gi, '').trim(); // 따옴표 없는 경우
+  result = result.replace(/\s*\[From\s+[^\]]+\]/gi, '').trim(); // 대괄호 + 따옴표 없음
+
+  // 0-3. 프로듀서 크레딧 제거: Prod. @username, Prod. Name, Produced by Name
+  // 예: "Pal Pal Prod. @AliSoomroMusic" → "Pal Pal"
+  // 예: "Song Produced by Metro Boomin" → "Song"
+  result = result.replace(/\s*Prod\.?\s*[@\u200b]?[\w\u0080-\uFFFF]+/gi, '').trim();
+  result = result.replace(/\s*Produced\s+by\s+[@\u200b]?[\w\u0080-\uFFFF]+/gi, '').trim();
 
   // 0. 괄호 안에 EXTRA_KEYWORDS만 있는 경우 괄호 전체 제거
   // 예: "Blue Valentine (Inst.)" → "Blue Valentine"

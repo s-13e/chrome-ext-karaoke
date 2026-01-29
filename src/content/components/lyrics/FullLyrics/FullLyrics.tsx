@@ -1,13 +1,15 @@
 // src/components/lyrics/FullLyricsView/FullLyricsView.tsx
-import React, { useRef, useEffect, useMemo, memo } from 'react';
+import React, { useRef, useEffect, useMemo, useCallback, memo } from 'react';
 import styles from './styles.module.css';
 import { Line } from '@lib/types/lyrics';
 import { useCurrentTime } from '@hooks/useCurrentTime';
+import { useFullscreenState } from '@hooks/useFullscreenState';
 import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/display/lyricsOffset';
 import { usePronunciations } from '../common/usePronunciation';
-import { FullLyricsStyleConfig } from '@lib/types/lyricsStyles';
+import { FullLyricsStyleConfig, GeneralLyricsSettings } from '@lib/types/lyricsStyles';
 import { mergeFullLyricsStyles } from '@lib/utils/lyrics/styles/lyricsStyleMerger';
 import { DEFAULT_FONT_WEIGHT, DEFAULT_PRONUNCIATION_FONT_WEIGHT } from '@constants/fontWeights';
+import { DEFAULT_GENERAL_SETTINGS } from '@constants/lyricsStyles';
 
 interface FullLyricsProps {
   lyrics: Line[];
@@ -19,6 +21,8 @@ interface FullLyricsProps {
   showPronunciationLyrics?: boolean;
   // 스타일 커스터마이징
   styleConfig?: Partial<FullLyricsStyleConfig>;
+  // General 설정
+  generalSettings?: Partial<GeneralLyricsSettings>;
 }
 
 const FullLyricsComponent: React.FC<FullLyricsProps> = ({
@@ -29,6 +33,7 @@ const FullLyricsComponent: React.FC<FullLyricsProps> = ({
   showRealtimeLyrics = true,
   showPronunciationLyrics = true,
   styleConfig,
+  generalSettings,
 }) => {
   // 스타일 병합
   const mergedStyles = useMemo(() => {
@@ -41,6 +46,7 @@ const FullLyricsComponent: React.FC<FullLyricsProps> = ({
   const shiftedLyrics = useMemo(() => shiftFirstLyricEarlier(lyrics, 3), [lyrics]);
   const currentTime = useCurrentTime();
   const containerRef = useRef<HTMLDivElement>(null);
+  const isFullscreen = useFullscreenState();
 
   // 하이라이트는 원본 lyrics 기준으로 계산 (shift 없이)
   const activeLineIndex = lyrics.findIndex((line, i) => {
@@ -51,14 +57,16 @@ const FullLyricsComponent: React.FC<FullLyricsProps> = ({
   const lyricTexts = useMemo(() => shiftedLyrics.map((line) => line.text), [shiftedLyrics]);
   const pronList = usePronunciations(lyricTexts);
 
-  // 가상화: 보이는 범위 계산 (활성 줄 기준 ±10줄만 렌더링)
-  const RENDER_BUFFER = 10;
+  // 가상화: 보이는 범위 계산
+  // 전체화면에서는 더 많은 줄 표시 (화면이 크므로)
   const visibleRange = useMemo(() => {
     const center = activeLineIndex >= 0 ? activeLineIndex : 0;
-    const start = Math.max(0, center - RENDER_BUFFER);
-    const end = Math.min(shiftedLyrics.length, center + RENDER_BUFFER + 1);
+    // 전체화면: 15줄, 일반: 10줄 (시작 전/후 동일하게 유지)
+    const buffer = isFullscreen ? 15 : 10;
+    const start = Math.max(0, center - buffer);
+    const end = Math.min(shiftedLyrics.length, center + buffer + 1);
     return { start, end };
-  }, [activeLineIndex, shiftedLyrics.length]);
+  }, [activeLineIndex, shiftedLyrics.length, isFullscreen]);
 
   // 각 가사 줄의 대략적 높이 (px)
   const ITEM_HEIGHT = 60;
@@ -102,56 +110,65 @@ const FullLyricsComponent: React.FC<FullLyricsProps> = ({
   };
 
   // 인라인 스타일 생성 (CSS 모듈로 처리할 수 없는 동적 스타일)
-  const getInlineStyle = (isActive: boolean, isForPronunciation: boolean) => {
-    let style;
-    if (isForPronunciation && pronunciationAsMain) {
-      // 발음이 메인을 대체하는 경우: 발음 텍스트에 lyrics 스타일 적용
-      style =
-        isActive && mergedStyles.pronunciationAsMainHighlight
-          ? mergedStyles.lyrics.highlight
-          : mergedStyles.lyrics.default;
-    } else if (isForPronunciation) {
-      // 일반 발음 스타일
-      style = isActive ? mergedStyles.pronunciation.highlight : mergedStyles.pronunciation.default;
-    } else {
-      // 가사 텍스트 스타일
-      style = isActive ? mergedStyles.lyrics.highlight : mergedStyles.lyrics.default;
-    }
-    if (!style) return {};
+  const getInlineStyle = useCallback(
+    (isActive: boolean, isForPronunciation: boolean) => {
+      let style;
+      if (isForPronunciation && pronunciationAsMain) {
+        // 발음이 메인을 대체하는 경우: 발음 텍스트에 lyrics 스타일 적용
+        style =
+          isActive && mergedStyles.pronunciationAsMainHighlight
+            ? mergedStyles.lyrics.highlight
+            : mergedStyles.lyrics.default;
+      } else if (isForPronunciation) {
+        // 일반 발음 스타일
+        style = isActive ? mergedStyles.pronunciation.highlight : mergedStyles.pronunciation.default;
+      } else {
+        // 가사 텍스트 스타일
+        style = isActive ? mergedStyles.lyrics.highlight : mergedStyles.lyrics.default;
+      }
+      if (!style) return {};
 
-    const inlineStyle: React.CSSProperties = {};
+      const inlineStyle: React.CSSProperties = {};
 
-    if (style.fontFamily) inlineStyle.fontFamily = style.fontFamily;
-    inlineStyle.fontWeight =
-      style.fontWeight ?? (isForPronunciation ? DEFAULT_PRONUNCIATION_FONT_WEIGHT : DEFAULT_FONT_WEIGHT);
-    if (style.textShadow) inlineStyle.textShadow = style.textShadow;
-    // fontSize: 전체화면에서 자동 배율 적용 (일반 모드 대비 약 1.5배)
-    if (style.fontSize) {
-      const isFullscreen = !!document.fullscreenElement;
-      const baseFontSize = typeof style.fontSize === 'number' ? style.fontSize : parseInt(String(style.fontSize), 10);
-      inlineStyle.fontSize = isFullscreen && !isNaN(baseFontSize) ? Math.round(baseFontSize * 1.5) : style.fontSize;
-    }
-    if (style.opacity !== undefined) inlineStyle.opacity = style.opacity;
-    if (style.transition) inlineStyle.transition = style.transition;
-    if (style.transform) inlineStyle.transform = style.transform;
-    if (style.background) inlineStyle.background = style.background;
-    if (style.backgroundImage) inlineStyle.backgroundImage = style.backgroundImage;
-    if (style.backgroundClip) inlineStyle.backgroundClip = style.backgroundClip;
-    if (style.WebkitBackgroundClip) inlineStyle.WebkitBackgroundClip = style.WebkitBackgroundClip;
-    if (style.WebkitTextFillColor) inlineStyle.WebkitTextFillColor = style.WebkitTextFillColor;
-    if (style.WebkitTextStroke) inlineStyle.WebkitTextStroke = style.WebkitTextStroke;
-    if (style.filter) inlineStyle.filter = style.filter;
+      if (style.fontFamily) inlineStyle.fontFamily = style.fontFamily;
+      inlineStyle.fontWeight =
+        style.fontWeight ?? (isForPronunciation ? DEFAULT_PRONUNCIATION_FONT_WEIGHT : DEFAULT_FONT_WEIGHT);
+      if (style.textShadow) inlineStyle.textShadow = style.textShadow;
+      // fontSize: 전체화면에서 자동 배율 적용 (일반 모드 대비 약 1.5배)
+      if (style.fontSize) {
+        const baseFontSize = typeof style.fontSize === 'number' ? style.fontSize : parseInt(String(style.fontSize), 10);
+        inlineStyle.fontSize = isFullscreen && !isNaN(baseFontSize) ? Math.round(baseFontSize * 1.5) : style.fontSize;
+      }
+      if (style.opacity !== undefined) inlineStyle.opacity = style.opacity;
+      if (style.transition) inlineStyle.transition = style.transition;
+      if (style.transform) inlineStyle.transform = style.transform;
+      if (style.background) inlineStyle.background = style.background;
+      if (style.backgroundImage) inlineStyle.backgroundImage = style.backgroundImage;
+      if (style.backgroundClip) inlineStyle.backgroundClip = style.backgroundClip;
+      if (style.WebkitBackgroundClip) inlineStyle.WebkitBackgroundClip = style.WebkitBackgroundClip;
+      if (style.WebkitTextFillColor) inlineStyle.WebkitTextFillColor = style.WebkitTextFillColor;
+      if (style.WebkitTextStroke) inlineStyle.WebkitTextStroke = style.WebkitTextStroke;
+      if (style.filter) inlineStyle.filter = style.filter;
 
-    // pronunciationAsMain일 때는 CSS의 기본 opacity 덮어쓰기
-    if (isForPronunciation && pronunciationAsMain && style.opacity === undefined) {
-      inlineStyle.opacity = 1;
-    }
+      // pronunciationAsMain일 때는 CSS의 기본 opacity 덮어쓰기
+      if (isForPronunciation && pronunciationAsMain && style.opacity === undefined) {
+        inlineStyle.opacity = 1;
+      }
 
-    return inlineStyle;
-  };
+      return inlineStyle;
+    },
+    [isFullscreen, mergedStyles, pronunciationAsMain],
+  );
+
+  // General 설정에서 배경 투명도 추출
+  const backgroundOpacity = generalSettings?.fullBackground?.opacity ?? DEFAULT_GENERAL_SETTINGS.fullBackground.opacity;
 
   return (
-    <div className={styles.fullLyricsContainer} ref={containerRef}>
+    <div
+      className={styles.fullLyricsContainer}
+      ref={containerRef}
+      style={{ background: `rgba(24, 24, 24, ${backgroundOpacity})` }}
+    >
       {/* 상단 스페이서: 렌더링하지 않는 위쪽 항목들의 높이만큼 공간 확보 */}
       <div style={{ height: `${visibleRange.start * ITEM_HEIGHT}px` }} />
 

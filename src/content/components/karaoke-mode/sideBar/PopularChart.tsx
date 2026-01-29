@@ -1,12 +1,15 @@
 // PopularChart.tsx
 // 선택된 차트 카테고리의 곡 목록 화면
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MdArrowBackIosNew } from 'react-icons/md';
 import { ChartCategory, ChartItem, CHART_CATEGORIES } from '@lib/types/chart';
 import type { YouTubePlaylistItem } from '@background/api/youtube';
 import acapellaStyles from './AcapellaRecording.module.css';
 import { SIDEBAR_COLORS } from './sidebarStyles';
+
+// Lazy loading 설정
+const ITEMS_PER_PAGE = 10;
 
 interface PopularChartProps {
   category: ChartCategory;
@@ -22,10 +25,47 @@ export const PopularChart: React.FC<PopularChartProps> = ({ category, onBackToCa
   const { t } = useTranslation();
   const [chartData, setChartData] = useState<ChartItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   // 카테고리 정보 가져오기
   const categoryInfo = CHART_CATEGORIES.find((c) => c.id === category);
   const categoryLabel = categoryInfo ? t(categoryInfo.labelKey) : category;
+
+  // 더 많은 항목 로드 (Intersection Observer 콜백)
+  const loadMore = useCallback(() => {
+    if (visibleCount < chartData.length) {
+      setVisibleCount((prev) => Math.min(prev + ITEMS_PER_PAGE, chartData.length));
+    }
+  }, [visibleCount, chartData.length]);
+
+  // Intersection Observer 설정
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          loadMore();
+        }
+      },
+      { threshold: 0.1 },
+    );
+
+    const currentRef = loadMoreRef.current;
+    if (currentRef) {
+      observer.observe(currentRef);
+    }
+
+    return () => {
+      if (currentRef) {
+        observer.unobserve(currentRef);
+      }
+    };
+  }, [loadMore]);
+
+  // 카테고리 변경 시 visibleCount 초기화
+  useEffect(() => {
+    setVisibleCount(ITEMS_PER_PAGE);
+  }, [category]);
 
   useEffect(() => {
     // 플레이리스트 ID 가져오기
@@ -111,7 +151,7 @@ export const PopularChart: React.FC<PopularChartProps> = ({ category, onBackToCa
           </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {chartData.map((item) => (
+            {chartData.slice(0, visibleCount).map((item) => (
               <div
                 key={item.videoId}
                 style={{
@@ -247,6 +287,20 @@ export const PopularChart: React.FC<PopularChartProps> = ({ category, onBackToCa
                 </div>
               </div>
             ))}
+            {/* 더 로드하기 위한 트리거 요소 */}
+            {visibleCount < chartData.length && (
+              <div
+                ref={loadMoreRef}
+                style={{
+                  padding: '16px',
+                  textAlign: 'center',
+                  color: SIDEBAR_COLORS.textSecondary,
+                  fontSize: '12px',
+                }}
+              >
+                {t('extChartLoadingMore', { current: visibleCount, total: chartData.length })}
+              </div>
+            )}
           </div>
         )}
       </div>

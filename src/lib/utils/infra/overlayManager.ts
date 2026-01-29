@@ -36,13 +36,23 @@ class OverlayManager {
       }
     } else if (type === 'songInfo') {
       container = document.getElementById('song-info-overlay-container');
-      if (!container) {
+      const lyricsOverlayRoot = document.getElementById('lyrics-cc-overlay');
+
+      // 컨테이너가 없거나 올바른 부모(lyrics-cc-overlay)에 없으면 재생성/재배치
+      if (!container || (lyricsOverlayRoot && container.parentElement !== lyricsOverlayRoot)) {
+        if (container) {
+          // 기존 컨테이너가 잘못된 위치에 있으면 제거
+          container.remove();
+        }
         container = document.createElement('div');
         container.id = 'song-info-overlay-container';
+        container.style.position = 'absolute';
+        container.style.top = '0';
+        container.style.left = '0';
         container.style.width = '100%';
         container.style.height = '100%';
+        container.style.pointerEvents = 'none';
 
-        const lyricsOverlayRoot = document.getElementById('lyrics-cc-overlay');
         if (lyricsOverlayRoot) {
           lyricsOverlayRoot.appendChild(container);
         } else {

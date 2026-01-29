@@ -39,9 +39,10 @@ export function calculateDualFontSizes() {
   const isFullscreen = !!document.fullscreenElement;
 
   if (isFullscreen) {
-    const min = 2 * remInPx; // 2rem
-    const max = 4 * remInPx; // 4rem
-    const calculated = 2.5 * remInPx + 2 * vw; // 2.5rem + 2vw
+    // 전체화면: 약 10% 축소 (기존: 2rem/2.5rem+2vw/4rem → 1.8rem/2.25rem+1.8vw/3.6rem)
+    const min = 1.8 * remInPx; // 1.8rem
+    const max = 3.6 * remInPx; // 3.6rem
+    const calculated = 2.25 * remInPx + 1.8 * vw; // 2.25rem + 1.8vw
     return Math.ceil(Math.max(min, Math.min(calculated, max)));
   } else {
     const min = remInPx; // 1rem

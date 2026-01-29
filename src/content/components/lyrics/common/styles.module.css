@@ -14,15 +14,10 @@
   /* font-weight는 JS에서 DEFAULT_FONT_WEIGHT 상수로 관리 */
   display: inline-block; /* background-clip: text가 작동하려면 필요 */
   /* drop-shadow로 얇은 테두리 효과 - 착시 보정 및 겹침 최소화 */
-  filter:
-    drop-shadow(1px 0 0 rgba(21, 21, 21, 0.85))
-    drop-shadow(-1px 0 0 rgba(21, 21, 21, 0.7))
-    drop-shadow(0 1px 0 rgba(21, 21, 21, 0.85))
-    drop-shadow(0 -1px 0 rgba(21, 21, 21, 0.7))
-    drop-shadow(1.5px 0 0 rgba(21, 21, 21, 0.4))
-    drop-shadow(-1.5px 0 0 rgba(21, 21, 21, 0.5))
-    drop-shadow(0 1.5px 0 rgba(21, 21, 21, 0.4))
-    drop-shadow(0 -1.5px 0 rgba(21, 21, 21, 0.5));
+  filter: drop-shadow(1px 0 0 rgba(21, 21, 21, 0.85)) drop-shadow(-1px 0 0 rgba(21, 21, 21, 0.7))
+    drop-shadow(0 1px 0 rgba(21, 21, 21, 0.85)) drop-shadow(0 -1px 0 rgba(21, 21, 21, 0.7))
+    drop-shadow(1.5px 0 0 rgba(21, 21, 21, 0.4)) drop-shadow(-1.5px 0 0 rgba(21, 21, 21, 0.5))
+    drop-shadow(0 1.5px 0 rgba(21, 21, 21, 0.4)) drop-shadow(0 -1.5px 0 rgba(21, 21, 21, 0.5));
 }
 
 /* 발음 가사 라인 */
@@ -71,10 +66,10 @@
   opacity: 1 !important; /* 완전 불투명 */
 }
 
-/* 전체화면 - 발음 가사 (가사의 55~60% 비율 유지) */
+/* 전체화면 - 발음 가사 (가사의 45~50% 비율 유지) */
 :fullscreen .pronunciation,
 :-webkit-full-screen .pronunciation {
-  font-size: clamp(20px, calc(1.5vw + 2vh), 35px);
+  font-size: clamp(16px, calc(1vw + 1.2vh), 26px);
 }
 
 /* 전체화면 - 발음만 있는 경우 (가사와 동일하게) */

@@ -1,29 +1,116 @@
 .overlayContainer {
-  position: relative;
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  transform: translate(-50%, -50%);
   background: rgba(0, 0, 0, 0.75);
   color: white;
   border-radius: 12px;
   padding: 24px 32px;
-  height: 30%;
   max-width: 50%;
-  width: 50%;
-  top: 10%;
-  margin: auto;
+  width: 40%;
   box-shadow: 0 2px 14px rgba(0, 0, 0, 0.2);
   font-family: 'Noto Sans KR', sans-serif;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* 전체화면 스타일 */
+:fullscreen .overlayContainer,
+:-webkit-full-screen .overlayContainer {
+  max-width: 40%;
+  width: 40%;
+  padding: 32px 48px;
+}
+
+/* Full 모드: 하단 좌측에 컴팩트하게 표시 */
+.fullModeCompact {
+  left: 20px;
+  bottom: 80px;
+  top: auto;
+  transform: none;
+  width: auto;
+  max-width: 35%;
+  padding: 16px 20px;
+  border-radius: 8px;
+  z-index: 10;
+}
+
+:fullscreen .fullModeCompact,
+:-webkit-full-screen .fullModeCompact {
+  left: 30px;
+  bottom: 100px;
+  max-width: 30%;
+  padding: 20px 28px;
+}
+
+.fullModeCompact .title {
+  font-size: clamp(1rem, 2vw, 1.8rem);
+}
+
+:fullscreen .fullModeCompact .title,
+:-webkit-full-screen .fullModeCompact .title {
+  font-size: clamp(1.5rem, 2.5vw, 2.5rem);
+}
+
+.fullModeCompact .artist {
+  font-size: clamp(0.8rem, 1.2vw, 1.2rem);
+  margin: 6px 0 0 0;
+}
+
+:fullscreen .fullModeCompact .artist,
+:-webkit-full-screen .fullModeCompact .artist {
+  font-size: clamp(1rem, 1.5vw, 1.8rem);
+  margin: 10px 0 0 0;
+}
+
+.fullModeCompact .source {
+  font-size: clamp(0.7rem, 0.9vw, 0.9rem);
+  margin-top: 12px;
+}
+
+:fullscreen .fullModeCompact .source,
+:-webkit-full-screen .fullModeCompact .source {
+  font-size: clamp(0.85rem, 1.1vw, 1.2rem);
+  margin-top: 16px;
+}
+
+.fullModeCompact .copyrightNotice {
+  font-size: clamp(0.6rem, 0.75vw, 0.8rem);
+  margin-top: 4px;
+  padding-top: 6px;
+}
+
+:fullscreen .fullModeCompact .copyrightNotice,
+:-webkit-full-screen .fullModeCompact .copyrightNotice {
+  font-size: clamp(0.75rem, 1vw, 1rem);
+  margin-top: 6px;
+  padding-top: 8px;
 }
 
 .title {
-  font-size: 3rem;
+  font-size: clamp(1.5rem, 3vw, 3rem);
   margin: 0;
   font-weight: 700;
   line-height: 1.2;
 }
 
+:fullscreen .title,
+:-webkit-full-screen .title {
+  font-size: clamp(2.5rem, 4vw, 4.5rem);
+}
+
 .artist {
-  font-size: 1.5rem;
+  font-size: clamp(1rem, 1.5vw, 1.5rem);
   margin: 10px 0 0 0;
   font-weight: 400;
+}
+
+:fullscreen .artist,
+:-webkit-full-screen .artist {
+  font-size: clamp(1.5rem, 2vw, 2.5rem);
+  margin: 16px 0 0 0;
 }
 
 .infoBlock {
@@ -47,16 +134,29 @@
 }
 
 .source {
-  font-size: 1rem;
+  font-size: clamp(0.8rem, 1vw, 1rem);
   margin-top: 25px;
   color: #b2bdd4; /* 연한 블루 그레이 */
 }
 
+:fullscreen .source,
+:-webkit-full-screen .source {
+  font-size: clamp(1rem, 1.5vw, 1.5rem);
+  margin-top: 32px;
+}
+
 .copyrightNotice {
-  font-size: 0.9rem;
+  font-size: clamp(0.7rem, 0.9vw, 0.9rem);
   margin-top: 6px;
   padding-top: 8px;
   border-top: 1px solid #375189; /* 진한 파란색 */
   color: #b2bdd4;
-  line-height: 1.4;
+  line-height: 1.6;
+}
+
+:fullscreen .copyrightNotice,
+:-webkit-full-screen .copyrightNotice {
+  font-size: clamp(0.9rem, 1.2vw, 1.3rem);
+  margin-top: 10px;
+  padding-top: 12px;
 }

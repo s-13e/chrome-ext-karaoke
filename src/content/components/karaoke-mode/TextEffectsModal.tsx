@@ -7,8 +7,16 @@ import {
   FullLyricsStyleConfig,
   SingleLineLyricsStyleConfig,
   LinearGradientOptions,
+  GeneralLyricsSettings,
+  LyricsPreset,
 } from '@lib/types/lyricsStyles';
-import { DEFAULT_LYRICS_COLOR, DEFAULT_HIGHLIGHT_COLOR, DEFAULT_PRONUNCIATION_COLOR } from '@constants/lyricsStyles';
+import {
+  DEFAULT_LYRICS_COLOR,
+  DEFAULT_HIGHLIGHT_COLOR,
+  DEFAULT_PRONUNCIATION_COLOR,
+  DEFAULT_GENERAL_SETTINGS,
+  DEFAULT_PRESETS,
+} from '@constants/lyricsStyles';
 import { DEFAULT_PRONUNCIATION_FONT_WEIGHT } from '@constants/fontWeights';
 import { useTranslation } from 'react-i18next';
 import {
@@ -22,9 +30,10 @@ import { FontWeightSelect } from './FontWeightSelect';
 import { ColorPickerInput } from './ColorPickerInput';
 import { canExecuteThrottled, THROTTLE_DELAYS } from '@lib/utils/common/common';
 
-type TabType = 'dual' | 'full' | 'single';
-// TabType을 lyricsMode로 변환 (dual -> sync)
-const tabToLyricsMode = (tab: TabType): 'sync' | 'single' | 'full' => {
+type TabType = 'general' | 'dual' | 'full' | 'single';
+// TabType을 lyricsMode로 변환 (dual -> sync, general은 현재 모드 유지)
+const tabToLyricsMode = (tab: TabType, currentMode: 'sync' | 'single' | 'full'): 'sync' | 'single' | 'full' => {
+  if (tab === 'general') return currentMode;
   return tab === 'dual' ? 'sync' : tab;
 };
 
@@ -34,6 +43,8 @@ interface TextEffectsModalProps {
   registerCancel?: (fn: (() => void) | null) => void;
   // 초기 탭 설정 (현재 가사 표시 모드에 따라)
   initialTab?: TabType;
+  // 현재 가사 모드 (General 탭에서 필요)
+  currentLyricsMode?: 'sync' | 'single' | 'full';
 }
 /**
  * 텍스트 효과 설정 모달
@@ -41,60 +52,104 @@ interface TextEffectsModalProps {
  * - 각 탭은 기본 스타일, 하이라이트 스타일, 발음 스타일 섹션으로 구성
  * - 탭 변경 시 실제 가사 오버레이도 해당 모드로 변경되어 미리보기 가능
  */
-export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, registerCancel, initialTab = 'dual' }) => {
+export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({
+  onClose,
+  registerCancel,
+  initialTab = 'general',
+  currentLyricsMode = 'sync',
+}) => {
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
   // 모달 열기 전 원래 lyricsMode 저장 (닫을 때 복구용)
-  const originalLyricsModeRef = useRef<'sync' | 'single' | 'full'>('sync');
+  const originalLyricsModeRef = useRef<'sync' | 'single' | 'full'>(currentLyricsMode);
+  // 현재 lyricsMode 추적 (General 탭에서 필요)
+  const currentModeRef = useRef<'sync' | 'single' | 'full'>(currentLyricsMode);
   // 탭 변경 쓰로틀링
   const lastTabChangeRef = useRef<number>(0);
   // 개별 설정 상태
   const [dualConfig, setDualConfig] = useState<Partial<DualHighlightLyricsStyleConfig>>({});
   const [fullConfig, setFullConfig] = useState<Partial<FullLyricsStyleConfig>>({});
   const [singleConfig, setSingleConfig] = useState<Partial<SingleLineLyricsStyleConfig>>({});
+  const [generalConfig, setGeneralConfig] = useState<Partial<GeneralLyricsSettings>>({});
+  // 사용자 프리셋 상태
+  const [userPresets, setUserPresets] = useState<LyricsPreset[]>([]);
   // 원본 설정 저장 (취소 시 복구용)
   const originalConfigsRef = useRef<{
     dual: Partial<DualHighlightLyricsStyleConfig>;
     full: Partial<FullLyricsStyleConfig>;
     single: Partial<SingleLineLyricsStyleConfig>;
+    general: Partial<GeneralLyricsSettings>;
+    userPresets: LyricsPreset[];
   }>({
     dual: {},
     full: {},
     single: {},
+    general: {},
+    userPresets: [],
   });
   const { t } = useTranslation();
 
+  // 선택된 프리셋 이름 상태 (storage에서 로드)
+  const [selectedPresetName, setSelectedPresetName] = useState<string>('');
+
   // chrome.storage에서 초기값 로드
   useEffect(() => {
-    chrome.storage.sync.get(['lyricsStyleDual', 'lyricsStyleFull', 'lyricsStyleSingle', 'lyricsMode'], (items) => {
-      const dual = items.lyricsStyleDual || {};
-      const full = items.lyricsStyleFull || {};
-      const single = items.lyricsStyleSingle || {};
+    chrome.storage.sync.get(
+      [
+        'lyricsStyleDual',
+        'lyricsStyleFull',
+        'lyricsStyleSingle',
+        'lyricsStyleGeneral',
+        'lyricsUserPresets',
+        'lyricsMode',
+        'selectedPresetName',
+      ],
+      (items) => {
+        const dual = items.lyricsStyleDual || {};
+        const full = items.lyricsStyleFull || {};
+        const single = items.lyricsStyleSingle || {};
+        const general = items.lyricsStyleGeneral || {};
+        const presets = items.lyricsUserPresets || [];
+        const presetName = items.selectedPresetName || '';
 
-      setDualConfig(dual);
-      setFullConfig(full);
-      setSingleConfig(single);
-      // 원본 저장
-      originalConfigsRef.current = {
-        dual: JSON.parse(JSON.stringify(dual)),
-        full: JSON.parse(JSON.stringify(full)),
-        single: JSON.parse(JSON.stringify(single)),
-      };
+        setDualConfig(dual);
+        setFullConfig(full);
+        setSingleConfig(single);
+        setGeneralConfig(general);
+        setUserPresets(presets);
+        setSelectedPresetName(presetName);
+        // 원본 저장
+        originalConfigsRef.current = {
+          dual: JSON.parse(JSON.stringify(dual)),
+          full: JSON.parse(JSON.stringify(full)),
+          single: JSON.parse(JSON.stringify(single)),
+          general: JSON.parse(JSON.stringify(general)),
+          userPresets: JSON.parse(JSON.stringify(presets)),
+        };
 
-      // 원래 lyricsMode 저장
-      if (items.lyricsMode && ['sync', 'single', 'full'].includes(items.lyricsMode)) {
-        originalLyricsModeRef.current = items.lyricsMode;
-      }
+        // 원래 lyricsMode 저장
+        if (items.lyricsMode && ['sync', 'single', 'full'].includes(items.lyricsMode)) {
+          originalLyricsModeRef.current = items.lyricsMode;
+          currentModeRef.current = items.lyricsMode;
+        }
 
-      // 초기 탭에 맞춰 lyricsMode 변경 (미리보기용)
-      chrome.storage.sync.set({ lyricsMode: tabToLyricsMode(initialTab) });
-    });
+        // 초기 탭에 맞춰 lyricsMode 변경 (미리보기용) - general 탭은 현재 모드 유지
+        if (initialTab !== 'general') {
+          chrome.storage.sync.set({ lyricsMode: tabToLyricsMode(initialTab, currentModeRef.current) });
+        }
+      },
+    );
   }, [initialTab]);
 
   // 탭 변경 시 lyricsMode도 변경 (실시간 미리보기) - 쓰로틀링 적용
   const handleTabChange = (tab: TabType) => {
     if (!canExecuteThrottled(lastTabChangeRef, THROTTLE_DELAYS.UI_INTERACTION)) return;
     setActiveTab(tab);
-    chrome.storage.sync.set({ lyricsMode: tabToLyricsMode(tab) });
+    // general 탭은 현재 모드 유지
+    if (tab !== 'general') {
+      const newMode = tabToLyricsMode(tab, currentModeRef.current);
+      currentModeRef.current = newMode;
+      chrome.storage.sync.set({ lyricsMode: newMode });
+    }
   };
   // 실시간 미리보기를 위한 임시 storage 저장
   const handlePreviewUpdate = () => {
@@ -103,22 +158,58 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, reg
       lyricsStyleDual: dualConfig,
       lyricsStyleFull: fullConfig,
       lyricsStyleSingle: singleConfig,
+      lyricsStyleGeneral: generalConfig,
     });
   };
 
-  // 초기화 버튼
+  // 수동 변경 시 프리셋 선택을 None으로 변경
+  const handleManualChange = useCallback(() => {
+    setSelectedPresetName('None');
+    chrome.storage.sync.set({ selectedPresetName: 'None' });
+  }, []);
+
+  // 초기화 버튼 (현재 탭만 초기화)
   const handleReset = () => {
     const emptyConfig = {};
-    setDualConfig(emptyConfig);
-    setFullConfig(emptyConfig);
-    setSingleConfig(emptyConfig);
+    setSelectedPresetName('None'); // 탭별 초기화이므로 None으로 설정
 
-    // 즉시 storage에도 반영 (실시간 미리보기)
-    chrome.storage.sync.set({
-      lyricsStyleDual: emptyConfig,
-      lyricsStyleFull: emptyConfig,
-      lyricsStyleSingle: emptyConfig,
-    });
+    switch (activeTab) {
+      case 'general':
+        setGeneralConfig(emptyConfig);
+        chrome.storage.sync.set({
+          lyricsStyleGeneral: emptyConfig,
+          selectedPresetName: 'None',
+        });
+        break;
+      case 'dual':
+        setDualConfig(emptyConfig);
+        chrome.storage.sync.set({
+          lyricsStyleDual: emptyConfig,
+          selectedPresetName: 'None',
+        });
+        break;
+      case 'single':
+        setSingleConfig(emptyConfig);
+        chrome.storage.sync.set({
+          lyricsStyleSingle: emptyConfig,
+          selectedPresetName: 'None',
+        });
+        break;
+      case 'full':
+        setFullConfig(emptyConfig);
+        // Full 탭은 배경 투명도도 포함하므로 generalConfig의 fullBackground도 초기화
+        setGeneralConfig((prev) => {
+          const newConfig = { ...prev };
+          delete newConfig.fullBackground;
+          chrome.storage.sync.set({
+            lyricsStyleFull: emptyConfig,
+            lyricsStyleGeneral: newConfig,
+            selectedPresetName: 'None',
+          });
+          return newConfig;
+        });
+        break;
+    }
   };
   // 적용 버튼
   const handleApply = () => {
@@ -126,17 +217,21 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, reg
       lyricsStyleDual: dualConfig,
       lyricsStyleFull: fullConfig,
       lyricsStyleSingle: singleConfig,
-      // 현재 activeTab의 lyricsMode로 설정
-      lyricsMode: tabToLyricsMode(activeTab),
+      lyricsStyleGeneral: generalConfig,
+      lyricsUserPresets: userPresets,
+      // 현재 activeTab의 lyricsMode로 설정 (general 탭은 현재 모드 유지)
+      lyricsMode: tabToLyricsMode(activeTab, currentModeRef.current),
     });
     // 원본 업데이트 (다음 취소 시 현재 상태가 기준이 됨)
     originalConfigsRef.current = {
       dual: JSON.parse(JSON.stringify(dualConfig)),
       full: JSON.parse(JSON.stringify(fullConfig)),
       single: JSON.parse(JSON.stringify(singleConfig)),
+      general: JSON.parse(JSON.stringify(generalConfig)),
+      userPresets: JSON.parse(JSON.stringify(userPresets)),
     };
     // 원래 lyricsMode도 현재 탭으로 업데이트
-    originalLyricsModeRef.current = tabToLyricsMode(activeTab);
+    originalLyricsModeRef.current = tabToLyricsMode(activeTab, currentModeRef.current);
     onClose();
   };
   // 취소/모달 닫기 공통 로직
@@ -145,14 +240,18 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, reg
     setDualConfig(originalConfigsRef.current.dual);
     setFullConfig(originalConfigsRef.current.full);
     setSingleConfig(originalConfigsRef.current.single);
+    setGeneralConfig(originalConfigsRef.current.general);
+    setUserPresets(originalConfigsRef.current.userPresets);
 
     // 즉시 원본 설정을 storage에 복구 + 현재 activeTab의 lyricsMode로 설정
     chrome.storage.sync.set({
       lyricsStyleDual: originalConfigsRef.current.dual,
       lyricsStyleFull: originalConfigsRef.current.full,
       lyricsStyleSingle: originalConfigsRef.current.single,
+      lyricsStyleGeneral: originalConfigsRef.current.general,
+      lyricsUserPresets: originalConfigsRef.current.userPresets,
       // 취소해도 현재 보고 있던 탭의 lyricsMode로 유지
-      lyricsMode: tabToLyricsMode(activeTab),
+      lyricsMode: tabToLyricsMode(activeTab, currentModeRef.current),
     });
 
     onClose();
@@ -181,6 +280,8 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, reg
         lyricsStyleDual: originalConfigsRef.current.dual,
         lyricsStyleFull: originalConfigsRef.current.full,
         lyricsStyleSingle: originalConfigsRef.current.single,
+        lyricsStyleGeneral: originalConfigsRef.current.general,
+        lyricsUserPresets: originalConfigsRef.current.userPresets,
         lyricsMode: originalLyricsModeRef.current,
       });
     };
@@ -194,38 +295,59 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, reg
     <div className={styles.modalContainer}>
       <div className={styles.modalHeader}>
         <h3 className={styles.modalTitle}>{t('extTextEffectsModalTitle')}</h3>
-        <button className={styles.closeButton} onClick={handleCancelOrClose} aria-label={t('extTextEffectsModalClose')}>
-          ×
-        </button>
       </div>
       {/* 탭 네비게이션 */}
       <div className={styles.tabNav}>
         <button
+          className={`${styles.tabButton} ${activeTab === 'general' ? styles.active : ''}`}
+          onClick={() => handleTabChange('general')}
+        >
+          {t('extTextEffectsTabGeneral')}
+        </button>
+        <button
           className={`${styles.tabButton} ${activeTab === 'dual' ? styles.active : ''}`}
           onClick={() => handleTabChange('dual')}
         >
-          Dual
+          {t('extKaraokeModeSync')}
         </button>
         <button
           className={`${styles.tabButton} ${activeTab === 'single' ? styles.active : ''}`}
           onClick={() => handleTabChange('single')}
         >
-          Single
+          {t('extKaraokeModeSingle')}
         </button>
         <button
           className={`${styles.tabButton} ${activeTab === 'full' ? styles.active : ''}`}
           onClick={() => handleTabChange('full')}
         >
-          Full
+          {t('extKaraokeModeFull')}
         </button>
       </div>
       {/* 탭 컨텐츠 */}
       <div className={styles.tabContent}>
+        {activeTab === 'general' && (
+          <GeneralSettingsPanel
+            config={generalConfig}
+            setConfig={setGeneralConfig}
+            dualConfig={dualConfig}
+            setDualConfig={setDualConfig}
+            singleConfig={singleConfig}
+            setSingleConfig={setSingleConfig}
+            fullConfig={fullConfig}
+            setFullConfig={setFullConfig}
+            userPresets={userPresets}
+            setUserPresets={setUserPresets}
+            selectedPresetName={selectedPresetName}
+            setSelectedPresetName={setSelectedPresetName}
+            t={t}
+          />
+        )}
         {activeTab === 'dual' && (
           <DualSettingsPanel
             config={dualConfig}
             setConfig={setDualConfig}
             onPreviewUpdate={handlePreviewUpdate}
+            onManualChange={handleManualChange}
             t={t}
           />
         )}
@@ -234,6 +356,7 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, reg
             config={singleConfig}
             setConfig={setSingleConfig}
             onPreviewUpdate={handlePreviewUpdate}
+            onManualChange={handleManualChange}
             t={t}
           />
         )}
@@ -241,7 +364,10 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({ onClose, reg
           <FullSettingsPanel
             config={fullConfig}
             setConfig={setFullConfig}
+            generalConfig={generalConfig}
+            setGeneralConfig={setGeneralConfig}
             onPreviewUpdate={handlePreviewUpdate}
+            onManualChange={handleManualChange}
             t={t}
           />
         )}
@@ -272,9 +398,16 @@ interface DualSettingsPanelProps {
   config: Partial<DualHighlightLyricsStyleConfig>;
   setConfig: React.Dispatch<React.SetStateAction<Partial<DualHighlightLyricsStyleConfig>>>;
   onPreviewUpdate: () => void;
+  onManualChange: () => void;
   t: (key: string) => string;
 }
-const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig, onPreviewUpdate, t }) => {
+const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({
+  config,
+  setConfig,
+  onPreviewUpdate,
+  onManualChange,
+  t,
+}) => {
   // 현재 뷰포트 기준 계산된 폰트 크기
   const calculatedSizes = useMemo(() => {
     const dualSize = calculateDualFontSizes();
@@ -287,6 +420,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
 
   // 색상 변경 핸들러
   const updateConfig = (path: string[], value: string | number | undefined) => {
+    onManualChange(); // 수동 변경 시 프리셋 선택 초기화
     setConfig((prev) => {
       const newConfig = { ...prev };
       let current: Record<string, unknown> = newConfig as Record<string, unknown>;
@@ -317,8 +451,8 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
     config.pronunciationAsMainHighlight ?? false,
   );
 
-  // 색상 모드 상태 (단색 vs 다색)
-  const [colorMode, setColorMode] = useState<'solid' | 'multi'>('solid');
+  // 색상 모드 (단색 vs 다색) - config에서 computed
+  const colorMode = config.lyrics?.highlight?.linearGradient?.enabled ? 'multi' : 'solid';
 
   // config 변경 시 상태 동기화 (초기화 버튼 대응)
   useEffect(() => {
@@ -326,6 +460,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
   }, [config.pronunciationAsMainHighlight]);
 
   const handlePronunciationHighlightToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onManualChange(); // 수동 변경 시 프리셋 선택 초기화
     const enabled = e.target.checked;
     setPronunciationHighlightEnabled(enabled);
     setConfig((prev) => {
@@ -342,7 +477,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
   };
 
   const handleColorModeChange = (mode: 'solid' | 'multi') => {
-    setColorMode(mode);
+    onManualChange(); // 수동 변경 시 프리셋 선택 초기화
     if (mode === 'solid') {
       // 단색 모드: gradient 비활성화
       updateGradientConfig('enabled', false);
@@ -353,6 +488,7 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
   };
 
   const updateGradientConfig = <K extends keyof LinearGradientOptions>(key: K, value: LinearGradientOptions[K]) => {
+    onManualChange(); // 수동 변경 시 프리셋 선택 초기화
     setConfig((prev) => {
       const newConfig = {
         ...prev,
@@ -635,14 +771,26 @@ const DualSettingsPanel: React.FC<DualSettingsPanelProps> = ({ config, setConfig
 interface FullSettingsPanelProps {
   config: Partial<FullLyricsStyleConfig>;
   setConfig: React.Dispatch<React.SetStateAction<Partial<FullLyricsStyleConfig>>>;
+  generalConfig: Partial<GeneralLyricsSettings>;
+  setGeneralConfig: React.Dispatch<React.SetStateAction<Partial<GeneralLyricsSettings>>>;
   onPreviewUpdate: () => void;
+  onManualChange: () => void;
   t: (key: string) => string;
 }
-const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig, onPreviewUpdate, t }) => {
+const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({
+  config,
+  setConfig,
+  generalConfig,
+  setGeneralConfig,
+  onPreviewUpdate,
+  onManualChange,
+  t,
+}) => {
   // 현재 뷰포트 기준 계산된 폰트 크기
   const calculatedSizes = useMemo(() => calculateFullFontSizes(), []); // 모달 오픈 시 한 번만 계산
 
   const updateConfig = (path: string[], value: string | number | undefined) => {
+    onManualChange(); // 수동 변경 시 프리셋 선택 초기화
     setConfig((prev) => {
       const newConfig = { ...prev };
       let current: Record<string, unknown> = newConfig as Record<string, unknown>;
@@ -671,6 +819,7 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
 
   // Linear Gradient 업데이트 함수
   const updateGradientConfig = <K extends keyof LinearGradientOptions>(key: K, value: LinearGradientOptions[K]) => {
+    onManualChange(); // 수동 변경 시 프리셋 선택 초기화
     setConfig((prev) => {
       const newConfig = {
         ...prev,
@@ -698,6 +847,7 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
   const colorMode = config.lyrics?.highlight?.linearGradient?.enabled ? 'multi' : 'single';
 
   const handleColorModeChange = (mode: 'single' | 'multi') => {
+    onManualChange(); // 수동 변경 시 프리셋 선택 초기화
     if (mode === 'single') {
       // 단색 모드: gradient 비활성화
       updateGradientConfig('enabled', false);
@@ -717,6 +867,7 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
   }, [config.pronunciationAsMainHighlight]);
 
   const handlePronunciationHighlightToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onManualChange(); // 수동 변경 시 프리셋 선택 초기화
     const enabled = e.target.checked;
     setPronunciationHighlightEnabled(enabled);
     setConfig((prev) => {
@@ -731,6 +882,21 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
       return newConfig;
     });
   };
+
+  // 배경 투명도 변경 핸들러
+  const handleBackgroundOpacityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onManualChange(); // 수동 변경 시 프리셋 선택 초기화
+    const opacity = Number(e.target.value) / 100;
+    setGeneralConfig((prev) => {
+      const newConfig = {
+        ...prev,
+        fullBackground: { opacity },
+      };
+      chrome.storage.sync.set({ lyricsStyleGeneral: newConfig });
+      return newConfig;
+    });
+  };
+
   return (
     <div className={styles.settingsPanel}>
       <p className={styles.panelDescription}>{t('extTextEffectsFullDescription')}</p>
@@ -967,6 +1133,29 @@ const FullSettingsPanel: React.FC<FullSettingsPanelProps> = ({ config, setConfig
         </div>
         <p className={styles.settingDescription}>{t('extTextEffectsPronunciationHighlightHint')}</p>
       </div>
+
+      {/* 배경 섹션 */}
+      <div className={styles.section}>
+        <h4 className={styles.sectionTitle}>{t('extTextEffectsSectionBackground')}</h4>
+
+        <div className={styles.settingRow}>
+          <label className={styles.settingLabel}>{t('extTextEffectsBackgroundOpacity')}</label>
+          <input
+            type="range"
+            className={styles.rangeInput}
+            value={(generalConfig.fullBackground?.opacity ?? DEFAULT_GENERAL_SETTINGS.fullBackground.opacity) * 100}
+            onChange={handleBackgroundOpacityChange}
+            min={0}
+            max={100}
+          />
+          <span className={styles.unit}>
+            {Math.round(
+              (generalConfig.fullBackground?.opacity ?? DEFAULT_GENERAL_SETTINGS.fullBackground.opacity) * 100,
+            )}
+            %
+          </span>
+        </div>
+      </div>
     </div>
   );
 };
@@ -979,13 +1168,21 @@ interface SingleSettingsPanelProps {
   config: Partial<SingleLineLyricsStyleConfig>;
   setConfig: React.Dispatch<React.SetStateAction<Partial<SingleLineLyricsStyleConfig>>>;
   onPreviewUpdate: () => void;
+  onManualChange: () => void;
   t: (key: string) => string;
 }
-const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setConfig, onPreviewUpdate, t }) => {
+const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({
+  config,
+  setConfig,
+  onPreviewUpdate,
+  onManualChange,
+  t,
+}) => {
   // 현재 뷰포트 기준 계산된 폰트 크기
   const calculatedSizes = useMemo(() => calculateSingleFontSizes(), []); // 모달 오픈 시 한 번만 계산
 
   const updateConfig = (path: string[], value: string | number | undefined) => {
+    onManualChange(); // 수동 변경 시 프리셋 선택 초기화
     setConfig((prev) => {
       const newConfig = { ...prev };
       let current: Record<string, unknown> = newConfig as Record<string, unknown>;
@@ -1014,6 +1211,7 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
 
   // Linear Gradient 업데이트 함수
   const updateGradientConfig = <K extends keyof LinearGradientOptions>(key: K, value: LinearGradientOptions[K]) => {
+    onManualChange(); // 수동 변경 시 프리셋 선택 초기화
     setConfig((prev) => {
       const newConfig = {
         ...prev,
@@ -1236,6 +1434,331 @@ const SingleSettingsPanel: React.FC<SingleSettingsPanelProps> = ({ config, setCo
           />
           <span className={styles.unit}>px</span>
         </div>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * General 설정 패널
+ * 카운트다운, 가사 위치, 배경 투명도, 프리셋 설정
+ */
+interface GeneralSettingsPanelProps {
+  config: Partial<GeneralLyricsSettings>;
+  setConfig: React.Dispatch<React.SetStateAction<Partial<GeneralLyricsSettings>>>;
+  dualConfig: Partial<DualHighlightLyricsStyleConfig>;
+  setDualConfig: React.Dispatch<React.SetStateAction<Partial<DualHighlightLyricsStyleConfig>>>;
+  singleConfig: Partial<SingleLineLyricsStyleConfig>;
+  setSingleConfig: React.Dispatch<React.SetStateAction<Partial<SingleLineLyricsStyleConfig>>>;
+  fullConfig: Partial<FullLyricsStyleConfig>;
+  setFullConfig: React.Dispatch<React.SetStateAction<Partial<FullLyricsStyleConfig>>>;
+  userPresets: LyricsPreset[];
+  setUserPresets: React.Dispatch<React.SetStateAction<LyricsPreset[]>>;
+  selectedPresetName: string;
+  setSelectedPresetName: React.Dispatch<React.SetStateAction<string>>;
+  t: (key: string) => string;
+}
+const GeneralSettingsPanel: React.FC<GeneralSettingsPanelProps> = ({
+  config,
+  setConfig,
+  dualConfig,
+  setDualConfig,
+  singleConfig,
+  setSingleConfig,
+  fullConfig,
+  setFullConfig,
+  userPresets,
+  setUserPresets,
+  selectedPresetName,
+  setSelectedPresetName,
+  t,
+}) => {
+  // 프리셋 이름 입력 상태
+  const [presetName, setPresetName] = useState('');
+  // 삭제할 프리셋 상태
+  const [presetToDelete, setPresetToDelete] = useState<string | null>(null);
+  // 삭제 확인 모달 표시 상태
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // 수동 변경 시 프리셋 선택을 None으로 변경
+  const clearSelectedPreset = () => {
+    setSelectedPresetName('None');
+    chrome.storage.sync.set({ selectedPresetName: 'None' });
+  };
+
+  // 설정 업데이트 헬퍼
+  const updateConfig = <K extends keyof GeneralLyricsSettings>(key: K, value: Partial<GeneralLyricsSettings[K]>) => {
+    clearSelectedPreset(); // 수동 변경 시 프리셋 선택 초기화
+    setConfig((prev) => {
+      const newConfig = {
+        ...prev,
+        [key]: {
+          ...(prev[key] as object),
+          ...value,
+        },
+      };
+      // 즉시 storage에 저장 (실시간 미리보기)
+      chrome.storage.sync.set({ lyricsStyleGeneral: newConfig });
+      return newConfig;
+    });
+  };
+
+  // 카운트다운 설정 업데이트
+  const updateCountdown = (field: keyof GeneralLyricsSettings['countdown'], value: boolean | string | number) => {
+    const currentCountdown = config.countdown || DEFAULT_GENERAL_SETTINGS.countdown;
+    updateConfig('countdown', { ...currentCountdown, [field]: value });
+  };
+
+  // 가사 위치 업데이트
+  const updatePosition = (type: 'dual' | 'single', bottom: number) => {
+    const currentPosition = config.position || DEFAULT_GENERAL_SETTINGS.position;
+    updateConfig('position', {
+      ...currentPosition,
+      [type]: { bottom },
+    });
+  };
+
+  // 프리셋 적용 (기존 config와 병합하지 않고 프리셋 값으로 덮어쓰기)
+  const applyPreset = (preset: LyricsPreset) => {
+    const newDual = preset.dual ?? dualConfig;
+    const newSingle = preset.single ?? singleConfig;
+    const newFull = preset.full ?? fullConfig;
+    const newGeneral = preset.general ?? config;
+
+    setDualConfig(newDual);
+    setSingleConfig(newSingle);
+    setFullConfig(newFull);
+    setConfig(newGeneral);
+
+    // 즉시 storage에 저장 (state 업데이트는 비동기이므로 새 값을 직접 저장)
+    chrome.storage.sync.set({
+      lyricsStyleDual: newDual,
+      lyricsStyleSingle: newSingle,
+      lyricsStyleFull: newFull,
+      lyricsStyleGeneral: newGeneral,
+      selectedPresetName: preset.name,
+    });
+  };
+
+  // 현재 설정을 프리셋으로 저장
+  const saveCurrentAsPreset = () => {
+    if (!presetName.trim()) return;
+
+    const newPreset: LyricsPreset = {
+      name: presetName.trim(),
+      dual: dualConfig,
+      single: singleConfig,
+      full: fullConfig,
+      general: config,
+    };
+
+    const updatedPresets = [...userPresets, newPreset];
+    setUserPresets(updatedPresets);
+    chrome.storage.sync.set({ lyricsUserPresets: updatedPresets });
+    setPresetName('');
+  };
+
+  // 프리셋 삭제 확인 모달 열기
+  const openDeleteConfirm = () => {
+    if (presetToDelete) {
+      setShowDeleteConfirm(true);
+    }
+  };
+
+  // 프리셋 삭제 확정
+  const confirmDelete = () => {
+    if (presetToDelete) {
+      const updatedPresets = userPresets.filter((p) => p.name !== presetToDelete);
+      setUserPresets(updatedPresets);
+      chrome.storage.sync.set({ lyricsUserPresets: updatedPresets });
+      setPresetToDelete(null);
+      setShowDeleteConfirm(false);
+    }
+  };
+
+  // 삭제 취소
+  const cancelDelete = () => {
+    setShowDeleteConfirm(false);
+  };
+
+  // 모든 프리셋 (기본 + 사용자)
+  const allPresets = [...DEFAULT_PRESETS, ...userPresets];
+
+  return (
+    <div className={styles.settingsPanel}>
+      <p className={styles.panelDescription}>{t('extTextEffectsGeneralDescription')}</p>
+
+      {/* 카운트다운 섹션 */}
+      <div className={styles.section}>
+        <h4 className={styles.sectionTitle}>{t('extTextEffectsSectionCountdown')}</h4>
+        <p className={styles.sectionDescription}>{t('extTextEffectsCountdownDescription')}</p>
+
+        <div className={styles.settingRow}>
+          <label className={styles.settingLabel}>{t('extTextEffectsCountdownEnabled')}</label>
+          <input
+            type="checkbox"
+            className={styles.checkboxInput}
+            checked={config.countdown?.enabled ?? DEFAULT_GENERAL_SETTINGS.countdown.enabled}
+            onChange={(e) => updateCountdown('enabled', e.target.checked)}
+          />
+        </div>
+
+        <div className={styles.settingRow}>
+          <label className={styles.settingLabel}>{t('extTextEffectsCountdownColor')}</label>
+          <ColorPickerInput
+            value={config.countdown?.color || DEFAULT_GENERAL_SETTINGS.countdown.color}
+            onChange={(value) => updateCountdown('color', value || DEFAULT_GENERAL_SETTINGS.countdown.color)}
+          />
+        </div>
+
+        <div className={styles.settingRow}>
+          <label className={styles.settingLabel}>{t('extTextEffectsCountdownSize')}</label>
+          <input
+            type="number"
+            className={styles.numberInput}
+            value={config.countdown?.fontSize ?? DEFAULT_GENERAL_SETTINGS.countdown.fontSize}
+            onChange={(e) => updateCountdown('fontSize', Number(e.target.value))}
+            min={60}
+            max={300}
+          />
+          <span className={styles.unit}>px</span>
+        </div>
+      </div>
+
+      {/* 가사 위치 섹션 */}
+      <div className={styles.section}>
+        <h4 className={styles.sectionTitle}>{t('extTextEffectsSectionPosition')}</h4>
+        <p className={styles.sectionDescription}>{t('extTextEffectsPositionDescription')}</p>
+
+        <div className={styles.settingRow}>
+          <label className={styles.settingLabel}>{t('extTextEffectsPositionDual')}</label>
+          <input
+            type="number"
+            className={styles.numberInput}
+            value={config.position?.dual?.bottom ?? DEFAULT_GENERAL_SETTINGS.position.dual.bottom}
+            onChange={(e) => updatePosition('dual', Number(e.target.value))}
+            min={0}
+            max={300}
+          />
+          <span className={styles.unit}>px</span>
+        </div>
+
+        <div className={styles.settingRow}>
+          <label className={styles.settingLabel}>{t('extTextEffectsPositionSingle')}</label>
+          <input
+            type="number"
+            className={styles.numberInput}
+            value={config.position?.single?.bottom ?? DEFAULT_GENERAL_SETTINGS.position.single.bottom}
+            onChange={(e) => updatePosition('single', Number(e.target.value))}
+            min={0}
+            max={300}
+          />
+          <span className={styles.unit}>px</span>
+        </div>
+      </div>
+
+      {/* 프리셋 섹션 */}
+      <div className={styles.section}>
+        <h4 className={styles.sectionTitle}>{t('extTextEffectsSectionPreset')}</h4>
+        <p className={styles.sectionDescription}>{t('extTextEffectsPresetDescription')}</p>
+
+        <div className={styles.settingRow}>
+          <label className={styles.settingLabel}>{t('extTextEffectsPresetSelect')}</label>
+          <select
+            className={styles.selectInput}
+            onChange={(e) => {
+              const name = e.target.value;
+              setSelectedPresetName(name);
+              // None이 아닌 경우에만 프리셋 적용
+              if (name !== 'None') {
+                const preset = allPresets.find((p) => p.name === name);
+                if (preset) applyPreset(preset);
+              } else {
+                // None 선택 시 storage에 저장
+                chrome.storage.sync.set({ selectedPresetName: 'None' });
+              }
+            }}
+            value={selectedPresetName || 'Basic'}
+          >
+            <option value="None">{t('extTextEffectsPresetNone')}</option>
+            {DEFAULT_PRESETS.map((preset) => (
+              <option key={preset.name} value={preset.name}>
+                {preset.name}
+              </option>
+            ))}
+            {userPresets.length > 0 && (
+              <>
+                <option disabled>──────────</option>
+                {userPresets.map((preset) => (
+                  <option key={preset.name} value={preset.name}>
+                    {preset.name}
+                  </option>
+                ))}
+              </>
+            )}
+          </select>
+        </div>
+
+        <div className={styles.settingRow}>
+          <label className={styles.settingLabel}>{t('extTextEffectsPresetSave')}</label>
+          <input
+            type="text"
+            className={styles.textInput}
+            value={presetName}
+            onChange={(e) => setPresetName(e.target.value)}
+            placeholder="Basic"
+          />
+          <button className={styles.smallButton} onClick={saveCurrentAsPreset} disabled={!presetName.trim()}>
+            {t('extSave')}
+          </button>
+        </div>
+
+        {userPresets.length > 0 && (
+          <div className={styles.settingRow}>
+            <label className={styles.settingLabel}>{t('extTextEffectsPresetDelete')}</label>
+            <select
+              className={styles.selectInput}
+              onChange={(e) => setPresetToDelete(e.target.value || null)}
+              value={presetToDelete || ''}
+            >
+              <option value="" disabled>
+                {t('extTextEffectsPresetSelect')}
+              </option>
+              {userPresets.map((preset) => (
+                <option key={preset.name} value={preset.name}>
+                  {preset.name}
+                </option>
+              ))}
+            </select>
+            <button
+              className={styles.smallButton}
+              onClick={openDeleteConfirm}
+              disabled={!presetToDelete}
+              style={{ backgroundColor: '#dc3545' }}
+            >
+              {t('extDelete')}
+            </button>
+          </div>
+        )}
+
+        {/* 삭제 확인 모달 */}
+        {showDeleteConfirm && presetToDelete && (
+          <div className={styles.confirmOverlay}>
+            <div className={styles.confirmModal}>
+              <p className={styles.confirmMessage}>
+                {t('extTextEffectsPresetDeleteConfirm').replace('{{name}}', presetToDelete)}
+              </p>
+              <div className={styles.confirmButtons}>
+                <button className={styles.cancelButton} onClick={cancelDelete}>
+                  {t('extCancel')}
+                </button>
+                <button className={styles.applyButton} onClick={confirmDelete} style={{ backgroundColor: '#dc3545' }}>
+                  {t('extDelete')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
