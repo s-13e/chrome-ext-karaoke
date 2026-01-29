@@ -1,6 +1,6 @@
 {
   "name": "youtube-karaoke",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Chrome extension that provides karaoke lyrics overlay for YouTube videos",
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
