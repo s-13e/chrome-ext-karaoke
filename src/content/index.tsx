@@ -1296,8 +1296,21 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
           console.log('[TITLE PARSE] 원본 타이틀:', meta.title);
           console.log('[TITLE PARSE] 정제된 타이틀:', cleanedTitle);
 
-          // 1차: get-artist-title 라이브러리
-          let parsed = extractArtistAndTitle(cleanedTitle);
+          // 0차: "Title" | Description 또는 'Title' | Description 패턴 감지 → fallback 사용
+          // 스킵 대상: "Your Idol" | Official Song Clip | ... (따옴표 + | 구분자)
+          // 허용 대상: "Artist" - Title, 'Artist' - Title (따옴표 + - 구분자)
+          // 따옴표 + | 조합은 아티스트 정보 없는 홍보성 타이틀로 판단, 따옴표 안 내용만 타이틀로 추출
+          const quotedTitleWithPipePattern =
+            /^['"\u2018\u2019\u201C\u201D]([^'"\u2018\u2019\u201C\u201D]+)['"\u2018\u2019\u201C\u201D]?\s*\|/;
+          const quotedTitleMatch = cleanedTitle.match(quotedTitleWithPipePattern);
+          let extractedQuotedTitle: string | null = null;
+          if (quotedTitleMatch?.[1]) {
+            extractedQuotedTitle = quotedTitleMatch[1].trim();
+            console.log('[TITLE PARSE] 따옴표+| 패턴 감지, 추출된 타이틀:', extractedQuotedTitle);
+          }
+
+          // 1차: get-artist-title 라이브러리 (따옴표+| 패턴이 아닌 경우에만)
+          let parsed = extractedQuotedTitle ? null : extractArtistAndTitle(cleanedTitle);
           if (parsed) {
             // 1차 파싱 결과에도 removeExtraInfo 적용
             parsed.title = removeExtraInfo(parsed.title);
@@ -1306,7 +1319,7 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
           console.log('[TITLE PARSE] 1차(라이브러리) 결과:', parsed);
 
           // 2차: 커스텀 파서 (일본어 쌍따옴표 등 특수 패턴)
-          if (!parsed) {
+          if (!parsed && !extractedQuotedTitle) {
             parsed = extractArtistAndTitleCustom(cleanedTitle);
             console.log('[TITLE PARSE] 2차(커스텀) 결과:', parsed);
           }
@@ -1316,6 +1329,8 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
             const fallback = fallbackArtistAndTitle(meta);
             if (!fallback) throw new Error('곡명/아티스트 파싱 실패');
 
+            // 따옴표+| 패턴에서 추출한 타이틀이 있으면 사용, 없으면 fallback 원본 사용
+            fallback.title = extractedQuotedTitle ?? fallback.title;
             fallback.title = cleanTopicName(fallback.title);
             fallback.artist = cleanTopicName(fallback.artist);
             // Fallback 파싱 결과는 removeExtraInfo가 적용되지 않았으므로 여기서 적용

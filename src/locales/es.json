@@ -176,6 +176,7 @@
   "extChartRockClassics": "Clásicos del Rock",
   "extChartHipHopHeat": "Hip-Hop Popular",
   "extChartLoading": "Cargando...",
+  "extChartLoadingMore": "{{current}} / {{total}} canciones cargadas",
   "extChartNoData": "No hay datos disponibles",
   "extChartViews": "visualizaciones",
   "extPopupStatusOn": "KARAOKE ON",

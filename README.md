@@ -14,7 +14,7 @@ Display real-time synced lyrics on YouTube music videos.
 
 ### Chrome Web Store
 
-여기 링크
+https://chromewebstore.google.com/detail/music-karaoke-for-youtube/bmjifgkkmadggkeoobcdaikkjionbakk?authuser=0&hl=en
 
 ### Manual Installation (Development)
 
@@ -25,9 +25,6 @@ Display real-time synced lyrics on YouTube music videos.
 5. Enable "Developer mode"
 6. Click "Load unpacked" and select the `dist` folder
 
-## Screenshots
-
-<!-- Add screenshots here -->
 
 ## Romanization Support
 Korean, Japanese, Chinese, Thai, Arabic, Hindi

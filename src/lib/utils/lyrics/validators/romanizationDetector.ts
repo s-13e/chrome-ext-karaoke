@@ -8,6 +8,41 @@
  */
 
 /**
+ * 영어 기능어 목록 (로마자 가사에는 거의 나타나지 않음)
+ * - 관사, be동사, 대명사, 전치사, 접속사 등
+ * - 구어체/축약형 표현 포함
+ */
+const ENGLISH_FUNCTION_WORDS = new Set([
+  // 관사
+  'the', 'a', 'an',
+  // be동사
+  'is', 'are', 'am', 'was', 'were', 'be', 'been', 'being',
+  // 대명사
+  'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them',
+  'my', 'your', 'his', 'her', 'its', 'our', 'their',
+  'this', 'that', 'these', 'those', 'what', 'who', 'which', 'where', 'when', 'how', 'why',
+  // 조동사
+  'can', 'could', 'will', 'would', 'shall', 'should', 'may', 'might', 'must',
+  // 전치사
+  'to', 'in', 'on', 'at', 'for', 'with', 'of', 'from', 'by', 'about', 'into', 'through',
+  // 접속사
+  'and', 'but', 'or', 'if', 'so', 'because', 'when', 'while', 'than',
+  // 부정어
+  'no', 'not', 'never',
+  // 기타 빈출 단어
+  'just', 'like', 'know', 'got', 'get', 'have', 'has', 'had', 'do', 'does', 'did', 'done',
+  'all', 'up', 'out', 'down', 'now', 'then', 'here', 'there', 'too', 'very', 'much', 'more',
+  // 축약형/구어체 (가사에서 자주 사용)
+  "i'm", "you're", "he's", "she's", "it's", "we're", "they're",
+  "i've", "you've", "we've", "they've",
+  "i'll", "you'll", "he'll", "she'll", "we'll", "they'll",
+  "i'd", "you'd", "he'd", "she'd", "we'd", "they'd",
+  "don't", "doesn't", "didn't", "can't", "couldn't", "won't", "wouldn't",
+  "ain't", "gonna", "wanna", "gotta", "lemme", "gimme", "kinda", "sorta",
+  "'em", "y'all", "'cause", "'til",
+]);
+
+/**
  * 로마자 표기 가사인지 감지
  *
  * @param lyrics - LRC 형식 가사 문자열 (타임스탬프 포함)
@@ -18,16 +53,18 @@
  *    - 30% 이상이면 원본 언어 가사
  * 2. 알파벳 비율 체크
  *    - 90% 이상이면 로마자 의심
- * 3. 모음 패턴 체크
- *    - 45% 이상이면 로마자 확정 (영어는 일반적으로 35-42%)
+ * 3. 영어 기능어 체크 (핵심 로직)
+ *    - 기능어 비율 > 10%이면 진짜 영어 가사
+ * 4. 모음 패턴 체크 (보조)
+ *    - 기능어 없고 모음 비율 45% 이상이면 로마자
  */
 export function isRomanizedLyrics(lyrics: string): boolean {
   // 방어적 프로그래밍: 입력값 검증
   if (!lyrics || typeof lyrics !== 'string') return false;
 
   try {
-    // 가사에서 처음 5줄만 샘플링 (성능 최적화)
-    const lines = lyrics.split('\n').slice(0, 5);
+    // 가사에서 처음 10줄 샘플링 (더 많은 샘플로 정확도 향상)
+    const lines = lyrics.split('\n').slice(0, 10);
     const sampleText = lines
       .map((line) => line.replace(/^\[\d+:\d+\.\d+\]/, '').trim()) // 타임스탬프 제거
       .filter((line) => line.length > 0)
@@ -41,7 +78,7 @@ export function isRomanizedLyrics(lyrics: string): boolean {
 
     // 비ASCII 문자가 30% 이상이면 원본 언어 가사로 판단
     if (nonAsciiRatio > 0.3) {
-      console.log(`[Romanization Check] 원본 언어 가사 (비ASCII ${(nonAsciiRatio * 100).toFixed(1)}%)`);
+      console.log(`[Romanization Check] ✅ 원본 언어 가사 (비ASCII ${(nonAsciiRatio * 100).toFixed(1)}%)`);
       return false;
     }
 
@@ -53,20 +90,40 @@ export function isRomanizedLyrics(lyrics: string): boolean {
 
     // 알파벳 비율이 90% 미만이면 로마자 아님
     if (alphabetRatio < 0.9) {
-      console.log(`[Romanization Check] 혼합 언어 가사 (알파벳 ${(alphabetRatio * 100).toFixed(1)}%)`);
+      console.log(`[Romanization Check] ✅ 혼합 언어 가사 (알파벳 ${(alphabetRatio * 100).toFixed(1)}%)`);
       return false;
     }
 
-    // 3. 모음 패턴 체크 (로마자 표기는 모음이 많음)
+    // 3. 영어 기능어 체크 (핵심 로직)
+    // 단어 추출 (소문자로 변환, 축약형 포함)
+    const words = sampleText.toLowerCase().match(/[a-z']+/g) || [];
+    const totalWords = words.length;
+
+    if (totalWords === 0) return false;
+
+    // 기능어 개수 카운트
+    const functionWordCount = words.filter((word) => ENGLISH_FUNCTION_WORDS.has(word)).length;
+    const functionWordRatio = functionWordCount / totalWords;
+
+    console.log(
+      `[Romanization Check] 기능어 분석: ${functionWordCount}/${totalWords} (${(functionWordRatio * 100).toFixed(1)}%)`,
+    );
+
+    // 기능어 비율이 10% 이상이면 진짜 영어 가사
+    if (functionWordRatio > 0.1) {
+      console.log(`[Romanization Check] ✅ 영어 가사 (기능어 ${(functionWordRatio * 100).toFixed(1)}%)`);
+      return false;
+    }
+
+    // 4. 모음 패턴 체크 (보조 - 기능어가 적은 경우에만)
     const vowels = sampleText.match(/[aeiou]/gi) || [];
     const vowelRatio = vowels.length / alphaOnly.length;
 
-    // 모음 비율이 45% 이상이면 로마자 표기로 판단
-    // 영어: 일반적으로 35-42% (예: "I love you" → 40%)
-    // 로마자: 일반적으로 45-55% (예: "saranghae neoreul" → 51%)
-    const isRomanized = vowelRatio > 0.45;
+    // 기능어가 거의 없고(< 5%) 모음 비율이 높으면(> 45%) 로마자로 판단
+    const isRomanized = functionWordRatio < 0.05 && vowelRatio > 0.45;
+
     console.log(
-      `[Romanization Check] ${isRomanized ? '⚠️ 로마자 표기' : '✅ 영어 가사'} (모음 ${(vowelRatio * 100).toFixed(1)}%)`,
+      `[Romanization Check] ${isRomanized ? '⚠️ 로마자 표기' : '✅ 영어 가사'} (기능어 ${(functionWordRatio * 100).toFixed(1)}%, 모음 ${(vowelRatio * 100).toFixed(1)}%)`,
     );
 
     return isRomanized;
@@ -91,6 +148,20 @@ export function testRomanizationDetector(): void {
 [00:18.50]You make me feel alive
 [00:22.00]Every moment with you`,
       expected: false, // 필터링 안 됨
+    },
+    {
+      name: '영어 가사 (구어체 포함)',
+      lyrics: `[00:15.00]I ain't gonna let you down
+[00:18.50]We're gonna make it through
+[00:22.00]Don't you wanna stay with me`,
+      expected: false, // 필터링 안 됨
+    },
+    {
+      name: '영어 가사 (모음 많음 - Tyla Chanel 스타일)',
+      lyrics: `[00:15.00]I got Chanel on my body
+[00:18.50]You see me shine so pretty
+[00:22.00]I make you feel the money`,
+      expected: false, // 필터링 안 됨 (기능어로 영어 판별)
     },
     {
       name: '한국어 로마자 표기',

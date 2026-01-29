@@ -29,7 +29,5 @@ module.exports = {
     '^.+\\.[jt]sx?$': 'babel-jest', // .js, .jsx, .ts, .tsx 파일은 babel-jest로 변환
   },
   // ESM 모듈 변환 허용
-  transformIgnorePatterns: [
-    'node_modules/(?!(@dehoist/romanize-thai|arabic-transliterate)/)',
-  ],
+  transformIgnorePatterns: ['node_modules/(?!(@dehoist/romanize-thai|arabic-transliterate)/)'],
 };

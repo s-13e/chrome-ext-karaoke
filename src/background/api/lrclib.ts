@@ -1,6 +1,6 @@
 import { Line } from '@lib/types/lyrics';
 import { LyricsError, LyricsErrorCode } from '@lib/types/lyricsError';
-import { isRomanizedLyrics } from '@lib/utils/lyrics/validators/romanizationDetector';
+import { validateLyrics, cleanLyrics } from '@lib/utils/lyrics/validators';
 
 export interface LrcLibLyricsResult {
   lyrics: string | Line[];
@@ -62,6 +62,7 @@ export async function fetchYouTubeLRCLibCache(videoId: string): Promise<{ lrclib
  * YouTube videoId로 가사 직접 조회 (통합 엔드포인트, 최고속)
  * - videoId → lrclibId → 가사를 서버 내부에서 한 번에 처리
  * - 네트워크 왕복 1회로 단축
+ * - 캐시에서 조회한 가사도 validation/cleaning 적용
  */
 export async function fetchYouTubeLyrics(videoId: string): Promise<LrcLibLyricsResult | null> {
   try {
@@ -82,18 +83,32 @@ export async function fetchYouTubeLyrics(videoId: string): Promise<LrcLibLyricsR
         return null;
       }
 
+      let lyrics = data.syncedLyrics || data.plainLyrics;
+
+      if (!lyrics) {
+        console.error('[fetchYouTubeLyrics] 가사 데이터 없음');
+        return null;
+      }
+
+      // 🔍 가사 유효성 검증 및 정제 (캐시된 가사도 검증 필요)
+      const validation = validateLyrics(lyrics);
+      if (validation.issues.includes('romanized')) {
+        console.warn('[fetchYouTubeLyrics] ⚠️ 로마자 표기 가사, 반환하지만 경고');
+      }
+      if (validation.cleanable) {
+        lyrics = cleanLyrics(lyrics, validation.issues);
+        console.log(
+          `[fetchYouTubeLyrics] 🧹 가사 정제 완료 (${validation.issues.filter((i) => i !== 'none').join(', ')})`,
+        );
+      }
+
       const result = {
-        lyrics: data.syncedLyrics || data.plainLyrics,
+        lyrics,
         duration: data.duration,
         artist: data.artistName,
         title: data.trackName,
         id: String(data.lrclibId),
       };
-
-      if (!result.lyrics) {
-        console.error('[fetchYouTubeLyrics] 가사 데이터 없음');
-        return null;
-      }
 
       console.log(`[fetchYouTubeLyrics] ✅ 가사 조회 성공 (길이: ${result.lyrics.length}자)`);
       return result;
@@ -114,6 +129,7 @@ export async function fetchYouTubeLyrics(videoId: string): Promise<LrcLibLyricsR
 
 /**
  * LRCLib ID로 가사 조회 (API 서버 프록시 사용)
+ * 캐시에서 조회한 가사도 validation/cleaning 적용
  */
 export async function fetchLyricsById(lrclibId: number): Promise<LrcLibLyricsResult | null> {
   try {
@@ -141,18 +157,32 @@ export async function fetchLyricsById(lrclibId: number): Promise<LrcLibLyricsRes
         trackName: data.trackName,
       });
 
+      let lyrics = data.syncedLyrics || data.plainLyrics;
+
+      if (!lyrics) {
+        console.error('[fetchLyricsById] ❌ 가사 데이터 없음!');
+        return null;
+      }
+
+      // 🔍 가사 유효성 검증 및 정제 (캐시된 가사도 검증 필요)
+      const validation = validateLyrics(lyrics);
+      if (validation.issues.includes('romanized')) {
+        console.warn('[fetchLyricsById] ⚠️ 로마자 표기 가사, 반환하지만 경고');
+      }
+      if (validation.cleanable) {
+        lyrics = cleanLyrics(lyrics, validation.issues);
+        console.log(
+          `[fetchLyricsById] 🧹 가사 정제 완료 (${validation.issues.filter((i) => i !== 'none').join(', ')})`,
+        );
+      }
+
       const result = {
-        lyrics: data.syncedLyrics || data.plainLyrics,
+        lyrics,
         duration: data.duration,
         artist: data.artistName,
         title: data.trackName,
         id: String(lrclibId),
       };
-
-      if (!result.lyrics) {
-        console.error('[fetchLyricsById] ❌ 가사 데이터 없음!');
-        return null;
-      }
 
       console.log(`[fetchLyricsById] ✅ 가사 조회 성공 (길이: ${result.lyrics.length}자)`);
       return result;
@@ -251,9 +281,25 @@ export async function fetchLyricsByArtistAndTrack(
           const lyricsRes = await fetchWithTimeout(`https://lrclib.net/api/get/${lrclibId}`, {}, LRCLIB_TIMEOUT_MS);
           if (lyricsRes.ok) {
             const lyricsData = await lyricsRes.json();
+            let lyrics = lyricsData.syncedLyrics || lyricsData.plainLyrics;
+
+            // 🔍 가사 유효성 검증 및 정제 (캐시된 가사도 검증 필요)
+            if (lyrics) {
+              const validation = validateLyrics(lyrics);
+              if (validation.issues.includes('romanized')) {
+                console.warn('[LRCLib] ⚠️ YouTube 캐시 가사: 로마자 표기, 반환하지만 경고');
+              }
+              if (validation.cleanable) {
+                lyrics = cleanLyrics(lyrics, validation.issues);
+                console.log(
+                  `[LRCLib] 🧹 YouTube 캐시 가사 정제 완료 (${validation.issues.filter((i) => i !== 'none').join(', ')})`,
+                );
+              }
+            }
+
             console.log(`[LRCLib] YouTube videoId 캐시로 가사 로드 완료 (가장 빠른 경로)`);
             return {
-              lyrics: lyricsData.syncedLyrics || lyricsData.plainLyrics,
+              lyrics,
               duration: lyricsData.duration,
               artist: lyricsData.artistName,
               title: lyricsData.trackName,
@@ -353,8 +399,24 @@ export async function fetchLyricsByArtistAndTrack(
         );
         if (lyricsRes.ok) {
           const lyricsData = await lyricsRes.json();
+          let lyrics = lyricsData.syncedLyrics || lyricsData.plainLyrics;
+
+          // 🔍 가사 유효성 검증 및 정제 (캐시된 가사도 검증 필요)
+          if (lyrics) {
+            const validation = validateLyrics(lyrics);
+            if (validation.issues.includes('romanized')) {
+              console.warn('[LRCLib API] ⚠️ Redis 캐시 가사: 로마자 표기, 반환하지만 경고');
+            }
+            if (validation.cleanable) {
+              lyrics = cleanLyrics(lyrics, validation.issues);
+              console.log(
+                `[LRCLib API] 🧹 Redis 캐시 가사 정제 완료 (${validation.issues.filter((i) => i !== 'none').join(', ')})`,
+              );
+            }
+          }
+
           const result = {
-            lyrics: lyricsData.syncedLyrics || lyricsData.plainLyrics,
+            lyrics,
             duration: lyricsData.duration,
             artist: lyricsData.artistName,
             title: lyricsData.trackName,
@@ -637,17 +699,29 @@ export async function fetchLyricsWithEndpoint(
           `[LRCLib API] 📊 후보 ${index + 1} (ID: ${candidate.id}): Duration ${durationDiff.toFixed(1)}s 차이 ${durationDiff > 2 ? '❌' : '✅'}`,
         );
 
-        // 🚫 로마자 표기 가사 필터링 (duration 체크 전에 수행)
-        if (isRomanizedLyrics(lyrics)) {
+        // 🔍 가사 유효성 검증 (로마자, Enhanced LRC, 혼합 번역 체크)
+        const validation = validateLyrics(lyrics);
+
+        // 🚫 로마자 표기 가사는 정제 불가, 스킵
+        if (validation.issues.includes('romanized')) {
           console.log(`[LRCLib API] ⚠️ 후보 ${index + 1}: 로마자 표기 가사, 스킵`);
           continue;
+        }
+
+        // 🧹 정제 가능한 문제가 있으면 정제
+        let cleanedLyrics = lyrics;
+        if (validation.cleanable) {
+          cleanedLyrics = cleanLyrics(lyrics, validation.issues);
+          console.log(
+            `[LRCLib API] 🧹 후보 ${index + 1}: 가사 정제 완료 (${validation.issues.filter((i) => i !== 'none').join(', ')})`,
+          );
         }
 
         const candidateTitle = (candidate.trackName ?? '').trim().toLowerCase();
         const isStrictMatch = candidateTitle === normalizedReqTitle;
 
         const result: LrcLibLyricsResult = {
-          lyrics,
+          lyrics: cleanedLyrics,
           duration: candidate.duration,
           artist: candidate.artistName,
           title: candidate.trackName,
@@ -803,12 +877,24 @@ export async function fetchLyricsWithEndpoint(
           const lyrics = candidate.syncedLyrics || candidate.plainLyrics;
           if (!lyrics) continue;
 
-          // 🚫 로마자 표기 가사 필터링
-          if (isRomanizedLyrics(lyrics)) {
+          // 🔍 가사 유효성 검증 (로마자, Enhanced LRC, 혼합 번역 체크)
+          const validation = validateLyrics(lyrics);
+
+          // 🚫 로마자 표기 가사는 정제 불가, 스킵
+          if (validation.issues.includes('romanized')) {
             console.log(
               `[LRCLib FreeText] ⚠️ 후보 스킵 (로마자 표기): ${candidate.artistName} - ${candidate.trackName}`,
             );
             continue;
+          }
+
+          // 🧹 정제 가능한 문제가 있으면 정제
+          let cleanedLyrics = lyrics;
+          if (validation.cleanable) {
+            cleanedLyrics = cleanLyrics(lyrics, validation.issues);
+            console.log(
+              `[LRCLib FreeText] 🧹 가사 정제 완료: ${candidate.artistName} - ${candidate.trackName} (${validation.issues.filter((i) => i !== 'none').join(', ')})`,
+            );
           }
 
           // 🔍 타이틀 매칭 검증 (FreeText 검색은 관련 없는 곡도 반환할 수 있음)
@@ -834,7 +920,7 @@ export async function fetchLyricsWithEndpoint(
                 `[LRCLib Search] ✅ 4차 시도 성공 (LRCLib FreeText, 정확히 일치): ${candidate.artistName} - ${candidate.trackName}`,
               );
               return {
-                lyrics: lyrics || '',
+                lyrics: cleanedLyrics || '',
                 duration: candidate.duration,
                 artist: candidate.artistName,
                 title: candidate.trackName,
@@ -853,13 +939,23 @@ export async function fetchLyricsWithEndpoint(
         // 정확히 일치하는 항목이 없으면 우선순위에 따라 반환
         const selectedCandidate = exactMatch || closeMatch;
         if (selectedCandidate) {
-          const lyrics = selectedCandidate.syncedLyrics || selectedCandidate.plainLyrics;
+          let selectedLyrics = selectedCandidate.syncedLyrics || selectedCandidate.plainLyrics || '';
           const durationDiff = Math.abs(durationSeconds - selectedCandidate.duration);
+
+          // 선택된 후보 가사 정제
+          const selectedValidation = validateLyrics(selectedLyrics);
+          if (selectedValidation.cleanable) {
+            selectedLyrics = cleanLyrics(selectedLyrics, selectedValidation.issues);
+            console.log(
+              `[LRCLib FreeText] 🧹 선택된 가사 정제 완료: ${selectedCandidate.artistName} - ${selectedCandidate.trackName}`,
+            );
+          }
+
           console.log(
             `[LRCLib Search] ✅ 4차 시도 성공 (LRCLib FreeText, ±${durationDiff}초): ${selectedCandidate.artistName} - ${selectedCandidate.trackName}`,
           );
           return {
-            lyrics: lyrics || '',
+            lyrics: selectedLyrics,
             duration: selectedCandidate.duration,
             artist: selectedCandidate.artistName,
             title: selectedCandidate.trackName,

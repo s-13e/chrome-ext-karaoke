@@ -176,6 +176,7 @@
   "extChartRockClassics": "搖滾經典",
   "extChartHipHopHeat": "嘻哈熱門",
   "extChartLoading": "載入中...",
+  "extChartLoadingMore": "已載入 {{current}} / {{total}} 首歌曲",
   "extChartNoData": "無資料",
   "extChartViews": "次觀看",
   "extPopupStatusOn": "KARAOKE ON",
