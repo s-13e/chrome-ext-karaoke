@@ -5,6 +5,7 @@
 
 import { Line } from '@lib/types/lyrics';
 import { enableTheaterMode, disableTheaterMode } from '@lib/utils/platform/theaterMode';
+import { saveCaptionStateAndDisable, restoreCaptionState } from '@lib/utils/platform/captionControl';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 import i18next from 'i18next';
 
@@ -82,6 +83,8 @@ export class KaraokeModeManager {
       }
 
       enableTheaterMode();
+      // YouTube 자막 상태 저장 후 비활성화
+      saveCaptionStateAndDisable();
     } else {
       // 가라오케 모드를 끄려고 할 때 녹음 중이면 확인
       if (this.recordingState === 'recording' || this.recordingState === 'paused') {
@@ -117,10 +120,14 @@ export class KaraokeModeManager {
       // cleanup이 완료된 후 실행되도록 setTimeout 사용
       setTimeout(() => {
         disableTheaterMode();
+        // YouTube 자막 상태 복원
+        restoreCaptionState();
         console.log('[KaraokeModeManager] 카라오케 모드 비활성화 - 기본 모드로 복원');
       }, 100);
     } else if (!this.isKaraokeModeVisible) {
       // 모드 버튼 클릭으로 해제: 모드 전환 생략 (이미 사용자가 모드 변경함)
+      // YouTube 자막 상태 복원
+      restoreCaptionState();
       console.log('[KaraokeModeManager] 카라오케 모드 비활성화 - 모드 전환 생략 (사용자가 이미 변경함)');
     }
   }

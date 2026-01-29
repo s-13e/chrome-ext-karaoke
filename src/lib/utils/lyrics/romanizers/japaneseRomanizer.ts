@@ -31,6 +31,20 @@ async function ensureKuroshiroInitialized(): Promise<InstanceType<typeof Kuroshi
   return kuroshiroInstance!;
 }
 
+/**
+ * 띄어쓰기로 구분된 단어의 첫 글자를 대문자로 변환
+ * 예: "watashi wa genki desu" → "Watashi Wa Genki Desu"
+ */
+function capitalizeWords(text: string): string {
+  return text
+    .split(' ')
+    .map((word) => {
+      if (word.length === 0) return word;
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(' ');
+}
+
 // 일본어 로마자 변환 (이미 일본어로 확정된 텍스트만 처리)
 export async function japaneseRomanizer(text: string): Promise<string> {
   try {
@@ -42,7 +56,8 @@ export async function japaneseRomanizer(text: string): Promise<string> {
       mode: 'spaced',
     });
 
-    return result;
+    // 각 단어의 첫 글자를 대문자로 변환
+    return capitalizeWords(result);
   } catch (err) {
     console.error('Kuroshiro convert error:', err);
     // 변환 실패 시 원본 텍스트 반환 (fallback)
