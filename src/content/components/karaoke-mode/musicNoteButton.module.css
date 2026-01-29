@@ -26,40 +26,39 @@
   display: block;
   pointer-events: none;
   /* 무지개 그라데이션 애니메이션 */
-  filter: brightness(0) invert(1) drop-shadow(0 0 4px currentColor)
-    drop-shadow(0 0 8px currentColor) hue-rotate(0deg);
+  filter: brightness(0) invert(1) drop-shadow(0 0 4px currentColor) drop-shadow(0 0 8px currentColor) hue-rotate(0deg);
   animation: rainbowGlow 8s linear infinite;
   transition: filter 0.15s;
 }
 
 @keyframes rainbowGlow {
   0% {
-    filter: brightness(0) invert(1) drop-shadow(0 0 4px hsl(0, 80%, 60%))
-      drop-shadow(0 0 8px hsl(0, 80%, 60%)) hue-rotate(0deg);
+    filter: brightness(0) invert(1) drop-shadow(0 0 4px hsl(0, 80%, 60%)) drop-shadow(0 0 8px hsl(0, 80%, 60%))
+      hue-rotate(0deg);
   }
   16.66% {
-    filter: brightness(0) invert(1) drop-shadow(0 0 4px hsl(60, 80%, 60%))
-      drop-shadow(0 0 8px hsl(60, 80%, 60%)) hue-rotate(60deg);
+    filter: brightness(0) invert(1) drop-shadow(0 0 4px hsl(60, 80%, 60%)) drop-shadow(0 0 8px hsl(60, 80%, 60%))
+      hue-rotate(60deg);
   }
   33.33% {
-    filter: brightness(0) invert(1) drop-shadow(0 0 4px hsl(120, 80%, 60%))
-      drop-shadow(0 0 8px hsl(120, 80%, 60%)) hue-rotate(120deg);
+    filter: brightness(0) invert(1) drop-shadow(0 0 4px hsl(120, 80%, 60%)) drop-shadow(0 0 8px hsl(120, 80%, 60%))
+      hue-rotate(120deg);
   }
   50% {
-    filter: brightness(0) invert(1) drop-shadow(0 0 4px hsl(180, 80%, 60%))
-      drop-shadow(0 0 8px hsl(180, 80%, 60%)) hue-rotate(180deg);
+    filter: brightness(0) invert(1) drop-shadow(0 0 4px hsl(180, 80%, 60%)) drop-shadow(0 0 8px hsl(180, 80%, 60%))
+      hue-rotate(180deg);
   }
   66.66% {
-    filter: brightness(0) invert(1) drop-shadow(0 0 4px hsl(240, 80%, 60%))
-      drop-shadow(0 0 8px hsl(240, 80%, 60%)) hue-rotate(240deg);
+    filter: brightness(0) invert(1) drop-shadow(0 0 4px hsl(240, 80%, 60%)) drop-shadow(0 0 8px hsl(240, 80%, 60%))
+      hue-rotate(240deg);
   }
   83.33% {
-    filter: brightness(0) invert(1) drop-shadow(0 0 4px hsl(300, 80%, 60%))
-      drop-shadow(0 0 8px hsl(300, 80%, 60%)) hue-rotate(300deg);
+    filter: brightness(0) invert(1) drop-shadow(0 0 4px hsl(300, 80%, 60%)) drop-shadow(0 0 8px hsl(300, 80%, 60%))
+      hue-rotate(300deg);
   }
   100% {
-    filter: brightness(0) invert(1) drop-shadow(0 0 4px hsl(360, 80%, 60%))
-      drop-shadow(0 0 8px hsl(360, 80%, 60%)) hue-rotate(360deg);
+    filter: brightness(0) invert(1) drop-shadow(0 0 4px hsl(360, 80%, 60%)) drop-shadow(0 0 8px hsl(360, 80%, 60%))
+      hue-rotate(360deg);
   }
 }
 
