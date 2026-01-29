@@ -4,6 +4,10 @@ module.exports = {
   preset: 'ts-jest',
 
   testEnvironment: 'jsdom',
+
+  // Setup file for Chrome API mocks
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+
   // 소스 코드 위치 (src 폴더 내에서만 테스트)
   roots: ['<rootDir>/src'],
 
