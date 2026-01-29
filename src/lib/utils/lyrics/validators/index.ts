@@ -5,10 +5,7 @@
 
 // 개별 검증기 export
 export { isRomanizedLyrics, testRomanizationDetector } from './romanizationDetector';
-export {
-  hasEnhancedTimestamps,
-  removeEnhancedTimestamps,
-} from './duplicateTimestampDetector';
+export { hasEnhancedTimestamps, removeEnhancedTimestamps } from './duplicateTimestampDetector';
 export { hasMixedTranslation, removeTranslation } from './mixedTranslationDetector';
 
 /**
@@ -36,9 +33,11 @@ export interface LyricsValidationResult {
  * @returns 검증 결과 (문제 유형, 정제 가능 여부 포함)
  */
 export function validateLyrics(lyrics: string): LyricsValidationResult {
-  // 동적 import를 피하기 위해 직접 함수 호출
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { isRomanizedLyrics } = require('./romanizationDetector');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { hasEnhancedTimestamps } = require('./duplicateTimestampDetector');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { hasMixedTranslation } = require('./mixedTranslationDetector');
 
   const issues: LyricsIssueType[] = [];
@@ -82,7 +81,9 @@ export function validateLyrics(lyrics: string): LyricsValidationResult {
  * 주의: 로마자 가사는 정제 불가 (원본 반환)
  */
 export function cleanLyrics(lyrics: string, issues: LyricsIssueType[]): string {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { removeEnhancedTimestamps } = require('./duplicateTimestampDetector');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { removeTranslation } = require('./mixedTranslationDetector');
 
   let cleaned = lyrics;

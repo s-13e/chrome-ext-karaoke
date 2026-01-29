@@ -157,7 +157,8 @@ export function extractArtistAndTitleCustom(
   // 예: "Your Idol" | Official Song Clip | KPop Demon Hunters | Sony Animation
   // 이 형식에서는 아티스트 정보를 신뢰할 수 없으므로 파싱 실패로 처리
   // Quote characters: ' " ' ' " " (U+0027, U+0022, U+2018, U+2019, U+201C, U+201D)
-  const leadingQuotePattern = /^['"\u2018\u2019\u201C\u201D]([^'"\u2018\u2019\u201C\u201D]+)['"\u2018\u2019\u201C\u201D]?\s*[|/\-]/;
+  const leadingQuotePattern =
+    /^['"\u2018\u2019\u201C\u201D]([^'"\u2018\u2019\u201C\u201D]+)['"\u2018\u2019\u201C\u201D]?\s*[|/-]/;
   if (leadingQuotePattern.test(rawTitle)) {
     console.log('[stringUtils] 따옴표로 시작하는 타이틀 감지, 파싱 실패 처리 (채널명 fallback)');
     return null;
