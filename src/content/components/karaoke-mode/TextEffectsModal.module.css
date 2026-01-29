@@ -551,3 +551,45 @@
   flex-direction: column;
   gap: 8px;
 }
+
+/* 삭제 확인 모달 */
+.confirmOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+}
+
+.confirmModal {
+  background-color: #2a2a2a;
+  border-radius: 8px;
+  padding: 20px 24px;
+  min-width: 300px;
+  max-width: 400px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.confirmMessage {
+  color: #e0e0e0;
+  font-size: 14px;
+  margin: 0 0 20px 0;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.confirmButtons {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+}
+
+.confirmButtons .cancelButton,
+.confirmButtons .applyButton {
+  min-width: 100px;
+}
