@@ -5,9 +5,9 @@ import { usePronunciations } from '../common/usePronunciation';
 import { LyricLine } from '../common/LyricLine';
 import { CountdownOverlay } from '../common/CountdownOverlay';
 import { shiftFirstLyricEarlier } from '@lib/utils/lyrics/display/lyricsOffset';
-import { SingleLineLyricsStyleConfig } from '@lib/types/lyricsStyles';
+import { SingleLineLyricsStyleConfig, GeneralLyricsSettings } from '@lib/types/lyricsStyles';
 import { mergeSingleLineStyles } from '@lib/utils/lyrics/styles/lyricsStyleMerger';
-import { DEFAULT_COUNTDOWN_COLORS } from '@constants/lyricsStyles';
+import { DEFAULT_COUNTDOWN_COLORS, DEFAULT_GENERAL_SETTINGS } from '@constants/lyricsStyles';
 import { DEFAULT_FONT_WEIGHT, DEFAULT_PRONUNCIATION_FONT_WEIGHT } from '@constants/fontWeights';
 import styles from './styles.module.css';
 
@@ -22,6 +22,8 @@ interface SingleLineLyricsProps {
   currentTime?: number; // 외부에서 시간을 주입할 수 있도록 (싱크셋 미리보기용)
   // 스타일 커스터마이징
   styleConfig?: Partial<SingleLineLyricsStyleConfig>;
+  // General 설정
+  generalSettings?: Partial<GeneralLyricsSettings>;
 }
 
 /**
@@ -38,6 +40,7 @@ const SingleLineLyricsComponent: React.FC<SingleLineLyricsProps> = ({
   showPronunciationLyrics = true,
   currentTime: externalCurrentTime,
   styleConfig,
+  generalSettings,
 }) => {
   // 스타일 병합 (single은 기본/하이라이트 구분 없음)
   const mergedStyles = useMemo(() => {
@@ -157,21 +160,29 @@ const SingleLineLyricsComponent: React.FC<SingleLineLyricsProps> = ({
     return inlineStyle;
   };
 
+  // General 설정에서 카운트다운 및 위치 추출
+  const countdownEnabled = generalSettings?.countdown?.enabled ?? DEFAULT_GENERAL_SETTINGS.countdown.enabled;
+  const countdownColor = generalSettings?.countdown?.color ?? DEFAULT_GENERAL_SETTINGS.countdown.color;
+  const countdownFontSize = generalSettings?.countdown?.fontSize ?? DEFAULT_GENERAL_SETTINGS.countdown.fontSize;
+  const positionBottom = generalSettings?.position?.single?.bottom ?? DEFAULT_GENERAL_SETTINGS.position.single.bottom;
+
   return (
-    <div className={styles.singleLineSubtitle} style={{ color: fontColor }}>
+    <div className={styles.singleLineSubtitle} style={{ color: fontColor, bottom: `${positionBottom}px` }}>
       {/* 카운트다운 오버레이 (첫 가사 또는 아카펠라 녹음) */}
-      {firstLyricTime !== null && !acapellaCountdownStart && (
+      {countdownEnabled && firstLyricTime !== null && !acapellaCountdownStart && (
         <CountdownOverlay
           startTime={firstLyricTime}
           currentTime={adjustedTime}
-          fontColor={DEFAULT_COUNTDOWN_COLORS.firstLyric}
+          fontColor={countdownColor}
+          fontSize={countdownFontSize}
         />
       )}
-      {acapellaCountdownStart !== null && (
+      {countdownEnabled && acapellaCountdownStart !== null && (
         <CountdownOverlay
           startTime={acapellaCountdownStart}
           currentTime={currentTime}
           fontColor={DEFAULT_COUNTDOWN_COLORS.acapella}
+          fontSize={countdownFontSize}
         />
       )}
 

@@ -8,6 +8,8 @@ interface CountdownOverlayProps {
   currentTime: number;
   /** 폰트 색상 */
   fontColor?: string;
+  /** 폰트 크기 (px) */
+  fontSize?: number;
 }
 
 /**
@@ -21,6 +23,7 @@ export const CountdownOverlay: React.FC<CountdownOverlayProps> = ({
   startTime,
   currentTime,
   fontColor = '#ffcc00',
+  fontSize,
 }) => {
   const [countdownNumber, setCountdownNumber] = useState<number | null>(null);
 
@@ -57,7 +60,11 @@ export const CountdownOverlay: React.FC<CountdownOverlayProps> = ({
   }
 
   return (
-    <div className={styles.countdownOverlay} style={{ color: fontColor }} aria-live="polite">
+    <div
+      className={styles.countdownOverlay}
+      style={{ color: fontColor, ...(fontSize && { fontSize: `${fontSize}px` }) }}
+      aria-live="polite"
+    >
       {countdownNumber}
     </div>
   );

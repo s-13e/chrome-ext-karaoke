@@ -95,3 +95,57 @@ export interface SingleLineLyricsStyleConfig {
   // 발음 스타일 (전역 스타일 오버라이드)
   pronunciation?: TextStyleOptions;
 }
+
+/**
+ * 카운트다운 스타일 설정
+ */
+export interface CountdownStyleConfig {
+  // 카운트다운 활성화 여부
+  enabled: boolean;
+  // 카운트다운 색상
+  color: string;
+  // 카운트다운 폰트 크기 (px)
+  fontSize: number;
+}
+
+/**
+ * 가사 위치 설정
+ */
+export interface LyricsPositionConfig {
+  // 하단 여백 (px)
+  bottom: number;
+}
+
+/**
+ * General 설정 (모든 가사 타입에 공통 적용)
+ */
+export interface GeneralLyricsSettings {
+  // 카운트다운 설정
+  countdown: CountdownStyleConfig;
+  // 가사 위치 설정
+  position: {
+    dual: LyricsPositionConfig;
+    single: LyricsPositionConfig;
+  };
+  // Full 모드 배경 설정
+  fullBackground: {
+    // 배경 투명도 (0-1)
+    opacity: number;
+  };
+}
+
+/**
+ * 가사 스타일 프리셋
+ */
+export interface LyricsPreset {
+  // 프리셋 이름
+  name: string;
+  // Dual 스타일 설정
+  dual: Partial<DualHighlightLyricsStyleConfig>;
+  // Single 스타일 설정
+  single: Partial<SingleLineLyricsStyleConfig>;
+  // Full 스타일 설정
+  full: Partial<FullLyricsStyleConfig>;
+  // General 설정
+  general: Partial<GeneralLyricsSettings>;
+}
