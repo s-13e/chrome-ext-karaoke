@@ -19,6 +19,28 @@ jest.mock('@dehoist/romanize-thai', () => ({
   }),
 }));
 
+// japaneseRomanizer 모킹 (Kuroshiro 사전 파일 로딩 문제 회피)
+jest.mock('../../romanizers/japaneseRomanizer', () => ({
+  __esModule: true,
+  japaneseRomanizer: jest.fn(async (text: string) => {
+    // 간단한 일본어 → 로마자 변환 시뮬레이션
+    const map: Record<string, string> = {
+      こんにちは: 'Konnichiwa',
+      ありがとう: 'Arigatou',
+      さようなら: 'Sayounara',
+      だめ: 'Dame',
+      もう: 'Mou',
+      無理: 'Muri',
+      駄目: 'Dame',
+    };
+    // 매핑된 단어가 있으면 변환, 없으면 간단한 히라가나 변환
+    for (const [ja, roma] of Object.entries(map)) {
+      text = text.replace(new RegExp(ja, 'g'), roma);
+    }
+    return text;
+  }),
+}));
+
 describe('languageTransliterator integration', () => {
   describe('Existing languages (dedicated libraries)', () => {
     it('should romanize Korean text', async () => {

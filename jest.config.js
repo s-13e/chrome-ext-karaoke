@@ -4,6 +4,10 @@ module.exports = {
   preset: 'ts-jest',
 
   testEnvironment: 'jsdom',
+
+  // Setup file for Chrome API mocks
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+
   // 소스 코드 위치 (src 폴더 내에서만 테스트)
   roots: ['<rootDir>/src'],
 
@@ -29,7 +33,5 @@ module.exports = {
     '^.+\\.[jt]sx?$': 'babel-jest', // .js, .jsx, .ts, .tsx 파일은 babel-jest로 변환
   },
   // ESM 모듈 변환 허용
-  transformIgnorePatterns: [
-    'node_modules/(?!(@dehoist/romanize-thai|arabic-transliterate)/)',
-  ],
+  transformIgnorePatterns: ['node_modules/(?!(@dehoist/romanize-thai|arabic-transliterate)/)'],
 };
