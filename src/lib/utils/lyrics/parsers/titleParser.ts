@@ -22,7 +22,7 @@
  * ```
  */
 
-import { parseTitle } from './titlePatterns';
+import { parseTitle, type TitleParseResult as PatternParseResult } from './titlePatterns';
 import { fallbackArtistAndTitle } from './fallbackParser';
 import { stripEmojiAndBeforeColon, cleanTopicName, removeExtraInfo, preprocessArtistOrTitle } from './stringUtils';
 
@@ -39,9 +39,9 @@ export interface TitleParseOptions {
 }
 
 /**
- * 타이틀 파싱 결과
+ * 타이틀 파싱 최종 결과 (artist는 반드시 존재)
  */
-export interface TitleParseResult {
+export interface ParsedTitleResult {
   /** 아티스트명 */
   artist: string;
   /** 곡명 */
@@ -72,14 +72,17 @@ export interface TitleParseResult {
  * // → { artist: 'IU', title: 'Official MV', skipSwap: false, source: 'fallback' }
  * ```
  */
-export function parseTitleWithFallback(rawTitle: string, options?: TitleParseOptions): TitleParseResult | null {
+export function parseTitleWithFallback(rawTitle: string, options?: TitleParseOptions): ParsedTitleResult | null {
   if (!rawTitle || typeof rawTitle !== 'string') return null;
 
   // 0차: 전처리 (이모지, 콜론 앞부분 제거)
   const cleanedTitle = stripEmojiAndBeforeColon(rawTitle);
 
   // 1차: 패턴 기반 파싱 (titlePatterns.ts의 8개 패턴 매칭)
-  let result = parseTitle(cleanedTitle);
+  let result:
+    | PatternParseResult
+    | { artist: string; title: string; artistVariants?: string[]; skipSwap: boolean; patternUsed: string }
+    | null = parseTitle(cleanedTitle);
   let source: 'pattern' | 'fallback' = 'pattern';
 
   // 2차: Fallback (패턴 실패 시 메타데이터 사용)
@@ -100,6 +103,9 @@ export function parseTitleWithFallback(rawTitle: string, options?: TitleParseOpt
   }
 
   if (!result) return null;
+
+  // artist가 null인 경우 (패턴 매칭은 성공했으나 artist가 없는 경우)
+  if (!result.artist) return null;
 
   // 3차: 후처리 (Topic 제거, 키워드 정리, 공백 정규화)
   const processedTitle = preprocessArtistOrTitle(removeExtraInfo(cleanTopicName(result.title)));

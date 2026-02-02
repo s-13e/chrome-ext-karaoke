@@ -1288,7 +1288,6 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
           const parsed = parseTitleWithFallback(meta.title, {
             channelTitle: meta.channelTitle,
             description: meta.description,
-            artist: meta.artist,
           });
 
           if (!parsed) throw new Error('곡명/아티스트 파싱 실패');
