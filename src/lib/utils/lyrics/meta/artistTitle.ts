@@ -1,16 +1,19 @@
-import getArtistTitle from 'get-artist-title';
+/**
+ * artistTitle.ts - YouTube 메타데이터 기반 아티스트/타이틀 추출
+ *
+ * [역할]
+ * - YouTube 영상 메타데이터(채널명, description 등)에서 아티스트 정보 추출
+ * - 타이틀 파싱 실패 시 fallback으로 사용
+ *
+ * [관련 파일]
+ * - titlePatterns.ts: 제목 기반 패턴 매칭 (1차)
+ * - 이 파일: 메타데이터 기반 fallback (2차)
+ */
 
 /**
- * 유튜브 영상 제목에서 [아티스트, 타이틀] 추출
+ * YouTube 메타데이터에서 아티스트/타이틀 추출 (fallback용)
+ * 타이틀 파싱 실패 시 채널명 등을 활용
  */
-export function extractArtistAndTitle(title: string): { artist: string; title: string } | null {
-  const [artist, songTitle] = getArtistTitle(title) || [];
-  if (artist && songTitle) {
-    return { artist, title: songTitle };
-  }
-  return null;
-}
-
 export function fallbackArtistAndTitle(meta: {
   title: string;
   channelTitle?: string;
@@ -41,7 +44,7 @@ export function fallbackArtistAndTitle(meta: {
     }
   }
 
-  // (3) description에서 by/작곡/노래/歌/MUSIC BY/Performer/Produced by 등 패턴 찾기
+  // (3) description에서 Artist/Song 패턴 찾기
   if (meta.description) {
     const artistMatch = meta.description.match(/^\s*•?\s*Artist\s*:\s*(.+)$/im);
     const songMatch = meta.description.match(/^\s*•?\s*Song\s*[♫:]?\s*(.+)$/im);
@@ -52,22 +55,6 @@ export function fallbackArtistAndTitle(meta: {
         title: songMatch[1].trim(),
       };
     }
-    // 가수가 아니라 소속 회사에 artist가 배정되는 경우가 생김
-    // const patterns = [
-    //   /by\s+([^\n\r,]+)/i,
-    //   /Performed\s+by\s+([^\n\r,]+)/i,
-    //   /歌[:：]\s*([^\n\r,]+)/,
-    //   /アーティスト[:：]\s*([^\n\r,]+)/,
-    //   /artist[:：]\s*([^\n\r,]+)/i,
-    //   /作曲[:：]\s*([^\n\r,]+)/,
-    //   /作詞[:：]\s*([^\n\r,]+)/,
-    // ];
-    // for (const regex of patterns) {
-    //   const m = meta.description.match(regex);
-    //   if (m && m[1]) {
-    //     return { artist: m[1].trim(), title };
-    //   }
-    // }
   }
 
   // (4) 일반 채널명 사용 (Topic 채널보다 우선순위 낮음)

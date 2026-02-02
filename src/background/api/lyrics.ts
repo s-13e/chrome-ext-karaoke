@@ -88,6 +88,7 @@ export async function fetchLyricsWithAliasFallback(
   durationSeconds: number,
   artistVariants?: string[],
   videoId?: string, // YouTube videoId (optional, 최고속 캐시용)
+  skipSwap: boolean = false, // true면 artist/title 순서 뒤집기 시도 스킵
 ): Promise<LrcLibLyricsResult> {
   const processedArtist = artist;
   const processedTitle = title;
@@ -98,7 +99,13 @@ export async function fetchLyricsWithAliasFallback(
   async function doubleLookup(a: string, t: string) {
     try {
       // videoId는 첫 번째 시도에만 전달 (이후 fallback은 다른 아티스트명이므로 videoId 무효)
-      const res = await fetchLyricsByArtistAndTrack(a, t, durationSeconds, a === processedArtist ? videoId : undefined);
+      const res = await fetchLyricsByArtistAndTrack(
+        a,
+        t,
+        durationSeconds,
+        a === processedArtist ? videoId : undefined,
+        skipSwap,
+      );
       return res ?? null;
     } catch (error) {
       // EMPTY_SEARCH_RESULTS나 NOT_FOUND 등은 정상적인 "가사 없음" 응답이므로 null 반환

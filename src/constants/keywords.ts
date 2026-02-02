@@ -33,7 +33,10 @@ export const MUSIC_KEYWORDS = [
 // 아티스트, 타이틀 정제 작업 시 삭제할 키워드
 export const EXTRA_KEYWORDS = [
   ...MUSIC_KEYWORDS,
-  // 영어
+  // 영어 (복합 키워드는 긴 것부터 정의 - sort에서 긴 것 우선 처리됨)
+  'Official MV',
+  'Official M/V',
+  'Lyric Video',
   'official audio',
   'animation',
   'League of Legends',

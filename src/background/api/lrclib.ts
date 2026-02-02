@@ -237,6 +237,7 @@ export async function fetchLyricsByArtistAndTrack(
   title: string,
   durationSeconds: number,
   videoId?: string, // YouTube videoId (optional, 최고속 캐시용)
+  skipSwap: boolean = false, // true면 artist/title 순서 뒤집기 시도 스킵
 ): Promise<LrcLibLyricsResult> {
   if (!artist?.trim() || !title?.trim()) {
     throw new LyricsError(LyricsErrorCode.ARTIST_TITLE_EXTRACT_FAILED, undefined, { artist, title });
@@ -468,7 +469,7 @@ export async function fetchLyricsByArtistAndTrack(
   }
 
   // 2. 캐시 미스 → LRCLib API 호출 (원본 값 사용, 대소문자 구분 없음)
-  const result = await fetchLyricsWithEndpoint(artist, title, durationSeconds);
+  const result = await fetchLyricsWithEndpoint(artist, title, durationSeconds, skipSwap);
 
   if (!result) {
     throw new LyricsError(LyricsErrorCode.LRCLIB_NOT_FOUND, undefined, { artist, title, durationSeconds });
@@ -591,6 +592,7 @@ export async function fetchLyricsWithEndpoint(
   artist: string,
   title: string,
   durationSeconds: number,
+  skipSwap: boolean = false,
 ): Promise<LrcLibLyricsResult | null> {
   async function searchWithParams(
     artistParam: string,
@@ -807,8 +809,8 @@ export async function fetchLyricsWithEndpoint(
     }
   }
 
-  // 2차 시도: 곡명-아티스트 순서
-  if (artist.toLowerCase() !== title.toLowerCase()) {
+  // 2차 시도: 곡명-아티스트 순서 (skipSwap이 true면 건너뜀)
+  if (!skipSwap && artist.toLowerCase() !== title.toLowerCase()) {
     try {
       const result2 = await searchWithParams(title, artist, 2, durationSeconds);
       if (result2 !== null) return result2;
@@ -821,6 +823,8 @@ export async function fetchLyricsWithEndpoint(
         throw error;
       }
     }
+  } else if (skipSwap) {
+    console.log('[LRCLib] skipSwap=true, 2차 시도(artist/title swap) 건너뜀');
   }
 
   // 3차 시도: 비영어 타이틀이면 Spotify 우선, 영어면 freeText 우선
