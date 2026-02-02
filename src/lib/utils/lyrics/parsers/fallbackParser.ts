@@ -1,13 +1,18 @@
 /**
- * artistTitle.ts - YouTube 메타데이터 기반 아티스트/타이틀 추출
+ * fallbackParser.ts - YouTube 메타데이터 기반 아티스트/타이틀 추출
  *
  * [역할]
  * - YouTube 영상 메타데이터(채널명, description 등)에서 아티스트 정보 추출
- * - 타이틀 파싱 실패 시 fallback으로 사용
+ * - 타이틀 패턴 파싱 실패 시 fallback으로 사용
  *
- * [관련 파일]
- * - titlePatterns.ts: 제목 기반 패턴 매칭 (1차)
- * - 이 파일: 메타데이터 기반 fallback (2차)
+ * [파싱 흐름]
+ * titleParser.ts → parseTitle(titlePatterns.ts) → (실패 시) fallbackArtistAndTitle(이 파일)
+ *
+ * [우선순위]
+ * 1. YouTube 제공 artist 필드 (YouTube Music 자동 생성 영상)
+ * 2. Topic 채널 (예: "IU - Topic")
+ * 3. Description의 "Artist: ..." 패턴
+ * 4. 일반 채널명
  */
 
 /**

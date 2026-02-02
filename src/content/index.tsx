@@ -13,14 +13,7 @@ import { isMusicVideo } from '@lib/utils/audio/musicDetection';
 import type { YouTubeVideoMetaFullValue } from '@background/api/youtube';
 import { UIResourceManager } from '@lib/utils/infra/uiResourceManager';
 import { YOUTUBE_MINI_PLAYER_CLASSES, YOUTUBE_MINI_PLAYER_CONTAINER_SELECTOR } from '@constants/youtubeSelectors';
-import { fallbackArtistAndTitle } from '@lib/utils/lyrics/meta/artistTitle';
-import {
-  cleanTopicName,
-  extractArtistAndTitleCustom,
-  preprocessArtistOrTitle,
-  removeExtraInfo,
-  stripEmojiAndBeforeColon,
-} from '@lib/utils/lyrics/parsers/stringUtils';
+import { parseTitleWithFallback } from '@lib/utils/lyrics/parsers/titleParser';
 import { listenerManager } from '@lib/utils/infra/listenerManager';
 import { withContentEnabled } from '@lib/utils/platform/contentGuard';
 import { DualHighlightLyrics } from './components/lyrics/SyncLyrics/DualHighlightLyrics';
@@ -313,7 +306,6 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
    * 콘텐츠 관련 전반적인 리소스를 정리하는 최상위 클린업 함수
    */
   const cleanupAllResources = (): void => {
-    console.log('[cleanupAllResources] 실행 - tracking Emotion unmounting');
     contentLogger.info('[cleanupAllResources] Cleaning up all resources and unmounting React components');
 
     // setInterval 정리
@@ -327,7 +319,6 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
     uiManager.cleanup();
     resetLyricsData();
 
-    console.log('[cleanupAllResources] 완료 - React components should be unmounted');
     contentLogger.info('[cleanupAllResources] Cleanup complete');
   };
 
@@ -1291,40 +1282,28 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
         // Title 파싱 (병렬 처리)
         (async () => {
           const titleParseStartTime = performance.now();
-          // 제목 정제: 이모지 + 콜론 앞부분 제거
-          const cleanedTitle = stripEmojiAndBeforeColon(meta.title);
           console.log('[TITLE PARSE] 원본 타이틀:', meta.title);
-          console.log('[TITLE PARSE] 정제된 타이틀:', cleanedTitle);
 
-          // 1차: 커스텀 패턴 기반 파서 (titlePatterns.ts 참조)
-          // - 일본어 쌍따옴표, 따옴표+|, 중첩괄호, 구분자 등 패턴 순차 매칭
-          // - 패턴별 skipSwap 플래그 반환
-          let parsed = extractArtistAndTitleCustom(cleanedTitle);
-          console.log('[TITLE PARSE] 1차(커스텀 패턴) 결과:', parsed);
+          // 통합 파싱 (전처리 → 패턴 → fallback → 후처리)
+          const parsed = parseTitleWithFallback(meta.title, {
+            channelTitle: meta.channelTitle,
+            description: meta.description,
+            artist: meta.artist,
+          });
 
-          // 2차: fallback (채널명 사용 - 타이틀 파싱 실패 시)
-          if (!parsed) {
-            const fallback = fallbackArtistAndTitle(meta);
-            if (!fallback) throw new Error('곡명/아티스트 파싱 실패');
+          if (!parsed) throw new Error('곡명/아티스트 파싱 실패');
 
-            fallback.title = cleanTopicName(fallback.title);
-            fallback.artist = cleanTopicName(fallback.artist);
-            fallback.title = removeExtraInfo(fallback.title);
-            fallback.artist = removeExtraInfo(fallback.artist);
-            parsed = fallback;
-            console.log('[TITLE PARSE] 2차(fallback) 결과:', parsed);
-          }
-
-          const artist = preprocessArtistOrTitle(parsed.artist);
-          const title = preprocessArtistOrTitle(parsed.title);
-          const artistVariants: string[] | undefined =
-            'artistVariants' in parsed ? (parsed.artistVariants as string[] | undefined) : undefined;
-          const skipSwap: boolean = 'skipSwap' in parsed ? ((parsed.skipSwap as boolean) ?? false) : false;
           console.log(
-            `[Performance] Title 파싱 완료 (${(performance.now() - titleParseStartTime).toFixed(0)}ms) - artist: ${artist}, title: ${title}, skipSwap: ${skipSwap}`,
+            `[TITLE PARSE] 파싱 완료 (source: ${parsed.source}) - artist: ${parsed.artist}, title: ${parsed.title}, skipSwap: ${parsed.skipSwap}`,
           );
+          console.log(`[Performance] Title 파싱 완료 (${(performance.now() - titleParseStartTime).toFixed(0)}ms)`);
 
-          return { artist, title, artistVariants, skipSwap };
+          return {
+            artist: parsed.artist,
+            title: parsed.title,
+            artistVariants: parsed.artistVariants,
+            skipSwap: parsed.skipSwap,
+          };
         })(),
       ]);
 
