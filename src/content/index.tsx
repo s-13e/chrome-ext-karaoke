@@ -1615,15 +1615,14 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
     }
     isDetecting = true;
 
-    //const videoIdFromUrl = getCurrentVideoId();
-    const videoElem = document.querySelector('video');
-    if (!videoElem) {
-      contentLogger.warn('Video element not found, skipping detection');
-      return;
-    }
-
     let videoData;
     try {
+      const videoElem = document.querySelector('video');
+      if (!videoElem) {
+        contentLogger.warn('Video element not found, skipping detection');
+        return;
+      }
+
       videoData = detectYouTubeVideo();
 
       if (!videoData || !videoData.videoId) {
