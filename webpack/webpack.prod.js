@@ -1,9 +1,17 @@
 const { merge } = require('webpack-merge');
+const webpack = require('webpack');
 const common = require('./webpack.common.js');
 const TerserPlugin = require('terser-webpack-plugin');
 const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
 
 module.exports = merge(common, {
+  plugins: [
+    // 프로덕션 모드에서는 DEV_MODE 비활성화 - 개발자 전용 기능 숨김
+    new webpack.DefinePlugin({
+      'process.env.DEV_MODE': JSON.stringify('false'),
+    }),
+  ],
+
   mode: 'production',
   devtool: false, // Source map 제거 (디버깅은 console로)
 
