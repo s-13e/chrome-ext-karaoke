@@ -61,6 +61,27 @@ describe('parseTitle', () => {
   });
 
   // ====================================
+  // 3-1. OST From 패턴 제외 (quoted-title이 잘못 매칭하지 않도록)
+  // ====================================
+  describe('OST From pattern exclusion', () => {
+    it('Shakira - Zoo (From "Zootopia 2") → artist: Shakira, title: Zoo', () => {
+      const result = parseTitle('Shakira - Zoo (From "Zootopia 2") Official Music Video');
+      expect(result).not.toBeNull();
+      expect(result?.artist).toBe('Shakira');
+      expect(result?.title).toBe('Zoo');
+      expect(result?.patternUsed).toBe('delimiter-dash');
+    });
+
+    it('Artist - Song (From "Movie") → delimiter-dash 패턴 사용', () => {
+      const result = parseTitle('Elsa - Let It Go (From "Frozen")');
+      expect(result).not.toBeNull();
+      expect(result?.artist).toBe('Elsa');
+      expect(result?.title).toBe('Let It Go');
+      expect(result?.patternUsed).toBe('delimiter-dash');
+    });
+  });
+
+  // ====================================
   // 4. 따옴표 패턴 - 아티스트 있는 경우
   // ====================================
   describe('quoted-title pattern with artist', () => {
@@ -175,6 +196,15 @@ describe('parseTitle', () => {
       expect(result?.artist).toBeNull();
       expect(result?.title).toBe('Love Story');
     });
+
+    it('Artist - 01. Song (트랙 번호가 title에 있는 경우)', () => {
+      // delimiter-dash 패턴으로 파싱 → title에 트랙 번호 포함 → removeExtraInfo에서 제거
+      const result = parseTitle('Taylor Swift - 01. Anti-Hero');
+      expect(result).not.toBeNull();
+      expect(result?.artist).toBe('Taylor Swift');
+      expect(result?.title).toBe('Anti-Hero'); // 트랙 번호 제거됨
+      expect(result?.patternUsed).toBe('delimiter-dash');
+    });
   });
 
   // ====================================
@@ -261,5 +291,82 @@ describe('additional test cases', () => {
     expect(result).not.toBeNull();
     expect(result?.artist).toBe('Mrs. GREEN APPLE');
     expect(result?.title).toBe('lulu.');
+  });
+});
+
+// ====================================
+// parseTitleWithFallback 통합 테스트
+// ====================================
+import { parseTitleWithFallback } from '../titleParser';
+
+describe('parseTitleWithFallback (통합 테스트)', () => {
+  describe('패턴 매칭 성공 (source: pattern)', () => {
+    it('IU - Blueming → 패턴 파싱', () => {
+      const result = parseTitleWithFallback('IU - Blueming');
+      expect(result).not.toBeNull();
+      expect(result?.artist).toBe('IU');
+      expect(result?.title).toBe('Blueming');
+      expect(result?.source).toBe('pattern');
+    });
+
+    it('YOASOBI「アイドル」→ 일본어 쌍따옴표 패턴', () => {
+      const result = parseTitleWithFallback('YOASOBI「アイドル」Official Music Video');
+      expect(result).not.toBeNull();
+      expect(result?.artist).toBe('YOASOBI');
+      expect(result?.title).toBe('アイドル');
+      expect(result?.source).toBe('pattern');
+    });
+  });
+
+  describe('Fallback 사용 (source: fallback)', () => {
+    it('"Golden" | Sony Animation + 채널명 fallback', () => {
+      const result = parseTitleWithFallback('"Golden" Official Lyric Video | KPop Demon Hunters | Sony Animation', {
+        channelTitle: 'Sony Pictures Animation',
+      });
+      expect(result).not.toBeNull();
+      expect(result?.artist).toBe('Sony Pictures Animation'); // 채널명 전체 유지
+      expect(result?.title).toBe('Golden'); // 패턴에서 추출한 title 보존
+      expect(result?.source).toBe('fallback');
+    });
+
+    it('채널명에 Animation 포함 → removeExtraInfo 미적용', () => {
+      const result = parseTitleWithFallback('Some Title Without Artist', {
+        channelTitle: 'Sony Pictures Animation',
+      });
+      // Animation이 제거되지 않아야 함
+      expect(result?.artist).toBe('Sony Pictures Animation');
+    });
+
+    it('Topic 채널에서 아티스트 추출', () => {
+      const result = parseTitleWithFallback('Blueming', {
+        channelTitle: 'IU - Topic',
+      });
+      expect(result).not.toBeNull();
+      expect(result?.artist).toBe('IU');
+      expect(result?.title).toBe('Blueming');
+      expect(result?.source).toBe('fallback');
+    });
+  });
+
+  describe('OST From 패턴 처리', () => {
+    it('Shakira - Zoo (From "Zootopia 2") → delimiter-dash 사용', () => {
+      const result = parseTitleWithFallback('Shakira - Zoo (From "Zootopia 2") Official Music Video');
+      expect(result).not.toBeNull();
+      expect(result?.artist).toBe('Shakira');
+      expect(result?.title).toBe('Zoo');
+      expect(result?.source).toBe('pattern');
+    });
+  });
+
+  describe('에러 케이스', () => {
+    it('파싱 완전 실패 → null', () => {
+      const result = parseTitleWithFallback('Just A Simple Title');
+      // 옵션 없이 패턴 매칭 실패 → null
+      expect(result).toBeNull();
+    });
+
+    it('빈 문자열 → null', () => {
+      expect(parseTitleWithFallback('')).toBeNull();
+    });
   });
 });

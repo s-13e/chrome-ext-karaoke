@@ -4,9 +4,40 @@ import { PATHS } from '@constants/paths';
 import { YOUTUBE_CONFIG } from '@constants/platforms';
 import { DetectionConfig } from '@lib/types/config';
 import { Line } from '@lib/types/lyrics';
+// API 모듈 정적 import (dynamic import 제거로 메시지 처리 지연 최소화)
+import { fetchYouTubeLRCLibCache, fetchLyricsById, fetchYouTubeLyrics } from './api/lrclib';
+import { fetchYouTubeVideoMeta, fetchPlaylistItems } from './api/youtube';
 
 // ===== 전역 변수 및 상태 =====
-const activeTabs = new Set<number>();
+// activeTabs를 chrome.storage.session에 저장하여 Service Worker 재시작 후에도 유지
+const ACTIVE_TABS_KEY = 'activeTabs';
+
+async function getActiveTabs(): Promise<Set<number>> {
+  try {
+    const result = await chrome.storage.session.get(ACTIVE_TABS_KEY);
+    const tabs = result[ACTIVE_TABS_KEY] as number[] | undefined;
+    return new Set(tabs || []);
+  } catch {
+    return new Set();
+  }
+}
+
+async function addActiveTab(tabId: number): Promise<void> {
+  const tabs = await getActiveTabs();
+  tabs.add(tabId);
+  await chrome.storage.session.set({ [ACTIVE_TABS_KEY]: Array.from(tabs) });
+}
+
+async function removeActiveTab(tabId: number): Promise<void> {
+  const tabs = await getActiveTabs();
+  tabs.delete(tabId);
+  await chrome.storage.session.set({ [ACTIVE_TABS_KEY]: Array.from(tabs) });
+}
+
+async function hasActiveTab(tabId: number): Promise<boolean> {
+  const tabs = await getActiveTabs();
+  return tabs.has(tabId);
+}
 
 // ===== 플레이리스트 캐시 (메모리 캐시 + TTL) =====
 interface PlaylistCacheEntry {
@@ -113,35 +144,46 @@ chrome.webNavigation.onHistoryStateUpdated.addListener(
 
 // 탭 닫힘 시 상태 제거
 chrome.tabs.onRemoved.addListener((tabId) => {
-  activeTabs.delete(tabId);
+  removeActiveTab(tabId);
 });
 
 // ===== 유틸리티 함수 =====
 
-// Content Script 주입
+/**
+ * Content Script 주입 (non-blocking)
+ *
+ * 중요: 이 함수는 이벤트 루프를 블로킹하지 않도록 설계됨
+ * - URL 패턴 체크는 동기적으로 먼저 수행
+ * - storage 확인 및 실제 주입은 fire-and-forget IIFE로 비동기 실행
+ * - 이를 통해 메시지 핸들러가 빠르게 실행될 수 있음
+ */
 function injectContentScript(tabId: number, url: string, config: DetectionConfig) {
-  console.log(`[injectContentScript] 호출됨 - tabId: ${tabId}, url: ${url}`);
-
-  if (activeTabs.has(tabId)) {
-    console.log(`[injectContentScript] 이미 주입됨 - tabId: ${tabId}`);
-    return;
-  }
-
+  // 1. URL 패턴 체크 (동기 - 빠름)
   if (!config.urlRegex.test(url)) {
-    console.log(`[injectContentScript] URL 패턴 불일치 - 주입 안 함`);
     return;
   }
 
-  activeTabs.add(tabId);
+  // 2. 나머지 로직은 fire-and-forget으로 비동기 실행 (이벤트 루프 블로킹 방지)
+  (async () => {
+    console.log(`[injectContentScript] 호출됨 - tabId: ${tabId}, url: ${url}`);
 
-  console.log(`[injectContentScript] Content Script 주입 시작 - ${PATHS.CONTENT_SCRIPT}`);
-  chrome.scripting
-    .executeScript({
-      target: { tabId },
-      files: [PATHS.CONTENT_SCRIPT],
-    })
-    .then(() => console.log(`[injectContentScript] 주입 성공 - tabId: ${tabId}`))
-    .catch((err) => console.error(`[injectContentScript] 주입 실패:`, err));
+    // storage.session에서 확인 (Service Worker 재시작 후에도 유지)
+    if (await hasActiveTab(tabId)) {
+      console.log(`[injectContentScript] 이미 주입됨 (storage) - tabId: ${tabId}`);
+      return;
+    }
+
+    await addActiveTab(tabId);
+
+    console.log(`[injectContentScript] Content Script 주입 시작 - ${PATHS.CONTENT_SCRIPT}`);
+    chrome.scripting
+      .executeScript({
+        target: { tabId },
+        files: [PATHS.CONTENT_SCRIPT],
+      })
+      .then(() => console.log(`[injectContentScript] 주입 성공 - tabId: ${tabId}`))
+      .catch((err) => console.error(`[injectContentScript] 주입 실패:`, err));
+  })();
 }
 
 // 활성 탭에 메시지 전송
@@ -181,7 +223,8 @@ function sendMessageToActiveTab(msg: ExtensionMessage, maxRetries = 3): Promise<
 
 // ===== 메시지 처리 =====
 chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendResponse) => {
-  console.log(`[background] onMessage 수신`, msg);
+  const msgReceiveTime = performance.now();
+  console.log(`[background] onMessage 수신 (${new Date().toISOString()})`, msg.type);
 
   // 가사 준비 완료 브로드캐스트
   if (msg.type === 'LYRICS_READY') {
@@ -234,7 +277,6 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendRespon
 
     (async () => {
       try {
-        const { fetchYouTubeLRCLibCache } = await import('./api/lrclib');
         const result = await fetchYouTubeLRCLibCache(msg.videoId);
         console.log('[background] FETCH_YOUTUBE_LRCLIB_CACHE 응답:', result);
         sendResponse({ success: true, data: result });
@@ -253,7 +295,6 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendRespon
 
     (async () => {
       try {
-        const { fetchLyricsById } = await import('./api/lrclib');
         const result = await fetchLyricsById(msg.lrclibId);
         console.log('[background] FETCH_LYRICS_BY_ID 응답:', result ? '성공' : '실패');
         sendResponse({ success: true, data: result });
@@ -272,7 +313,6 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendRespon
 
     (async () => {
       try {
-        const { fetchYouTubeLyrics } = await import('./api/lrclib');
         const result = await fetchYouTubeLyrics(msg.videoId);
         console.log('[background] FETCH_YOUTUBE_LYRICS 응답:', result ? '성공' : '실패');
         sendResponse({ success: true, data: result });
@@ -287,17 +327,31 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendRespon
 
   // YouTube 비디오 메타데이터 조회
   if (msg.type === 'FETCH_YOUTUBE_META') {
-    console.log('[background] FETCH_YOUTUBE_META 요청 수신 - videoId:', msg.videoId);
+    const handlerStartTime = performance.now();
+    console.log(
+      `[background] FETCH_YOUTUBE_META 핸들러 진입: ${(handlerStartTime - msgReceiveTime).toFixed(0)}ms after onMessage`,
+    );
 
     (async () => {
       try {
-        const { fetchYouTubeVideoMeta } = await import('./api/youtube');
         const apiKey = process.env.YOUTUBE_API_KEY;
         if (!apiKey) {
           throw new Error('YouTube API key not configured');
         }
+
+        const apiStartTime = performance.now();
+        console.log(
+          `[background] YouTube API 호출 시작: ${(apiStartTime - handlerStartTime).toFixed(0)}ms after handler start`,
+        );
+
         const result = await fetchYouTubeVideoMeta(msg.videoId, apiKey);
-        console.log('[background] FETCH_YOUTUBE_META 응답:', result ? '성공' : '메타데이터 없음');
+
+        const apiEndTime = performance.now();
+        console.log(`[background] YouTube API 호출 완료: ${(apiEndTime - apiStartTime).toFixed(0)}ms (API 실제 시간)`);
+        console.log(
+          `[background] FETCH_YOUTUBE_META 전체: ${(apiEndTime - handlerStartTime).toFixed(0)}ms, 결과: ${result ? '성공' : '메타데이터 없음'}`,
+        );
+
         sendResponse({ success: true, data: result });
       } catch (error) {
         console.error('[background] FETCH_YOUTUBE_META 실패:', error);
@@ -325,7 +379,6 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendRespon
         }
 
         // 캐시 미스 또는 만료 → API 호출
-        const { fetchPlaylistItems } = await import('./api/youtube');
         const apiKey = process.env.YOUTUBE_API_KEY;
         console.log('[background] API 키 확인:', apiKey ? `존재 (길이: ${apiKey.length})` : '없음');
         if (!apiKey) {

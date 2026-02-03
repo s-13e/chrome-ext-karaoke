@@ -35,53 +35,8 @@ async function saveNegativeCacheForVideo(videoId: string, artist: string, title:
   }
 }
 
-/**
- * artistVariants에서 성공한 아티스트를 기준으로 나머지 variants를 reverse 캐시에 저장
- * @param successfulArtist 성공한 아티스트명 (예: "YOUNHA")
- * @param artistVariants 모든 variants (예: ["YOUNHA", "윤하"])
- */
-async function cacheArtistVariantsToReverse(successfulArtist: string, artistVariants: string[]): Promise<void> {
-  if (!artistVariants || artistVariants.length <= 1) {
-    return; // variants가 없거나 1개뿐이면 캐싱 불필요
-  }
+// 아티스트 캐시 저장 로직 제거됨 (잘못된 매핑 방지)
 
-  const englishNormalized = successfulArtist.toLowerCase();
-
-  for (const variant of artistVariants) {
-    const variantNormalized = variant.toLowerCase();
-
-    // 자기 자신이거나 이미 같은 값이면 스킵
-    if (variantNormalized === englishNormalized) {
-      continue;
-    }
-
-    try {
-      // Forward 매핑: variant → successful
-      await fetch(`${API_SERVER_URL}/api/v1/musicbrainz/alias`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          originalArtist: variantNormalized,
-          englishAlias: englishNormalized,
-        }),
-      });
-
-      // Reverse 매핑: successful → variants에 variant 추가
-      await fetch(`${API_SERVER_URL}/api/v1/musicbrainz/reverse`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          englishArtist: englishNormalized,
-          variant: variantNormalized,
-        }),
-      });
-
-      console.log(`[Cache] Variants 양방향 저장: "${variant}" ↔ "${successfulArtist}"`);
-    } catch (error) {
-      console.warn(`[Cache] Variants 캐싱 실패 (${variant}):`, error);
-    }
-  }
-}
 export async function fetchLyricsWithAliasFallback(
   artist: string,
   title: string,
@@ -124,8 +79,6 @@ export async function fetchLyricsWithAliasFallback(
     // 1차 시도: 원본 아티스트명 (variants[0], 영어)
     const firstResult = await doubleLookup(processedArtist, processedTitle);
     if (firstResult !== null) {
-      // 성공 시 variants 양방향 캐싱
-      await cacheArtistVariantsToReverse(processedArtist, artistVariants || []);
       return firstResult;
     }
 
@@ -138,8 +91,6 @@ export async function fetchLyricsWithAliasFallback(
           const variantResult = await doubleLookup(variant, processedTitle);
           if (variantResult !== null) {
             console.log(`[Info] artistVariants[${i}] (${variant})로 가사 검색 성공: ${variant} - ${processedTitle}`);
-            // 성공 시 variants 양방향 캐싱 (성공한 variant 기준)
-            await cacheArtistVariantsToReverse(variant, artistVariants);
             return variantResult;
           }
         }
@@ -170,7 +121,6 @@ export async function fetchLyricsWithAliasFallback(
     // (lrclib.ts 내부에서 alias 캐시 조회 완료: あいみょん → aimyon)
     const firstResult = await doubleLookup(processedArtist, processedTitle);
     if (firstResult !== null) {
-      await cacheArtistVariantsToReverse(processedArtist, artistVariants || []);
       return firstResult;
     }
 
@@ -182,7 +132,6 @@ export async function fetchLyricsWithAliasFallback(
           const variantResult = await doubleLookup(variant, processedTitle);
           if (variantResult !== null) {
             console.log(`[Lyrics] artistVariants[${i}] (${variant})로 가사 발견: ${variant} - ${processedTitle}`);
-            await cacheArtistVariantsToReverse(variant, artistVariants);
             return variantResult;
           }
         }

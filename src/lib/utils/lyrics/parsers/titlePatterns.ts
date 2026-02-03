@@ -330,6 +330,12 @@ export const TITLE_PATTERNS: TitlePattern[] = [
 
       if (!quotedText) return null;
 
+      // OST 출처 표기 제외: (From "...", [From "..."] 등은 곡 제목이 아님
+      // 예: Shakira - Zoo (From "Zootopia 2") → "Zootopia 2"는 OST 출처
+      if (/\(\s*From\s*$/i.test(beforeQuote) || /\[\s*From\s*$/i.test(beforeQuote)) {
+        return null; // 다음 패턴으로 넘김
+      }
+
       // 따옴표 앞 텍스트에서 구분자 제거하여 artist 추출
       let artist: string | null = beforeQuote
         .replace(/[-–—|/]\s*$/g, '') // 끝의 구분자 제거
@@ -459,7 +465,7 @@ export const TITLE_PATTERNS: TitlePattern[] = [
 
   // ----------------------------------------
   // 7. 괄호 패턴
-  // 예: Artist (Title)
+  // 예: Artist (Title) 또는 Title (Artist1, Artist2, Artist3)
   // ----------------------------------------
   {
     name: 'parentheses',
@@ -468,13 +474,26 @@ export const TITLE_PATTERNS: TitlePattern[] = [
     returnNull: false,
     skipSwap: true,
     extract: (match) => {
-      const artist = match[1]?.trim() ?? '';
-      const title = match[2]?.trim() ?? '';
-      if (!artist || !title) return null;
+      const outside = match[1]?.trim() ?? '';
+      const inside = match[2]?.trim() ?? '';
+      if (!outside || !inside) return null;
 
+      // 괄호 안에 쉼표가 2개 이상 있으면 (3명 이상) → Title (Artist) 형식으로 판단
+      // 예: TAKEDOWN (JEONGYEON, JIHYO, CHAEYOUNG)
+      const commaCount = (inside.match(/,/g) || []).length;
+      if (commaCount >= 2) {
+        return {
+          artist: cleanMusicKeyword(cleanArtist(inside)),
+          title: cleanMusicKeyword(cleanTitle(outside)),
+          patternUsed: 'parentheses-multi-artist',
+          skipSwap: true,
+        };
+      }
+
+      // 기본: Artist (Title) 형식
       return {
-        artist: cleanMusicKeyword(cleanArtist(artist)),
-        title: cleanMusicKeyword(cleanTitle(title)),
+        artist: cleanMusicKeyword(cleanArtist(outside)),
+        title: cleanMusicKeyword(cleanTitle(inside)),
         patternUsed: 'parentheses',
         skipSwap: true,
       };

@@ -26,15 +26,30 @@ const STORAGE_KEY = 'errorLogs';
  * 현재 환경 정보 가져오기
  */
 function getEnvironmentInfo(): EnvironmentInfo {
-  const manifest = chrome.runtime.getManifest();
+  try {
+    // Extension context가 무효화된 경우 chrome.runtime 접근 시 에러 발생
+    if (!chrome.runtime?.id) {
+      throw new Error('Extension context invalidated');
+    }
+    const manifest = chrome.runtime.getManifest();
 
-  return {
-    extensionVersion: manifest.version,
-    manifestVersion: manifest.manifest_version,
-    browserVersion: navigator.userAgent,
-    platform: navigator.platform,
-    language: navigator.language,
-  };
+    return {
+      extensionVersion: manifest.version,
+      manifestVersion: manifest.manifest_version,
+      browserVersion: navigator.userAgent,
+      platform: navigator.platform,
+      language: navigator.language,
+    };
+  } catch {
+    // Extension context 무효화 시 기본값 반환
+    return {
+      extensionVersion: 'unknown',
+      manifestVersion: 3,
+      browserVersion: navigator.userAgent,
+      platform: navigator.platform,
+      language: navigator.language,
+    };
+  }
 }
 
 /**

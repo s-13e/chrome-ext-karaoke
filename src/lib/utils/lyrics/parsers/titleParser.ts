@@ -85,8 +85,11 @@ export function parseTitleWithFallback(rawTitle: string, options?: TitleParseOpt
     | null = parseTitle(cleanedTitle);
   let source: 'pattern' | 'fallback' = 'pattern';
 
-  // 2차: Fallback (패턴 실패 시 메타데이터 사용)
-  if (!result && options) {
+  // 2차: Fallback (패턴 실패 또는 artist가 없는 경우 메타데이터 사용)
+  if ((!result || !result.artist) && options) {
+    // 패턴에서 추출한 title 보존 (artist만 없는 경우 title은 재사용)
+    const patternTitle = result?.title;
+
     const fallback = fallbackArtistAndTitle({
       title: rawTitle,
       ...options,
@@ -94,7 +97,9 @@ export function parseTitleWithFallback(rawTitle: string, options?: TitleParseOpt
 
     if (fallback) {
       result = {
-        ...fallback,
+        // 패턴에서 title이 있으면 그걸 사용, 없으면 fallback title
+        artist: fallback.artist,
+        title: patternTitle ?? fallback.title,
         patternUsed: 'fallback',
         skipSwap: false,
       };
@@ -102,14 +107,18 @@ export function parseTitleWithFallback(rawTitle: string, options?: TitleParseOpt
     }
   }
 
-  if (!result) return null;
-
-  // artist가 null인 경우 (패턴 매칭은 성공했으나 artist가 없는 경우)
-  if (!result.artist) return null;
+  // 최종 실패: 파싱 결과가 없거나 artist가 여전히 null인 경우
+  if (!result || !result.artist) return null;
 
   // 3차: 후처리 (Topic 제거, 키워드 정리, 공백 정규화)
+  // title: 항상 키워드 제거 적용 (Official MV, Lyric Video 등)
+  // artist: fallback(채널명)에서 온 경우 키워드 제거 미적용 (Sony Pictures Animation → Animation 유지)
+  //         패턴에서 온 경우 키워드 제거 적용 (swap 시 title에서 온 값일 수 있음)
   const processedTitle = preprocessArtistOrTitle(removeExtraInfo(cleanTopicName(result.title)));
-  const processedArtist = preprocessArtistOrTitle(removeExtraInfo(cleanTopicName(result.artist)));
+  const processedArtist =
+    source === 'fallback'
+      ? preprocessArtistOrTitle(cleanTopicName(result.artist))
+      : preprocessArtistOrTitle(removeExtraInfo(cleanTopicName(result.artist)));
 
   return {
     artist: processedArtist,

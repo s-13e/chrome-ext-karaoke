@@ -54,10 +54,17 @@ import { ActionableToast } from './components/common/ActionableToast';
 import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
 
 (() => {
+  // Content script 실행 시작 시점 로깅 (디버깅용)
+  console.log(`[Content Script] IIFE 시작: ${new Date().toISOString()}`);
+
   // 전역 에러 핸들러 설정 (최상단)
   window.addEventListener('error', (event) => {
     // ResizeObserver 에러는 Chrome의 harmless warning이므로 무시
     if (event.message.includes('ResizeObserver loop')) {
+      return;
+    }
+    // Extension context invalidated 에러는 무시 (확장 리로드 시 발생, 무한 루프 방지)
+    if (event.message.includes('Extension context invalidated')) {
       return;
     }
 
@@ -76,15 +83,16 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
   });
 
   window.addEventListener('unhandledrejection', (event) => {
-    contentErrorTracker.captureError(
-      event.reason instanceof Error ? event.reason : new Error(String(event.reason)),
-      'Unhandled promise rejection in content script',
-      LogLevelEnum.ERROR,
-      {
-        url: window.location.href,
-        videoId: extractVideoIdFromUrl(window.location.href),
-      },
-    );
+    const reason = event.reason instanceof Error ? event.reason : new Error(String(event.reason));
+    // Extension context invalidated 에러는 무시 (확장 리로드 시 발생, 무한 루프 방지)
+    if (reason.message.includes('Extension context invalidated')) {
+      return;
+    }
+
+    contentErrorTracker.captureError(reason, 'Unhandled promise rejection in content script', LogLevelEnum.ERROR, {
+      url: window.location.href,
+      videoId: extractVideoIdFromUrl(window.location.href),
+    });
   });
 
   // 새로고침 시 contentscript 내 중복 실행 방지
@@ -95,6 +103,18 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
   window.__LYRICS_OVERLAY_INITED = true;
 
   contentLogger.info('Content script initializing...');
+
+  // 이전 content script에서 남은 오버레이 정리 (확장 리로드 시)
+  const staleLoadingOverlay = document.getElementById('lyrics-loading-overlay');
+  if (staleLoadingOverlay) {
+    staleLoadingOverlay.remove();
+    console.log('[Cleanup] 이전 로딩 오버레이 제거');
+  }
+  const staleErrorOverlay = document.getElementById('lyrics-error-overlay-container');
+  if (staleErrorOverlay) {
+    staleErrorOverlay.remove();
+    console.log('[Cleanup] 이전 에러 오버레이 제거');
+  }
 
   // Extension context invalidation 감지 및 자동 페이지 새로고침
   // 개발 중 확장 재로드 시 content script가 무효화되는 문제 해결
@@ -146,8 +166,19 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
    * (보안: API 키를 content script에 노출하지 않음)
    */
   async function fetchYouTubeMetaViaBackground(videoId: string): Promise<YouTubeVideoMetaFullValue | null> {
+    // Extension context 무효화 시 즉시 실패 (확장 리로드 후 이전 content script)
+    if (!isExtensionContextValid()) {
+      throw new Error('Extension context invalidated');
+    }
+
+    const sendTime = performance.now();
+    console.log(`[Meta Timing] sendMessage 시작: ${new Date().toISOString()}`);
+
     return new Promise((resolve, reject) => {
       chrome.runtime.sendMessage({ type: 'FETCH_YOUTUBE_META', videoId }, (response) => {
+        const responseTime = performance.now();
+        console.log(`[Meta Timing] sendMessage 응답 수신: ${(responseTime - sendTime).toFixed(0)}ms`);
+
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message));
           return;
@@ -337,8 +368,6 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
    * 화면에 표시된 가사 렌더링을 초기 상태로 재실행하는 함수
    */
   function resetLyricsData() {
-    console.log('[resetLyricsData] 가사 상태 초기화 완료');
-
     // 광고 모니터링 중지
     stopLyricsAdMonitoringIfNeeded();
 
@@ -544,8 +573,6 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
 
   // MusicNoteButton 렌더링 함수 (확장 로드 시 한 번만 실행)
   function renderMusicNoteButton() {
-    console.log('[renderMusicNoteButton] 버튼 렌더링 시작');
-
     if (musicNoteButtonRoot) {
       console.log('[renderMusicNoteButton] 이미 렌더링됨, 스킵');
       return;
@@ -560,11 +587,9 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
       buttonContainer.style.zIndex = '9999';
       buttonContainer.style.pointerEvents = 'none'; // 컨테이너는 클릭 차단 안 함
       document.body.appendChild(buttonContainer);
-      console.log('[renderMusicNoteButton] 컨테이너 생성 완료');
     }
 
     // React Root 생성 및 렌더링
-    console.log('[renderMusicNoteButton] Tracking: Creating MusicNoteButton React root - Emotion may load');
     contentLogger.debug('Creating MusicNoteButton React root');
     musicNoteButtonRoot = ReactDOM.createRoot(buttonContainer);
     musicNoteButtonRoot.render(
@@ -575,8 +600,6 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
         onClick={() => karaokeModeManager.toggleKaraokeMode()}
       />,
     );
-
-    console.log('[renderMusicNoteButton] 렌더링 완료');
   }
 
   // 재활성화 토스트 표시
@@ -754,6 +777,12 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
     // 가사 오버레이 제거
     overlayManager.cleanupOverlay('lyrics');
 
+    // 로딩 오버레이 제거 (collectMetadataAndLyricsCore에서 생성된 것)
+    const loadingOverlay = document.getElementById('lyrics-loading-overlay');
+    if (loadingOverlay) {
+      loadingOverlay.remove();
+    }
+
     // 오류 UI 렌더링 (플레이어 중앙에 표시)
     overlayManager.renderOverlay(
       'lyricsError',
@@ -862,6 +891,11 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
   function setupOtherListeners(): void {
     chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       switch (message.type) {
+        case 'PING':
+          // Background에서 content script 실행 여부 확인용
+          sendResponse({ status: 'pong' });
+          break;
+
         case 'SPA_NAVIGATION_DETECTED':
           handleSpaUrlChange(message.payload);
           sendResponse({ status: 'ok' });
@@ -1171,9 +1205,35 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
     try {
       contentLogger.debug('Starting metadata and lyrics collection', { videoId, attempt });
 
-      // 🚀 Prefetch 전략: 가사 로드를 광고 여부와 무관하게 시작 (백그라운드)
+      // 🚀 Prefetch 전략: Meta 조회 + 캐시 조회를 동시에 시작 (최대 병렬화)
       const metaStartTime = performance.now();
       const metaPromise = fetchYouTubeMetaViaBackground(videoId);
+
+      // 🚀 캐시 조회 조기 시작: videoId만 있으면 Meta 완료 전에 시작 가능
+      const cacheStartTime = performance.now();
+      const cachePromise = (async () => {
+        // Extension context 무효화 시 즉시 실패 (확장 리로드 후 이전 content script)
+        if (!isExtensionContextValid()) {
+          console.log('[DEBUG] Extension context 무효화 감지 - 캐시 조회 중단');
+          throw new Error('Extension context invalidated');
+        }
+        console.log('[DEBUG] 캐시 조회 시작');
+
+        try {
+          const response = await chrome.runtime.sendMessage({
+            type: 'FETCH_YOUTUBE_LRCLIB_CACHE',
+            videoId,
+          });
+          const result = response?.success ? response.data : null;
+          console.log(
+            `[Performance] YouTube-LRCLib 캐시 조회 완료 (${(performance.now() - cacheStartTime).toFixed(0)}ms, 상태: ${result ? '200' : '404'})`,
+          );
+          return result;
+        } catch (error) {
+          console.warn('[YouTube-LRCLib 캐시] 조회 실패:', error);
+          return null;
+        }
+      })();
 
       // 1) 메타데이터 및 기본 정보 수집
       let meta;
@@ -1210,8 +1270,10 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
         contentLogger.warn('YouTube metadata not found', { videoId });
         throw new Error('메타 정보 없음');
       }
+      console.log('[DEBUG] Meta 조회 성공, isMusicVideo 체크 시작');
 
       const isMusic = isMusicVideo(meta);
+      console.log(`[DEBUG] isMusicVideo 결과: ${isMusic}`);
       contentLogger.debug('Music video detection result', { videoId, isMusic });
 
       // 음악 영상이 아니면 오버레이 제거
@@ -1256,28 +1318,13 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
 
       const videoDurationSec = meta.durationSec ?? 0;
 
-      // 🚀 최적화: YouTube-LRCLib 캐시 조회를 Title 파싱과 병렬 처리
+      // 🚀 최적화: 조기 시작한 캐시 조회 결과 대기 + Title 파싱 병렬 처리
       const parallelStartTime = performance.now();
+      console.log('[DEBUG] Promise.all 시작 (캐시 + title 파싱)');
 
       const [ytLrclibCacheResult, titleParseResult] = await Promise.all([
-        // YouTube-LRCLib 캐시 조회 (Background Script를 통한 API 프록시)
-        (async () => {
-          try {
-            const cacheStartTime = performance.now();
-            const response = await chrome.runtime.sendMessage({
-              type: 'FETCH_YOUTUBE_LRCLIB_CACHE',
-              videoId,
-            });
-            const result = response?.success ? response.data : null;
-            console.log(
-              `[Performance] YouTube-LRCLib 캐시 조회 완료 (${(performance.now() - cacheStartTime).toFixed(0)}ms, 상태: ${result ? '200' : '404'})`,
-            );
-            return result;
-          } catch (error) {
-            console.warn('[YouTube-LRCLib 캐시] 조회 실패:', error);
-            return null;
-          }
-        })(),
+        // 캐시 조회는 이미 Meta 조회와 동시에 시작됨 (위에서 cachePromise)
+        cachePromise,
 
         // Title 파싱 (병렬 처리)
         (async () => {
@@ -1307,6 +1354,7 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
       ]);
 
       console.log(`[Performance] 병렬 처리 완료 (${(performance.now() - parallelStartTime).toFixed(0)}ms)`);
+      console.log('[DEBUG] Promise.all 완료, 캐시 결과:', ytLrclibCacheResult?.lrclibId ? 'HIT' : 'MISS');
 
       // 캐시 히트 시: Title 파싱 결과 불필요, 바로 가사 로드
       let lyricsData: {
@@ -1451,7 +1499,9 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
         );
       }
 
+      console.log('[DEBUG] renderSongInfo 호출 전');
       renderSongInfo(finalLyricsResult.title || 'Unknown', finalLyricsResult.artist || 'Unknown');
+      console.log('[DEBUG] renderSongInfo 호출 완료');
 
       // 5) 저장된 오프셋 확인 및 자동 적용
       const { getVideoOffset } = await import('@lib/utils/storage/videoOffsetStorage');
@@ -1468,7 +1518,9 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
       }
 
       // 6) 광고 종료 후 즉시 가사 렌더링 (오프셋 적용된 가사)
+      console.log('[DEBUG] onLyricsUpdated 호출 전, 가사 수:', finalParsedLyrics.length);
       onLyricsUpdated(finalParsedLyrics);
+      console.log('[DEBUG] onLyricsUpdated 호출 완료, analyzeAudioAndRender 시작');
       await analyzeAudioAndRender(videoElem, meta, effectiveLyricsDuration, finalParsedLyrics);
 
       contentLogger.info('Lyrics rendering completed', {
@@ -1784,7 +1836,6 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
 
   // 감지 활성화 및 옵저버 등록 전담 함수
   const enableDetection = async () => {
-    console.log('[enableDetection] 실행');
     if (isDetectionActive) {
       console.log('[SKIP] 감지 시스템 이미 활성화됨');
       return;
@@ -1813,7 +1864,6 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
   };
   // 감지 시스템 완전 비활성화
   const disableDetection = () => {
-    console.log('[disableDetection] cleanupAllResources 실행');
     cleanupAllResources();
 
     if (detectionObserverManager.videoElementObserver) {
@@ -1890,7 +1940,6 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
     // 다른 오버레이 타입들(예: songInfo)도 여기에 포함 가능
   }
   function startDetectionWorkflow() {
-    console.log('[startDetectionWorkflow] 시작');
     initListenersAndState(); // Storage 초기값 및 이벤트 등록
 
     // MutationObserver 등록 및 manager에 저장
@@ -1939,7 +1988,6 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
             document.querySelector('.ytp-right-controls-right') || document.querySelector('.ytp-right-controls');
 
           if (playerControls) {
-            console.log('[initializeApp] YouTube 플레이어 컨트롤 발견, MusicNoteButton 렌더링');
             renderMusicNoteButton();
             break;
           }
