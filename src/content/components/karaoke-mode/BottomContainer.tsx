@@ -1014,7 +1014,7 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
 
   return (
     <>
-      <div className={styles.bottomContainer}>
+      <div className={`${styles.bottomContainer} ytk-bottom-container`}>
         <div className={styles.bottomContent}>
           {/* 왼쪽 그룹: 이전/다음 버튼 */}
           <div className={styles.buttonGroupLeft}>
