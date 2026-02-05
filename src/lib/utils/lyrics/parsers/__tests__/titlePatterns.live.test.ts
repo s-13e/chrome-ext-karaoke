@@ -83,9 +83,12 @@ async function fetchMultiRegionCharts(regions: string[], maxPerRegion: number = 
   return allVideos;
 }
 
-describe('YouTube Chart Live Test', () => {
-  // 기본적으로 skip 처리 (수동으로 실행할 때만 활성화)
-  // 활성화하려면: npm test -- titlePatterns.live --testNamePattern="차트"
+const hasApiKey = !!process.env.YOUTUBE_API_KEY;
+const describeIfApiKey = hasApiKey ? describe : describe.skip;
+
+describeIfApiKey('YouTube Chart Live Test', () => {
+  // YOUTUBE_API_KEY가 없으면 자동 skip (CI 환경 등)
+  // 로컬에서 실행: YOUTUBE_API_KEY=... npm test -- titlePatterns.live
   describe('YouTube 인기 차트 (한국, 미국, 일본) 테스트', () => {
     let chartVideos: YouTubeChartVideo[] = [];
 
