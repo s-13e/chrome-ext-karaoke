@@ -3488,7 +3488,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
           // origin 정보는 changes 내에 없으니 lastChangeOrigin 사용
           console.log(`contentEnabled 변경 감지: ${newValue}, origin: ${lastChangeOrigin}`);
 
-          setContentEnabled(newValue, lastChangeOrigin);
+          setContentEnabled(newValue as boolean, lastChangeOrigin);
 
           if (newValue === false) {
             if (shouldCleanupNow()) {

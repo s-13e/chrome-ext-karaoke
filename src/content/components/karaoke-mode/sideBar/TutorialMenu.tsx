@@ -87,7 +87,7 @@ export const TutorialMenu: React.FC<TutorialMenuProps> = ({ onBack }) => {
         if (item.id === 'tutorial1') {
           completed[item.id] = true;
         } else {
-          completed[item.id] = result[item.storageKey] ?? false;
+          completed[item.id] = (result[item.storageKey] as boolean | undefined) ?? false;
         }
       });
       setCompletedTutorials(completed);
