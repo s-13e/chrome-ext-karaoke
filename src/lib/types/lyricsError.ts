@@ -81,6 +81,10 @@ export class LyricsError extends Error {
   }
 
   static fromNetworkError(error: Error, context?: Record<string, unknown>): LyricsError {
+    // AbortController 타임아웃: name='AbortError', message='The operation was aborted'
+    if (error.name === 'AbortError') {
+      return new LyricsError(LyricsErrorCode.API_TIMEOUT, error.message, context);
+    }
     if (error.message.includes('timeout') || error.message.includes('TIMEOUT')) {
       return new LyricsError(LyricsErrorCode.API_TIMEOUT, error.message, context);
     }

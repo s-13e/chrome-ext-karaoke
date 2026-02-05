@@ -277,7 +277,6 @@ export const ManualLyricsSearch: React.FC<ManualLyricsSearchProps> = ({
       });
 
       onLyricsSelected(lines);
-      onBack();
     } catch (err) {
       console.error('[ManualLyricsSearch] 파싱 오류:', err);
       setError(t('extManualSearchParseError'));

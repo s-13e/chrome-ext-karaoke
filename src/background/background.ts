@@ -4,6 +4,7 @@ import { PATHS } from '@constants/paths';
 import { YOUTUBE_CONFIG } from '@constants/platforms';
 import { DetectionConfig } from '@lib/types/config';
 import { Line } from '@lib/types/lyrics';
+import { LyricsError, LyricsErrorCode } from '@lib/types/lyricsError';
 // API 모듈 정적 import (dynamic import 제거로 메시지 처리 지연 최소화)
 import { fetchYouTubeLRCLibCache, fetchLyricsById, fetchYouTubeLyrics } from './api/lrclib';
 import { fetchYouTubeVideoMeta, fetchPlaylistItems } from './api/youtube';
@@ -318,7 +319,18 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendRespon
         sendResponse({ success: true, data: result });
       } catch (error) {
         console.error('[background] FETCH_YOUTUBE_LYRICS 실패:', error);
-        sendResponse({ success: false, error: String(error) });
+
+        // 에러 유형 판별: content script가 재시도 여부를 결정할 수 있도록 전달
+        let errorType: 'TIMEOUT' | 'NETWORK' | undefined;
+        if (error instanceof LyricsError) {
+          if (error.code === LyricsErrorCode.API_TIMEOUT) {
+            errorType = 'TIMEOUT';
+          } else if (error.code === LyricsErrorCode.NETWORK_ERROR) {
+            errorType = 'NETWORK';
+          }
+        }
+
+        sendResponse({ success: false, error: String(error), errorType });
       }
     })();
 

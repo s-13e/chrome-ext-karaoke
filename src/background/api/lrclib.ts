@@ -26,7 +26,7 @@ interface LrcLibSearchResultItem {
 const API_SERVER_URL = process.env.API_SERVER_URL!;
 
 // API 타임아웃 설정
-const CACHE_TIMEOUT_MS = 5000; // API 서버 캐시: 5초 (서버 응답 대기)
+const CACHE_TIMEOUT_MS = 6000; // API 서버 캐시: 6초 (서버 콜드 스타트 여유 확보)
 const LRCLIB_TIMEOUT_MS = 20000; // LRCLib API: 20초 (네트워크 지연 고려)
 
 /**
@@ -63,68 +63,90 @@ export async function fetchYouTubeLRCLibCache(videoId: string): Promise<{ lrclib
  * - videoId → lrclibId → 가사를 서버 내부에서 한 번에 처리
  * - 네트워크 왕복 1회로 단축
  * - 캐시에서 조회한 가사도 validation/cleaning 적용
+ * - 타임아웃/네트워크 에러 시 1회 자체 재시도 후 LyricsError throw
  */
 export async function fetchYouTubeLyrics(videoId: string): Promise<LrcLibLyricsResult | null> {
-  try {
-    console.log(`[fetchYouTubeLyrics] 통합 엔드포인트 호출: ${videoId}`);
+  const MAX_BACKGROUND_RETRIES = 1;
 
-    const response = await fetchWithTimeout(
-      `${API_SERVER_URL}/api/v1/youtube/lyrics/${encodeURIComponent(videoId)}`,
-      {},
-      CACHE_TIMEOUT_MS,
-    );
+  for (let attempt = 0; attempt <= MAX_BACKGROUND_RETRIES; attempt++) {
+    try {
+      console.log(
+        `[fetchYouTubeLyrics] 통합 엔드포인트 호출 (시도 ${attempt + 1}/${MAX_BACKGROUND_RETRIES + 1}): ${videoId}`,
+      );
 
-    if (response.ok) {
-      const responseData = await response.json();
-      const data = responseData?.data;
+      const response = await fetchWithTimeout(
+        `${API_SERVER_URL}/api/v1/youtube/lyrics/${encodeURIComponent(videoId)}`,
+        {},
+        CACHE_TIMEOUT_MS,
+      );
 
-      if (!data) {
-        console.error('[fetchYouTubeLyrics] 응답 데이터 없음');
+      if (response.ok) {
+        const responseData = await response.json();
+        const data = responseData?.data;
+
+        if (!data) {
+          console.error('[fetchYouTubeLyrics] 응답 데이터 없음');
+          return null;
+        }
+
+        let lyrics = data.syncedLyrics || data.plainLyrics;
+
+        if (!lyrics) {
+          console.error('[fetchYouTubeLyrics] 가사 데이터 없음');
+          return null;
+        }
+
+        // 가사 유효성 검증 및 정제 (캐시된 가사도 검증 필요)
+        const validation = validateLyrics(lyrics);
+        if (validation.issues.includes('romanized')) {
+          console.warn('[fetchYouTubeLyrics] 로마자 표기 가사, 반환하지만 경고');
+        }
+        if (validation.cleanable) {
+          lyrics = cleanLyrics(lyrics, validation.issues);
+          console.log(
+            `[fetchYouTubeLyrics] 가사 정제 완료 (${validation.issues.filter((i) => i !== 'none').join(', ')})`,
+          );
+        }
+
+        const result = {
+          lyrics,
+          duration: data.duration,
+          artist: data.artistName,
+          title: data.trackName,
+          id: String(data.lrclibId),
+        };
+
+        console.log(`[fetchYouTubeLyrics] 가사 조회 성공 (길이: ${result.lyrics.length}자)`);
+        return result;
+      }
+
+      if (response.status === 404) {
+        console.log('[fetchYouTubeLyrics] videoId 매핑 없음 (캐시 미스)');
         return null;
       }
 
-      let lyrics = data.syncedLyrics || data.plainLyrics;
-
-      if (!lyrics) {
-        console.error('[fetchYouTubeLyrics] 가사 데이터 없음');
-        return null;
-      }
-
-      // 🔍 가사 유효성 검증 및 정제 (캐시된 가사도 검증 필요)
-      const validation = validateLyrics(lyrics);
-      if (validation.issues.includes('romanized')) {
-        console.warn('[fetchYouTubeLyrics] ⚠️ 로마자 표기 가사, 반환하지만 경고');
-      }
-      if (validation.cleanable) {
-        lyrics = cleanLyrics(lyrics, validation.issues);
-        console.log(
-          `[fetchYouTubeLyrics] 🧹 가사 정제 완료 (${validation.issues.filter((i) => i !== 'none').join(', ')})`,
-        );
-      }
-
-      const result = {
-        lyrics,
-        duration: data.duration,
-        artist: data.artistName,
-        title: data.trackName,
-        id: String(data.lrclibId),
-      };
-
-      console.log(`[fetchYouTubeLyrics] ✅ 가사 조회 성공 (길이: ${result.lyrics.length}자)`);
-      return result;
-    }
-
-    if (response.status === 404) {
-      console.log('[fetchYouTubeLyrics] videoId 매핑 없음 (캐시 미스)');
+      console.warn(`[fetchYouTubeLyrics] API 응답 실패: ${response.status}`);
       return null;
-    }
+    } catch (error) {
+      const isTimeoutOrNetwork =
+        error instanceof Error && (error.name === 'AbortError' || error.message.includes('Failed to fetch'));
 
-    console.warn(`[fetchYouTubeLyrics] API 응답 실패: ${response.status}`);
-    return null;
-  } catch (error) {
-    console.error('[fetchYouTubeLyrics] 조회 실패:', error);
-    return null;
+      if (isTimeoutOrNetwork && attempt < MAX_BACKGROUND_RETRIES) {
+        const errorType = (error as Error).name === 'AbortError' ? 'timeout' : 'network';
+        console.warn(`[fetchYouTubeLyrics] ${errorType} 발생, 재시도 ${attempt + 1}/${MAX_BACKGROUND_RETRIES}`);
+        continue;
+      }
+
+      // 재시도 소진 또는 재시도 불가 에러: 구조화된 에러로 throw
+      console.error('[fetchYouTubeLyrics] 조회 실패 (재시도 소진):', error);
+      throw LyricsError.fromNetworkError(error instanceof Error ? error : new Error(String(error)), {
+        videoId,
+        attempt: attempt + 1,
+      });
+    }
   }
+
+  return null;
 }
 
 /**

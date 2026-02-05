@@ -41,13 +41,15 @@ async function fetchYouTubeChart(regionCode: string, maxResults: number = 50): P
       throw new Error(`YouTube API HTTP ${response.status}: ${response.statusText}`);
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as {
+      items?: Array<{ id: string; snippet: { title: string; channelTitle: string } }>;
+    };
 
     if (!data.items || !Array.isArray(data.items)) {
       throw new Error('YouTube API 응답 형식이 올바르지 않습니다.');
     }
 
-    return data.items.map((item: { id: string; snippet: { title: string; channelTitle: string } }) => ({
+    return data.items.map((item) => ({
       id: item.id,
       title: item.snippet.title,
       channelTitle: item.snippet.channelTitle,
@@ -161,12 +163,10 @@ describe('YouTube Chart Live Test', () => {
       // 국가별 성공률 통계
       const regionStats: Record<string, { total: number; success: number }> = {};
       results.forEach((r) => {
-        if (!regionStats[r.국가]) {
-          regionStats[r.국가] = { total: 0, success: 0 };
-        }
-        regionStats[r.국가].total++;
+        const stat = regionStats[r.국가] ?? (regionStats[r.국가] = { total: 0, success: 0 });
+        stat.total++;
         if (r.아티스트 !== '❌') {
-          regionStats[r.국가].success++;
+          stat.success++;
         }
       });
 
