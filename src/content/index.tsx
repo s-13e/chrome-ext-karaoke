@@ -570,7 +570,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
                 .forEach((el) => el.classList.remove('ytk-tutorial-highlight'));
               cleanupMenuTutorial();
               // storage에 먼저 저장 후 이벤트 발생
-              chrome.storage.sync.set({ tutorial_sync_completed: true });
+              chrome.storage.sync.set({ [STORAGE_KEYS.TUTORIAL_SYNC_COMPLETED]: true });
               window.dispatchEvent(
                 new CustomEvent('tutorial-complete', {
                   detail: { tutorialId: 'tutorial2' },
@@ -711,7 +711,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
                 .forEach((el) => el.classList.remove('ytk-tutorial-highlight'));
               cleanupMenuTutorial();
               // storage에 먼저 저장 후 이벤트 발생
-              chrome.storage.sync.set({ tutorial_loop_completed: true });
+              chrome.storage.sync.set({ [STORAGE_KEYS.TUTORIAL_LOOP_COMPLETED]: true });
               window.dispatchEvent(new CustomEvent('tutorial-complete', { detail: { tutorialId: 'tutorial3' } }));
             } else if (newSubstep >= 0) {
               currentSubstep = newSubstep;
@@ -843,7 +843,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
                 .forEach((el) => el.classList.remove('ytk-tutorial-highlight'));
               cleanupMenuTutorial();
               // storage에 먼저 저장 후 이벤트 발생
-              chrome.storage.sync.set({ tutorial_custom_lyrics_completed: true });
+              chrome.storage.sync.set({ [STORAGE_KEYS.TUTORIAL_CUSTOM_LYRICS_COMPLETED]: true });
               window.dispatchEvent(new CustomEvent('tutorial-complete', { detail: { tutorialId: 'tutorial4' } }));
             } else if (newSubstep >= 0) {
               currentSubstep = newSubstep;
@@ -970,7 +970,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
                 .forEach((el) => el.classList.remove('ytk-tutorial-highlight'));
               cleanupMenuTutorial();
               // storage에 먼저 저장 후 이벤트 발생
-              chrome.storage.sync.set({ tutorial_sidebar_completed: true });
+              chrome.storage.sync.set({ [STORAGE_KEYS.TUTORIAL_SIDEBAR_COMPLETED]: true });
               window.dispatchEvent(new CustomEvent('tutorial-complete', { detail: { tutorialId: 'tutorial5' } }));
             } else if (newSubstep >= 0) {
               currentSubstep = newSubstep;
@@ -1081,7 +1081,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
               });
               cleanupMenuTutorial();
               // storage에 먼저 저장 후 이벤트 발생
-              chrome.storage.sync.set({ tutorial_jump_completed: true });
+              chrome.storage.sync.set({ [STORAGE_KEYS.TUTORIAL_JUMP_COMPLETED]: true });
               window.dispatchEvent(new CustomEvent('tutorial-complete', { detail: { tutorialId: 'tutorial6' } }));
             } else if (newSubstep >= 0) {
               currentSubstep = newSubstep;
