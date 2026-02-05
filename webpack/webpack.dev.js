@@ -1,5 +1,6 @@
 // webpack.dev.js - 개발 환경
 const { merge } = require('webpack-merge');
+const webpack = require('webpack');
 const common = require('./webpack.common.js');
 const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
 
@@ -31,7 +32,12 @@ const devConfig = {
     wasmLoading: false,
   },
 
-  plugins: [],
+  plugins: [
+    // 개발 모드 플래그 - production 빌드에서는 이 코드가 포함되지 않음
+    new webpack.DefinePlugin({
+      'process.env.DEV_MODE': JSON.stringify('true'),
+    }),
+  ],
 };
 
 // 번들 분석 활성화 시에만 플러그인 추가

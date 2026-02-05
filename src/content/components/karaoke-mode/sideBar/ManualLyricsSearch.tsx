@@ -2,10 +2,14 @@
 // 수동 가사 검색 컴포넌트
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MdArrowBackIosNew, MdSearch } from 'react-icons/md';
+import { MdArrowBackIosNew, MdSearch, MdCheck } from 'react-icons/md';
 import styles from './ManualLyricsSearch.module.css';
 import { sanitizeInput, RateLimiter, validateLyricsText } from '@lib/utils/security/inputSanitizer';
+import { extractVideoIdFromUrl } from '@lib/utils/platform/videoDetection';
 import type { Line } from '@lib/types/lyrics';
+
+const API_SERVER_URL = process.env.API_SERVER_URL!;
+const IS_DEV_MODE = process.env.DEV_MODE === 'true';
 
 interface ManualLyricsSearchProps {
   onBack: () => void;
@@ -16,6 +20,7 @@ interface ManualLyricsSearchProps {
 
 interface LyricsCandidate {
   id: string;
+  lrclibId: number; // 실제 LRCLib ID (서버 캐시 저장용)
   trackName: string;
   artistName: string;
   duration: number;
@@ -53,6 +58,10 @@ export const ManualLyricsSearch: React.FC<ManualLyricsSearchProps> = ({
   const [error, setError] = useState<string>('');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [isFormCollapsed, setIsFormCollapsed] = useState(false);
+
+  // DEV_MODE 전용: 확정 버튼 상태
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [confirmedIds, setConfirmedIds] = useState<Set<string>>(new Set());
 
   /**
    * LRCLib API 가사 검색
@@ -113,7 +122,8 @@ export const ManualLyricsSearch: React.FC<ManualLyricsSearchProps> = ({
           const syncedLyrics = item.syncedLyrics || '';
           const timestamps = getTimestamps(syncedLyrics);
           return {
-            id: `${item.id}-${Date.now()}-${Math.random()}`,
+            id: `${item.id}-${Date.now()}-${Math.random()}`, // React key용
+            lrclibId: item.id, // 실제 LRCLib ID 보존
             trackName: item.trackName || cleanTitle,
             artistName: item.artistName || cleanArtist,
             duration: Math.round(item.duration || 0), // 정수로 반올림
@@ -267,10 +277,57 @@ export const ManualLyricsSearch: React.FC<ManualLyricsSearchProps> = ({
       });
 
       onLyricsSelected(lines);
-      onBack();
     } catch (err) {
       console.error('[ManualLyricsSearch] 파싱 오류:', err);
       setError(t('extManualSearchParseError'));
+    }
+  };
+
+  /**
+   * [DEV_MODE 전용] videoId → lrclibId 매핑을 서버에 확정 저장
+   */
+  const handleConfirmMapping = async (candidate: LyricsCandidate) => {
+    const videoId = extractVideoIdFromUrl(window.location.href);
+    if (!videoId) {
+      setError('현재 YouTube 영상 ID를 찾을 수 없습니다.');
+      return;
+    }
+
+    setConfirmingId(candidate.id);
+
+    try {
+      console.log('[ManualLyricsSearch] 매핑 확정 시도:', {
+        videoId,
+        lrclibId: candidate.lrclibId,
+        artist: candidate.artistName,
+        title: candidate.trackName,
+      });
+
+      const response = await fetch(`${API_SERVER_URL}/api/v1/youtube/lrclib`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videoId,
+          lrclibId: candidate.lrclibId,
+          artist: candidate.artistName,
+          title: candidate.trackName,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`서버 오류: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('[ManualLyricsSearch] 매핑 확정 성공:', result);
+
+      // 확정 완료 표시
+      setConfirmedIds((prev) => new Set(prev).add(candidate.id));
+    } catch (err) {
+      console.error('[ManualLyricsSearch] 매핑 확정 실패:', err);
+      setError(`매핑 저장 실패: ${err instanceof Error ? err.message : '알 수 없는 오류'}`);
+    } finally {
+      setConfirmingId(null);
     }
   };
 
@@ -387,9 +444,27 @@ export const ManualLyricsSearch: React.FC<ManualLyricsSearchProps> = ({
                         </button>
                       </div>
                     </div>
-                    <button className={styles.selectButton} onClick={() => handleSelectLyrics(candidate)}>
-                      {t('extSelect')}
-                    </button>
+                    <div className={styles.buttonGroup}>
+                      <button className={styles.selectButton} onClick={() => handleSelectLyrics(candidate)}>
+                        {t('extSelect')}
+                      </button>
+                      {/* DEV_MODE 전용: 확정 버튼 (videoId → lrclibId 서버 캐시 저장) */}
+                      {IS_DEV_MODE && (
+                        <button
+                          className={`${styles.confirmButton} ${confirmedIds.has(candidate.id) ? styles.confirmed : ''}`}
+                          onClick={() => handleConfirmMapping(candidate)}
+                          disabled={confirmingId === candidate.id || confirmedIds.has(candidate.id)}
+                          title={`LRCLib ID: ${candidate.lrclibId} 매핑 확정`}
+                        >
+                          <MdCheck size={16} />
+                          {confirmingId === candidate.id
+                            ? '저장 중...'
+                            : confirmedIds.has(candidate.id)
+                              ? '확정됨'
+                              : '확정'}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}

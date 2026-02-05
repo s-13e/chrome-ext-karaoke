@@ -1,0 +1,245 @@
+/* tutorialTooltip.module.css */
+/* 튜토리얼 툴팁 스타일 */
+
+.tooltipContainer {
+  /* position은 부모 컨테이너(JS)에서 설정 */
+  position: relative;
+  pointer-events: none;
+}
+
+/* Step1: 버튼 위에 표시 (좌표는 JS에서 설정) */
+.step1 {
+  /* 위치는 JavaScript에서 동적 설정 */
+}
+
+/* Step2: 버튼 위에 표시 (Step1과 동일 위치, 좌표는 JS에서 설정) */
+.step2 {
+  /* 위치는 JavaScript에서 동적 설정 */
+}
+
+.tooltipContent {
+  background: linear-gradient(135deg, #1db954 0%, #1ed760 100%);
+  color: #ffffff;
+  padding: 12px 16px;
+  border-radius: 10px;
+  box-shadow:
+    0 4px 20px rgba(29, 185, 84, 0.4),
+    0 2px 8px rgba(0, 0, 0, 0.2);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.step1Text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.title {
+  font-weight: 600;
+}
+
+.desc {
+  font-weight: 400;
+  opacity: 0.95;
+}
+
+.action {
+  font-weight: 700;
+  font-size: 15px;
+  margin-top: 4px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.step2Text {
+  max-width: 300px;
+  white-space: normal;
+  text-align: center;
+}
+
+/* 애니메이션 */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeOutDown {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.02);
+  }
+}
+
+.fadeIn {
+  animation: fadeInUp 0.3s ease-out forwards;
+}
+
+.fadeOut {
+  animation: fadeOutDown 0.3s ease-in forwards;
+}
+
+/* step2 고정 위치 조정 */
+.step2 .tooltipContent {
+  background: linear-gradient(135deg, #1db954 0%, #1ed760 100%);
+  border-radius: 12px;
+  padding: 14px 20px;
+}
+
+/* Feature 튜토리얼 스타일 */
+.feature {
+  /* 위치는 JavaScript에서 동적 설정 */
+}
+
+.feature .tooltipContent {
+  padding: 16px 20px;
+  min-width: 280px;
+  max-width: 350px;
+  white-space: normal;
+  pointer-events: auto;
+}
+
+.featureContent {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: relative;
+  width: 100%;
+}
+
+.closeButton {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: rgba(0, 0, 0, 0.3);
+  border: none;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #ffffff;
+  transition: all 0.2s;
+}
+
+.closeButton:hover {
+  background: rgba(0, 0, 0, 0.5);
+  transform: scale(1.1);
+}
+
+.featureText {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: center;
+  padding-right: 20px;
+}
+
+.featureTitle {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.featureDesc {
+  font-size: 14px;
+  font-weight: 400;
+  opacity: 0.95;
+  line-height: 1.5;
+}
+
+.featureNav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.navButton {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #ffffff;
+  transition: all 0.2s;
+}
+
+.navButton:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.35);
+  transform: scale(1.1);
+}
+
+.navButton:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.stepIndicator {
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.9;
+  min-width: 50px;
+  text-align: center;
+}
+
+/* Step 진행 표시 (dots) */
+.stepProgress {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.stepDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  transition: all 0.2s;
+}
+
+.stepDotActive {
+  background: #ffffff;
+  transform: scale(1.2);
+}
+
+.stepDotCompleted {
+  background: rgba(255, 255, 255, 0.7);
+}

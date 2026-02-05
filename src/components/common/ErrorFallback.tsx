@@ -6,7 +6,7 @@ export function ErrorFallback({
 }: FallbackProps) {
   return (
     <div>
-      <p>{error.message}</p>
+      <p>{error instanceof Error ? error.message : String(error)}</p>
       <button onClick={resetErrorBoundary}>재시도</button>
     </div>
   );

@@ -69,7 +69,7 @@ const configureInstance = async (lang: SupportedLanguage | null) => {
 // 3. 스토리지 리스너 분리
 const setupStorageListeners = () => {
   chrome.storage.onChanged.addListener((changes) => {
-    const newLang = changes?.[STORAGE_KEYS.LANGUAGE]?.newValue;
+    const newLang = changes?.[STORAGE_KEYS.LANGUAGE]?.newValue as SupportedLanguage | undefined;
     if (newLang && SUPPORTED_LANGUAGES.includes(newLang)) {
       i18nInstance.changeLanguage(newLang);
     }
@@ -102,7 +102,7 @@ const detectBrowserLanguage = (): Promise<SupportedLanguage> => {
 const getSavedLanguage = async (): Promise<SupportedLanguage | null> => {
   return new Promise<SupportedLanguage | null>((resolve) => {
     chrome.storage.sync.get(STORAGE_KEYS.LANGUAGE, (result) => {
-      const lang = result[STORAGE_KEYS.LANGUAGE];
+      const lang = result[STORAGE_KEYS.LANGUAGE] as SupportedLanguage | undefined;
       const isValid = lang && SUPPORTED_LANGUAGES.includes(lang);
       resolve(isValid ? lang : null);
     });

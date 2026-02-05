@@ -14,6 +14,8 @@
   overflow-y: auto;
   box-shadow: -2px 0 8px rgba(0, 0, 0, 0.3);
   pointer-events: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .sidebarContent {
@@ -21,6 +23,32 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  flex: 1;
+}
+
+/* 사이드바 하단 고정 영역 (튜토리얼 버튼) */
+.sidebarFooter {
+  padding: 12px 20px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.tutorialFooterButton {
+  width: 100%;
+  padding: 10px 16px;
+  background-color: rgba(29, 185, 84, 0.15);
+  border: 1px solid rgba(29, 185, 84, 0.3);
+  color: #1ed760;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  text-align: center;
+  transition: all 0.2s ease;
+  line-height: 1.4;
+}
+
+.tutorialFooterButton:hover {
+  background-color: rgba(29, 185, 84, 0.25);
+  border-color: rgba(29, 185, 84, 0.5);
 }
 
 .sidebarButton {
@@ -40,6 +68,20 @@
 .sidebarButton:hover {
   background-color: rgba(255, 255, 255, 0.2);
   border-color: rgba(255, 255, 255, 0.4);
+}
+
+/* 튜토리얼 버튼 활성화 상태 */
+.tutorialButtonActive {
+  background: linear-gradient(135deg, #1db954 0%, #1ed760 100%);
+  border-color: #1db954;
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(29, 185, 84, 0.4);
+}
+
+.tutorialButtonActive:hover {
+  background: linear-gradient(135deg, #1ed760 0%, #1db954 100%);
+  border-color: #1ed760;
 }
 
 /* 하단 컨테이너 - 화면 하단에 고정 */

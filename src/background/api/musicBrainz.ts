@@ -104,19 +104,7 @@ export async function fetchEnglishAliasForArtist(artistName: string): Promise<st
 
     const alias = extractEnglishAliasFromArtists(data.artists);
 
-    // 3. API 서버 캐시에 저장
-    if (alias) {
-      try {
-        await fetch(`${API_SERVER_URL}/api/v1/musicbrainz/alias`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ artist: artistName, alias }),
-        });
-        console.log('[MusicBrainz] 캐시 저장 완료:', artistName, '→', alias);
-      } catch (error) {
-        console.warn('[MusicBrainz] 캐시 저장 실패:', error);
-      }
-    }
+    // 캐시 저장 로직 제거됨 (잘못된 매핑 방지)
 
     return alias;
   } catch (error) {

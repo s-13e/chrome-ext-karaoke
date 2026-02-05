@@ -1,35 +1,41 @@
 # TODO
 
 ## 🐛 Bugs
-1. ~~인기차트 TOP 100이 50개만 표시되는 문제~~ ✅
-   - ~~YouTube API maxResults 제한 (50) → 페이지네이션 필요~~ ✅
-   - ~~Lazy loading (10개씩) 구현~~ ✅
-
-## ✨ Features
-1. ~~TextEffectsModal에 공통 설정 탭 추가~~ ✅
-  - ~~카운트다운 설정 (색상, 크기, on/off)~~ ✅
-  - ~~가사 위치 설정 (Dual/Single용)~~ ✅
-  - ~~배경 투명도~~ ✅
-  - ~~프리셋 도입~~ ✅
-
-2. 피드백 시스템 구축
-  - ~~삭제 시 피드백 페이지 (setUninstallURL + Google Forms)~~ ✅
 
 ## 🔧 Improvements
-1. ~~lrclib에서 잘못된 가사 형식 여부 검토 로직 추가~~ ✅
-  - ~~가사에 중복된 타임 스탬프가 들어가있는 경우~~ ✅
-  - ~~로마자 가사 판별 로직 수정~~ ✅
-  - ~~원문과 번역된 영문 가사가 같이 있는 경우~~ ✅
-    - e.g. 내가 아파봤자 너만하겠니^englsh english
-2. ~~karaoke 확장이 on인 경우 유튜브 자막 자동 비활성화~~ ✅
-3. ~~일본어 로마자에서 띄어쓰기의 첫 문자는 대문자로 표시(현재는 전부 소문자로 표시)~~ ✅
+
+## ✅ Completed
+
+- [x] DEV_MODE 전용 "확정" 버튼 (videoId → lrclibId 매핑 저장)
+- [x] 동일 영상 재방문 시 가사 미표시 버그 수정 (isDetecting 플래그 리셋 문제)
+- [x] 첫 사용 튜토리얼 (TutorialTooltip, TutorialMenu, Step1~6)
+- [x] Title 파싱 1단계 - 패턴 배열 기반 리팩토링 (`titlePatterns.ts`)
+- [x] 캐시 미스 시 로딩 문구 개선 (`extLyricsLoadingCacheMiss` 번역키 추가, 7개 언어)
+- [x] TypeScript 오류 수정 (TutorialTooltip 타입, 미사용 코드 제거, 테스트 파일 타입 안전성)
+- [x] Step1 튜토리얼 툴팁 스크롤 추적 (스크롤 시 버튼 위치에 맞게 툴팁 이동)
 
 ## 📋 Backlog
-1. 피드백 시스템 (나머지)
-  - 팝업/설정에 피드백 버튼 추가
-  - 사용 중 만족도 조사 (일정 기간 사용 후)
 
-2. 가사 탐지 로직 개선
-  - 제목 필터링 정교화 (괄호, 특수문자, 버전 정보 등 처리)
-  - 아티스트명 매칭 개선
-  - 검색 실패 시 대체 검색어 시도
+1. **튜토리얼 로직 분리 (index.tsx → tutorialController.ts)**
+
+   - index.tsx 내 showTutorial1~6FromMenu 함수들(~850줄)을 별도 모듈로 분리
+   - 6개 함수의 공통 패턴(컨테이너 생성 → substeps → 위치 계산 → 렌더)을 하나의 `showMenuTutorial(config)` 함수로 추상화
+
+2. **[DEV_MODE] 오프셋 캐시 기능**
+
+   - 수동 검색에서 선택한 가사의 오프셋 조정값도 서버에 저장
+   - videoId → { lrclibId, offset } 매핑
+
+3. **Spotify 결과 검사 로직 도입**
+
+4. **피드백 시스템**
+
+   - 팝업/설정에 피드백 버튼 추가
+   - 사용 중 만족도 조사 (일정 기간 사용 후)
+
+5. **[재현 불가] songInfo 위치 초기화 버그**
+
+   - 증상: 알 수 없는 오류 발생 후 재시도 버튼 클릭 시 songInfo가 윈도우 중앙에 생성됨
+   - 상태: 현재 재현 불가 - 특정 계정/조건에서만 발생할 수 있음
+
+6. 일본어 로마자 가독성 높이기 위한 띄어쓰기 도입

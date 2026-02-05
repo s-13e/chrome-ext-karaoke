@@ -1,9 +1,30 @@
-// src/lib/utils/stringUtils.ts
-// 문자열 전처리
+/**
+ * stringUtils.ts - 범용 문자열 유틸리티
+ *
+ * [역할]
+ * - 문자열 전처리 및 정제 함수들 (cleanUp, removeExtraInfo 등)
+ * - 영어 텍스트 판별 (isEnglishText)
+ * - 아티스트/타이틀 전처리 (preprocessArtistOrTitle)
+ * - extractArtistAndTitleCustom: parseTitle 래퍼 (하위 호환용)
+ *
+ * [titlePatterns.ts와의 차이]
+ * - stringUtils.ts: 범용 문자열 유틸리티 (다른 모듈에서도 사용)
+ * - titlePatterns.ts: Title 파싱 전용 패턴 정의 + parseTitle 함수
+ *
+ * [의존성]
+ * - titlePatterns.ts를 import (parseTitle, TitleParseResult)
+ * - titlePatterns.ts는 이 파일을 import하지 않음 (순환 참조 방지)
+ */
+
 import { EXTRA_KEYWORDS } from '@constants/keywords';
+import { parseTitle } from './titlePatterns';
 
 const TRAILING_DELIMITERS_REGEX = /[\s\-/|]+$/;
 const emojiRegex = /\p{Extended_Pictographic}/u;
+
+// Re-export for external use
+export type { TitleParseResult } from './titlePatterns';
+export { parseTitle } from './titlePatterns';
 
 // -----------------------------
 // Exported utility functions
@@ -102,152 +123,31 @@ export function cleanUp(str: string): string {
 }
 
 /**
- * 괄호 안팎의 내용을 모두 추출 (영어 우선)
- * 예: "윤하(YOUNHA)" → ["YOUNHA", "윤하"]
- * 예: "YOUNHA(윤하)" → ["YOUNHA", "윤하"]
- * @returns 배열의 0번은 항상 영어 (영어가 없으면 원본)
+ * 커스텀 title 파싱 (패턴 기반)
+ *
+ * 패턴 배열을 순회하며 YouTube 영상 제목에서 artist/title 추출
+ * @param rawTitle 원본 YouTube 영상 제목
+ * @returns 파싱 결과 또는 null (채널명 fallback 필요)
  */
-function extractParenthesesVariants(str: string): string[] {
-  const variants: string[] = [];
-  const parenthesesPattern = /^(.+?)\s*\(([^)]+)\)\s*$/;
-  const match = str.match(parenthesesPattern);
-
-  if (match && match[1] && match[2]) {
-    const outside = match[1].trim();
-    const inside = match[2].trim();
-
-    // 영어를 0번 인덱스에 배치
-    if (isEnglishText(outside)) {
-      variants.push(outside);
-      if (inside) variants.push(inside);
-    } else if (isEnglishText(inside)) {
-      variants.push(inside);
-      if (outside) variants.push(outside);
-    } else {
-      // 둘 다 비영어면 순서대로
-      if (outside) variants.push(outside);
-      if (inside) variants.push(inside);
-    }
-  } else {
-    // 괄호가 없으면 원본만 반환
-    variants.push(str);
-  }
-
-  return variants;
-}
-
-// 실질적 실행
 export function extractArtistAndTitleCustom(
   rawTitle: string,
-): { artist: string; title: string; artistVariants?: string[] } | null {
-  if (!rawTitle || typeof rawTitle !== 'string') return null;
+): { artist: string; title: string; artistVariants?: string[]; patternUsed?: string; skipSwap?: boolean } | null {
+  const result = parseTitle(rawTitle);
 
-  // 0. 일본어 쌍따옴표 패턴 우선 처리 (cleanUp 전에)
-  // 예: "YOASOBI「アイドル」 Official Music Video" → artist: "YOASOBI", title: "アイドル"
-  const japaneseQuotePattern = /^(.+?)[「『]([^」』]+)[」』]/;
-  const japaneseQuoteMatch = rawTitle.match(japaneseQuotePattern);
-  if (japaneseQuoteMatch && japaneseQuoteMatch[1] && japaneseQuoteMatch[2]) {
-    return {
-      artist: japaneseQuoteMatch[1].trim(),
-      title: japaneseQuoteMatch[2].trim(),
-    };
-  }
+  if (!result) return null;
 
-  // 0-0.5. 따옴표로 시작하는 타이틀 패턴 감지 → null 반환 (채널명 fallback 유도)
-  // 예: "Your Idol" | Official Song Clip | KPop Demon Hunters | Sony Animation
-  // 이 형식에서는 아티스트 정보를 신뢰할 수 없으므로 파싱 실패로 처리
-  // Quote characters: ' " ' ' " " (U+0027, U+0022, U+2018, U+2019, U+201C, U+201D)
-  const leadingQuotePattern =
-    /^['"\u2018\u2019\u201C\u201D]([^'"\u2018\u2019\u201C\u201D]+)['"\u2018\u2019\u201C\u201D]?\s*[|/-]/;
-  if (leadingQuotePattern.test(rawTitle)) {
-    console.log('[stringUtils] 따옴표로 시작하는 타이틀 감지, 파싱 실패 처리 (채널명 fallback)');
+  // artist가 null이면 채널명 fallback 필요
+  if (result.artist === null) {
     return null;
   }
 
-  // 0-1. 타이틀 중복 표시 감지: 중첩 괄호가 있고 구분자가 없으면 실패 처리
-  // 예: "HEYA (해야 (HEYA))" → null (fallback으로 채널명 사용)
-  const hasNestedParentheses = /\([^()]*\([^()]*\)[^()]*\)/.test(rawTitle);
-  const hasDelimiter = / - | \/ | \| /.test(rawTitle);
-
-  if (hasNestedParentheses && !hasDelimiter) {
-    // 중첩 괄호만 있고 구분자 없음 → 타이틀 중복 표시로 간주
-    // fallback으로 넘어가서 채널명을 아티스트로 사용
-    return null;
-  }
-
-  // 1. 기본 정돈 (괄호/대괄호 제거, 중복 공백 정리 등)
-  const cleaned = cleanUp(rawTitle);
-
-  // 2. 쌍따옴표 등으로 감싼 부분 우선 파싱 예: Artist "Title"
-  const quotePattern = /^(.+?)\s+(?:'|"|"|'|'|")([^'""''"]+)(?:'|"|"|'|')?(?:\s|$)/;
-  const quoteMatch = cleaned.match(quotePattern);
-
-  let artist = '';
-  let title = '';
-
-  if (
-    quoteMatch &&
-    quoteMatch[1] !== undefined &&
-    quoteMatch[2] !== undefined &&
-    !/\w'$/.test(quoteMatch[1].trim()) && // 아티스트 단어 끝 ' 소유격 제외
-    quoteMatch[2].trim().length > 0
-  ) {
-    artist = quoteMatch[1]?.trim() ?? '';
-    title = quoteMatch[2]?.trim() ?? '';
-  } else {
-    // 3. 구분자 기준 추출 (하이픈, 슬래시, 파이프)
-    const delimiters = [' - ', ' / ', ' | '];
-    for (const delim of delimiters) {
-      if (cleaned.includes(delim)) {
-        const parts = cleaned.split(delim);
-        if (parts.length >= 2) {
-          artist = parts[0]?.trim() ?? '';
-          title = parts.slice(1).join(delim).trim();
-          break;
-        }
-      }
-    }
-  }
-
-  // 2. remove extra info
-  title = removeExtraInfo(title);
-  artist = cleanMusicKeyword(artist);
-  title = cleanMusicKeyword(title);
-
-  // 4. 추가 패턴: 괄호
-  if (!artist || !title) {
-    const match = cleaned.match(/^(.+?)\s*\((.+?)\)/);
-    if (match) {
-      artist = match[1]?.trim() ?? '';
-      title = match[2]?.trim() ?? '';
-    }
-  }
-
-  // 6. 곡명에서 부가정보 추가 제거
-  title = removeExtraInfo(title);
-  title = removeTrailingHashtags(title);
-  title = removeDatePattern(title);
-
-  if (!artist || !title) return null;
-
-  // 7. 아티스트명 정제 전에 괄호 variants 추출
-  const rawArtist = artist; // 정제 전 원본 저장
-
-  // 8. 괄호가 있었다면 variants 추출 (정제 전 원본에서)
-  const artistVariants = extractParenthesesVariants(rawArtist);
-
-  // variants의 0번(영어)을 최종 artist로 사용하고, 나머지를 variants로 반환
-  if (artistVariants.length > 0 && artistVariants[0]) {
-    artist = preprocessArtistOrTitle(artistVariants[0]); // 0번(영어)을 정제
-    return {
-      artist,
-      title,
-      artistVariants: artistVariants.length > 1 ? artistVariants : undefined,
-    };
-  }
-
-  artist = removeEmptyBrackets(removeExtraInfo(artist));
-  return { artist, title };
+  return {
+    artist: result.artist,
+    title: result.title,
+    artistVariants: result.artistVariants,
+    patternUsed: result.patternUsed,
+    skipSwap: result.skipSwap,
+  };
 }
 
 // preprocessing for artist or title string: clean up + extract English only + trim trailing delimiters
@@ -385,22 +285,7 @@ export function removeExtraInfo(str: string): string {
 function hasEmoji(text: string): boolean {
   return emojiRegex.test(text);
 }
-// op, ed, ost, mv는 해당 단어만 삭제해 예를 들어 open the door -> en the door이 되지 않게끔
-function cleanMusicKeyword(str: string): string {
-  return str
-    .replace(/([^A-Za-z]|^)(OP|ED|OST|MV)([^A-Za-z]|$)/gi, (_match, p1, _p2, p3) => {
-      return `${p1}${p3}`.replace(/\s{2,}/g, ' ');
-    })
-    .trim();
-}
-// 곡명 끝에 연속된 해시태그만 제거
-function removeTrailingHashtags(title: string): string {
-  return title.replace(/(\s*#[\p{L}\p{N}._-]+)+\s*$/gu, '').trim();
-}
-// 방송 날짜 기재된 경우 제거 (YYMMDD 형식)
-function removeDatePattern(str: string): string {
-  return str.replace(/\b\d{2}[01]\d(?:3[0-2]|[0-2][0-9])\b/g, '').trim();
-}
+
 // 빈 괄호 제거
 function removeEmptyBrackets(str: string): string {
   return str

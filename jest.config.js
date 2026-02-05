@@ -17,6 +17,19 @@ module.exports = {
   // 지원 파일 확장자
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
 
+  // Path aliases (webpack alias와 동일하게 설정)
+  moduleNameMapper: {
+    '^@constants/(.*)$': '<rootDir>/src/constants/$1',
+    '^@lib/(.*)$': '<rootDir>/src/lib/$1',
+    '^@components/(.*)$': '<rootDir>/src/components/$1',
+    '^@hooks/(.*)$': '<rootDir>/src/hooks/$1',
+    '^@services/(.*)$': '<rootDir>/src/services/$1',
+    '^@background/(.*)$': '<rootDir>/src/background/$1',
+    '^@content/(.*)$': '<rootDir>/src/content/$1',
+    '^@popup/(.*)$': '<rootDir>/src/popup/$1',
+    '^@styles/(.*)$': '<rootDir>/src/styles/$1',
+  },
+
   // 커버리지 리포트 옵션
   collectCoverage: true,
   coverageDirectory: 'coverage',

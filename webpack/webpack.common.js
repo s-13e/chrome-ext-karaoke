@@ -131,10 +131,11 @@ module.exports = {
         { from: 'node_modules/kuromoji/dict/', to: 'dict/' },
       ],
     }),
+    // 환경변수 주입 (DefinePlugin은 참조하는 코드가 있는 번들에만 값이 포함됨)
+    // YOUTUBE_API_KEY, MUSICBRAINZ_USER_AGENT는 background script에서만 사용해야 함 (보안)
+    // Content script에서는 chrome.runtime.sendMessage로 background를 통해 API 호출할 것
     new webpack.DefinePlugin({
       'process.env.API_SERVER_URL': JSON.stringify(process.env.API_SERVER_URL),
-      // YOUTUBE_API_KEY는 background script에서만 사용되어야 함 (보안)
-      // Content script에서는 chrome.runtime.sendMessage로 background를 통해 API 호출
       'process.env.YOUTUBE_API_KEY': JSON.stringify(process.env.YOUTUBE_API_KEY),
       'process.env.MUSICBRAINZ_USER_AGENT': JSON.stringify(process.env.MUSICBRAINZ_USER_AGENT),
     }),

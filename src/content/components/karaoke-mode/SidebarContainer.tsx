@@ -24,6 +24,7 @@ const PopularChart = lazy(() => import('./sideBar/PopularChart').then((module) =
 const ManualLyricsSearch = lazy(() =>
   import('./sideBar/ManualLyricsSearch').then((module) => ({ default: module.ManualLyricsSearch })),
 );
+const TutorialMenu = lazy(() => import('./sideBar/TutorialMenu').then((module) => ({ default: module.TutorialMenu })));
 
 type SidebarView =
   | 'main'
@@ -33,8 +34,9 @@ type SidebarView =
   | 'chart-list' // 특정 차트의 곡 목록
   | 'acapella'
   | 'recordings-list'
-  | 'sync-offset-list' // 싱크셋 목록
-  | 'manual-lyrics-search' // 수동 가사 검색
+  | 'sync-offset-list'
+  | 'manual-lyrics-search'
+  | 'tutorial'
   | 'analysis';
 
 interface SidebarContainerProps {
@@ -101,12 +103,28 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, widt
       window.dispatchEvent(new CustomEvent('show-sync-panel'));
     };
 
+    // 튜토리얼 완료 시 튜토리얼 탭으로 돌아오기
+    const handleTutorialComplete = () => {
+      console.log('[SidebarContainer] tutorial-complete 이벤트 수신 - 튜토리얼 탭으로 이동');
+      setCurrentView('tutorial');
+    };
+
+    // 튜토리얼 중 메인으로 이동 요청 (나중에 튜토리얼 탭으로 복귀)
+    const handleTutorialGoMain = () => {
+      console.log('[SidebarContainer] tutorial-go-main 이벤트 수신 - 메인으로 이동');
+      setCurrentView('main');
+    };
+
     window.addEventListener('open-manual-search', handleOpenManualSearch);
     window.addEventListener('open-sync-settings', handleOpenSyncSettings);
+    window.addEventListener('tutorial-complete', handleTutorialComplete);
+    window.addEventListener('tutorial-go-main', handleTutorialGoMain);
 
     return () => {
       window.removeEventListener('open-manual-search', handleOpenManualSearch);
       window.removeEventListener('open-sync-settings', handleOpenSyncSettings);
+      window.removeEventListener('tutorial-complete', handleTutorialComplete);
+      window.removeEventListener('tutorial-go-main', handleTutorialGoMain);
     };
   }, []);
 
@@ -129,6 +147,11 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, widt
           </button>
           <button className={styles.sidebarButton} onClick={() => handleMenuClick('sync-offset-list')}>
             {t('extSidebarSyncOffsetList')}
+          </button>
+        </div>
+        <div className={styles.sidebarFooter}>
+          <button className={styles.tutorialFooterButton} onClick={() => handleMenuClick('tutorial')}>
+            {t('extSidebarTutorial')}
           </button>
         </div>
       </div>
@@ -196,6 +219,17 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, widt
       <div className={styles.sidebarContainer} style={sidebarStyle}>
         <Suspense fallback={<div style={{ padding: '20px', color: '#fff' }}>Loading...</div>}>
           <ManualLyricsSearch onBack={handleBackToMain} onLyricsSelected={handleLyricsSelected} />
+        </Suspense>
+      </div>
+    );
+  }
+
+  // 튜토리얼 메뉴 화면
+  if (currentView === 'tutorial') {
+    return (
+      <div className={styles.sidebarContainer} style={sidebarStyle}>
+        <Suspense fallback={<div style={{ padding: '20px', color: '#fff' }}>Loading...</div>}>
+          <TutorialMenu onBack={handleBackToMain} />
         </Suspense>
       </div>
     );

@@ -30,14 +30,14 @@ export function App() {
   useEffect(() => {
     const loadDarkMode = async () => {
       const result = await chrome.storage.sync.get(['darkMode']);
-      setIsDarkMode(result.darkMode ?? false);
+      setIsDarkMode((result.darkMode as boolean | undefined) ?? false);
       setIsDarkModeLoaded(true);
     };
     loadDarkMode();
 
     const handleDarkModeChange = (changes: Record<string, chrome.storage.StorageChange>) => {
       if (changes.darkMode) {
-        setIsDarkMode(changes.darkMode.newValue ?? false);
+        setIsDarkMode((changes.darkMode.newValue as boolean | undefined) ?? false);
       }
     };
 
@@ -58,7 +58,7 @@ export function App() {
     // Storage 변경 감지
     const handleStorageChange = (changes: Record<string, chrome.storage.StorageChange>) => {
       if (changes.autoDisableState) {
-        setAutoDisableState(changes.autoDisableState.newValue);
+        setAutoDisableState(changes.autoDisableState.newValue as AutoDisableState);
       }
     };
 
@@ -74,10 +74,10 @@ export function App() {
     // 스토리지 변경과 메시지 둘 다 처리
     const handleStorageChange = (changes: Record<string, chrome.storage.StorageChange>) => {
       if (changes[STORAGE_KEYS.LANGUAGE]?.newValue) {
-        const newLang = changes[STORAGE_KEYS.LANGUAGE]?.newValue;
+        const newLang = changes[STORAGE_KEYS.LANGUAGE]?.newValue as string | undefined;
         console.log(`[Popup] Storage change detected: ${newLang}`);
 
-        if (i18n.language !== newLang) {
+        if (newLang && i18n.language !== newLang) {
           console.log(`[Popup] Changing language: ${i18n.language} -> ${newLang}`);
           i18n.changeLanguage(newLang);
         }
