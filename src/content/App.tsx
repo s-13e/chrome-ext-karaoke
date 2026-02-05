@@ -12,7 +12,7 @@ export function App() {
 
     const handleStorageChange = (changes: Record<string, chrome.storage.StorageChange>) => {
       if (changes[STORAGE_KEYS.LANGUAGE]?.newValue) {
-        const newLang = changes[STORAGE_KEYS.LANGUAGE]?.newValue;
+        const newLang = changes[STORAGE_KEYS.LANGUAGE]?.newValue as string;
         console.log(`[Content] Storage change detected: ${newLang}`);
 
         // ✅ 실제 언어 변경 적용

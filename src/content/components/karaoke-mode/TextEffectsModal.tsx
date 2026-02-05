@@ -104,12 +104,12 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({
         'selectedPresetName',
       ],
       (items) => {
-        const dual = items.lyricsStyleDual || {};
-        const full = items.lyricsStyleFull || {};
-        const single = items.lyricsStyleSingle || {};
-        const general = items.lyricsStyleGeneral || {};
-        const presets = items.lyricsUserPresets || [];
-        const presetName = items.selectedPresetName || '';
+        const dual = (items.lyricsStyleDual || {}) as Partial<DualHighlightLyricsStyleConfig>;
+        const full = (items.lyricsStyleFull || {}) as Partial<FullLyricsStyleConfig>;
+        const single = (items.lyricsStyleSingle || {}) as Partial<SingleLineLyricsStyleConfig>;
+        const general = (items.lyricsStyleGeneral || {}) as Partial<GeneralLyricsSettings>;
+        const presets = (items.lyricsUserPresets || []) as LyricsPreset[];
+        const presetName = (items.selectedPresetName || '') as string;
 
         setDualConfig(dual);
         setFullConfig(full);
@@ -127,9 +127,9 @@ export const TextEffectsModal: React.FC<TextEffectsModalProps> = ({
         };
 
         // 원래 lyricsMode 저장
-        if (items.lyricsMode && ['sync', 'single', 'full'].includes(items.lyricsMode)) {
-          originalLyricsModeRef.current = items.lyricsMode;
-          currentModeRef.current = items.lyricsMode;
+        if (items.lyricsMode && ['sync', 'single', 'full'].includes(items.lyricsMode as string)) {
+          originalLyricsModeRef.current = items.lyricsMode as 'sync' | 'single' | 'full';
+          currentModeRef.current = items.lyricsMode as 'sync' | 'single' | 'full';
         }
 
         // 초기 탭에 맞춰 lyricsMode 변경 (미리보기용) - general 탭은 현재 모드 유지

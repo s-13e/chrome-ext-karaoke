@@ -14,7 +14,7 @@ const STORAGE_KEY = 'autoDisableState';
 export async function getAutoDisableState(): Promise<AutoDisableState> {
   try {
     const result = await chrome.storage.local.get([STORAGE_KEY]);
-    return result[STORAGE_KEY] || DEFAULT_AUTO_DISABLE_STATE;
+    return (result[STORAGE_KEY] as AutoDisableState | undefined) || DEFAULT_AUTO_DISABLE_STATE;
   } catch (error) {
     console.error('[AutoDisable] 상태 조회 실패:', error);
     return DEFAULT_AUTO_DISABLE_STATE;

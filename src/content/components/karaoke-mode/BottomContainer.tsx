@@ -332,17 +332,17 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
     chrome.storage.sync.get(['karaokeAutoSkipEnabled', 'lyricsMode', 'realtimeLyrics', 'announceLyrics'], (result) => {
       console.log('[BottomContainer] storage 불러오기:', result);
       if (result.karaokeAutoSkipEnabled !== undefined) {
-        setAutoSkipEnabled(result.karaokeAutoSkipEnabled);
+        setAutoSkipEnabled(result.karaokeAutoSkipEnabled as boolean);
       }
       if (result.lyricsMode !== undefined) {
         console.log('[BottomContainer] lyricsMode 설정:', result.lyricsMode);
-        setLyricsDisplayMode(result.lyricsMode);
+        setLyricsDisplayMode(result.lyricsMode as LyricsDisplayMode);
       }
       if (result.realtimeLyrics !== undefined) {
-        setShowCurrentLyrics(result.realtimeLyrics);
+        setShowCurrentLyrics(result.realtimeLyrics as boolean);
       }
       if (result.announceLyrics !== undefined) {
-        setShowPronunciation(result.announceLyrics);
+        setShowPronunciation(result.announceLyrics as boolean);
       }
     });
 
@@ -354,13 +354,13 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
       if (areaName === 'sync') {
         if (changes.lyricsMode) {
           console.log('[BottomContainer] lyricsMode 변경 감지:', changes.lyricsMode.newValue);
-          setLyricsDisplayMode(changes.lyricsMode.newValue);
+          setLyricsDisplayMode(changes.lyricsMode.newValue as LyricsDisplayMode);
         }
         if (changes.realtimeLyrics) {
-          setShowCurrentLyrics(changes.realtimeLyrics.newValue);
+          setShowCurrentLyrics(changes.realtimeLyrics.newValue as boolean);
         }
         if (changes.announceLyrics) {
-          setShowPronunciation(changes.announceLyrics.newValue);
+          setShowPronunciation(changes.announceLyrics.newValue as boolean);
         }
       }
     };

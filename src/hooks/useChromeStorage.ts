@@ -8,7 +8,7 @@ export function useChromeStorage<T>(key: string, defaultValue: T) {
   // 저장된 값 불러오기
   useEffect(() => {
     chrome.storage.sync.get([key], (result) => {
-      const storedValue = result[key] ?? defaultValue;
+      const storedValue = (result[key] as T | undefined) ?? defaultValue;
       setValue(storedValue);
       setIsLoading(false);
     });

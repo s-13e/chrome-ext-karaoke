@@ -1527,7 +1527,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
 
     // 이미 완료된 경우 표시하지 않음
     const result = await chrome.storage.sync.get([STORAGE_KEYS.TUTORIAL_STEP1_COMPLETED]);
-    tutorialStep1Completed = result[STORAGE_KEYS.TUTORIAL_STEP1_COMPLETED] ?? false;
+    tutorialStep1Completed = (result[STORAGE_KEYS.TUTORIAL_STEP1_COMPLETED] as boolean | undefined) ?? false;
 
     console.log('[Tutorial] Step1 완료 상태:', tutorialStep1Completed);
 
@@ -1707,7 +1707,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
   async function showTutorialStep2() {
     // 이미 완료된 경우 표시하지 않음
     const result = await chrome.storage.sync.get([STORAGE_KEYS.TUTORIAL_STEP2_COMPLETED]);
-    tutorialStep2Completed = result[STORAGE_KEYS.TUTORIAL_STEP2_COMPLETED] ?? false;
+    tutorialStep2Completed = (result[STORAGE_KEYS.TUTORIAL_STEP2_COMPLETED] as boolean | undefined) ?? false;
 
     if (tutorialStep2Completed) {
       console.log('[Tutorial] Step2 이미 완료됨, 스킵');
@@ -2230,20 +2230,20 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
           if (typeof items.announceLyrics === 'boolean') {
             showPronunciationLyrics = items.announceLyrics;
           }
-          if (['sync', 'single', 'full'].includes(items.lyricsMode)) {
-            lyricsMode = items.lyricsMode;
+          if (['sync', 'single', 'full'].includes(items.lyricsMode as string)) {
+            lyricsMode = items.lyricsMode as 'sync' | 'single' | 'full';
           }
           if (items.lyricsStyleDual) {
-            lyricsStyleDual = items.lyricsStyleDual;
+            lyricsStyleDual = items.lyricsStyleDual as typeof lyricsStyleDual;
           }
           if (items.lyricsStyleFull) {
-            lyricsStyleFull = items.lyricsStyleFull;
+            lyricsStyleFull = items.lyricsStyleFull as typeof lyricsStyleFull;
           }
           if (items.lyricsStyleSingle) {
-            lyricsStyleSingle = items.lyricsStyleSingle;
+            lyricsStyleSingle = items.lyricsStyleSingle as typeof lyricsStyleSingle;
           }
           if (items.lyricsStyleGeneral) {
-            lyricsStyleGeneral = items.lyricsStyleGeneral;
+            lyricsStyleGeneral = items.lyricsStyleGeneral as typeof lyricsStyleGeneral;
           }
 
           // 스타일에서 폰트 로드 (페이지 로드 시)
@@ -2327,25 +2327,25 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
         }
       }
       if ('lyricsStyleDual' in changes) {
-        lyricsStyleDual = changes.lyricsStyleDual.newValue || {};
+        lyricsStyleDual = (changes.lyricsStyleDual.newValue as typeof lyricsStyleDual) || {};
         console.log('[Storage] lyricsStyleDual 변경 감지:', lyricsStyleDual);
         loadFontsFromStyleConfigs();
         needRerender = true;
       }
       if ('lyricsStyleFull' in changes) {
-        lyricsStyleFull = changes.lyricsStyleFull.newValue || {};
+        lyricsStyleFull = (changes.lyricsStyleFull.newValue as typeof lyricsStyleFull) || {};
         console.log('[Storage] lyricsStyleFull 변경 감지:', lyricsStyleFull);
         loadFontsFromStyleConfigs();
         needRerender = true;
       }
       if ('lyricsStyleSingle' in changes) {
-        lyricsStyleSingle = changes.lyricsStyleSingle.newValue || {};
+        lyricsStyleSingle = (changes.lyricsStyleSingle.newValue as typeof lyricsStyleSingle) || {};
         console.log('[Storage] lyricsStyleSingle 변경 감지:', lyricsStyleSingle);
         loadFontsFromStyleConfigs();
         needRerender = true;
       }
       if ('lyricsStyleGeneral' in changes) {
-        lyricsStyleGeneral = changes.lyricsStyleGeneral.newValue || {};
+        lyricsStyleGeneral = (changes.lyricsStyleGeneral.newValue as typeof lyricsStyleGeneral) || {};
         console.log('[Storage] lyricsStyleGeneral 변경 감지:', lyricsStyleGeneral);
         needRerender = true;
       }
@@ -3284,12 +3284,13 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
   };
 
   // 에러 바운더리 에러 핸들러 (모니터링 통합)
-  const handleError = (error: Error, info: { componentStack?: string | null }) => {
-    contentErrorTracker.captureError(error, 'React Error Boundary caught an error', LogLevelEnum.ERROR, {
+  const handleError = (error: unknown, info: { componentStack?: string | null }) => {
+    const errorObj = error instanceof Error ? error : new Error(String(error));
+    contentErrorTracker.captureError(errorObj, 'React Error Boundary caught an error', LogLevelEnum.ERROR, {
       componentStack: info.componentStack ?? undefined,
       videoId: lastVideoId,
     });
-    contentLogger.error('React component error', error, {
+    contentLogger.error('React component error', errorObj, {
       componentStack: info.componentStack ?? undefined,
       videoId: lastVideoId,
     });
@@ -3458,7 +3459,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
 
       // contentEnabled 상태를 chrome.storage.sync에서 읽어옴
       const result = await chrome.storage.sync.get([STORAGE_KEYS.CONTENT_ENABLED]);
-      contentEnabled = result[STORAGE_KEYS.CONTENT_ENABLED] ?? false;
+      contentEnabled = (result[STORAGE_KEYS.CONTENT_ENABLED] as boolean | undefined) ?? false;
       contentLogger.info('Content enabled state loaded', { contentEnabled });
 
       if (!contentEnabled) {
