@@ -1,6 +1,6 @@
 // lib/utils/videoDetection.ts
 let lastVideoId: string | null = null;
-const DETECTION_COOLDOWN = 10000; // 3초
+const DETECTION_COOLDOWN = 10000; // 10초
 let lastDetection = 0;
 
 export function shouldDetect(videoId: string, cooldown = DETECTION_COOLDOWN): boolean {

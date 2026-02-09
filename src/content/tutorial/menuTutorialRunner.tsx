@@ -1,7 +1,6 @@
 // menuTutorialRunner.tsx
 // 메뉴 튜토리얼 제네릭 실행 함수 (Tutorial 2-6 공통) + Tutorial 1 별도
 
-import React from 'react';
 import ReactDOM from 'react-dom/client';
 import type { MenuTutorialConfig } from './tutorialTypes';
 import { clearAllHighlights } from './tutorialStyles';

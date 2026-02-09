@@ -2,20 +2,24 @@
 
 ## 🐛 Bugs
 
+1. 가사 로딩되기 전에 다른 페이지 전환 시, 기존 페이지의 가사가 다음 페이지에 전송이 됨.
+
+2. 영상의 화질 깨짐 이슈
+
 ## ✨ Features
 
-1. **[DEV_MODE] 오프셋 캐시 기능**
-   - 수동 검색에서 선택한 가사의 오프셋 조정값도 서버에 저장
-   - videoId → { lrclibId, offset } 매핑
+1. ~~**[DEV_MODE] 오프셋 캐시 기능**~~
+   - ~~수동 검색에서 선택한 가사의 오프셋 조정값도 서버에 저장~~
+   - ~~videoId → { lrclibId, offset } 매핑~~
 
-2. **Spotify API 조회 결과 검사 로직 도입**
-   - 현재 Spotify 조회 결과를 그대로 사용 중 → 신뢰도 검증 단계 추가
+2. ~~**Spotify API 조회 결과 검사 로직 도입**~~
+   - ~~현재 Spotify 조회 결과를 그대로 사용 중 → 신뢰도 검증 단계 추가~~
 
 ## 🔧 Improvements
 
-3. **튜토리얼 로직 분리 (index.tsx → tutorialController.ts)**
-   - index.tsx 내 showTutorial1\~6FromMenu 함수들(\~850줄)을 별도 모듈로 분리
-   - 6개 함수의 공통 패턴(컨테이너 생성 → substeps → 위치 계산 → 렌더)을 하나의 `showMenuTutorial(config)` 함수로 추상화
+3. ~~**튜토리얼 로직 분리 (index.tsx → tutorialController.ts)**~~
+   - ~~index.tsx 내 showTutorial1\~6FromMenu 함수들(\~850줄)을 별도 모듈로 분리~~
+   - ~~6개 함수의 공통 패턴(컨테이너 생성 → substeps → 위치 계산 → 렌더)을 하나의 `showMenuTutorial(config)` 함수로 추상화~~
 
 4. **핵심 모듈 테스트 커버리지 확대**
    - 현재 테스트 파일 8개 / 소스 158개 → 주요 경로 우선 보강

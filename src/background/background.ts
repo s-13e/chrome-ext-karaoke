@@ -6,7 +6,7 @@ import { DetectionConfig } from '@lib/types/config';
 import { Line } from '@lib/types/lyrics';
 import { LyricsError, LyricsErrorCode } from '@lib/types/lyricsError';
 // API 모듈 정적 import (dynamic import 제거로 메시지 처리 지연 최소화)
-import { fetchYouTubeLRCLibCache, fetchLyricsById, fetchYouTubeLyrics } from './api/lrclib';
+import { fetchYouTubeLRCLibCache, fetchLyricsById, fetchYouTubeLyrics, fetchServerOffset } from './api/lrclib';
 import { fetchYouTubeVideoMeta, fetchPlaylistItems } from './api/youtube';
 
 // ===== 전역 변수 및 상태 =====
@@ -98,6 +98,11 @@ interface FetchPlaylistItemsMessage {
   maxResults?: number;
 }
 
+interface FetchServerOffsetMessage {
+  type: 'FETCH_SERVER_OFFSET';
+  videoId: string;
+}
+
 export type ExtensionMessage =
   | LyricsReadyMessage
   | GetLatestLyricsMessage
@@ -107,7 +112,8 @@ export type ExtensionMessage =
   | FetchLyricsByIdMessage
   | FetchYouTubeLyricsMessage
   | FetchYouTubeMetaMessage
-  | FetchPlaylistItemsMessage;
+  | FetchPlaylistItemsMessage
+  | FetchServerOffsetMessage;
 
 // ===== Chrome 확장 이벤트 리스너 =====
 
@@ -288,6 +294,21 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendRespon
     })();
 
     return true; // 비동기 응답
+  }
+
+  // 서버 오프셋 캐시 조회
+  if (msg.type === 'FETCH_SERVER_OFFSET') {
+    (async () => {
+      try {
+        const offset = await fetchServerOffset(msg.videoId);
+        sendResponse({ success: true, offset });
+      } catch (error) {
+        console.error('[background] FETCH_SERVER_OFFSET 실패:', error);
+        sendResponse({ success: false, offset: null });
+      }
+    })();
+
+    return true;
   }
 
   // LRCLib ID로 가사 조회 (API 프록시)

@@ -1,7 +1,6 @@
 // autoFlowTutorial.tsx
 // 자동 튜토리얼 (Step 1: 카라오케 모드 활성화 안내, Step 2: 복귀 안내)
 
-import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 import type { TutorialController } from './tutorialController';

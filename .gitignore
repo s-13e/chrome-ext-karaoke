@@ -160,3 +160,6 @@ dist
 
 # VSCode workspace files
 *.code-workspace
+
+# Claude Code
+.claude/
