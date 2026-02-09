@@ -26,6 +26,8 @@ npm test                # Run Jest tests with coverage
 npm run lint && npm run format && npm test && npm run build
 ```
 
+> **IMPORTANT**: Before running `npm run build` or `npm run dev`, you **MUST** first ask the user whether `npm run dev` is already running. Do NOT run these commands without confirming first. This prevents port conflicts, redundant processes, and wasted build time. This applies every time — never assume dev is not running.
+
 ## Architecture & Key Patterns
 
 ### Extension Architecture
@@ -110,6 +112,7 @@ The project uses webpack path aliases:
 - Supports multiple languages with automatic detection
 - Romanization for non-Latin scripts (Korean, Japanese, Chinese)
 - Chrome extension i18n format conversion in build process
+- When implementing a new feature, add translation keys for `ko` locale only first. Once tests pass, add the remaining locale translations in a single batch
 
 ## API Dependencies
 
@@ -142,6 +145,7 @@ Environment variables should be placed in `.env` file in the project root.
 - Use English for programming terms, but answers and explanations in Korean
 - Document external libraries in README.md under ### library section, including name, author, license type, and license link
 - Add comments for complex or critical logic parts
+- Before staging files (`git add`) on feature branches, review all changes for security issues such as hardcoded credentials, API keys, tokens, or sensitive data leaks
 
 ### TypeScript Standards
 
