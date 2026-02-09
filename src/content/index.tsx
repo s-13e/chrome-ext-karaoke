@@ -206,6 +206,18 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
   // 중복 가사 호출 방지
   let isCollecting = false;
 
+  // 탐색(navigation) 시 이전 가사 수집을 무효화하기 위한 세대 카운터
+  let collectGeneration = 0;
+
+  /**
+   * 현재 세대 번호가 유효한지 확인하는 헬퍼 함수.
+   * 탐색이 발생하면 collectGeneration이 증가하므로,
+   * 캡처된 세대와 현재 세대가 다르면 이전 요청으로 판단한다.
+   */
+  function isStaleCollection(capturedGeneration: number): boolean {
+    return capturedGeneration !== collectGeneration;
+  }
+
   let lastContentEnabledFalseTime = 0; // 마지막 false 처리 시각(ms)
   const CLEANUP_DEBOUNCE_MS = 500; // 0.5초 딜레이
   let lastChangeOrigin: 'user' | 'system' = 'system';
@@ -386,6 +398,12 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
    * 화면에 표시된 가사 렌더링을 초기 상태로 재실행하는 함수
    */
   function resetLyricsData() {
+    // 이전 가사 수집 무효화: 세대 카운터 증가
+    collectGeneration++;
+    // 이전 수집/감지 작업이 진행 중이더라도 새 감지를 허용하기 위해 플래그 리셋
+    isCollecting = false;
+    isDetecting = false;
+
     // 광고 모니터링 중지
     stopLyricsAdMonitoringIfNeeded();
 
@@ -1109,7 +1127,12 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
 
   // 1. 영상과 크게 무관한 메타데이터, 가사 정보를 확보하는 함수 (재시도 래퍼)
   async function collectMetadataAndLyrics(videoId: string, videoElem: HTMLMediaElement): Promise<boolean | null> {
+    const myGeneration = collectGeneration;
     for (let attempt = 1; attempt <= API_RETRY_MAX_ATTEMPTS + 1; attempt++) {
+      if (isStaleCollection(myGeneration)) {
+        console.log('[Lyrics] 세대 불일치 감지 (재시도 루프), 수집 중단');
+        return null;
+      }
       try {
         const result = await collectMetadataAndLyricsCore(videoId, videoElem, attempt);
         return result;
@@ -1183,6 +1206,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
       return null;
     }
     isCollecting = true;
+    const myGeneration = collectGeneration;
 
     const startTime = performance.now();
     console.log(`[collectMetadataAndLyrics] 시도 ${attempt}/${API_RETRY_MAX_ATTEMPTS + 1} - videoId: ${videoId}`);
@@ -1262,6 +1286,10 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
       let meta;
       try {
         meta = await metaPromise;
+        if (isStaleCollection(myGeneration)) {
+          console.log('[Lyrics] 세대 불일치 감지 (meta 조회 후), 수집 중단');
+          return null;
+        }
         console.log(`[Performance] YouTube Meta 조회 완료 (${(performance.now() - metaStartTime).toFixed(0)}ms)`);
       } catch (metaError) {
         // YouTube API 에러 상세 추적
@@ -1376,6 +1404,11 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
         })(),
       ]);
 
+      if (isStaleCollection(myGeneration)) {
+        console.log('[Lyrics] 세대 불일치 감지 (캐시+파싱 후), 수집 중단');
+        return null;
+      }
+
       console.log(`[Performance] 병렬 처리 완료 (${(performance.now() - parallelStartTime).toFixed(0)}ms)`);
       console.log('[DEBUG] Promise.all 완료, 캐시 결과:', ytLrclibCacheResult?.lrclibId ? 'HIT' : 'MISS');
 
@@ -1402,6 +1435,10 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
           type: 'FETCH_YOUTUBE_LYRICS',
           videoId: videoId,
         });
+        if (isStaleCollection(myGeneration)) {
+          console.log('[Lyrics] 세대 불일치 감지 (캐시 히트 가사 조회 후), 수집 중단');
+          return null;
+        }
         console.log(`[Performance] 가사 검색 완료 (${(performance.now() - lyricsSearchStartTime).toFixed(0)}ms)`);
 
         // background 에러 응답: 에러 유형에 따라 LyricsError throw (재시도 로직 활용)
@@ -1440,6 +1477,10 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
           fetch: async () =>
             fetchLyricsWithAliasFallback(artist, title, videoDurationSec, artistVariants, videoId, skipSwap),
         });
+        if (isStaleCollection(myGeneration)) {
+          console.log('[Lyrics] 세대 불일치 감지 (캐시 미스 가사 조회 후), 수집 중단');
+          return null;
+        }
         console.log(`[Performance] 가사 검색 완료 (${(performance.now() - lyricsSearchStartTime).toFixed(0)}ms)`);
 
         if (!result) throw new Error('가사 없음');
@@ -1547,21 +1588,53 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
       renderSongInfo(finalLyricsResult.title || 'Unknown', finalLyricsResult.artist || 'Unknown');
       console.log('[DEBUG] renderSongInfo 호출 완료');
 
-      // 5) 저장된 오프셋 확인 및 자동 적용
+      // 5) 저장된 오프셋 확인 및 자동 적용 (서버 오프셋 우선 → 로컬 오프셋 fallback)
       const { getVideoOffset } = await import('@lib/utils/storage/videoOffsetStorage');
       const { applyOffsetToLyrics } = await import('@lib/utils/lyrics/display/lyricsOffset');
 
-      const savedData = await getVideoOffset(videoId);
       let finalParsedLyrics = parsedLyrics;
 
-      if (savedData && savedData.offset !== 0) {
-        console.log(`[AutoOffset] 저장된 오프셋 발견 (videoId: ${videoId}, offset: ${savedData.offset}초) - 자동 적용`);
-        finalParsedLyrics = applyOffsetToLyrics(parsedLyrics, savedData.offset, 0);
-      } else {
-        console.log(`[AutoOffset] 저장된 오프셋 없음 - 원본 가사 사용`);
+      // 5-1. 서버 오프셋 조회 (보이지 않는 베이스라인 보정)
+      let serverOffset: number | null = null;
+      if (isExtensionContextValid()) {
+        try {
+          const serverOffsetResponse = await new Promise<{ success: boolean; offset: number | null }>((resolve) => {
+            chrome.runtime.sendMessage({ type: 'FETCH_SERVER_OFFSET', videoId }, (response) => {
+              if (chrome.runtime.lastError) {
+                resolve({ success: false, offset: null });
+              } else {
+                resolve(response ?? { success: false, offset: null });
+              }
+            });
+          });
+          serverOffset = serverOffsetResponse.success ? serverOffsetResponse.offset : null;
+        } catch {
+          serverOffset = null;
+        }
       }
 
-      // 6) 광고 종료 후 즉시 가사 렌더링 (오프셋 적용된 가사)
+      if (serverOffset !== null && serverOffset !== 0) {
+        // 서버 오프셋 존재 → 원본 가사에 적용 (사용자 눈에는 0초로 보임)
+        console.log(`[AutoOffset] 서버 오프셋 발견 (videoId: ${videoId}, offset: ${serverOffset}초) - 자동 적용`);
+        finalParsedLyrics = applyOffsetToLyrics(parsedLyrics, serverOffset, 0);
+      } else {
+        // 5-2. 로컬 오프셋 확인 (fallback)
+        const savedData = await getVideoOffset(videoId);
+        if (savedData && savedData.offset !== 0) {
+          console.log(`[AutoOffset] 로컬 오프셋 발견 (videoId: ${videoId}, offset: ${savedData.offset}초) - 자동 적용`);
+          finalParsedLyrics = applyOffsetToLyrics(parsedLyrics, savedData.offset, 0);
+        } else {
+          console.log(`[AutoOffset] 저장된 오프셋 없음 - 원본 가사 사용`);
+        }
+      }
+
+      // 6) 최종 렌더링 전 탐색 무효화 체크 (가장 중요한 게이트)
+      if (isStaleCollection(myGeneration)) {
+        console.log('[Lyrics] 세대 불일치 감지 (렌더링 직전), 수집 중단');
+        return null;
+      }
+
+      // 광고 종료 후 즉시 가사 렌더링 (오프셋 적용된 가사)
       console.log('[DEBUG] onLyricsUpdated 호출 전, 가사 수:', finalParsedLyrics.length);
       onLyricsUpdated(finalParsedLyrics);
       console.log('[DEBUG] onLyricsUpdated 호출 완료, analyzeAudioAndRender 시작');
@@ -1625,7 +1698,10 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
         throw lyricsError;
       }
     } finally {
-      isCollecting = false;
+      // 세대가 일치할 때만 isCollecting 리셋 (이미 resetLyricsData에서 리셋된 경우 중복 방지)
+      if (!isStaleCollection(myGeneration)) {
+        isCollecting = false;
+      }
 
       // 로딩 오버레이 제거 (비음악 비디오 포함)
       if (loadingOverlay && loadingOverlay.parentElement) {
@@ -1658,6 +1734,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
       return;
     }
     isDetecting = true;
+    const myGeneration = collectGeneration;
 
     let videoData;
     try {
@@ -1699,7 +1776,10 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
         videoId: videoData?.videoId,
       });
     } finally {
-      isDetecting = false;
+      // 세대가 일치할 때만 isDetecting 리셋 (탐색으로 이미 리셋된 경우 중복 방지)
+      if (!isStaleCollection(myGeneration)) {
+        isDetecting = false;
+      }
 
       if (videoData && videoData.videoId) {
         lastVideoId = videoData.videoId;
