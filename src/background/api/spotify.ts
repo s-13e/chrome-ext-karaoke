@@ -16,7 +16,7 @@ export interface SpotifyTrackResult {
  * Spotify 검색 결과의 신뢰도 검증 (영어 입력 전용)
  * artist 또는 title 중 하나라도 토큰 겹침이 있으면 통과, 둘 다 없으면 거부
  */
-function validateSpotifyResult(
+export function validateSpotifyResult(
   originalArtist: string,
   originalTitle: string,
   spotifyResult: SpotifyTrackResult,

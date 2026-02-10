@@ -2,9 +2,13 @@
 
 ## 🐛 Bugs
 
-1. 가사 로딩되기 전에 다른 페이지 전환 시, 기존 페이지의 가사가 다음 페이지에 전송이 됨.
+1. ~~가사 로딩되기 전에 다른 페이지 전환 시, 기존 페이지의 가사가 다음 페이지에 전송이 됨.~~
 
-2. 영상의 화질 깨짐 이슈
+2. ~~영상의 화질 깨짐 이슈~~
+
+3. ~~**버튼 tooltip이 언어 설정을 무시하고 한국어로 표시되는 문제**~~
+   - ~~영어 설정인데 일부 tooltip이 한국어로 뜸 → i18n 미적용 또는 하드코딩된 부분 수정~~
+   - ~~MusicNoteButton 커스텀 툴팁 + i18n 적용, BottomContainer/TutorialTooltip/TutorialMenu/ReservationSidebar 하드코딩 한국어 교체~~
 
 ## ✨ Features
 
@@ -21,9 +25,9 @@
    - ~~index.tsx 내 showTutorial1\~6FromMenu 함수들(\~850줄)을 별도 모듈로 분리~~
    - ~~6개 함수의 공통 패턴(컨테이너 생성 → substeps → 위치 계산 → 렌더)을 하나의 `showMenuTutorial(config)` 함수로 추상화~~
 
-4. **핵심 모듈 테스트 커버리지 확대**
-   - 현재 테스트 파일 8개 / 소스 158개 → 주요 경로 우선 보강
-   - 대상: 가사 파싱(lyricsParser), API 에러 핸들링(lrclib), 플랫폼 감지(videoDetection)
+4. ~~**핵심 모듈 테스트 커버리지 확대**~~
+   - ~~현재 테스트 파일 8개 / 소스 158개 → 주요 경로 우선 보강~~
+   - ~~대상: 가사 파싱(lyricsParser), API 에러 핸들링(lrclib), 플랫폼 감지(videoDetection)~~
 
 ## 📋 Backlog
 

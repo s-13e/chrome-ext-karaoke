@@ -16,9 +16,7 @@ import { YOUTUBE_MINI_PLAYER_CLASSES, YOUTUBE_MINI_PLAYER_CONTAINER_SELECTOR } f
 import { parseTitleWithFallback } from '@lib/utils/lyrics/parsers/titleParser';
 import { listenerManager } from '@lib/utils/infra/listenerManager';
 import { withContentEnabled } from '@lib/utils/platform/contentGuard';
-import { DualHighlightLyrics } from './components/lyrics/SyncLyrics/DualHighlightLyrics';
-import { SingleLineLyrics } from './components/lyrics/SingleLineLyrics/SingleLineLyrics';
-import { FullLyrics } from './components/lyrics/FullLyrics/FullLyrics';
+import { LyricsOverlayWrapper } from './components/lyrics/LyricsOverlayWrapper';
 import { isAdPlaying } from '@lib/utils/dom/domUtils';
 import { startLyricsAdMonitoring } from '@lib/utils/infra/adWatcher';
 import { parseLyrics } from '@lib/utils/lyrics/parsers/lyricsParser';
@@ -51,7 +49,6 @@ import {
   shouldAutoDisable,
 } from '@lib/utils/storage/autoDisableStorage';
 import { ActionableToast } from './components/common/ActionableToast';
-import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
 import { TutorialController } from './tutorial/tutorialController';
 
 // DEV_MODE: 개발 중 튜토리얼 완료 상태 저장 스킵
@@ -722,53 +719,22 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
 
   // 가사 렌더링 함수
   async function renderLyricsOverlay(lyrics: Line[], offset = 0) {
-    if (lyricsMode === 'full') {
+    if (lyricsMode === 'full' || lyricsMode === 'sync' || lyricsMode === 'single') {
       overlayManager.renderOverlay(
         'lyrics',
-        <CurrentTimeProvider>
-          <FullLyrics
-            lyrics={lyrics}
-            offset={offset}
-            fontColor={lyricsFontColorCurrent}
-            pronunciationColor={lyricsFontColorPronunciation}
-            showRealtimeLyrics={showRealtimeLyrics}
-            showPronunciationLyrics={showPronunciationLyrics}
-            styleConfig={lyricsStyleFull}
-            generalSettings={lyricsStyleGeneral}
-          />
-        </CurrentTimeProvider>,
-      );
-    } else if (lyricsMode === 'sync') {
-      overlayManager.renderOverlay(
-        'lyrics',
-        <CurrentTimeProvider>
-          <DualHighlightLyrics
-            lyrics={lyrics}
-            offset={offset}
-            fontColor={lyricsFontColorCurrent}
-            pronunciationColor={lyricsFontColorPronunciation}
-            showRealtimeLyrics={showRealtimeLyrics}
-            showPronunciationLyrics={showPronunciationLyrics}
-            styleConfig={lyricsStyleDual}
-            generalSettings={lyricsStyleGeneral}
-          />
-        </CurrentTimeProvider>,
-      );
-    } else if (lyricsMode === 'single') {
-      overlayManager.renderOverlay(
-        'lyrics',
-        <CurrentTimeProvider>
-          <SingleLineLyrics
-            lyrics={lyrics}
-            offset={offset}
-            fontColor={lyricsFontColorCurrent}
-            pronunciationColor={lyricsFontColorPronunciation}
-            showRealtimeLyrics={showRealtimeLyrics}
-            showPronunciationLyrics={showPronunciationLyrics}
-            styleConfig={lyricsStyleSingle}
-            generalSettings={lyricsStyleGeneral}
-          />
-        </CurrentTimeProvider>,
+        <LyricsOverlayWrapper
+          lyrics={lyrics}
+          offset={offset}
+          lyricsMode={lyricsMode}
+          fontColor={lyricsFontColorCurrent}
+          pronunciationColor={lyricsFontColorPronunciation}
+          showRealtimeLyrics={showRealtimeLyrics}
+          showPronunciationLyrics={showPronunciationLyrics}
+          styleConfigDual={lyricsStyleDual}
+          styleConfigFull={lyricsStyleFull}
+          styleConfigSingle={lyricsStyleSingle}
+          generalSettings={lyricsStyleGeneral}
+        />,
       );
     } else {
       console.log('[renderLyricsOverlay] else 문으로 overlay cleanup 실행');
@@ -1551,48 +1517,12 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
         }
       }
 
-      const durationDiff = Math.abs(videoDurationSec - effectiveLyricsDuration);
-
-      // 가사 싱크 불일치 감지 (±3초 이상 차이)
-      if (durationDiff >= 3) {
-        console.log(`[Lyrics Sync] 싱크 불일치 감지 - 차이: ${durationDiff.toFixed(1)}초`);
-
-        // ActionableToast 표시 (싱크셋 유도)
-        showActionableToast(
-          i18nInstance.t('extLyricsSyncMismatchTitle'),
-          i18nInstance.t('extLyricsSyncMismatchDescription'),
-          i18nInstance.t('extLyricsSyncMismatchAction'),
-          () => {
-            // 싱크셋 버튼 클릭 액션
-            console.log('[ActionableToast] 싱크셋 버튼 클릭됨');
-
-            // 가라오케 모드가 활성화되어 있지 않다면 먼저 활성화
-            if (!karaokeModeManager.isVisible()) {
-              karaokeModeManager.toggleKaraokeMode();
-            }
-
-            // 싱크셋 패널 열기 이벤트 발생
-            setTimeout(() => {
-              window.dispatchEvent(new CustomEvent('open-sync-settings'));
-            }, 500); // 가라오케 모드 활성화 대기
-          },
-          React.createElement('span', { style: { fontSize: '20px' } }, '⚠️'),
-        );
-      } else {
-        console.debug(
-          `[Lyrics Sync] 영상 길이 (${videoDurationSec}s)와 가사 길이 (${effectiveLyricsDuration}s) 차이: ${durationDiff.toFixed(1)}s - 정상 범위`,
-        );
-      }
-
-      console.log('[DEBUG] renderSongInfo 호출 전');
-      renderSongInfo(finalLyricsResult.title || 'Unknown', finalLyricsResult.artist || 'Unknown');
-      console.log('[DEBUG] renderSongInfo 호출 완료');
-
       // 5) 저장된 오프셋 확인 및 자동 적용 (서버 오프셋 우선 → 로컬 오프셋 fallback)
       const { getVideoOffset } = await import('@lib/utils/storage/videoOffsetStorage');
       const { applyOffsetToLyrics } = await import('@lib/utils/lyrics/display/lyricsOffset');
 
       let finalParsedLyrics = parsedLyrics;
+      let hasUserOffset = false;
 
       // 5-1. 서버 오프셋 조회 (보이지 않는 베이스라인 보정)
       let serverOffset: number | null = null;
@@ -1617,16 +1547,59 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
         // 서버 오프셋 존재 → 원본 가사에 적용 (사용자 눈에는 0초로 보임)
         console.log(`[AutoOffset] 서버 오프셋 발견 (videoId: ${videoId}, offset: ${serverOffset}초) - 자동 적용`);
         finalParsedLyrics = applyOffsetToLyrics(parsedLyrics, serverOffset, 0);
+        hasUserOffset = true;
       } else {
         // 5-2. 로컬 오프셋 확인 (fallback)
         const savedData = await getVideoOffset(videoId);
         if (savedData && savedData.offset !== 0) {
           console.log(`[AutoOffset] 로컬 오프셋 발견 (videoId: ${videoId}, offset: ${savedData.offset}초) - 자동 적용`);
           finalParsedLyrics = applyOffsetToLyrics(parsedLyrics, savedData.offset, 0);
+          hasUserOffset = true;
         } else {
           console.log(`[AutoOffset] 저장된 오프셋 없음 - 원본 가사 사용`);
         }
       }
+
+      // 가사 싱크 불일치 감지 (±3초 이상 차이, 사용자가 이미 오프셋을 조정한 경우 표시하지 않음)
+      const durationDiff = Math.abs(videoDurationSec - effectiveLyricsDuration);
+
+      if (durationDiff >= 3 && !hasUserOffset) {
+        console.log(`[Lyrics Sync] 싱크 불일치 감지 - 차이: ${durationDiff.toFixed(1)}초`);
+
+        // ActionableToast 표시 (싱크셋 유도)
+        showActionableToast(
+          i18nInstance.t('extLyricsSyncMismatchTitle'),
+          i18nInstance.t('extLyricsSyncMismatchDescription'),
+          i18nInstance.t('extLyricsSyncMismatchAction'),
+          () => {
+            // 싱크셋 버튼 클릭 액션
+            console.log('[ActionableToast] 싱크셋 버튼 클릭됨');
+
+            // 가라오케 모드가 활성화되어 있지 않다면 먼저 활성화
+            if (!karaokeModeManager.isVisible()) {
+              karaokeModeManager.toggleKaraokeMode();
+            }
+
+            // 싱크셋 패널 열기 이벤트 발생
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('open-sync-settings'));
+            }, 500); // 가라오케 모드 활성화 대기
+          },
+          React.createElement('span', { style: { fontSize: '20px' } }, '⚠️'),
+        );
+      } else if (durationDiff < 3) {
+        console.debug(
+          `[Lyrics Sync] 영상 길이 (${videoDurationSec}s)와 가사 길이 (${effectiveLyricsDuration}s) 차이: ${durationDiff.toFixed(1)}s - 정상 범위`,
+        );
+      } else {
+        console.debug(
+          `[Lyrics Sync] 싱크 불일치 (${durationDiff.toFixed(1)}초)이나 사용자 오프셋이 존재하여 알림 생략`,
+        );
+      }
+
+      console.log('[DEBUG] renderSongInfo 호출 전');
+      renderSongInfo(finalLyricsResult.title || 'Unknown', finalLyricsResult.artist || 'Unknown');
+      console.log('[DEBUG] renderSongInfo 호출 완료');
 
       // 6) 최종 렌더링 전 탐색 무효화 체크 (가장 중요한 게이트)
       if (isStaleCollection(myGeneration)) {
