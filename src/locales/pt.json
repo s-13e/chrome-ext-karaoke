@@ -367,5 +367,12 @@
   "extTutorialStep1Title": "Ative o Modo Karaokê",
   "extTutorialStep1Desc": "para desbloquear mais recursos!",
   "extTutorialStep1Action": "Clique aqui!",
-  "extTutorialStep2": "Pressione o mesmo botão para voltar à visualização normal mantendo suas letras e configurações!"
+  "extTutorialStep2": "Pressione o mesmo botão para voltar à visualização normal mantendo suas letras e configurações!",
+  "extTooltipMusicNote": "Karaokê",
+  "extClose": "Fechar",
+  "extPrevious": "Anterior",
+  "extNext": "Próximo",
+  "extDone": "Concluído",
+  "extSyncOffsetZero": "O deslocamento atual é 0",
+  "extSyncResetToOriginal": "Redefinir para marcações originais"
 }

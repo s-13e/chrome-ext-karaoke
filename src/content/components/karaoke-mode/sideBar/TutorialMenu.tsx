@@ -157,7 +157,7 @@ export const TutorialMenu: React.FC<TutorialMenuProps> = ({ onBack }) => {
     <div className={styles.container}>
       {/* 헤더 */}
       <div className={styles.header}>
-        <button className={styles.backButton} onClick={handleBack} aria-label="뒤로가기">
+        <button className={styles.backButton} onClick={handleBack} aria-label={t('extBack')}>
           <MdArrowBackIosNew size={20} />
         </button>
         <h2 className={styles.title}>{t('extTutorialTitle')}</h2>

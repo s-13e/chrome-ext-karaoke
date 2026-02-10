@@ -1304,7 +1304,7 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
                 className={styles.syncResetButton}
                 onClick={handleResetOffset}
                 disabled={currentOffset === 0}
-                title={currentOffset === 0 ? '현재 오프셋이 0입니다' : '원본 타임스탬프로 초기화'}
+                title={currentOffset === 0 ? t('extSyncOffsetZero') : t('extSyncResetToOriginal')}
               >
                 {t('extReset')}
               </button>

@@ -367,5 +367,12 @@
   "extTutorialStep1Title": "가라오케 모드를 켜면",
   "extTutorialStep1Desc": "더 많은 기능을 사용할 수 있어요!",
   "extTutorialStep1Action": "클릭해보세요!",
-  "extTutorialStep2": "같은 버튼을 누르면 가사 및 현재 설정은 유지된 채 원래 화면으로 돌아가요!"
+  "extTutorialStep2": "같은 버튼을 누르면 가사 및 현재 설정은 유지된 채 원래 화면으로 돌아가요!",
+  "extTooltipMusicNote": "노래방",
+  "extClose": "닫기",
+  "extPrevious": "이전",
+  "extNext": "다음",
+  "extDone": "완료",
+  "extSyncOffsetZero": "현재 오프셋이 0입니다",
+  "extSyncResetToOriginal": "원본 타임스탬프로 초기화"
 }

@@ -367,5 +367,12 @@
   "extTutorialStep1Title": "開啟卡拉OK模式",
   "extTutorialStep1Desc": "解鎖更多功能！",
   "extTutorialStep1Action": "點擊這裡！",
-  "extTutorialStep2": "按下同一按鈕即可返回正常視圖，同時保留歌詞和設定！"
+  "extTutorialStep2": "按下同一按鈕即可返回正常視圖，同時保留歌詞和設定！",
+  "extTooltipMusicNote": "卡拉OK",
+  "extClose": "關閉",
+  "extPrevious": "上一個",
+  "extNext": "下一個",
+  "extDone": "完成",
+  "extSyncOffsetZero": "目前偏移量為0",
+  "extSyncResetToOriginal": "重置為原始時間戳"
 }
