@@ -4,13 +4,14 @@
  * 실행: npm test -- titlePatterns.live
  *
  * YouTube Data API에서 실제 차트 100개를 가져와서 파싱 결과를 확인합니다.
+ *
+ * @jest-environment node
  */
 
 // .env 파일 로드
 import * as dotenv from 'dotenv';
 dotenv.config();
 
-import fetch from 'node-fetch';
 import { parseTitle } from '../titlePatterns';
 import { extractArtistAndTitleCustom } from '../stringUtils';
 
