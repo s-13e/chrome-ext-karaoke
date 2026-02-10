@@ -1,7 +1,9 @@
 // MusicNoteButton.tsx
 import React, { ReactNode, useRef, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import styles from './musicNoteButton.module.css';
 import ReactDOM from 'react-dom/client';
+import { attachTooltip } from '../common/tooltip';
 
 interface Props {
   icon: ReactNode;
@@ -15,10 +17,12 @@ interface Props {
  * YouTube UI 업데이트에도 안정적으로 표시되도록 MutationObserver 활용
  */
 export const MusicNoteButton: React.FC<Props> = ({ icon, contentEnabled, menuVisible, onClick }) => {
+  const { t } = useTranslation();
   const btnRef = useRef<HTMLButtonElement | null>(null);
   const iconRootRef = useRef<ReactDOM.Root | null>(null);
   const observerRef = useRef<MutationObserver | null>(null);
   const insertionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tooltipCleanupRef = useRef<(() => void) | null>(null);
   const [isFullscreen, setIsFullscreen] = React.useState(false);
 
   /**
@@ -90,8 +94,9 @@ export const MusicNoteButton: React.FC<Props> = ({ icon, contentEnabled, menuVis
     btnRef.current = btn;
 
     btn.className = `${styles.musicNoteButton} ytp-button ytp-music-note-button`;
-    btn.setAttribute('aria-label', '노트');
-    btn.setAttribute('data-tooltip', '노트');
+    const tooltipText = t('extTooltipMusicNote');
+    btn.setAttribute('aria-label', tooltipText);
+    btn.setAttribute('data-tooltip', tooltipText);
     btn.tabIndex = 0;
 
     // 아이콘 렌더링
@@ -121,9 +126,15 @@ export const MusicNoteButton: React.FC<Props> = ({ icon, contentEnabled, menuVis
     };
     document.body.addEventListener('click', handleBodyClick);
 
+    // 커스텀 툴팁 부착
+    if (tooltipCleanupRef.current) {
+      tooltipCleanupRef.current();
+    }
+    tooltipCleanupRef.current = attachTooltip(btn, tooltipText);
+
     // 버튼 삽입: targetContainer 맨 앞에 추가
     targetContainer.insertBefore(btn, targetContainer.firstChild);
-  }, [icon, onClick, isFullscreen]);
+  }, [icon, onClick, isFullscreen, t]);
 
   /**
    * YouTube UI 변경 감지 및 버튼 재삽입
@@ -188,6 +199,12 @@ export const MusicNoteButton: React.FC<Props> = ({ icon, contentEnabled, menuVis
         }, 0);
       }
 
+      // 툴팁 정리
+      if (tooltipCleanupRef.current) {
+        tooltipCleanupRef.current();
+        tooltipCleanupRef.current = null;
+      }
+
       // 옵저버 중단
       if (observerRef.current) {
         observerRef.current.disconnect();
@@ -208,6 +225,11 @@ export const MusicNoteButton: React.FC<Props> = ({ icon, contentEnabled, menuVis
     return () => {
       if (insertionTimeoutRef.current) {
         clearTimeout(insertionTimeoutRef.current);
+      }
+
+      if (tooltipCleanupRef.current) {
+        tooltipCleanupRef.current();
+        tooltipCleanupRef.current = null;
       }
 
       if (observerRef.current) {

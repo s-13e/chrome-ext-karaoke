@@ -367,5 +367,12 @@
   "extTutorialStep1Title": "カラオケモードをオンにすると",
   "extTutorialStep1Desc": "さらに多くの機能が使えます！",
   "extTutorialStep1Action": "クリックしてみてください！",
-  "extTutorialStep2": "同じボタンを押すと、歌詞と設定を保持したまま元の画面に戻ります！"
+  "extTutorialStep2": "同じボタンを押すと、歌詞と設定を保持したまま元の画面に戻ります！",
+  "extTooltipMusicNote": "カラオケ",
+  "extClose": "閉じる",
+  "extPrevious": "前へ",
+  "extNext": "次へ",
+  "extDone": "完了",
+  "extSyncOffsetZero": "現在のオフセットは0です",
+  "extSyncResetToOriginal": "元のタイムスタンプにリセット"
 }

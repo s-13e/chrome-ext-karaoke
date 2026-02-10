@@ -59,6 +59,34 @@ export async function fetchYouTubeLRCLibCache(videoId: string): Promise<{ lrclib
 }
 
 /**
+ * 서버 오프셋 캐시 조회
+ * - videoId에 대한 서버 저장 오프셋(초)을 반환
+ * - 없으면 null 반환
+ */
+export async function fetchServerOffset(videoId: string): Promise<number | null> {
+  try {
+    const res = await fetchWithTimeout(
+      `${API_SERVER_URL}/api/v1/youtube/offset/${encodeURIComponent(videoId)}`,
+      {},
+      CACHE_TIMEOUT_MS,
+    );
+
+    if (res.ok) {
+      const data = await res.json();
+      const offset = data?.offset;
+
+      if (typeof offset === 'number') {
+        return offset;
+      }
+    }
+    return null;
+  } catch (error) {
+    console.warn('[fetchServerOffset] 조회 실패:', error);
+    return null;
+  }
+}
+
+/**
  * YouTube videoId로 가사 직접 조회 (통합 엔드포인트, 최고속)
  * - videoId → lrclibId → 가사를 서버 내부에서 한 번에 처리
  * - 네트워크 왕복 1회로 단축
@@ -858,7 +886,7 @@ export async function fetchLyricsWithEndpoint(
     try {
       console.log('[Spotify] 비영어 타이틀 감지, Spotify 검색 시도');
       const { searchSpotifyTrack } = await import('./spotify');
-      const spotifyResult = await searchSpotifyTrack(artist, title);
+      const spotifyResult = await searchSpotifyTrack(artist, title, true);
 
       if (spotifyResult) {
         console.log(`[Spotify] 영문명 발견: ${spotifyResult.artist} - ${spotifyResult.name}`);

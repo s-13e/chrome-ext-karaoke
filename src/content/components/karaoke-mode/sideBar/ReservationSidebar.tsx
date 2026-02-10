@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { MdArrowBackIosNew } from 'react-icons/md';
 
 // ----------------------------------------------------
@@ -44,6 +45,7 @@ const mockSearchSongs = async (query: string): Promise<SearchResult[]> => {
  * 노래방 예약 기능을 위한 사이드바 컴포넌트
  */
 export const ReservationSidebar: React.FC = () => {
+  const { t } = useTranslation();
   // 사이드바 상태 관리: 'default' (버튼), 'search' (검색 화면), 'queue' (예약 목록)
   const [viewState, setViewState] = useState<'default' | 'search'>('default');
 
@@ -121,7 +123,7 @@ export const ReservationSidebar: React.FC = () => {
   // 2. 검색 화면 (별도의 tsx 전환을 simulate)
   return (
     <div className="reservation-sidebar search-view">
-      <button className="back-button" onClick={() => setViewState('default')} aria-label="뒤로가기">
+      <button className="back-button" onClick={() => setViewState('default')} aria-label={t('extBack')}>
         <MdArrowBackIosNew />
       </button>
 

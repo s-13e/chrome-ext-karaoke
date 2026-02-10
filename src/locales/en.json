@@ -367,5 +367,12 @@
   "extTutorialStep1Title": "Turn on Karaoke Mode",
   "extTutorialStep1Desc": "to unlock more features!",
   "extTutorialStep1Action": "Click here!",
-  "extTutorialStep2": "Press the same button to return to normal view while keeping your lyrics and settings!"
+  "extTutorialStep2": "Press the same button to return to normal view while keeping your lyrics and settings!",
+  "extTooltipMusicNote": "Karaoke",
+  "extClose": "Close",
+  "extPrevious": "Previous",
+  "extNext": "Next",
+  "extDone": "Done",
+  "extSyncOffsetZero": "Current offset is 0",
+  "extSyncResetToOriginal": "Reset to original timestamps"
 }

@@ -22,7 +22,7 @@ import { useTranslation } from 'react-i18next';
 import { Line } from '@lib/types/lyrics';
 import { applyOffsetToLyrics } from '@lib/utils/lyrics/display/lyricsOffset';
 import { extractVideoIdFromUrl } from '@lib/utils/platform/videoDetection';
-import { saveVideoOffset, getVideoOffset } from '@lib/utils/storage/videoOffsetStorage';
+import { saveVideoOffset, getVideoOffset, deleteVideoOffset } from '@lib/utils/storage/videoOffsetStorage';
 import { Toast } from '../common/Toast';
 import { canExecuteThrottled, THROTTLE_DELAYS } from '@lib/utils/common/common';
 
@@ -30,6 +30,11 @@ import { canExecuteThrottled, THROTTLE_DELAYS } from '@lib/utils/common/common';
 const TextEffectsModal = lazy(() =>
   import('./TextEffectsModal').then((module) => ({ default: module.TextEffectsModal })),
 );
+
+// DEV_MODE 전용 상수
+const IS_DEV_MODE = process.env.DEV_MODE === 'true';
+const API_SERVER_URL = process.env.API_SERVER_URL ?? '';
+const DEBUG_API_KEY = process.env.DEBUG_API_KEY ?? '';
 
 // 아이콘 공통 스타일 상수
 const ICON_SIZE = 28;
@@ -118,6 +123,13 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
   // Toast 알림 상태
   const [showSyncSavedToast, setShowSyncSavedToast] = React.useState<boolean>(false);
 
+  // DEV_MODE: 서버 캐시 상태
+  const [isSavingServerCache, setIsSavingServerCache] = React.useState<boolean>(false);
+  const [isDeletingServerCache, setIsDeletingServerCache] = React.useState<boolean>(false);
+  const [showServerCacheToast, setShowServerCacheToast] = React.useState<boolean>(false);
+  const [serverCacheToastMessage, setServerCacheToastMessage] = React.useState<string>('');
+  const [hasServerOffset, setHasServerOffset] = React.useState<boolean>(false);
+
   // 버튼 쓰로틀링을 위한 refs
   const lastButtonClickRef = React.useRef<number>(0);
 
@@ -131,7 +143,8 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
     }
   }, [lyrics]);
 
-  // 페이지 로드 시 저장된 오프셋 자동 적용
+  // 페이지 로드 시 오프셋 자동 적용
+  // 서버 오프셋은 index.tsx에서 이미 적용됨 → 여기서는 존재 여부만 확인 (DEV 삭제 버튼용)
   React.useEffect(() => {
     const loadSavedOffset = async () => {
       const videoId = extractVideoIdFromUrl(window.location.href);
@@ -139,17 +152,37 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
         return;
       }
 
+      // 1. 서버 오프셋 존재 여부 확인 (적용은 index.tsx에서 이미 완료)
+      const serverOffsetResponse = await new Promise<{ success: boolean; offset: number | null }>((resolve) => {
+        chrome.runtime.sendMessage({ type: 'FETCH_SERVER_OFFSET', videoId }, (response) => {
+          if (chrome.runtime.lastError) {
+            resolve({ success: false, offset: null });
+          } else {
+            resolve(response ?? { success: false, offset: null });
+          }
+        });
+      });
+
+      const serverOffset = serverOffsetResponse.success ? serverOffsetResponse.offset : null;
+
+      if (serverOffset !== null && serverOffset !== 0) {
+        // 서버 오프셋 존재 → DEV 삭제 버튼 활성화, 로컬 오프셋 무시
+        setHasServerOffset(true);
+        setCurrentOffset(0);
+        deleteVideoOffset(videoId).catch(() => {});
+        return;
+      } else {
+        setHasServerOffset(false);
+      }
+
+      // 2. 서버 오프셋 없음 → 로컬 오프셋 fallback
       const savedData = await getVideoOffset(videoId);
       if (savedData && savedData.offset !== 0) {
-        console.log(`[BottomContainer] 저장된 오프셋 발견 (videoId: ${videoId}, offset: ${savedData.offset}초)`);
-
-        // 원본 가사를 기준으로 오프셋 적용 (lyrics prop이 아닌 originalLyricsRef 사용)
         const originalLyrics = originalLyricsRef.current;
         const appliedLyrics = applyOffsetToLyrics(originalLyrics, savedData.offset, 0);
         setCurrentOffset(savedData.offset);
         onOffsetChange?.(savedData.offset, appliedLyrics);
 
-        // content script에 메시지 전송하여 즉시 반영
         chrome.runtime.sendMessage(
           {
             type: 'APPLY_OFFSET_LYRICS',
@@ -158,8 +191,6 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
           () => {
             if (chrome.runtime.lastError) {
               console.warn('[BottomContainer] 저장된 오프셋 적용 실패:', chrome.runtime.lastError.message);
-            } else {
-              console.log(`[BottomContainer] 저장된 오프셋 자동 적용 완료 (offset: ${savedData.offset}초)`);
             }
           },
         );
@@ -900,6 +931,87 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
   };
 
   /**
+   * [DEV_MODE 전용] 현재 오프셋을 서버 캐시로 저장
+   * 성공 시: 오프셋을 원본 가사에 베이킹 → 로컬 오프셋 삭제 → currentOffset = 0
+   */
+  const handleSaveServerOffset = async () => {
+    const videoId = extractVideoIdFromUrl(window.location.href);
+    if (!videoId) return;
+
+    setIsSavingServerCache(true);
+    try {
+      const response = await fetch(`${API_SERVER_URL}/api/v1/youtube/offset`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': DEBUG_API_KEY,
+        },
+        body: JSON.stringify({ videoId, offset: currentOffset }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`서버 오류: ${response.status}`);
+      }
+
+      // 서버 저장 성공 → 현재 오프셋을 원본에 베이킹 (보이지 않는 베이스라인으로 전환)
+      const bakedLyrics = applyOffsetToLyrics(originalLyricsRef.current, currentOffset, 0);
+      originalLyricsRef.current = bakedLyrics;
+      setCurrentOffset(0);
+      onOffsetChange?.(0, bakedLyrics);
+
+      // 로컬 Chrome Storage 오프셋 삭제 (싱크셋 목록에서 제거)
+      await deleteVideoOffset(videoId);
+
+      // 다른 컴포넌트에 적용 알림
+      chrome.runtime.sendMessage({ type: 'APPLY_OFFSET_LYRICS', payload: { offset: 0, lyrics: bakedLyrics } }, () => {
+        if (chrome.runtime.lastError) {
+          console.warn('[BottomContainer] 서버 캐시 저장 후 메시지 전송 실패:', chrome.runtime.lastError.message);
+        }
+      });
+
+      setHasServerOffset(true);
+      setServerCacheToastMessage('[DEV] 서버 오프셋 캐시 저장 완료');
+      setShowServerCacheToast(true);
+    } catch (err) {
+      console.error('[BottomContainer] 서버 캐시 저장 실패:', err);
+    } finally {
+      setIsSavingServerCache(false);
+    }
+  };
+
+  /**
+   * [DEV_MODE 전용] 서버 오프셋 캐시 삭제
+   * 삭제 후 페이지 새로고침하여 원본 가사 복원
+   */
+  const handleDeleteServerOffset = async () => {
+    const videoId = extractVideoIdFromUrl(window.location.href);
+    if (!videoId) return;
+
+    setIsDeletingServerCache(true);
+    try {
+      const response = await fetch(`${API_SERVER_URL}/api/v1/youtube/offset/${encodeURIComponent(videoId)}`, {
+        method: 'DELETE',
+        headers: { 'x-api-key': DEBUG_API_KEY },
+      });
+
+      if (!response.ok) {
+        throw new Error(`서버 오류: ${response.status}`);
+      }
+
+      setHasServerOffset(false);
+      setServerCacheToastMessage('[DEV] 서버 오프셋 캐시 삭제 완료 — 새로고침합니다');
+      setShowServerCacheToast(true);
+
+      // 잠시 후 새로고침 (Toast 표시 후)
+      setTimeout(() => window.location.reload(), 1000);
+    } catch (err) {
+      console.error('[BottomContainer] 서버 캐시 삭제 실패:', err);
+    } finally {
+      setIsDeletingServerCache(false);
+    }
+  };
+
+  /**
    * 가사 방식 모드 순환 토글
    * sync(기본) → single(싱글) → full(전체) → sync
    */
@@ -1192,7 +1304,7 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
                 className={styles.syncResetButton}
                 onClick={handleResetOffset}
                 disabled={currentOffset === 0}
-                title={currentOffset === 0 ? '현재 오프셋이 0입니다' : '원본 타임스탬프로 초기화'}
+                title={currentOffset === 0 ? t('extSyncOffsetZero') : t('extSyncResetToOriginal')}
               >
                 {t('extReset')}
               </button>
@@ -1213,6 +1325,22 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
                 </>
               )}
             </div>
+
+            {/* DEV_MODE 전용: 서버 캐시 저장/삭제 버튼 */}
+            {IS_DEV_MODE && currentOffset !== 0 && (
+              <button className={styles.devCacheButton} onClick={handleSaveServerOffset} disabled={isSavingServerCache}>
+                {isSavingServerCache ? '[DEV] 저장 중...' : `[DEV] 서버 캐시 저장 (${currentOffset}초)`}
+              </button>
+            )}
+            {IS_DEV_MODE && hasServerOffset && (
+              <button
+                className={styles.devCacheDeleteButton}
+                onClick={handleDeleteServerOffset}
+                disabled={isDeletingServerCache}
+              >
+                {isDeletingServerCache ? '[DEV] 삭제 중...' : '[DEV] 서버 캐시 삭제'}
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -1220,6 +1348,11 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
       {/* 싱크셋 저장 완료 Toast 알림 */}
       {showSyncSavedToast && (
         <Toast message={t('extKaraokeSyncSaved')} duration={3000} onClose={() => setShowSyncSavedToast(false)} />
+      )}
+
+      {/* DEV_MODE: 서버 캐시 Toast */}
+      {showServerCacheToast && (
+        <Toast message={serverCacheToastMessage} duration={3000} onClose={() => setShowServerCacheToast(false)} />
       )}
     </>
   );

@@ -16,9 +16,7 @@ import { YOUTUBE_MINI_PLAYER_CLASSES, YOUTUBE_MINI_PLAYER_CONTAINER_SELECTOR } f
 import { parseTitleWithFallback } from '@lib/utils/lyrics/parsers/titleParser';
 import { listenerManager } from '@lib/utils/infra/listenerManager';
 import { withContentEnabled } from '@lib/utils/platform/contentGuard';
-import { DualHighlightLyrics } from './components/lyrics/SyncLyrics/DualHighlightLyrics';
-import { SingleLineLyrics } from './components/lyrics/SingleLineLyrics/SingleLineLyrics';
-import { FullLyrics } from './components/lyrics/FullLyrics/FullLyrics';
+import { LyricsOverlayWrapper } from './components/lyrics/LyricsOverlayWrapper';
 import { isAdPlaying } from '@lib/utils/dom/domUtils';
 import { startLyricsAdMonitoring } from '@lib/utils/infra/adWatcher';
 import { parseLyrics } from '@lib/utils/lyrics/parsers/lyricsParser';
@@ -51,7 +49,7 @@ import {
   shouldAutoDisable,
 } from '@lib/utils/storage/autoDisableStorage';
 import { ActionableToast } from './components/common/ActionableToast';
-import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
+import { TutorialController } from './tutorial/tutorialController';
 
 // DEV_MODE: 개발 중 튜토리얼 완료 상태 저장 스킵
 const IS_DEV_MODE = process.env.DEV_MODE === 'true';
@@ -205,6 +203,18 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
   // 중복 가사 호출 방지
   let isCollecting = false;
 
+  // 탐색(navigation) 시 이전 가사 수집을 무효화하기 위한 세대 카운터
+  let collectGeneration = 0;
+
+  /**
+   * 현재 세대 번호가 유효한지 확인하는 헬퍼 함수.
+   * 탐색이 발생하면 collectGeneration이 증가하므로,
+   * 캡처된 세대와 현재 세대가 다르면 이전 요청으로 판단한다.
+   */
+  function isStaleCollection(capturedGeneration: number): boolean {
+    return capturedGeneration !== collectGeneration;
+  }
+
   let lastContentEnabledFalseTime = 0; // 마지막 false 처리 시각(ms)
   const CLEANUP_DEBOUNCE_MS = 500; // 0.5초 딜레이
   let lastChangeOrigin: 'user' | 'system' = 'system';
@@ -215,60 +225,9 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
   // KaraokeModeContainer 전용 React Root
   let karaokeModeRoot: ReactDOM.Root | null = null;
 
-  // 튜토리얼 툴팁 전용 React Root
-  let tutorialTooltipRoot: ReactDOM.Root | null = null;
-  let tutorialStep1Completed = false;
-  let tutorialStep2Completed = false;
-
-  // 기능 튜토리얼 상태
-  let featureTutorialActive = false;
-  let featureTutorialRoot: ReactDOM.Root | null = null;
-  let featureTutorialContainer: HTMLElement | null = null;
-
-  // 튜토리얼 하이라이트 스타일 주입 (튜토리얼 시작 시 호출)
-  function injectTutorialHighlightStyles() {
-    if (document.getElementById('ytk-tutorial-highlight-styles')) return;
-    if (!document.head) return; // head가 없으면 스킵
-
-    const styleEl = document.createElement('style');
-    styleEl.id = 'ytk-tutorial-highlight-styles';
-    styleEl.textContent = `
-      .ytk-tutorial-highlight {
-        animation: ytk-highlight-pulse 1.5s ease-in-out infinite !important;
-        box-shadow: 0 0 20px rgba(29, 185, 84, 0.6), 0 0 40px rgba(29, 185, 84, 0.3) !important;
-        border-radius: 8px !important;
-        position: relative;
-      }
-      .ytk-tutorial-highlight::after {
-        content: '';
-        position: absolute;
-        inset: -4px;
-        border: 2px solid #1db954;
-        border-radius: 12px;
-        animation: ytk-highlight-border 1.5s ease-in-out infinite;
-        pointer-events: none;
-      }
-      @keyframes ytk-highlight-pulse {
-        0%, 100% {
-          box-shadow: 0 0 20px rgba(29, 185, 84, 0.6), 0 0 40px rgba(29, 185, 84, 0.3);
-        }
-        50% {
-          box-shadow: 0 0 30px rgba(29, 185, 84, 0.8), 0 0 60px rgba(29, 185, 84, 0.4);
-        }
-      }
-      @keyframes ytk-highlight-border {
-        0%, 100% {
-          opacity: 1;
-          transform: scale(1);
-        }
-        50% {
-          opacity: 0.7;
-          transform: scale(1.02);
-        }
-      }
-    `;
-    document.head.appendChild(styleEl);
-  }
+  // 튜토리얼 컨트롤러 초기화
+  const tutorialController = new TutorialController(IS_DEV_MODE);
+  tutorialController.init();
 
   // 카라오케 모드 매니저 초기화
   const karaokeModeManager = new KaraokeModeManager({
@@ -279,11 +238,10 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
       updateMusicNoteButtonState(isVisible);
 
       // 튜토리얼 처리
-      if (isVisible && !tutorialStep1Completed) {
-        // Step1 완료 처리 및 Step2 표시
-        completeTutorialStep1();
-        if (!tutorialStep2Completed) {
-          showTutorialStep2();
+      if (isVisible && !tutorialController.isStep1Completed()) {
+        tutorialController.completeTutorialStep1();
+        if (!tutorialController.isStep2Completed()) {
+          tutorialController.showTutorialStep2();
         }
       }
     },
@@ -304,852 +262,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
     }
   });
 
-  // 기능 튜토리얼 토글 이벤트 리스너
-  window.addEventListener('toggle-feature-tutorial', (e) => {
-    const customEvent = e as CustomEvent<{ active: boolean }>;
-    const shouldActivate = customEvent.detail.active;
-    console.log('[Index] toggle-feature-tutorial 이벤트 수신:', shouldActivate);
-
-    if (shouldActivate && !featureTutorialActive) {
-      showFeatureTutorial();
-    } else if (!shouldActivate && featureTutorialActive) {
-      hideFeatureTutorial();
-    }
-  });
-
-  // 사이드바 TutorialMenu에서 개별 튜토리얼 시작 이벤트 리스너
-  window.addEventListener('start-tutorial', (e) => {
-    const customEvent = e as CustomEvent<{ tutorialId: string }>;
-    const { tutorialId } = customEvent.detail;
-    console.log('[Index] start-tutorial 이벤트 수신:', tutorialId);
-
-    handleTutorialStart(tutorialId);
-  });
-
-  // 개별 튜토리얼 시작 처리
-  async function handleTutorialStart(tutorialId: string) {
-    console.log('[Tutorial] 개별 튜토리얼 시작:', tutorialId);
-
-    // 튜토리얼 하이라이트 스타일 주입
-    injectTutorialHighlightStyles();
-
-    switch (tutorialId) {
-      case 'tutorial1':
-        // 가라오케 모드 시작 튜토리얼 - 뮤직노트 버튼 하이라이트
-        await showTutorial1FromMenu();
-        break;
-      case 'tutorial2':
-        // 싱크 조절 튜토리얼 - 하단바 싱크 버튼 설명
-        await showTutorial2FromMenu();
-        break;
-      case 'tutorial3':
-        // 구간 반복 튜토리얼 - 하단바 반복 버튼 설명
-        await showTutorial3FromMenu();
-        break;
-      case 'tutorial4':
-        // 텍스트 효과 튜토리얼 - 하단바 텍스트 설정 설명
-        await showTutorial4FromMenu();
-        break;
-      case 'tutorial5':
-        // 사이드바 기능 튜토리얼 - 사이드바 메뉴 설명
-        await showTutorial5FromMenu();
-        break;
-      case 'tutorial6':
-        // 점프 기능 튜토리얼 - 간주 점프, 자동 점프, 노래 처음으로
-        await showTutorial6FromMenu();
-        break;
-      default:
-        console.warn('[Tutorial] 알 수 없는 튜토리얼 ID:', tutorialId);
-        // 취소 이벤트 발송
-        window.dispatchEvent(new CustomEvent('tutorial-cancel'));
-    }
-  }
-
-  // 튜토리얼 1: 가라오케 모드 시작
-  async function showTutorial1FromMenu() {
-    const musicNoteBtn = document.querySelector('#ytk-music-note-btn');
-    if (!musicNoteBtn) {
-      console.warn('[Tutorial] 뮤직노트 버튼을 찾을 수 없음');
-      window.dispatchEvent(new CustomEvent('tutorial-cancel'));
-      return;
-    }
-
-    const { TutorialTooltip } = await import('./components/karaoke-mode/TutorialTooltip');
-
-    // 기존 컨테이너 제거
-    let container = document.getElementById('menu-tutorial-container');
-    if (container) container.remove();
-
-    container = document.createElement('div');
-    container.id = 'menu-tutorial-container';
-    document.body.appendChild(container);
-
-    // 버튼 위치 계산
-    const buttonRect = musicNoteBtn.getBoundingClientRect();
-    const bottomDistance = window.innerHeight - buttonRect.top + 15;
-    const rightDistance = window.innerWidth - buttonRect.right + buttonRect.width / 2 - 20;
-
-    container.style.cssText = `
-      position: fixed;
-      bottom: ${bottomDistance}px;
-      right: ${rightDistance}px;
-      z-index: 10000;
-      pointer-events: none;
-    `;
-
-    // 버튼 하이라이트 효과
-    musicNoteBtn.classList.add('ytk-tutorial-highlight');
-
-    const root = ReactDOM.createRoot(container);
-    root.render(
-      <TutorialTooltip
-        step="step1"
-        visible={true}
-        onDismiss={() => {
-          root.unmount();
-          container?.remove();
-          musicNoteBtn.classList.remove('ytk-tutorial-highlight');
-          // 완료 이벤트 발송
-          window.dispatchEvent(
-            new CustomEvent('tutorial-complete', {
-              detail: { tutorialId: 'tutorial1' },
-            }),
-          );
-        }}
-      />,
-    );
-
-    // 버튼 클릭 시 튜토리얼 완료 처리
-    const handleButtonClick = () => {
-      root.unmount();
-      container?.remove();
-      musicNoteBtn.classList.remove('ytk-tutorial-highlight');
-      musicNoteBtn.removeEventListener('click', handleButtonClick);
-      window.dispatchEvent(
-        new CustomEvent('tutorial-complete', {
-          detail: { tutorialId: 'tutorial1' },
-        }),
-      );
-    };
-    musicNoteBtn.addEventListener('click', handleButtonClick, { once: true });
-  }
-
-  // 튜토리얼 2: 싱크 조절 (Step별 위치 다르게 처리)
-  async function showTutorial2FromMenu() {
-    const { TutorialTooltip } = await import('./components/karaoke-mode/TutorialTooltip');
-
-    // 사이드바를 메인 뷰로 이동시켜 전체 버튼이 보이도록 함
-    window.dispatchEvent(new CustomEvent('tutorial-go-main'));
-    await new Promise((resolve) => setTimeout(resolve, 150));
-
-    const substeps = [
-      { titleKey: 'extTutorial2Step1Title', descKey: 'extTutorial2Step1Desc' },
-      { titleKey: 'extTutorial2Step2Title', descKey: 'extTutorial2Step2Desc' },
-    ];
-
-    // 기존 컨테이너 제거
-    if (menuTutorialContainer) {
-      menuTutorialContainer.remove();
-    }
-    if (menuTutorialRoot) {
-      menuTutorialRoot.unmount();
-      menuTutorialRoot = null;
-    }
-
-    menuTutorialContainer = document.createElement('div');
-    menuTutorialContainer.id = 'menu-tutorial-container';
-    document.body.appendChild(menuTutorialContainer);
-
-    let currentSubstep = 0;
-
-    // Step별 위치 계산 및 버튼 강조
-    const updatePositionAndHighlight = (step: number) => {
-      if (!menuTutorialContainer) return;
-
-      // 기존 하이라이트 제거
-      document.querySelectorAll('.ytk-tutorial-highlight').forEach((el) => {
-        el.classList.remove('ytk-tutorial-highlight');
-      });
-
-      if (step === 0) {
-        // Step 2-1: 싱크셋 버튼 강조
-        const syncButton = document.querySelector(
-          '[aria-label*="싱크셋"], [aria-label*="Sync"], [aria-label*="同期"]',
-        ) as HTMLElement;
-        if (syncButton) {
-          const rect = syncButton.getBoundingClientRect();
-          const bottom = window.innerHeight - rect.top + 15;
-          const left = rect.left + rect.width / 2;
-          menuTutorialContainer.style.cssText = `
-            position: fixed;
-            bottom: ${bottom}px;
-            left: ${left}px;
-            transform: translateX(-50%);
-            z-index: 10000;
-          `;
-          syncButton.classList.add('ytk-tutorial-highlight');
-        } else {
-          // fallback: bottom-center
-          const bottomContainer = document.querySelector('.ytk-bottom-container') as HTMLElement;
-          if (bottomContainer) {
-            const rect = bottomContainer.getBoundingClientRect();
-            const bottom = window.innerHeight - rect.top + 20;
-            menuTutorialContainer.style.cssText = `
-              position: fixed;
-              bottom: ${bottom}px;
-              left: 50%;
-              transform: translateX(-50%);
-              z-index: 10000;
-            `;
-          }
-        }
-      } else {
-        // Step 2-2: 사이드바의 싱크셋 목록 버튼 강조
-        const sidebarContent = document.querySelector('[class*="sidebarContent"]');
-        if (sidebarContent) {
-          const buttons = sidebarContent.querySelectorAll('button');
-          // 버튼 인덱스: 0: 수동 가사, 1: 인기 차트, 2: 무반주 녹음, 3: 녹음 목록, 4: 싱크셋 목록
-          const syncOffsetButton = buttons[4] as HTMLElement;
-          if (syncOffsetButton) {
-            syncOffsetButton.classList.add('ytk-tutorial-highlight');
-            const rect = syncOffsetButton.getBoundingClientRect();
-            const top = rect.top + rect.height / 2;
-            const right = window.innerWidth - rect.left + 20;
-            menuTutorialContainer.style.cssText = `
-              position: fixed;
-              top: ${top}px;
-              right: ${right}px;
-              transform: translateY(-50%);
-              z-index: 10000;
-            `;
-          } else {
-            // fallback: 사이드바 왼쪽
-            const sidebarContainer = document.querySelector('[class*="sidebarContainer"]') as HTMLElement;
-            if (sidebarContainer) {
-              const rect = sidebarContainer.getBoundingClientRect();
-              const top = rect.top + 100;
-              const right = window.innerWidth - rect.left + 20;
-              menuTutorialContainer.style.cssText = `
-                position: fixed;
-                top: ${top}px;
-                right: ${right}px;
-                z-index: 10000;
-              `;
-            }
-          }
-        }
-      }
-    };
-
-    const renderTooltip = () => {
-      if (!menuTutorialRoot) {
-        menuTutorialRoot = ReactDOM.createRoot(menuTutorialContainer!);
-      }
-
-      updatePositionAndHighlight(currentSubstep);
-
-      menuTutorialRoot.render(
-        <TutorialTooltip
-          step="feature"
-          visible={true}
-          featureStepIndex={0}
-          featureSubstepIndex={currentSubstep}
-          customSubsteps={substeps}
-          onDismiss={() => {
-            document
-              .querySelectorAll('.ytk-tutorial-highlight')
-              .forEach((el) => el.classList.remove('ytk-tutorial-highlight'));
-            cleanupMenuTutorial();
-            window.dispatchEvent(new CustomEvent('tutorial-cancel'));
-          }}
-          onFeatureStepChange={(_, newSubstep) => {
-            if (newSubstep >= substeps.length) {
-              // 모든 스텝 완료
-              document
-                .querySelectorAll('.ytk-tutorial-highlight')
-                .forEach((el) => el.classList.remove('ytk-tutorial-highlight'));
-              cleanupMenuTutorial();
-              // storage에 먼저 저장 후 이벤트 발생
-              chrome.storage.sync.set({ [STORAGE_KEYS.TUTORIAL_SYNC_COMPLETED]: true });
-              window.dispatchEvent(
-                new CustomEvent('tutorial-complete', {
-                  detail: { tutorialId: 'tutorial2' },
-                }),
-              );
-            } else if (newSubstep < 0) {
-              // 첫 스텝에서 이전 누름 - 무시
-              return;
-            } else {
-              currentSubstep = newSubstep;
-              renderTooltip();
-            }
-          }}
-        />,
-      );
-    };
-
-    renderTooltip();
-  }
-
-  // 튜토리얼 3: 구간 반복 (7개 스텝: 6개 구간반복 설명 + 1개 이전/다음 버튼)
-  async function showTutorial3FromMenu() {
-    const { TutorialTooltip } = await import('./components/karaoke-mode/TutorialTooltip');
-
-    const substeps = [
-      { titleKey: 'extTutorial3Step1Title', descKey: 'extTutorial3Step1Desc' },
-      { titleKey: 'extTutorial3Step2Title', descKey: 'extTutorial3Step2Desc' },
-      { titleKey: 'extTutorial3Step3Title', descKey: 'extTutorial3Step3Desc' },
-      { titleKey: 'extTutorial3Step4Title', descKey: 'extTutorial3Step4Desc' },
-      { titleKey: 'extTutorial3Step5Title', descKey: 'extTutorial3Step5Desc' },
-      { titleKey: 'extTutorial3Step6Title', descKey: 'extTutorial3Step6Desc' },
-      { titleKey: 'extTutorial3Step7Title', descKey: 'extTutorial3Step7Desc' },
-    ];
-
-    if (menuTutorialContainer) menuTutorialContainer.remove();
-    if (menuTutorialRoot) {
-      menuTutorialRoot.unmount();
-      menuTutorialRoot = null;
-    }
-
-    menuTutorialContainer = document.createElement('div');
-    menuTutorialContainer.id = 'menu-tutorial-container';
-    document.body.appendChild(menuTutorialContainer);
-
-    let currentSubstep = 0;
-
-    // Step별 버튼 강조 및 위치 업데이트
-    const updatePositionAndHighlight = (step: number) => {
-      if (!menuTutorialContainer) return;
-
-      // 기존 하이라이트 제거
-      document.querySelectorAll('.ytk-tutorial-highlight').forEach((el) => {
-        el.classList.remove('ytk-tutorial-highlight');
-      });
-
-      let targetButton: HTMLElement | null = null;
-      let secondaryButton: HTMLElement | null = null;
-      // 하단 컨테이너 내에서만 버튼 검색 (YouTube 버튼과 충돌 방지)
-      const bottomContainer = document.querySelector('.ytk-bottom-container');
-      if (step < 6) {
-        // Step 1-6: 구간 반복 버튼
-        targetButton = bottomContainer?.querySelector(
-          '[aria-label*="구간"], [aria-label*="Loop"], [aria-label*="リピート"]',
-        ) as HTMLElement;
-      } else {
-        // Step 7: 이전/다음 버튼 (둘 다 강조)
-        targetButton = bottomContainer?.querySelector(
-          '[aria-label*="이전"], [aria-label*="Previous"], [aria-label*="前"]',
-        ) as HTMLElement;
-        secondaryButton = bottomContainer?.querySelector(
-          '[aria-label*="다음"], [aria-label*="Next"], [aria-label*="次"]',
-        ) as HTMLElement;
-      }
-
-      if (targetButton) {
-        targetButton.classList.add('ytk-tutorial-highlight');
-        if (secondaryButton) {
-          secondaryButton.classList.add('ytk-tutorial-highlight');
-        }
-        const rect = targetButton.getBoundingClientRect();
-        const bottom = window.innerHeight - rect.top + 15;
-        if (secondaryButton) {
-          // Step 7: 이전/다음 버튼 왼쪽 정렬 (왼쪽 잘림 방지)
-          menuTutorialContainer.style.cssText = `
-            position: fixed;
-            bottom: ${bottom}px;
-            left: ${rect.left}px;
-            z-index: 10000;
-          `;
-        } else {
-          const left = rect.left + rect.width / 2;
-          menuTutorialContainer.style.cssText = `
-            position: fixed;
-            bottom: ${bottom}px;
-            left: ${left}px;
-            transform: translateX(-50%);
-            z-index: 10000;
-          `;
-        }
-      } else {
-        // 버튼을 찾지 못해도 하단 중앙에 표시
-        console.log('[Tutorial3] Step 7: 이전/다음 버튼을 찾지 못함, 하단 중앙 fallback');
-        menuTutorialContainer.style.cssText = `
-          position: fixed;
-          bottom: 150px;
-          left: 50%;
-          transform: translateX(-50%);
-          z-index: 10000;
-        `;
-      }
-    };
-
-    const renderTooltip = () => {
-      if (!menuTutorialRoot) {
-        menuTutorialRoot = ReactDOM.createRoot(menuTutorialContainer!);
-      }
-
-      updatePositionAndHighlight(currentSubstep);
-
-      menuTutorialRoot.render(
-        <TutorialTooltip
-          step="feature"
-          visible={true}
-          featureStepIndex={0}
-          featureSubstepIndex={currentSubstep}
-          customSubsteps={substeps}
-          onDismiss={() => {
-            document
-              .querySelectorAll('.ytk-tutorial-highlight')
-              .forEach((el) => el.classList.remove('ytk-tutorial-highlight'));
-            cleanupMenuTutorial();
-            window.dispatchEvent(new CustomEvent('tutorial-cancel'));
-          }}
-          onFeatureStepChange={(_, newSubstep) => {
-            if (newSubstep >= substeps.length) {
-              document
-                .querySelectorAll('.ytk-tutorial-highlight')
-                .forEach((el) => el.classList.remove('ytk-tutorial-highlight'));
-              cleanupMenuTutorial();
-              // storage에 먼저 저장 후 이벤트 발생
-              chrome.storage.sync.set({ [STORAGE_KEYS.TUTORIAL_LOOP_COMPLETED]: true });
-              window.dispatchEvent(new CustomEvent('tutorial-complete', { detail: { tutorialId: 'tutorial3' } }));
-            } else if (newSubstep >= 0) {
-              currentSubstep = newSubstep;
-              renderTooltip();
-            }
-          }}
-        />,
-      );
-    };
-    renderTooltip();
-  }
-
-  // 튜토리얼 4: 커스텀 가사 (3개 스텝: 가사모드, 현재가사/발음, 텍스트효과)
-  async function showTutorial4FromMenu() {
-    const { TutorialTooltip } = await import('./components/karaoke-mode/TutorialTooltip');
-
-    const substeps = [
-      { titleKey: 'extTutorial4Step1Title', descKey: 'extTutorial4Step1Desc' },
-      { titleKey: 'extTutorial4Step2Title', descKey: 'extTutorial4Step2Desc' },
-      { titleKey: 'extTutorial4Step3Title', descKey: 'extTutorial4Step3Desc' },
-    ];
-
-    if (menuTutorialContainer) menuTutorialContainer.remove();
-    if (menuTutorialRoot) {
-      menuTutorialRoot.unmount();
-      menuTutorialRoot = null;
-    }
-
-    menuTutorialContainer = document.createElement('div');
-    menuTutorialContainer.id = 'menu-tutorial-container';
-    document.body.appendChild(menuTutorialContainer);
-
-    let currentSubstep = 0;
-
-    // Step별 버튼 강조 및 위치 업데이트
-    const updatePositionAndHighlight = (step: number) => {
-      if (!menuTutorialContainer) return;
-
-      // 기존 하이라이트 제거
-      document.querySelectorAll('.ytk-tutorial-highlight').forEach((el) => {
-        el.classList.remove('ytk-tutorial-highlight');
-      });
-
-      let targetButton: HTMLElement | null = null;
-      let secondaryButton: HTMLElement | null = null;
-      // 하단 컨테이너 내에서만 버튼 검색 (YouTube 버튼과 충돌 방지)
-      const bottomContainer = document.querySelector('.ytk-bottom-container');
-
-      if (step === 0) {
-        // Step 1: 가사 방식 버튼
-        targetButton = bottomContainer?.querySelector(
-          '[aria-label="가사 방식"], [aria-label*="Lyrics Display"], [aria-label*="歌詞表示"]',
-        ) as HTMLElement;
-      } else if (step === 1) {
-        // Step 2: 현재 가사 버튼 + 발음 표시 버튼 (둘 다 강조)
-        targetButton = bottomContainer?.querySelector(
-          '[aria-label="현재 가사"], [aria-label*="Current Lyrics"], [aria-label*="現在の歌詞"]',
-        ) as HTMLElement;
-        secondaryButton = bottomContainer?.querySelector(
-          '[aria-label="발음 표시"], [aria-label*="Pronunciation"], [aria-label*="発音表示"]',
-        ) as HTMLElement;
-      } else {
-        // Step 3: 텍스트 효과 버튼
-        targetButton = bottomContainer?.querySelector(
-          '[aria-label="텍스트 효과"], [aria-label*="Text Effect"], [aria-label*="テキスト効果"]',
-        ) as HTMLElement;
-      }
-
-      if (targetButton) {
-        targetButton.classList.add('ytk-tutorial-highlight');
-        if (secondaryButton) {
-          secondaryButton.classList.add('ytk-tutorial-highlight');
-        }
-
-        const rect = targetButton.getBoundingClientRect();
-        const bottom = window.innerHeight - rect.top + 15;
-
-        if (step === 2) {
-          // Step 3: 텍스트 효과 버튼은 오른쪽에 있으므로 오른쪽 정렬
-          const right = window.innerWidth - rect.right;
-          menuTutorialContainer.style.cssText = `
-            position: fixed;
-            bottom: ${bottom}px;
-            right: ${right}px;
-            z-index: 10000;
-          `;
-        } else {
-          // Step 1, 2: 중앙 정렬
-          const left = rect.left + rect.width / 2;
-          menuTutorialContainer.style.cssText = `
-            position: fixed;
-            bottom: ${bottom}px;
-            left: ${left}px;
-            transform: translateX(-50%);
-            z-index: 10000;
-          `;
-        }
-      } else {
-        const positionStyle = calculateMenuTutorialPosition('bottom-center');
-        menuTutorialContainer.style.cssText = `position: fixed; ${positionStyle} z-index: 10000;`;
-      }
-    };
-
-    const renderTooltip = () => {
-      if (!menuTutorialRoot) {
-        menuTutorialRoot = ReactDOM.createRoot(menuTutorialContainer!);
-      }
-
-      updatePositionAndHighlight(currentSubstep);
-
-      menuTutorialRoot.render(
-        <TutorialTooltip
-          step="feature"
-          visible={true}
-          featureStepIndex={0}
-          featureSubstepIndex={currentSubstep}
-          customSubsteps={substeps}
-          onDismiss={() => {
-            document
-              .querySelectorAll('.ytk-tutorial-highlight')
-              .forEach((el) => el.classList.remove('ytk-tutorial-highlight'));
-            cleanupMenuTutorial();
-            window.dispatchEvent(new CustomEvent('tutorial-cancel'));
-          }}
-          onFeatureStepChange={(_, newSubstep) => {
-            if (newSubstep >= substeps.length) {
-              document
-                .querySelectorAll('.ytk-tutorial-highlight')
-                .forEach((el) => el.classList.remove('ytk-tutorial-highlight'));
-              cleanupMenuTutorial();
-              // storage에 먼저 저장 후 이벤트 발생
-              chrome.storage.sync.set({ [STORAGE_KEYS.TUTORIAL_CUSTOM_LYRICS_COMPLETED]: true });
-              window.dispatchEvent(new CustomEvent('tutorial-complete', { detail: { tutorialId: 'tutorial4' } }));
-            } else if (newSubstep >= 0) {
-              currentSubstep = newSubstep;
-              renderTooltip();
-            }
-          }}
-        />,
-      );
-    };
-    renderTooltip();
-  }
-
-  // 튜토리얼 5: 사이드바 기능 (버튼 강조 포함)
-  async function showTutorial5FromMenu() {
-    const { TutorialTooltip } = await import('./components/karaoke-mode/TutorialTooltip');
-
-    // 사이드바를 메인 뷰로 이동시켜 전체 버튼이 보이도록 함
-    window.dispatchEvent(new CustomEvent('tutorial-go-main'));
-
-    // 약간의 딜레이 후 툴팁 표시 (사이드바 상태 변경 대기)
-    await new Promise((resolve) => setTimeout(resolve, 150));
-
-    const substeps = [
-      { titleKey: 'extTutorial5Step1Title', descKey: 'extTutorial5Step1Desc' },
-      { titleKey: 'extTutorial5Step2Title', descKey: 'extTutorial5Step2Desc' },
-      { titleKey: 'extTutorial5Step3Title', descKey: 'extTutorial5Step3Desc' },
-      { titleKey: 'extTutorial5Step4Title', descKey: 'extTutorial5Step4Desc' },
-    ];
-
-    if (menuTutorialContainer) menuTutorialContainer.remove();
-    if (menuTutorialRoot) {
-      menuTutorialRoot.unmount();
-      menuTutorialRoot = null;
-    }
-
-    menuTutorialContainer = document.createElement('div');
-    menuTutorialContainer.id = 'menu-tutorial-container';
-    document.body.appendChild(menuTutorialContainer);
-
-    let currentSubstep = 0;
-
-    // Step별 사이드바 버튼 강조 및 위치 계산
-    const updatePositionAndHighlight = (step: number) => {
-      if (!menuTutorialContainer) return;
-
-      // 기존 하이라이트 제거
-      document.querySelectorAll('.ytk-tutorial-highlight').forEach((el) => {
-        el.classList.remove('ytk-tutorial-highlight');
-      });
-
-      const sidebarContent = document.querySelector('[class*="sidebarContent"]');
-      if (!sidebarContent) {
-        console.log('[Tutorial5] sidebarContent를 찾을 수 없음');
-        return;
-      }
-
-      const buttons = sidebarContent.querySelectorAll('button');
-      let targetButton: HTMLElement | null = null;
-      let secondaryButton: HTMLElement | null = null;
-
-      // Step별 버튼 인덱스 매핑
-      // 0: 수동 가사 검색, 1: 인기 차트, 2: 무반주 녹음, 3: 녹음 목록, 4: 싱크셋 목록
-      if (step === 0) {
-        targetButton = buttons[0] as HTMLElement; // 수동 가사 검색
-      } else if (step === 1) {
-        targetButton = buttons[1] as HTMLElement; // 인기 차트
-      } else if (step === 2) {
-        targetButton = buttons[2] as HTMLElement; // 무반주 녹음
-        secondaryButton = buttons[3] as HTMLElement; // 녹음 목록
-      } else if (step === 3) {
-        targetButton = buttons[4] as HTMLElement; // 싱크셋 목록
-      }
-
-      if (targetButton) {
-        targetButton.classList.add('ytk-tutorial-highlight');
-        if (secondaryButton) {
-          secondaryButton.classList.add('ytk-tutorial-highlight');
-        }
-
-        const rect = targetButton.getBoundingClientRect();
-        // 사이드바 왼쪽에 툴팁 배치
-        const top = rect.top + rect.height / 2;
-        const right = window.innerWidth - rect.left + 20;
-
-        menuTutorialContainer.style.cssText = `
-          position: fixed;
-          top: ${top}px;
-          right: ${right}px;
-          transform: translateY(-50%);
-          z-index: 10000;
-        `;
-      } else {
-        // fallback
-        const positionStyle = calculateMenuTutorialPosition('sidebar-left');
-        menuTutorialContainer.style.cssText = `position: fixed; ${positionStyle} z-index: 10000;`;
-      }
-    };
-
-    const renderTooltip = () => {
-      if (!menuTutorialRoot) {
-        menuTutorialRoot = ReactDOM.createRoot(menuTutorialContainer!);
-      }
-
-      updatePositionAndHighlight(currentSubstep);
-
-      menuTutorialRoot.render(
-        <TutorialTooltip
-          step="feature"
-          visible={true}
-          featureStepIndex={0}
-          featureSubstepIndex={currentSubstep}
-          customSubsteps={substeps}
-          onDismiss={() => {
-            document
-              .querySelectorAll('.ytk-tutorial-highlight')
-              .forEach((el) => el.classList.remove('ytk-tutorial-highlight'));
-            cleanupMenuTutorial();
-            window.dispatchEvent(new CustomEvent('tutorial-cancel'));
-          }}
-          onFeatureStepChange={(_, newSubstep) => {
-            if (newSubstep >= substeps.length) {
-              document
-                .querySelectorAll('.ytk-tutorial-highlight')
-                .forEach((el) => el.classList.remove('ytk-tutorial-highlight'));
-              cleanupMenuTutorial();
-              // storage에 먼저 저장 후 이벤트 발생
-              chrome.storage.sync.set({ [STORAGE_KEYS.TUTORIAL_SIDEBAR_COMPLETED]: true });
-              window.dispatchEvent(new CustomEvent('tutorial-complete', { detail: { tutorialId: 'tutorial5' } }));
-            } else if (newSubstep >= 0) {
-              currentSubstep = newSubstep;
-              renderTooltip();
-            }
-          }}
-        />,
-      );
-    };
-    renderTooltip();
-  }
-
-  // 튜토리얼 6: 점프 기능 (간주 점프, 자동 점프, 노래 처음으로)
-  async function showTutorial6FromMenu() {
-    const { TutorialTooltip } = await import('./components/karaoke-mode/TutorialTooltip');
-
-    const substeps = [
-      { titleKey: 'extTutorial6Step1Title', descKey: 'extTutorial6Step1Desc' },
-      { titleKey: 'extTutorial6Step2Title', descKey: 'extTutorial6Step2Desc' },
-      { titleKey: 'extTutorial6Step3Title', descKey: 'extTutorial6Step3Desc' },
-    ];
-
-    if (menuTutorialContainer) menuTutorialContainer.remove();
-    if (menuTutorialRoot) {
-      menuTutorialRoot.unmount();
-      menuTutorialRoot = null;
-    }
-
-    menuTutorialContainer = document.createElement('div');
-    menuTutorialContainer.id = 'menu-tutorial-container';
-    document.body.appendChild(menuTutorialContainer);
-
-    let currentSubstep = 0;
-
-    // Step별 버튼 강조 및 위치 계산
-    const updatePositionAndHighlight = (step: number) => {
-      if (!menuTutorialContainer) return;
-
-      // 기존 하이라이트 제거
-      document.querySelectorAll('.ytk-tutorial-highlight').forEach((el) => {
-        el.classList.remove('ytk-tutorial-highlight');
-      });
-
-      // 하단 컨테이너 내에서만 버튼 검색 (YouTube 버튼과 충돌 방지)
-      const bottomContainer = document.querySelector('.ytk-bottom-container');
-      let targetButton: HTMLElement | null = null;
-      if (step === 0) {
-        // 간주 점프 버튼
-        targetButton = bottomContainer?.querySelector(
-          '[aria-label="간주점프"], [aria-label*="Skip Intro"], [aria-label*="イントロスキップ"]',
-        ) as HTMLElement;
-      } else if (step === 1) {
-        // 자동 점프 버튼
-        targetButton = bottomContainer?.querySelector(
-          '[aria-label="자동점프"], [aria-label*="Auto Skip"], [aria-label*="オートスキップ"]',
-        ) as HTMLElement;
-      } else {
-        // 노래 처음으로 버튼
-        targetButton = bottomContainer?.querySelector(
-          '[aria-label="노래처음으로"], [aria-label*="Restart"], [aria-label*="最初に戻る"]',
-        ) as HTMLElement;
-      }
-
-      if (targetButton) {
-        targetButton.classList.add('ytk-tutorial-highlight');
-        const rect = targetButton.getBoundingClientRect();
-        const bottom = window.innerHeight - rect.top + 15;
-        const left = rect.left + rect.width / 2;
-        menuTutorialContainer.style.cssText = `
-          position: fixed;
-          bottom: ${bottom}px;
-          left: ${left}px;
-          transform: translateX(-50%);
-          z-index: 10000;
-        `;
-      } else {
-        // fallback: bottom-center
-        const positionStyle = calculateMenuTutorialPosition('bottom-center');
-        menuTutorialContainer.style.cssText = `position: fixed; ${positionStyle} z-index: 10000;`;
-      }
-    };
-
-    const renderTooltip = () => {
-      if (!menuTutorialRoot) {
-        menuTutorialRoot = ReactDOM.createRoot(menuTutorialContainer!);
-      }
-
-      updatePositionAndHighlight(currentSubstep);
-
-      menuTutorialRoot.render(
-        <TutorialTooltip
-          step="feature"
-          visible={true}
-          featureStepIndex={0}
-          featureSubstepIndex={currentSubstep}
-          customSubsteps={substeps}
-          onDismiss={() => {
-            document.querySelectorAll('.ytk-tutorial-highlight').forEach((el) => {
-              el.classList.remove('ytk-tutorial-highlight');
-            });
-            cleanupMenuTutorial();
-            window.dispatchEvent(new CustomEvent('tutorial-cancel'));
-          }}
-          onFeatureStepChange={(_, newSubstep) => {
-            if (newSubstep >= substeps.length) {
-              document.querySelectorAll('.ytk-tutorial-highlight').forEach((el) => {
-                el.classList.remove('ytk-tutorial-highlight');
-              });
-              cleanupMenuTutorial();
-              // storage에 먼저 저장 후 이벤트 발생
-              chrome.storage.sync.set({ [STORAGE_KEYS.TUTORIAL_JUMP_COMPLETED]: true });
-              window.dispatchEvent(new CustomEvent('tutorial-complete', { detail: { tutorialId: 'tutorial6' } }));
-            } else if (newSubstep >= 0) {
-              currentSubstep = newSubstep;
-              renderTooltip();
-            }
-          }}
-        />,
-      );
-    };
-    renderTooltip();
-  }
-
-  // 메뉴 튜토리얼 상태 관리 변수
-  let menuTutorialRoot: ReactDOM.Root | null = null;
-  let menuTutorialContainer: HTMLElement | null = null;
-
-  function calculateMenuTutorialPosition(position: 'bottom-center' | 'bottom-right' | 'sidebar-left'): string {
-    const bottomContainer = document.querySelector('.ytk-bottom-container') as HTMLElement;
-    const sidebarContainer = document.querySelector('[class*="sidebarContainer"]') as HTMLElement;
-
-    switch (position) {
-      case 'bottom-center': {
-        if (bottomContainer) {
-          const rect = bottomContainer.getBoundingClientRect();
-          const bottom = window.innerHeight - rect.top + 20;
-          const left = rect.left + rect.width / 2;
-          return `bottom: ${bottom}px; left: ${left}px; transform: translateX(-50%);`;
-        }
-        return 'bottom: 150px; left: 50%; transform: translateX(-50%);';
-      }
-      case 'bottom-right': {
-        if (bottomContainer) {
-          const rect = bottomContainer.getBoundingClientRect();
-          const bottom = window.innerHeight - rect.top + 20;
-          const right = window.innerWidth - rect.right + 50;
-          return `bottom: ${bottom}px; right: ${right}px;`;
-        }
-        return 'bottom: 150px; right: 100px;';
-      }
-      case 'sidebar-left': {
-        if (sidebarContainer) {
-          const rect = sidebarContainer.getBoundingClientRect();
-          const top = rect.top + 100;
-          const right = window.innerWidth - rect.left + 20;
-          return `top: ${top}px; right: ${right}px;`;
-        }
-        return 'top: 200px; right: 400px;';
-      }
-      default:
-        return 'bottom: 150px; left: 50%; transform: translateX(-50%);';
-    }
-  }
-
-  function cleanupMenuTutorial() {
-    if (menuTutorialRoot) {
-      menuTutorialRoot.unmount();
-      menuTutorialRoot = null;
-    }
-    if (menuTutorialContainer) {
-      menuTutorialContainer.remove();
-      menuTutorialContainer = null;
-    }
-
-    // 하이라이트 제거
-    document.querySelectorAll('.ytk-tutorial-highlight').forEach((el) => {
-      el.classList.remove('ytk-tutorial-highlight');
-    });
-  }
+  // 튜토리얼 이벤트 리스너는 tutorialController.init()에서 등록됨
 
   // 토스트/알림 전용 React Root
   let toastRoot: ReactDOM.Root | null = null;
@@ -1282,6 +395,12 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
    * 화면에 표시된 가사 렌더링을 초기 상태로 재실행하는 함수
    */
   function resetLyricsData() {
+    // 이전 가사 수집 무효화: 세대 카운터 증가
+    collectGeneration++;
+    // 이전 수집/감지 작업이 진행 중이더라도 새 감지를 허용하기 위해 플래그 리셋
+    isCollecting = false;
+    isDetecting = false;
+
     // 광고 모니터링 중지
     stopLyricsAdMonitoringIfNeeded();
 
@@ -1518,459 +637,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
     );
 
     // 튜토리얼 Step1 표시 (첫 사용자용)
-    showTutorialStep1IfNeeded();
-  }
-
-  // 튜토리얼 Step1 표시 (가라오케 모드 활성화 안내)
-  async function showTutorialStep1IfNeeded() {
-    console.log('[Tutorial] showTutorialStep1IfNeeded 호출됨');
-
-    // 이미 완료된 경우 표시하지 않음
-    const result = await chrome.storage.sync.get([STORAGE_KEYS.TUTORIAL_STEP1_COMPLETED]);
-    tutorialStep1Completed = (result[STORAGE_KEYS.TUTORIAL_STEP1_COMPLETED] as boolean | undefined) ?? false;
-
-    console.log('[Tutorial] Step1 완료 상태:', tutorialStep1Completed);
-
-    if (tutorialStep1Completed) {
-      console.log('[Tutorial] Step1 이미 완료됨, 스킵');
-      return;
-    }
-
-    console.log('[Tutorial] 버튼 대기 시작...');
-    let attempts = 0;
-
-    // 버튼이 DOM에 렌더링될 때까지 대기
-    const waitForButton = setInterval(() => {
-      attempts++;
-      const musicNoteBtn = document.querySelector('.ytp-music-note-button');
-      console.log(`[Tutorial] 버튼 검색 시도 #${attempts}:`, musicNoteBtn ? '발견!' : '미발견');
-
-      if (musicNoteBtn) {
-        clearInterval(waitForButton);
-        console.log('[Tutorial] 버튼 발견, 툴팁 렌더링 시작');
-        renderTutorialStep1(musicNoteBtn as HTMLElement);
-      }
-    }, 200);
-
-    // 10초 후에도 버튼이 없으면 취소 (5초 -> 10초로 증가)
-    setTimeout(() => {
-      clearInterval(waitForButton);
-      console.log('[Tutorial] 버튼 대기 타임아웃 (10초)');
-    }, 10000);
-  }
-
-  // 튜토리얼 툴팁 위치 업데이트 함수
-  function updateTutorialTooltipPosition() {
-    const tooltipContainer = document.getElementById('tutorial-tooltip-container');
-    const musicNoteBtn = document.querySelector('.ytp-music-note-button');
-
-    if (!tooltipContainer || !musicNoteBtn) return;
-
-    const buttonRect = musicNoteBtn.getBoundingClientRect();
-    console.log('[Tutorial] 위치 업데이트 - 버튼 좌표:', buttonRect);
-
-    // 전체화면일 때는 툴팁 숨김
-    if (document.fullscreenElement) {
-      tooltipContainer.style.display = 'none';
-      console.log('[Tutorial] 전체화면 모드 - 툴팁 숨김');
-      return;
-    }
-    tooltipContainer.style.display = 'block';
-
-    // 툴팁을 버튼 바로 위에 배치
-    const bottomDistance = window.innerHeight - buttonRect.top + 10;
-    // right 값을 더 작게 (더 오른쪽으로) 조정
-    const rightDistance = window.innerWidth - buttonRect.right + 20;
-
-    console.log('[Tutorial] 새 위치 - bottom:', bottomDistance, 'right:', rightDistance);
-    tooltipContainer.style.bottom = `${bottomDistance}px`;
-    tooltipContainer.style.right = `${rightDistance}px`;
-  }
-
-  // 튜토리얼 Step1 렌더링
-  async function renderTutorialStep1(buttonElement: HTMLElement) {
-    console.log('[Tutorial] renderTutorialStep1 시작');
-
-    const { TutorialTooltip } = await import('./components/karaoke-mode/TutorialTooltip');
-    console.log('[Tutorial] TutorialTooltip 컴포넌트 로드됨');
-
-    // 기존 컨테이너 및 React root 제거 후 새로 생성
-    let tooltipContainer = document.getElementById('tutorial-tooltip-container');
-    if (tooltipContainer) {
-      tooltipContainer.remove();
-      if (tutorialTooltipRoot) {
-        tutorialTooltipRoot.unmount();
-        tutorialTooltipRoot = null;
-      }
-      console.log('[Tutorial] 기존 컨테이너 및 root 제거됨');
-    }
-
-    tooltipContainer = document.createElement('div');
-    tooltipContainer.id = 'tutorial-tooltip-container';
-    document.body.appendChild(tooltipContainer);
-    console.log('[Tutorial] 새 컨테이너 생성 및 body에 추가됨');
-
-    // 버튼의 화면 좌표 계산
-    const buttonRect = buttonElement.getBoundingClientRect();
-    console.log('[Tutorial] 버튼 좌표:', buttonRect);
-
-    // 툴팁을 버튼 바로 위에 배치
-    const bottomDistance = window.innerHeight - buttonRect.top + 10;
-    // right 값을 더 작게 (더 오른쪽으로) 조정
-    const rightDistance = window.innerWidth - buttonRect.right + 20;
-
-    console.log('[Tutorial] 계산된 위치 - bottom:', bottomDistance, 'right:', rightDistance);
-
-    // 인라인 스타일로 위치 설정
-    tooltipContainer.style.cssText = `
-      position: fixed;
-      z-index: 2147483647;
-      pointer-events: none;
-      bottom: ${bottomDistance}px;
-      right: ${rightDistance}px;
-    `;
-    console.log('[Tutorial] 컨테이너 스타일 적용됨');
-
-    if (!tutorialTooltipRoot) {
-      tutorialTooltipRoot = ReactDOM.createRoot(tooltipContainer);
-    }
-
-    tutorialTooltipRoot.render(<TutorialTooltip step="step1" visible={true} />);
-
-    // 모드 변경 시 위치 업데이트를 위한 이벤트 리스너 등록
-    const handleModeChange = () => {
-      // 약간의 딜레이 후 위치 업데이트 (애니메이션 완료 대기)
-      setTimeout(updateTutorialTooltipPosition, 300);
-    };
-
-    // 전체화면 변경 감지
-    document.addEventListener('fullscreenchange', handleModeChange);
-    // 창 크기 변경 감지
-    window.addEventListener('resize', handleModeChange);
-    // 스크롤 시 위치 업데이트
-    window.addEventListener('scroll', updateTutorialTooltipPosition, true);
-
-    // 영화관 모드 변경 감지 (YouTube의 ytd-watch-flexy 요소의 theater 속성 변화 감지)
-    let theaterModeObserver: MutationObserver | null = null;
-    const watchFlexy = document.querySelector('ytd-watch-flexy');
-    if (watchFlexy) {
-      theaterModeObserver = new MutationObserver((mutations) => {
-        for (const mutation of mutations) {
-          if (mutation.type === 'attributes' && mutation.attributeName === 'theater') {
-            console.log('[Tutorial] 영화관 모드 변경 감지');
-            handleModeChange();
-          }
-        }
-      });
-      theaterModeObserver.observe(watchFlexy, { attributes: true, attributeFilter: ['theater'] });
-    }
-
-    // 컨테이너에 cleanup 함수 저장 (나중에 제거할 때 사용)
-    (tooltipContainer as HTMLElement & { _cleanup?: () => void })._cleanup = () => {
-      document.removeEventListener('fullscreenchange', handleModeChange);
-      window.removeEventListener('resize', handleModeChange);
-      window.removeEventListener('scroll', updateTutorialTooltipPosition, true);
-      theaterModeObserver?.disconnect();
-    };
-
-    console.log('[Tutorial] Step1 툴팁 표시됨, 버튼 위치:', buttonRect);
-  }
-
-  // 튜토리얼 Step1 완료 처리
-  function completeTutorialStep1() {
-    tutorialStep1Completed = true;
-    // DEV_MODE에서는 저장하지 않음 (테스트 편의)
-    if (!IS_DEV_MODE) {
-      chrome.storage.sync.set({ [STORAGE_KEYS.TUTORIAL_STEP1_COMPLETED]: true });
-    } else {
-      console.log('[Tutorial] DEV_MODE: Step1 완료 저장 스킵');
-    }
-
-    // 툴팁 제거
-    if (tutorialTooltipRoot) {
-      tutorialTooltipRoot.unmount();
-      tutorialTooltipRoot = null;
-    }
-    const tooltipContainer = document.getElementById('tutorial-tooltip-container') as
-      | (HTMLElement & { _cleanup?: () => void })
-      | null;
-    if (tooltipContainer) {
-      // 이벤트 리스너 정리
-      tooltipContainer._cleanup?.();
-      tooltipContainer.remove();
-    }
-
-    console.log('[Tutorial] Step1 완료 처리됨');
-  }
-
-  // 튜토리얼 Step2 표시 (원래 화면 복귀 안내)
-  async function showTutorialStep2() {
-    // 이미 완료된 경우 표시하지 않음
-    const result = await chrome.storage.sync.get([STORAGE_KEYS.TUTORIAL_STEP2_COMPLETED]);
-    tutorialStep2Completed = (result[STORAGE_KEYS.TUTORIAL_STEP2_COMPLETED] as boolean | undefined) ?? false;
-
-    if (tutorialStep2Completed) {
-      console.log('[Tutorial] Step2 이미 완료됨, 스킵');
-      return;
-    }
-
-    // musicNoteButton 위치 확인
-    const musicNoteBtn = document.querySelector('.ytp-music-note-button');
-    if (!musicNoteBtn) {
-      console.log('[Tutorial] Step2: musicNoteButton을 찾을 수 없음');
-      return;
-    }
-
-    const { TutorialTooltip } = await import('./components/karaoke-mode/TutorialTooltip');
-
-    // Step2도 Step1과 같은 위치 (버튼 위)에 표시
-    let step2Container = document.getElementById('tutorial-step2-container');
-    if (step2Container) {
-      step2Container.remove();
-    }
-
-    step2Container = document.createElement('div');
-    step2Container.id = 'tutorial-step2-container';
-
-    // 가라오케 모드 컨테이너(full-bleed-container) 안에 추가하여 z-index 문제 해결
-    const fullBleedContainer = document.getElementById('full-bleed-container');
-    if (fullBleedContainer) {
-      fullBleedContainer.appendChild(step2Container);
-    } else {
-      document.body.appendChild(step2Container);
-    }
-
-    // 버튼의 화면 좌표 계산
-    const buttonRect = musicNoteBtn.getBoundingClientRect();
-    const bottomDistance = window.innerHeight - buttonRect.top + 10;
-
-    // 사이드바가 있으면 사이드바 왼쪽에 배치, 없으면 버튼 위에 배치
-    const sidebar = document.querySelector('[class*="sidebarContainer"]');
-    let rightDistance: number;
-
-    if (sidebar) {
-      const sidebarRect = sidebar.getBoundingClientRect();
-      // 사이드바 왼쪽 경계 + 여백 (광고 스킵 버튼과 겹치지 않도록 왼쪽으로 이동)
-      rightDistance = window.innerWidth - sidebarRect.left + 80;
-    } else {
-      rightDistance = window.innerWidth - buttonRect.right + 60;
-    }
-
-    step2Container.style.cssText = `
-      position: fixed;
-      z-index: 2147483647;
-      pointer-events: none;
-      bottom: ${bottomDistance}px;
-      right: ${rightDistance}px;
-    `;
-
-    const step2Root = ReactDOM.createRoot(step2Container);
-    step2Root.render(
-      <TutorialTooltip
-        step="step2"
-        visible={true}
-        autoHideDelay={10000}
-        onDismiss={() => {
-          tutorialStep2Completed = true;
-          // DEV_MODE에서는 저장하지 않음 (테스트 편의)
-          if (!IS_DEV_MODE) {
-            chrome.storage.sync.set({ [STORAGE_KEYS.TUTORIAL_STEP2_COMPLETED]: true });
-          } else {
-            console.log('[Tutorial] DEV_MODE: Step2 완료 저장 스킵');
-          }
-          step2Root.unmount();
-          step2Container?.remove();
-          console.log('[Tutorial] Step2 완료 처리됨');
-        }}
-      />,
-    );
-
-    console.log('[Tutorial] Step2 툴팁 표시됨');
-  }
-
-  // 기능 튜토리얼 현재 상태
-  let currentFeatureStepIndex = 0;
-  let currentFeatureSubstepIndex = 0;
-
-  // 기능 튜토리얼 표시
-  async function showFeatureTutorial() {
-    console.log('[Tutorial] showFeatureTutorial 시작');
-
-    const { TutorialTooltip, FEATURE_TUTORIAL_CONFIG } = await import('./components/karaoke-mode/TutorialTooltip');
-
-    // 초기화
-    currentFeatureStepIndex = 0;
-    currentFeatureSubstepIndex = 0;
-
-    featureTutorialActive = true;
-
-    // 사이드바에 상태 알림
-    window.dispatchEvent(
-      new CustomEvent('tutorial-state-change', {
-        detail: { active: true },
-      }),
-    );
-
-    // 초기 렌더링
-    renderFeatureTutorial(TutorialTooltip, FEATURE_TUTORIAL_CONFIG);
-
-    console.log('[Tutorial] Feature 튜토리얼 표시됨');
-  }
-
-  // Feature 튜토리얼 렌더링 (위치 + 컴포넌트)
-  async function renderFeatureTutorial(
-    TutorialTooltip: React.FC<{
-      step: 'step1' | 'step2' | 'feature';
-      visible: boolean;
-      onDismiss?: () => void;
-      featureStepIndex?: number;
-      featureSubstepIndex?: number;
-      onFeatureStepChange?: (stepIndex: number, substepIndex: number) => void;
-    }>,
-    config: Array<{
-      id: string;
-      position: 'bottom-center' | 'bottom-right' | 'sidebar-left';
-      substeps: Array<{ titleKey: string; descKey: string }>;
-    }>,
-  ) {
-    // 기존 컨테이너 제거
-    if (featureTutorialContainer) {
-      featureTutorialContainer.remove();
-    }
-    if (featureTutorialRoot) {
-      featureTutorialRoot.unmount();
-      featureTutorialRoot = null;
-    }
-
-    featureTutorialContainer = document.createElement('div');
-    featureTutorialContainer.id = 'feature-tutorial-container';
-
-    // 가라오케 모드 컨테이너(full-bleed-container) 안에 추가
-    const fullBleedContainer = document.getElementById('full-bleed-container');
-    if (fullBleedContainer) {
-      fullBleedContainer.appendChild(featureTutorialContainer);
-    } else {
-      document.body.appendChild(featureTutorialContainer);
-    }
-
-    // 현재 Step의 위치 설정에 따라 위치 계산
-    const currentConfig = config[currentFeatureStepIndex];
-    const position = currentConfig?.position || 'bottom-center';
-
-    const positionStyle = calculateFeaturePosition(position);
-    featureTutorialContainer.style.cssText = `
-      position: fixed;
-      z-index: 2147483647;
-      ${positionStyle}
-    `;
-
-    featureTutorialRoot = ReactDOM.createRoot(featureTutorialContainer);
-    featureTutorialRoot.render(
-      <TutorialTooltip
-        step="feature"
-        visible={true}
-        featureStepIndex={currentFeatureStepIndex}
-        featureSubstepIndex={currentFeatureSubstepIndex}
-        onDismiss={() => {
-          hideFeatureTutorial();
-        }}
-        onFeatureStepChange={async (stepIndex: number, substepIndex: number) => {
-          console.log(`[Tutorial] Step 변경: ${stepIndex}-${substepIndex}`);
-          const prevStepIndex = currentFeatureStepIndex;
-          currentFeatureStepIndex = stepIndex;
-          currentFeatureSubstepIndex = substepIndex;
-
-          // Step이 변경되면 위치도 변경해야 함
-          if (prevStepIndex !== stepIndex) {
-            // 모듈 재임포트 (이미 캐시됨)
-            const module = await import('./components/karaoke-mode/TutorialTooltip');
-            renderFeatureTutorial(module.TutorialTooltip, module.FEATURE_TUTORIAL_CONFIG);
-          } else {
-            // 같은 Step 내 서브스텝 변경 - 리렌더만
-            featureTutorialRoot?.render(
-              <TutorialTooltip
-                step="feature"
-                visible={true}
-                featureStepIndex={currentFeatureStepIndex}
-                featureSubstepIndex={currentFeatureSubstepIndex}
-                onDismiss={() => {
-                  hideFeatureTutorial();
-                }}
-                onFeatureStepChange={arguments[0] as (stepIndex: number, substepIndex: number) => void}
-              />,
-            );
-          }
-        }}
-      />,
-    );
-  }
-
-  // Feature 튜토리얼 위치 계산
-  function calculateFeaturePosition(position: string): string {
-    const bottomBar = document.querySelector('[class*="bottomContainer"]');
-    const sidebar = document.querySelector('[class*="sidebarContainer"]');
-
-    // 기본 하단 거리 (하단바 높이 + 여백)
-    const bottomBarHeight = bottomBar?.getBoundingClientRect().height || 100;
-    const bottomDistance = bottomBarHeight + 15;
-
-    switch (position) {
-      case 'bottom-center': {
-        // 하단바 위 중앙에서 살짝 오른쪽
-        // 사이드바가 있으면 사이드바 제외한 영역의 중앙
-        if (sidebar) {
-          const sidebarRect = sidebar.getBoundingClientRect();
-          const availableWidth = sidebarRect.left;
-          const centerX = availableWidth / 2;
-          return `bottom: ${bottomDistance}px; left: ${centerX}px; transform: translateX(-50%);`;
-        }
-        return `bottom: ${bottomDistance}px; left: 50%; transform: translateX(-30%);`;
-      }
-      case 'bottom-right': {
-        // 하단바 오른쪽 위 (텍스트 효과 버튼 근처)
-        if (sidebar) {
-          const sidebarRect = sidebar.getBoundingClientRect();
-          return `bottom: ${bottomDistance}px; right: ${window.innerWidth - sidebarRect.left + 20}px;`;
-        }
-        return `bottom: ${bottomDistance}px; right: 120px;`;
-      }
-      case 'sidebar-left': {
-        // 사이드바 왼쪽
-        if (sidebar) {
-          const sidebarRect = sidebar.getBoundingClientRect();
-          return `top: ${sidebarRect.top + 100}px; right: ${window.innerWidth - sidebarRect.left + 15}px;`;
-        }
-        return `bottom: ${bottomDistance}px; right: 350px;`;
-      }
-      default:
-        return `bottom: ${bottomDistance}px; left: 50%; transform: translateX(-50%);`;
-    }
-  }
-
-  // 기능 튜토리얼 숨기기
-  function hideFeatureTutorial() {
-    console.log('[Tutorial] hideFeatureTutorial 시작');
-
-    if (featureTutorialRoot) {
-      featureTutorialRoot.unmount();
-      featureTutorialRoot = null;
-    }
-
-    if (featureTutorialContainer) {
-      featureTutorialContainer.remove();
-      featureTutorialContainer = null;
-    }
-
-    featureTutorialActive = false;
-
-    // 사이드바에 상태 알림
-    window.dispatchEvent(
-      new CustomEvent('tutorial-state-change', {
-        detail: { active: false },
-      }),
-    );
-
-    console.log('[Tutorial] Feature 튜토리얼 숨김 완료');
+    tutorialController.showTutorialStep1IfNeeded();
   }
 
   // 재활성화 토스트 표시
@@ -2052,53 +719,22 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
 
   // 가사 렌더링 함수
   async function renderLyricsOverlay(lyrics: Line[], offset = 0) {
-    if (lyricsMode === 'full') {
+    if (lyricsMode === 'full' || lyricsMode === 'sync' || lyricsMode === 'single') {
       overlayManager.renderOverlay(
         'lyrics',
-        <CurrentTimeProvider>
-          <FullLyrics
-            lyrics={lyrics}
-            offset={offset}
-            fontColor={lyricsFontColorCurrent}
-            pronunciationColor={lyricsFontColorPronunciation}
-            showRealtimeLyrics={showRealtimeLyrics}
-            showPronunciationLyrics={showPronunciationLyrics}
-            styleConfig={lyricsStyleFull}
-            generalSettings={lyricsStyleGeneral}
-          />
-        </CurrentTimeProvider>,
-      );
-    } else if (lyricsMode === 'sync') {
-      overlayManager.renderOverlay(
-        'lyrics',
-        <CurrentTimeProvider>
-          <DualHighlightLyrics
-            lyrics={lyrics}
-            offset={offset}
-            fontColor={lyricsFontColorCurrent}
-            pronunciationColor={lyricsFontColorPronunciation}
-            showRealtimeLyrics={showRealtimeLyrics}
-            showPronunciationLyrics={showPronunciationLyrics}
-            styleConfig={lyricsStyleDual}
-            generalSettings={lyricsStyleGeneral}
-          />
-        </CurrentTimeProvider>,
-      );
-    } else if (lyricsMode === 'single') {
-      overlayManager.renderOverlay(
-        'lyrics',
-        <CurrentTimeProvider>
-          <SingleLineLyrics
-            lyrics={lyrics}
-            offset={offset}
-            fontColor={lyricsFontColorCurrent}
-            pronunciationColor={lyricsFontColorPronunciation}
-            showRealtimeLyrics={showRealtimeLyrics}
-            showPronunciationLyrics={showPronunciationLyrics}
-            styleConfig={lyricsStyleSingle}
-            generalSettings={lyricsStyleGeneral}
-          />
-        </CurrentTimeProvider>,
+        <LyricsOverlayWrapper
+          lyrics={lyrics}
+          offset={offset}
+          lyricsMode={lyricsMode}
+          fontColor={lyricsFontColorCurrent}
+          pronunciationColor={lyricsFontColorPronunciation}
+          showRealtimeLyrics={showRealtimeLyrics}
+          showPronunciationLyrics={showPronunciationLyrics}
+          styleConfigDual={lyricsStyleDual}
+          styleConfigFull={lyricsStyleFull}
+          styleConfigSingle={lyricsStyleSingle}
+          generalSettings={lyricsStyleGeneral}
+        />,
       );
     } else {
       console.log('[renderLyricsOverlay] else 문으로 overlay cleanup 실행');
@@ -2457,7 +1093,12 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
 
   // 1. 영상과 크게 무관한 메타데이터, 가사 정보를 확보하는 함수 (재시도 래퍼)
   async function collectMetadataAndLyrics(videoId: string, videoElem: HTMLMediaElement): Promise<boolean | null> {
+    const myGeneration = collectGeneration;
     for (let attempt = 1; attempt <= API_RETRY_MAX_ATTEMPTS + 1; attempt++) {
+      if (isStaleCollection(myGeneration)) {
+        console.log('[Lyrics] 세대 불일치 감지 (재시도 루프), 수집 중단');
+        return null;
+      }
       try {
         const result = await collectMetadataAndLyricsCore(videoId, videoElem, attempt);
         return result;
@@ -2531,6 +1172,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
       return null;
     }
     isCollecting = true;
+    const myGeneration = collectGeneration;
 
     const startTime = performance.now();
     console.log(`[collectMetadataAndLyrics] 시도 ${attempt}/${API_RETRY_MAX_ATTEMPTS + 1} - videoId: ${videoId}`);
@@ -2610,6 +1252,10 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
       let meta;
       try {
         meta = await metaPromise;
+        if (isStaleCollection(myGeneration)) {
+          console.log('[Lyrics] 세대 불일치 감지 (meta 조회 후), 수집 중단');
+          return null;
+        }
         console.log(`[Performance] YouTube Meta 조회 완료 (${(performance.now() - metaStartTime).toFixed(0)}ms)`);
       } catch (metaError) {
         // YouTube API 에러 상세 추적
@@ -2724,6 +1370,11 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
         })(),
       ]);
 
+      if (isStaleCollection(myGeneration)) {
+        console.log('[Lyrics] 세대 불일치 감지 (캐시+파싱 후), 수집 중단');
+        return null;
+      }
+
       console.log(`[Performance] 병렬 처리 완료 (${(performance.now() - parallelStartTime).toFixed(0)}ms)`);
       console.log('[DEBUG] Promise.all 완료, 캐시 결과:', ytLrclibCacheResult?.lrclibId ? 'HIT' : 'MISS');
 
@@ -2750,6 +1401,10 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
           type: 'FETCH_YOUTUBE_LYRICS',
           videoId: videoId,
         });
+        if (isStaleCollection(myGeneration)) {
+          console.log('[Lyrics] 세대 불일치 감지 (캐시 히트 가사 조회 후), 수집 중단');
+          return null;
+        }
         console.log(`[Performance] 가사 검색 완료 (${(performance.now() - lyricsSearchStartTime).toFixed(0)}ms)`);
 
         // background 에러 응답: 에러 유형에 따라 LyricsError throw (재시도 로직 활용)
@@ -2788,6 +1443,10 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
           fetch: async () =>
             fetchLyricsWithAliasFallback(artist, title, videoDurationSec, artistVariants, videoId, skipSwap),
         });
+        if (isStaleCollection(myGeneration)) {
+          console.log('[Lyrics] 세대 불일치 감지 (캐시 미스 가사 조회 후), 수집 중단');
+          return null;
+        }
         console.log(`[Performance] 가사 검색 완료 (${(performance.now() - lyricsSearchStartTime).toFixed(0)}ms)`);
 
         if (!result) throw new Error('가사 없음');
@@ -2858,10 +1517,53 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
         }
       }
 
+      // 5) 저장된 오프셋 확인 및 자동 적용 (서버 오프셋 우선 → 로컬 오프셋 fallback)
+      const { getVideoOffset } = await import('@lib/utils/storage/videoOffsetStorage');
+      const { applyOffsetToLyrics } = await import('@lib/utils/lyrics/display/lyricsOffset');
+
+      let finalParsedLyrics = parsedLyrics;
+      let hasUserOffset = false;
+
+      // 5-1. 서버 오프셋 조회 (보이지 않는 베이스라인 보정)
+      let serverOffset: number | null = null;
+      if (isExtensionContextValid()) {
+        try {
+          const serverOffsetResponse = await new Promise<{ success: boolean; offset: number | null }>((resolve) => {
+            chrome.runtime.sendMessage({ type: 'FETCH_SERVER_OFFSET', videoId }, (response) => {
+              if (chrome.runtime.lastError) {
+                resolve({ success: false, offset: null });
+              } else {
+                resolve(response ?? { success: false, offset: null });
+              }
+            });
+          });
+          serverOffset = serverOffsetResponse.success ? serverOffsetResponse.offset : null;
+        } catch {
+          serverOffset = null;
+        }
+      }
+
+      if (serverOffset !== null && serverOffset !== 0) {
+        // 서버 오프셋 존재 → 원본 가사에 적용 (사용자 눈에는 0초로 보임)
+        console.log(`[AutoOffset] 서버 오프셋 발견 (videoId: ${videoId}, offset: ${serverOffset}초) - 자동 적용`);
+        finalParsedLyrics = applyOffsetToLyrics(parsedLyrics, serverOffset, 0);
+        hasUserOffset = true;
+      } else {
+        // 5-2. 로컬 오프셋 확인 (fallback)
+        const savedData = await getVideoOffset(videoId);
+        if (savedData && savedData.offset !== 0) {
+          console.log(`[AutoOffset] 로컬 오프셋 발견 (videoId: ${videoId}, offset: ${savedData.offset}초) - 자동 적용`);
+          finalParsedLyrics = applyOffsetToLyrics(parsedLyrics, savedData.offset, 0);
+          hasUserOffset = true;
+        } else {
+          console.log(`[AutoOffset] 저장된 오프셋 없음 - 원본 가사 사용`);
+        }
+      }
+
+      // 가사 싱크 불일치 감지 (±3초 이상 차이, 사용자가 이미 오프셋을 조정한 경우 표시하지 않음)
       const durationDiff = Math.abs(videoDurationSec - effectiveLyricsDuration);
 
-      // 가사 싱크 불일치 감지 (±3초 이상 차이)
-      if (durationDiff >= 3) {
+      if (durationDiff >= 3 && !hasUserOffset) {
         console.log(`[Lyrics Sync] 싱크 불일치 감지 - 차이: ${durationDiff.toFixed(1)}초`);
 
         // ActionableToast 표시 (싱크셋 유도)
@@ -2885,9 +1587,13 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
           },
           React.createElement('span', { style: { fontSize: '20px' } }, '⚠️'),
         );
-      } else {
+      } else if (durationDiff < 3) {
         console.debug(
           `[Lyrics Sync] 영상 길이 (${videoDurationSec}s)와 가사 길이 (${effectiveLyricsDuration}s) 차이: ${durationDiff.toFixed(1)}s - 정상 범위`,
+        );
+      } else {
+        console.debug(
+          `[Lyrics Sync] 싱크 불일치 (${durationDiff.toFixed(1)}초)이나 사용자 오프셋이 존재하여 알림 생략`,
         );
       }
 
@@ -2895,21 +1601,13 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
       renderSongInfo(finalLyricsResult.title || 'Unknown', finalLyricsResult.artist || 'Unknown');
       console.log('[DEBUG] renderSongInfo 호출 완료');
 
-      // 5) 저장된 오프셋 확인 및 자동 적용
-      const { getVideoOffset } = await import('@lib/utils/storage/videoOffsetStorage');
-      const { applyOffsetToLyrics } = await import('@lib/utils/lyrics/display/lyricsOffset');
-
-      const savedData = await getVideoOffset(videoId);
-      let finalParsedLyrics = parsedLyrics;
-
-      if (savedData && savedData.offset !== 0) {
-        console.log(`[AutoOffset] 저장된 오프셋 발견 (videoId: ${videoId}, offset: ${savedData.offset}초) - 자동 적용`);
-        finalParsedLyrics = applyOffsetToLyrics(parsedLyrics, savedData.offset, 0);
-      } else {
-        console.log(`[AutoOffset] 저장된 오프셋 없음 - 원본 가사 사용`);
+      // 6) 최종 렌더링 전 탐색 무효화 체크 (가장 중요한 게이트)
+      if (isStaleCollection(myGeneration)) {
+        console.log('[Lyrics] 세대 불일치 감지 (렌더링 직전), 수집 중단');
+        return null;
       }
 
-      // 6) 광고 종료 후 즉시 가사 렌더링 (오프셋 적용된 가사)
+      // 광고 종료 후 즉시 가사 렌더링 (오프셋 적용된 가사)
       console.log('[DEBUG] onLyricsUpdated 호출 전, 가사 수:', finalParsedLyrics.length);
       onLyricsUpdated(finalParsedLyrics);
       console.log('[DEBUG] onLyricsUpdated 호출 완료, analyzeAudioAndRender 시작');
@@ -2973,7 +1671,10 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
         throw lyricsError;
       }
     } finally {
-      isCollecting = false;
+      // 세대가 일치할 때만 isCollecting 리셋 (이미 resetLyricsData에서 리셋된 경우 중복 방지)
+      if (!isStaleCollection(myGeneration)) {
+        isCollecting = false;
+      }
 
       // 로딩 오버레이 제거 (비음악 비디오 포함)
       if (loadingOverlay && loadingOverlay.parentElement) {
@@ -3006,6 +1707,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
       return;
     }
     isDetecting = true;
+    const myGeneration = collectGeneration;
 
     let videoData;
     try {
@@ -3047,7 +1749,10 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
         videoId: videoData?.videoId,
       });
     } finally {
-      isDetecting = false;
+      // 세대가 일치할 때만 isDetecting 리셋 (탐색으로 이미 리셋된 경우 중복 방지)
+      if (!isStaleCollection(myGeneration)) {
+        isDetecting = false;
+      }
 
       if (videoData && videoData.videoId) {
         lastVideoId = videoData.videoId;

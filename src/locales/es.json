@@ -367,5 +367,12 @@
   "extTutorialStep1Title": "Activa el Modo Karaoke",
   "extTutorialStep1Desc": "para desbloquear más funciones!",
   "extTutorialStep1Action": "¡Haz clic aquí!",
-  "extTutorialStep2": "¡Presiona el mismo botón para volver a la vista normal manteniendo tus letras y configuración!"
+  "extTutorialStep2": "¡Presiona el mismo botón para volver a la vista normal manteniendo tus letras y configuración!",
+  "extTooltipMusicNote": "Karaoke",
+  "extClose": "Cerrar",
+  "extPrevious": "Anterior",
+  "extNext": "Siguiente",
+  "extDone": "Hecho",
+  "extSyncOffsetZero": "El desfase actual es 0",
+  "extSyncResetToOriginal": "Restablecer marcas de tiempo originales"
 }

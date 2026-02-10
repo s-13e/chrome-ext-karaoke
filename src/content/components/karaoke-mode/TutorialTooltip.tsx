@@ -160,7 +160,7 @@ export const TutorialTooltip: React.FC<TutorialTooltipProps> = ({
         ) : (
           // feature step
           <div className={styles.featureContent}>
-            <button className={styles.closeButton} onClick={handleDismiss} aria-label="닫기">
+            <button className={styles.closeButton} onClick={handleDismiss} aria-label={t('extClose')}>
               <MdClose size={18} />
             </button>
             <div className={styles.featureText}>
@@ -168,13 +168,22 @@ export const TutorialTooltip: React.FC<TutorialTooltipProps> = ({
               <span className={styles.featureDesc}>{currentSubstep ? t(currentSubstep.descKey) : ''}</span>
             </div>
             <div className={styles.featureNav}>
-              <button className={styles.navButton} onClick={handlePrev} disabled={isFirstSubstep} aria-label="이전">
+              <button
+                className={styles.navButton}
+                onClick={handlePrev}
+                disabled={isFirstSubstep}
+                aria-label={t('extPrevious')}
+              >
                 <MdArrowBack size={20} />
               </button>
               <span className={styles.stepIndicator}>
                 {featureSubstepIndex + 1} / {currentSubsteps.length}
               </span>
-              <button className={styles.navButton} onClick={handleNext} aria-label={isLastSubstep ? '완료' : '다음'}>
+              <button
+                className={styles.navButton}
+                onClick={handleNext}
+                aria-label={isLastSubstep ? t('extDone') : t('extNext')}
+              >
                 <MdArrowForward size={20} />
               </button>
             </div>

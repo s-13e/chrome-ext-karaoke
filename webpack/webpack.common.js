@@ -138,6 +138,7 @@ module.exports = {
       'process.env.API_SERVER_URL': JSON.stringify(process.env.API_SERVER_URL),
       'process.env.YOUTUBE_API_KEY': JSON.stringify(process.env.YOUTUBE_API_KEY),
       'process.env.MUSICBRAINZ_USER_AGENT': JSON.stringify(process.env.MUSICBRAINZ_USER_AGENT),
+      'process.env.DEBUG_API_KEY': JSON.stringify(process.env.DEBUG_API_KEY || ''),
     }),
   ],
 };
