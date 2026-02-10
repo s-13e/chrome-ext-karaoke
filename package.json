@@ -37,7 +37,7 @@
     "json-loader": "^0.5.7",
     "license-checker": "^25.0.1",
     "mini-css-extract-plugin": "^2.10.0",
-    "node-fetch": "^2.7.0",
+    "node-fetch": "^3.3.2",
     "prettier": "3.8.1",
     "style-loader": "^4.0.0",
     "terser-webpack-plugin": "^5.3.16",
