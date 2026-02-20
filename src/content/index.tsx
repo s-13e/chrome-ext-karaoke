@@ -388,6 +388,9 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
       existingToastContainer.remove();
     }
 
+    // 에러 오버레이 정리 (이전 영상의 에러가 잔류하지 않도록)
+    overlayManager.cleanupOverlay('lyricsError');
+
     latestLyrics = [];
     // songInfo container가 존재할 때만 숨김 처리
     if (overlayManager.getContainer('songInfo')) {
@@ -701,6 +704,11 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
   // 가사 렌더링 함수
   async function renderLyricsOverlay(lyrics: Line[], offset = 0) {
     if (lyricsMode === 'full' || lyricsMode === 'sync' || lyricsMode === 'single') {
+      // 가사 로드 성공 시 에러 오버레이 정리 (광고 중 에러 → 가사 자동 로드 시 잔류 방지)
+      if (lyrics.length > 0) {
+        overlayManager.cleanupOverlay('lyricsError');
+      }
+
       overlayManager.renderOverlay(
         'lyrics',
         <LyricsOverlayWrapper
@@ -768,13 +776,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
 
     overlayManager.renderOverlay(
       'songInfo',
-      <SongInfoOverlay
-        title={title}
-        artist={artist}
-        lyricsSource="LRCLIB"
-        lyricsMode={lyricsMode}
-        onFeedback={handleFeedback}
-      />,
+      <SongInfoOverlay title={title} artist={artist} lyricsSource="LRCLIB" lyricsMode={lyricsMode} />,
     );
     overlayManager.setVisibility('songInfo', true);
 
