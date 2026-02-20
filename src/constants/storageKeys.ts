@@ -14,4 +14,5 @@ export const STORAGE_KEYS = {
   TUTORIAL_CUSTOM_LYRICS_COMPLETED: 'tutorial_custom_lyrics_completed',
   TUTORIAL_SIDEBAR_COMPLETED: 'tutorial_sidebar_completed',
   TUTORIAL_JUMP_COMPLETED: 'tutorial_jump_completed',
+  SYNC_TOAST_DISMISSED_PREFIX: 'syncToastDismissed_',
 } as const;

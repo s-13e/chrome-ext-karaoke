@@ -44,6 +44,7 @@ export async function fetchLyricsWithAliasFallback(
   artistVariants?: string[],
   videoId?: string, // YouTube videoId (optional, 최고속 캐시용)
   skipSwap: boolean = false, // true면 artist/title 순서 뒤집기 시도 스킵
+  skipVideoIdCacheRead: boolean = false, // true면 videoId 캐시 조회 스킵 (이미 확인한 경우)
 ): Promise<LrcLibLyricsResult> {
   const processedArtist = artist;
   const processedTitle = title;
@@ -60,6 +61,7 @@ export async function fetchLyricsWithAliasFallback(
         durationSeconds,
         a === processedArtist ? videoId : undefined,
         skipSwap,
+        a === processedArtist ? skipVideoIdCacheRead : false,
       );
       return res ?? null;
     } catch (error) {

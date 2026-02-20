@@ -39,7 +39,8 @@
   "extLyricsErrorApiTimeout": "请求超时。请重试",
   "extLyricsErrorApiRateLimited": "请求过多。请稍后重试",
   "extLyricsErrorApiServerError": "服务器错误。请稍后重试",
-  "extLyricsErrorLrclibNotFound": "未找到歌词",
+  "extLyricsErrorLrclibNotFound": "歌词尚未收录到数据库中",
+  "extLyricsErrorLrclibNotFoundWithInfo": "\"{{artist}}\"的\"{{title}}\"歌词尚未收录到数据库中",
   "extLyricsErrorMusicbrainzNotFound": "未找到艺术家信息",
   "extLyricsErrorInvalidResponse": "无效的服务器响应",
   "extLyricsErrorEmptySearchResults": "未找到搜索结果",
@@ -374,5 +375,9 @@
   "extNext": "下一个",
   "extDone": "完成",
   "extSyncOffsetZero": "当前偏移量为0",
-  "extSyncResetToOriginal": "重置为原始时间戳"
+  "extSyncResetToOriginal": "重置为原始时间戳",
+  "extFeedbackReportIssue": "歌词有问题吗？",
+  "extFeedbackWrongLyrics": "歌词错误",
+  "extFeedbackSyncMismatch": "同步不匹配",
+  "extFeedbackSentMessage": "感谢您的反馈！"
 }

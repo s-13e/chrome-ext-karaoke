@@ -1,4 +1,5 @@
 import { MESSAGE_TYPES } from '@constants/messageTypes';
+import { STORAGE_KEYS } from '@constants/storageKeys';
 import { YOUTUBE_HOST } from '@constants/youtubeSelectors';
 import { PATHS } from '@constants/paths';
 import { YOUTUBE_CONFIG } from '@constants/platforms';
@@ -8,6 +9,7 @@ import { LyricsError, LyricsErrorCode } from '@lib/types/lyricsError';
 // API 모듈 정적 import (dynamic import 제거로 메시지 처리 지연 최소화)
 import { fetchYouTubeLRCLibCache, fetchLyricsById, fetchYouTubeLyrics, fetchServerOffset } from './api/lrclib';
 import { fetchYouTubeVideoMeta, fetchPlaylistItems } from './api/youtube';
+import { sendFeedback } from './api/feedback';
 
 // ===== 전역 변수 및 상태 =====
 // activeTabs를 chrome.storage.session에 저장하여 Service Worker 재시작 후에도 유지
@@ -103,6 +105,22 @@ interface FetchServerOffsetMessage {
   videoId: string;
 }
 
+interface FetchVideoInitMessage {
+  type: 'FETCH_VIDEO_INIT';
+  videoId: string;
+}
+
+interface SendFeedbackMessage {
+  type: 'SEND_FEEDBACK';
+  payload: {
+    videoId: string;
+    type: 'wrong_lyrics' | 'sync_mismatch' | 'other';
+    artist: string;
+    title: string;
+    details?: string;
+  };
+}
+
 export type ExtensionMessage =
   | LyricsReadyMessage
   | GetLatestLyricsMessage
@@ -113,7 +131,9 @@ export type ExtensionMessage =
   | FetchYouTubeLyricsMessage
   | FetchYouTubeMetaMessage
   | FetchPlaylistItemsMessage
-  | FetchServerOffsetMessage;
+  | FetchServerOffsetMessage
+  | FetchVideoInitMessage
+  | SendFeedbackMessage;
 
 // ===== Chrome 확장 이벤트 리스너 =====
 
@@ -358,6 +378,47 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendRespon
     return true; // 비동기 응답
   }
 
+  // 통합 초기화: Meta + Cache를 단일 메시지로 병렬 처리 (MV3 메시지 직렬화 우회)
+  if (msg.type === 'FETCH_VIDEO_INIT') {
+    const handlerStartTime = performance.now();
+    console.log(`[background] FETCH_VIDEO_INIT 핸들러 진입: videoId=${msg.videoId}`);
+
+    (async () => {
+      try {
+        const apiKey = process.env.YOUTUBE_API_KEY;
+        if (!apiKey) {
+          throw new Error('YouTube API key not configured');
+        }
+
+        const [metaSettled, cacheSettled] = await Promise.allSettled([
+          fetchYouTubeVideoMeta(msg.videoId, apiKey),
+          fetchYouTubeLRCLibCache(msg.videoId),
+        ]);
+
+        const metaResult = metaSettled.status === 'fulfilled' ? metaSettled.value : null;
+        const metaError = metaSettled.status === 'rejected' ? String(metaSettled.reason) : undefined;
+        const cacheResult = cacheSettled.status === 'fulfilled' ? cacheSettled.value : null;
+
+        console.log(
+          `[background] FETCH_VIDEO_INIT 완료 (${(performance.now() - handlerStartTime).toFixed(0)}ms): meta=${metaResult ? '성공' : '실패'}, cache=${cacheResult?.lrclibId ? 'HIT' : 'MISS'}`,
+        );
+
+        sendResponse({
+          meta: metaResult ? { success: true, data: metaResult } : { success: false, error: metaError },
+          cache: { success: true, data: cacheResult },
+        });
+      } catch (error) {
+        console.error('[background] FETCH_VIDEO_INIT 실패:', error);
+        sendResponse({
+          meta: { success: false, error: String(error) },
+          cache: { success: true, data: null },
+        });
+      }
+    })();
+
+    return true;
+  }
+
   // YouTube 비디오 메타데이터 조회
   if (msg.type === 'FETCH_YOUTUBE_META') {
     const handlerStartTime = performance.now();
@@ -434,15 +495,52 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendRespon
     return true; // 비동기 응답
   }
 
+  // 피드백 전송
+  if (msg.type === 'SEND_FEEDBACK') {
+    console.log('[background] SEND_FEEDBACK 요청 수신 - videoId:', msg.payload.videoId, 'type:', msg.payload.type);
+
+    (async () => {
+      try {
+        const result = await sendFeedback(msg.payload);
+        console.log('[background] SEND_FEEDBACK 성공:', result.feedbackId);
+        sendResponse({ success: true, feedbackId: result.feedbackId });
+      } catch (error) {
+        console.error('[background] SEND_FEEDBACK 실패:', error);
+        sendResponse({ success: false, error: String(error) });
+      }
+    })();
+
+    return true; // 비동기 응답
+  }
+
   return true;
+});
+
+// ===== Uninstall URL 관리 =====
+const API_SERVER_URL = process.env.API_SERVER_URL!;
+
+/** 유저 언어 설정을 반영한 삭제 피드백 URL 설정 */
+async function updateUninstallURL(): Promise<void> {
+  try {
+    const result = await chrome.storage.sync.get(STORAGE_KEYS.LANGUAGE);
+    const lang = (result[STORAGE_KEYS.LANGUAGE] as string) || 'en';
+    chrome.runtime.setUninstallURL(`${API_SERVER_URL}/uninstall?lang=${encodeURIComponent(lang)}`);
+  } catch {
+    chrome.runtime.setUninstallURL(`${API_SERVER_URL}/uninstall?lang=en`);
+  }
+}
+
+// 언어 변경 시 uninstall URL도 업데이트
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'sync' && changes[STORAGE_KEYS.LANGUAGE]) {
+    updateUninstallURL();
+  }
 });
 
 // ===== 확장 프로그램 설치/업데이트 시 content script 재주입 =====
 chrome.runtime.onInstalled.addListener(async (details) => {
-  // 확장 프로그램 삭제 시 피드백 폼으로 이동
-  chrome.runtime.setUninstallURL(
-    'https://docs.google.com/forms/d/e/1FAIpQLScX5c-B9-euAGkGFqWqfbeWpd895f4knUrO94LcQ62mwdzjMA/viewform',
-  );
+  // 확장 프로그램 삭제 시 피드백 페이지로 이동
+  await updateUninstallURL();
 
   if (details.reason === 'install') {
     console.log('[Background] Extension installed');

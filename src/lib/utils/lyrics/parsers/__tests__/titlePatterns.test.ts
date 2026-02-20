@@ -292,6 +292,45 @@ describe('additional test cases', () => {
     expect(result?.artist).toBe('Mrs. GREEN APPLE');
     expect(result?.title).toBe('lulu.');
   });
+
+  it("KiiiKiii 키키 '404 (New Era)' MV → title에 숫자 보존", () => {
+    const result = parseTitle("KiiiKiii 키키 '404 (New Era)' MV");
+    expect(result).not.toBeNull();
+    expect(result?.title).toBe('404 (New Era)');
+    expect(result?.patternUsed).toBe('quoted-title');
+  });
+
+  it('BAD BUNNY - DtMF (Visualizer) | DeBÍ TiRAR MáS FOToS → Visualizer 제거, 파이프 뒤 앨범명 제거', () => {
+    const result = parseTitle('BAD BUNNY - DtMF (Visualizer) | DeBÍ TiRAR MáS FOToS');
+    expect(result).not.toBeNull();
+    expect(result?.artist).toBe('BAD BUNNY');
+    expect(result?.title).toBe('DtMF');
+    expect(result?.patternUsed).toBe('delimiter-dash');
+  });
+
+  it('BAD BUNNY - NUEVAYoL (Visualizer) | DeBÍ TiRAR MáS FOToS → 동일 패턴', () => {
+    const result = parseTitle('BAD BUNNY - NUEVAYoL (Visualizer) | DeBÍ TiRAR MáS FOToS');
+    expect(result).not.toBeNull();
+    expect(result?.artist).toBe('BAD BUNNY');
+    expect(result?.title).toBe('NUEVAYoL');
+  });
+
+  it('El Bogueto x Yung Beef - Cuando No Era Cantante - Como Antes ( Video Oficial ) → x 분리, Video Oficial 제거', () => {
+    const result = parseTitle('El Bogueto x Yung Beef - Cuando No Era Cantante - Como Antes ( Video Oficial )');
+    expect(result).not.toBeNull();
+    expect(result?.artist).toBe('El Bogueto');
+    expect(result?.title).toBe('Cuando No Era Cantante - Como Antes');
+  });
+
+  it('Díario de um Cafajeste "O amor não paga as conta" → quoted-title 패턴', () => {
+    const result = parseTitle(
+      'Díario de um Cafajeste "O amor não paga as conta" MC\'s Lele JP, Ryan SP, Meno k,Negão Original, Tuto',
+    );
+    expect(result).not.toBeNull();
+    expect(result?.artist).toBe('Díario de um Cafajeste');
+    expect(result?.title).toBe('O amor não paga as conta');
+    expect(result?.patternUsed).toBe('quoted-title');
+  });
 });
 
 // ====================================
@@ -354,6 +393,17 @@ describe('parseTitleWithFallback (통합 테스트)', () => {
       expect(result).not.toBeNull();
       expect(result?.artist).toBe('Shakira');
       expect(result?.title).toBe('Zoo');
+      expect(result?.source).toBe('pattern');
+    });
+  });
+
+  describe('숫자 포함 타이틀 보존', () => {
+    it("KiiiKiii 키키 '404 (New Era)' MV → 후처리 후에도 404 보존", () => {
+      const result = parseTitleWithFallback("KiiiKiii 키키 '404 (New Era)' MV", {
+        channelTitle: 'KiiiKiii',
+      });
+      expect(result).not.toBeNull();
+      expect(result?.title).toBe('404 (New Era)');
       expect(result?.source).toBe('pattern');
     });
   });

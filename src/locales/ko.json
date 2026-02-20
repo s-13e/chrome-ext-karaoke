@@ -39,7 +39,8 @@
   "extLyricsErrorApiTimeout": "요청 시간이 초과되었습니다. 다시 시도해주세요",
   "extLyricsErrorApiRateLimited": "요청이 너무 많습니다. 잠시 후 다시 시도해주세요",
   "extLyricsErrorApiServerError": "서버에 문제가 발생했습니다. 잠시 후 다시 시도해주세요",
-  "extLyricsErrorLrclibNotFound": "가사를 찾을 수 없습니다",
+  "extLyricsErrorLrclibNotFound": "가사가 데이터베이스에 아직 없습니다",
+  "extLyricsErrorLrclibNotFoundWithInfo": "\"{{artist}}\"의 \"{{title}}\" 가사가 데이터베이스에 아직 없습니다",
   "extLyricsErrorMusicbrainzNotFound": "아티스트 정보를 찾을 수 없습니다",
   "extLyricsErrorInvalidResponse": "서버 응답이 올바르지 않습니다",
   "extLyricsErrorEmptySearchResults": "검색 결과가 없습니다",
@@ -374,5 +375,9 @@
   "extNext": "다음",
   "extDone": "완료",
   "extSyncOffsetZero": "현재 오프셋이 0입니다",
-  "extSyncResetToOriginal": "원본 타임스탬프로 초기화"
+  "extSyncResetToOriginal": "원본 타임스탬프로 초기화",
+  "extFeedbackReportIssue": "가사에 문제가 있나요?",
+  "extFeedbackWrongLyrics": "잘못된 가사",
+  "extFeedbackSyncMismatch": "싱크 불일치",
+  "extFeedbackSentMessage": "제보해 주셔서 감사합니다!"
 }

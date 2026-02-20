@@ -19,6 +19,23 @@ export const LyricsErrorDisplay: React.FC<LyricsErrorDisplayProps> = ({
 }) => {
   const { t } = useTranslation();
 
+  // 타입 가드 함수
+  const isStringOrNumber = (value: unknown): value is string | number => {
+    return typeof value === 'string' || typeof value === 'number';
+  };
+
+  const getContextValue = (key: string): string | null => {
+    if (!error.context || typeof error.context !== 'object') return null;
+    const value = (error.context as Record<string, unknown>)[key];
+    return isStringOrNumber(value) ? String(value) : null;
+  };
+
+  const contextArtist = getContextValue('artist');
+  const contextTitle = getContextValue('title');
+
+  // 3001 에러에서 artist/title이 메시지에 포함되는지 여부
+  const hasInfoInMessage = error.code === 3001 && contextArtist !== null && contextTitle !== null;
+
   // 에러 코드를 번역 키로 매핑
   const getErrorMessageKey = (code: number): string => {
     switch (code) {
@@ -37,7 +54,7 @@ export const LyricsErrorDisplay: React.FC<LyricsErrorDisplayProps> = ({
       case 2004:
         return 'extLyricsErrorApiServerError';
       case 3001:
-        return 'extLyricsErrorLrclibNotFound';
+        return hasInfoInMessage ? 'extLyricsErrorLrclibNotFoundWithInfo' : 'extLyricsErrorLrclibNotFound';
       case 3002:
         return 'extLyricsErrorMusicbrainzNotFound';
       case 3003:
@@ -106,22 +123,14 @@ export const LyricsErrorDisplay: React.FC<LyricsErrorDisplayProps> = ({
 
   const actions = error.actions;
 
-  // 타입 가드 함수
-  const isStringOrNumber = (value: unknown): value is string | number => {
-    return typeof value === 'string' || typeof value === 'number';
-  };
-
-  const getContextValue = (key: string): string | null => {
-    if (!error.context || typeof error.context !== 'object') return null;
-    const value = (error.context as Record<string, unknown>)[key];
-    return isStringOrNumber(value) ? String(value) : null;
-  };
+  // i18next interpolation 값 (3001 WithInfo 키에서 사용)
+  const interpolationValues = hasInfoInMessage ? { artist: contextArtist, title: contextTitle } : undefined;
 
   return (
     <div className={`lyrics-error-display ${className}`}>
       <div className="error-header">
         <span className="error-icon">{getErrorIcon()}</span>
-        <span className="error-message">{t(getErrorMessageKey(error.code))}</span>
+        <span className="error-message">{t(getErrorMessageKey(error.code), interpolationValues)}</span>
       </div>
 
       {error.context && (
@@ -132,14 +141,15 @@ export const LyricsErrorDisplay: React.FC<LyricsErrorDisplayProps> = ({
               <div>
                 {t('extLyricsErrorCode')}: {error.code}
               </div>
-              {getContextValue('artist') && (
+              {/* 3001에서 메시지에 이미 표시된 경우 중복 제거 */}
+              {!hasInfoInMessage && contextArtist && (
                 <div>
-                  {t('extArtist')}: {getContextValue('artist')}
+                  {t('extArtist')}: {contextArtist}
                 </div>
               )}
-              {getContextValue('title') && (
+              {!hasInfoInMessage && contextTitle && (
                 <div>
-                  {t('extSongs')}: {getContextValue('title')}
+                  {t('extSongs')}: {contextTitle}
                 </div>
               )}
               {getContextValue('endpoint') && <div>API Endpoint: {getContextValue('endpoint')}</div>}

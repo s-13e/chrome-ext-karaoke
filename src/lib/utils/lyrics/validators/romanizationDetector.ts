@@ -165,6 +165,102 @@ const ENGLISH_FUNCTION_WORDS = new Set([
 ]);
 
 /**
+ * 스페인어/포르투갈어 기능어 목록
+ * 라틴 언어 가사가 로마자 표기로 오판되는 것을 방지
+ * - 영어 기능어가 거의 없지만 실제 원본 언어인 경우
+ */
+const LATIN_FUNCTION_WORDS = new Set([
+  // 스페인어 관사/전치사/대명사/접속사
+  'el',
+  'la',
+  'los',
+  'las',
+  'un',
+  'una',
+  'de',
+  'del',
+  'en',
+  'con',
+  'por',
+  'para',
+  'que',
+  'es',
+  'yo',
+  'tu',
+  'mi',
+  'me',
+  'te',
+  'se',
+  'lo',
+  'le',
+  'nos',
+  'les',
+  'su',
+  'si',
+  'ya',
+  'pero',
+  'como',
+  'cuando',
+  'donde',
+  'sin',
+  'sobre',
+  'entre',
+  'todo',
+  'esta',
+  'este',
+  'eso',
+  'ese',
+  'mas',
+  'muy',
+  'bien',
+  'mal',
+  'aqui',
+  'alla',
+  'hay',
+  'ser',
+  'estar',
+  'tiene',
+  'tiene',
+  'quiero',
+  'soy',
+  // 포르투갈어 (스페인어와 겹치지 않는 것)
+  'ou',
+  'na',
+  'do',
+  'da',
+  'dos',
+  'das',
+  'ao',
+  'aos',
+  'uma',
+  'eu',
+  'ele',
+  'ela',
+  'voce',
+  'nos',
+  'eles',
+  'meu',
+  'minha',
+  'seu',
+  'sua',
+  'nao',
+  'sim',
+  'tem',
+  'com',
+  'mais',
+  'bem',
+  'aqui',
+  'ali',
+  'onde',
+  'quando',
+  'porque',
+  'isso',
+  'isto',
+  'essa',
+  'esse',
+]);
+
+/**
  * 로마자 표기 가사인지 감지
  *
  * @param lyrics - LRC 형식 가사 문자열 (타임스탬프 포함)
@@ -216,24 +312,38 @@ export function isRomanizedLyrics(lyrics: string): boolean {
       return false;
     }
 
-    // 3. 영어 기능어 체크 (핵심 로직)
+    // 3. 기능어 체크 (핵심 로직)
     // 단어 추출 (소문자로 변환, 축약형 포함)
     const words = sampleText.toLowerCase().match(/[a-z']+/g) || [];
     const totalWords = words.length;
 
     if (totalWords === 0) return false;
 
-    // 기능어 개수 카운트
-    const functionWordCount = words.filter((word) => ENGLISH_FUNCTION_WORDS.has(word)).length;
-    const functionWordRatio = functionWordCount / totalWords;
+    // 영어 기능어 카운트
+    const engFunctionWordCount = words.filter((word) => ENGLISH_FUNCTION_WORDS.has(word)).length;
+    const engFunctionWordRatio = engFunctionWordCount / totalWords;
+
+    // 스페인어/포르투갈어 기능어 카운트
+    const latinFunctionWordCount = words.filter((word) => LATIN_FUNCTION_WORDS.has(word)).length;
+    const latinFunctionWordRatio = latinFunctionWordCount / totalWords;
+
+    // 통합 기능어 비율 (영어 + 라틴 언어)
+    const totalFunctionWordCount = engFunctionWordCount + latinFunctionWordCount;
+    const totalFunctionWordRatio = totalFunctionWordCount / totalWords;
 
     console.log(
-      `[Romanization Check] 기능어 분석: ${functionWordCount}/${totalWords} (${(functionWordRatio * 100).toFixed(1)}%)`,
+      `[Romanization Check] 기능어 분석: 영어 ${engFunctionWordCount}, 라틴 ${latinFunctionWordCount} / ${totalWords} (${(totalFunctionWordRatio * 100).toFixed(1)}%)`,
     );
 
-    // 기능어 비율이 10% 이상이면 진짜 영어 가사
-    if (functionWordRatio > 0.1) {
-      console.log(`[Romanization Check] ✅ 영어 가사 (기능어 ${(functionWordRatio * 100).toFixed(1)}%)`);
+    // 영어 기능어 비율이 10% 이상이면 진짜 영어 가사
+    if (engFunctionWordRatio > 0.1) {
+      console.log(`[Romanization Check] ✅ 영어 가사 (기능어 ${(engFunctionWordRatio * 100).toFixed(1)}%)`);
+      return false;
+    }
+
+    // 라틴 언어 기능어 비율이 10% 이상이면 스페인어/포르투갈어 가사
+    if (latinFunctionWordRatio > 0.1) {
+      console.log(`[Romanization Check] ✅ 라틴 언어 가사 (기능어 ${(latinFunctionWordRatio * 100).toFixed(1)}%)`);
       return false;
     }
 
@@ -242,10 +352,10 @@ export function isRomanizedLyrics(lyrics: string): boolean {
     const vowelRatio = vowels.length / alphaOnly.length;
 
     // 기능어가 거의 없고(< 5%) 모음 비율이 높으면(> 45%) 로마자로 판단
-    const isRomanized = functionWordRatio < 0.05 && vowelRatio > 0.45;
+    const isRomanized = totalFunctionWordRatio < 0.05 && vowelRatio > 0.45;
 
     console.log(
-      `[Romanization Check] ${isRomanized ? '⚠️ 로마자 표기' : '✅ 영어 가사'} (기능어 ${(functionWordRatio * 100).toFixed(1)}%, 모음 ${(vowelRatio * 100).toFixed(1)}%)`,
+      `[Romanization Check] ${isRomanized ? '⚠️ 로마자 표기' : '✅ 원본 가사'} (기능어 ${(totalFunctionWordRatio * 100).toFixed(1)}%, 모음 ${(vowelRatio * 100).toFixed(1)}%)`,
     );
 
     return isRomanized;

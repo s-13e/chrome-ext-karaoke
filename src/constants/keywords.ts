@@ -71,6 +71,10 @@ export const EXTRA_KEYWORDS = [
   '안방1열',
   '직캠4k',
   'stage mix',
+  // 영상 유형 태그
+  'Visualizer',
+  // 스페인어/포르투갈어 (Video 단독은 곡 제목과 충돌 위험)
+  'Video Oficial',
 ];
 
 // 특별 취급 키워드: EXTRA_KEYWORDS에 포함하기에는 다른 단어의 일부로 잘못 삭제될 위험이 있는 키워드
