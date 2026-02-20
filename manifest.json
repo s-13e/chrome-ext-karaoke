@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extName__",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "__MSG_extDescription__",
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
@@ -30,7 +30,8 @@
   ],
   "host_permissions": [
     "*://*.youtube.com/*",
-    "https://lrclib.net/*"
+    "https://lrclib.net/*",
+    "https://karaoke-api-server.vercel.app/*"
   ],
   "action": {
     "default_popup": "popup/popup.html",

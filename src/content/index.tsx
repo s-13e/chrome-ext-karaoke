@@ -378,6 +378,16 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
     // song-info 자동 숨김 리스너 제거
     removeSongInfoVideoTimeListener();
 
+    // ActionableToast 정리 (이전 영상의 토스트가 잔류하지 않도록)
+    if (actionableToastRoot) {
+      actionableToastRoot.unmount();
+      actionableToastRoot = null;
+    }
+    const existingToastContainer = document.getElementById('actionable-toast-container');
+    if (existingToastContainer) {
+      existingToastContainer.remove();
+    }
+
     latestLyrics = [];
     // songInfo container가 존재할 때만 숨김 처리
     if (overlayManager.getContainer('songInfo')) {
