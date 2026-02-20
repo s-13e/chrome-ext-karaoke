@@ -331,13 +331,15 @@ function extractEnglishOnly(str: string): string {
   // 악센트 제거 후 비교를 위해 미리 처리
   const strNoDiacritics = removeDiacritics(str);
 
-  // 비영문자 검사 - 악센트 제거 전 원본에서 처리
-  const hasNonEnglish = new RegExp(`[^\\s${LETTERS}0-9'’&.,-]`).test(strNoDiacritics);
+  // 비영문자 검사 - 괄호()는 영어 제목에서 흔히 사용되므로 허용
+  // 예: "404 (New Era)" → 괄호만으로 비영문자로 판단하지 않음
+  const hasNonEnglish = new RegExp(`[^\\s${LETTERS}0-9''&.,()\\-]`).test(strNoDiacritics);
 
   if (hasEnglish && hasNonEnglish) {
     // 원본에서 악센트 제거한 문자를 토큰화 (공백, 특수문자 포함)
+    // 숫자로 시작하는 토큰도 캡처 (예: "404", "7 Rings")
     const processedStr = removeDiacritics(str);
-    const match = processedStr.match(new RegExp(`([${LETTERS}][${LETTERS}\\s'’./-]*|&|,)`, 'g'));
+    const match = processedStr.match(new RegExp(`([${LETTERS}0-9][${LETTERS}0-9\\s''./-]*|&|,)`, 'g'));
     let result = match ? match.join(' ').trim() : '';
 
     // 쉼표 앞뒤 공백 정리

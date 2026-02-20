@@ -39,7 +39,8 @@
   "extLyricsErrorApiTimeout": "リクエストタイムアウト。再試行してください",
   "extLyricsErrorApiRateLimited": "リクエストが多すぎます。しばらくしてから再試行してください",
   "extLyricsErrorApiServerError": "サーバーエラーが発生しました。しばらくしてから再試行してください",
-  "extLyricsErrorLrclibNotFound": "歌詞が見つかりません",
+  "extLyricsErrorLrclibNotFound": "歌詞がまだデータベースにありません",
+  "extLyricsErrorLrclibNotFoundWithInfo": "「{{artist}}」の「{{title}}」の歌詞がまだデータベースにありません",
   "extLyricsErrorMusicbrainzNotFound": "アーティスト情報が見つかりません",
   "extLyricsErrorInvalidResponse": "無効なサーバー応答",
   "extLyricsErrorEmptySearchResults": "検索結果が見つかりません",
@@ -374,5 +375,9 @@
   "extNext": "次へ",
   "extDone": "完了",
   "extSyncOffsetZero": "現在のオフセットは0です",
-  "extSyncResetToOriginal": "元のタイムスタンプにリセット"
+  "extSyncResetToOriginal": "元のタイムスタンプにリセット",
+  "extFeedbackReportIssue": "歌詞に問題がありますか？",
+  "extFeedbackWrongLyrics": "歌詞が違う",
+  "extFeedbackSyncMismatch": "同期のずれ",
+  "extFeedbackSentMessage": "ご報告ありがとうございます！"
 }

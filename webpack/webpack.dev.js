@@ -9,7 +9,7 @@ const enableBundleAnalyzer = process.env.ANALYZE === 'true';
 
 const devConfig = {
   mode: 'development',
-  devtool: 'inline-source-map',
+  devtool: 'cheap-module-source-map',
   target: 'web',
 
   // Chrome Extension 전용 개발 설정

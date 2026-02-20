@@ -39,7 +39,8 @@
   "extLyricsErrorApiTimeout": "Tempo limite da solicitação. Por favor, tente novamente",
   "extLyricsErrorApiRateLimited": "Muitas solicitações. Por favor, tente mais tarde",
   "extLyricsErrorApiServerError": "Erro do servidor. Por favor, tente mais tarde",
-  "extLyricsErrorLrclibNotFound": "Letras não encontradas",
+  "extLyricsErrorLrclibNotFound": "As letras ainda não estão no banco de dados",
+  "extLyricsErrorLrclibNotFoundWithInfo": "As letras de \"{{title}}\" de \"{{artist}}\" ainda não estão no banco de dados",
   "extLyricsErrorMusicbrainzNotFound": "Informações do artista não encontradas",
   "extLyricsErrorInvalidResponse": "Resposta do servidor inválida",
   "extLyricsErrorEmptySearchResults": "Nenhum resultado de pesquisa encontrado",
@@ -374,5 +375,9 @@
   "extNext": "Próximo",
   "extDone": "Concluído",
   "extSyncOffsetZero": "O deslocamento atual é 0",
-  "extSyncResetToOriginal": "Redefinir para marcações originais"
+  "extSyncResetToOriginal": "Redefinir para marcações originais",
+  "extFeedbackReportIssue": "Algo errado com a letra?",
+  "extFeedbackWrongLyrics": "Letra errada",
+  "extFeedbackSyncMismatch": "Sincronização incorreta",
+  "extFeedbackSentMessage": "Obrigado pelo seu feedback!"
 }

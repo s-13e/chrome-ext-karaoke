@@ -39,7 +39,8 @@
   "extLyricsErrorApiTimeout": "Request timeout. Please try again",
   "extLyricsErrorApiRateLimited": "Too many requests. Please try again later",
   "extLyricsErrorApiServerError": "Server error occurred. Please try again later",
-  "extLyricsErrorLrclibNotFound": "Lyrics not found",
+  "extLyricsErrorLrclibNotFound": "Lyrics are not yet in the database",
+  "extLyricsErrorLrclibNotFoundWithInfo": "Lyrics for \"{{title}}\" by \"{{artist}}\" are not yet in the database",
   "extLyricsErrorMusicbrainzNotFound": "Artist information not found",
   "extLyricsErrorInvalidResponse": "Invalid server response",
   "extLyricsErrorEmptySearchResults": "No search results found",
@@ -374,5 +375,9 @@
   "extNext": "Next",
   "extDone": "Done",
   "extSyncOffsetZero": "Current offset is 0",
-  "extSyncResetToOriginal": "Reset to original timestamps"
+  "extSyncResetToOriginal": "Reset to original timestamps",
+  "extFeedbackReportIssue": "Something wrong with the lyrics?",
+  "extFeedbackWrongLyrics": "Wrong lyrics",
+  "extFeedbackSyncMismatch": "Sync mismatch",
+  "extFeedbackSentMessage": "Thanks for your feedback!"
 }

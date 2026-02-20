@@ -256,6 +256,15 @@ function cleanArtist(artist: string): string {
     .replace(/\[\s*\]/g, '')
     .replace(/\{\s*\}/g, '')
     .trim();
+
+  // 콜라보레이션 구분자 " x "로 연결된 다중 아티스트에서 첫 번째 추출
+  // 예: "El Bogueto x Yung Beef" → "El Bogueto"
+  // 주의: 대소문자 무관하게 " x " 패턴만 매칭 (단어 중간의 x는 무시)
+  const collabMatch = result.match(/^(.+?)\s+[xX]\s+/);
+  if (collabMatch?.[1]) {
+    result = collabMatch[1].trim();
+  }
+
   return result;
 }
 
@@ -263,7 +272,16 @@ function cleanArtist(artist: string): string {
  * 타이틀명 정제 (부가정보, 해시태그, 날짜 제거)
  */
 function cleanTitle(title: string): string {
-  let result = removeExtraInfo(title);
+  // 파이프(|) 뒤의 앨범명/부가정보 제거 (removeExtraInfo보다 먼저 실행)
+  // removeExtraInfo 내부에서 | 를 - 로 변환하므로, 그 전에 제거해야 함
+  // 예: "DtMF (Visualizer) | DeBÍ TiRAR MáS FOToS" → "DtMF (Visualizer)"
+  let result = title;
+  const pipeIndex = result.indexOf(' | ');
+  if (pipeIndex > 0) {
+    result = result.slice(0, pipeIndex).trim();
+  }
+
+  result = removeExtraInfo(result);
   result = result.replace(/(\s*#[\p{L}\p{N}._-]+)+\s*$/gu, '').trim();
   result = result.replace(/\b\d{2}[01]\d(?:3[0-2]|[0-2][0-9])\b/g, '').trim();
   return result;
