@@ -28,7 +28,7 @@ const API_SERVER_URL = process.env.API_SERVER_URL!;
 // API 타임아웃 설정
 const CACHE_TIMEOUT_MS = 3000; // API 서버 캐시 (Redis 전용): 3초
 const LYRICS_PROXY_TIMEOUT_MS = 8000; // API 서버 프록시 (서버→LRCLib 외부 호출 포함): 8초
-const LRCLIB_TIMEOUT_MS = 20000; // LRCLib API 직접 호출: 20초
+const LRCLIB_TIMEOUT_MS = 10000; // LRCLib API 직접 호출: 10초
 
 /**
  * YouTube videoId로 LRCLib ID 캐시 조회 (독립 함수)
