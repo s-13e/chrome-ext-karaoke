@@ -56,6 +56,12 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
   const [loopPanelOpen, setLoopPanelOpen] = useState(false);
   // A/B 설정 중 어느 포인트를 선택할 차례인지
   const [selectingPoint, setSelectingPoint] = useState<'A' | 'B' | null>(null);
+  // 드래그 선택 상태
+  const dragRef = useRef<{ dragging: boolean; startIdx: number; didDrag: boolean }>({
+    dragging: false,
+    startIdx: -1,
+    didDrag: false,
+  });
   // 구간 반복 설정
   const [loopConfig, setLoopConfig] = useState<LoopConfig>({
     startIndex: -1,
@@ -93,6 +99,11 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
   // 가사 줄 클릭 핸들러
   const handleLineClick = useCallback(
     (idx: number, time: number) => {
+      // 드래그로 A-B 설정 완료 직후면 클릭 이벤트 무시
+      if (dragRef.current.didDrag) {
+        dragRef.current.didDrag = false;
+        return;
+      }
       // A/B 선택 모드일 때
       if (selectingPoint === 'A') {
         setLoopConfig((prev) => ({ ...prev, startIndex: idx }));
@@ -117,6 +128,47 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
     },
     [selectingPoint, loopConfig.startIndex, getVideo],
   );
+
+  // 드래그로 A-B 구간 지정: mousedown → A, mousemove 중 hover → B 실시간, mouseup → 확정
+  const handleLineDragStart = useCallback(
+    (idx: number) => {
+      if (!selectingPoint) return;
+      dragRef.current = { dragging: true, startIdx: idx, didDrag: false };
+      // A 즉시 설정
+      setLoopConfig((prev) => ({ ...prev, startIndex: idx, endIndex: -1 }));
+      setSelectingPoint('B');
+    },
+    [selectingPoint],
+  );
+
+  const handleLineDragEnter = useCallback((idx: number) => {
+    if (!dragRef.current.dragging) return;
+    // 다른 줄에 진입했으면 실제 드래그 발생
+    if (idx !== dragRef.current.startIdx) {
+      dragRef.current.didDrag = true;
+    }
+    const start = dragRef.current.startIdx;
+    const actualStart = Math.min(start, idx);
+    const actualEnd = Math.max(start, idx);
+    setLoopConfig((prev) => ({ ...prev, startIndex: actualStart, endIndex: actualEnd }));
+  }, []);
+
+  const handleLineDragEnd = useCallback(() => {
+    if (!dragRef.current.dragging) return;
+    dragRef.current.dragging = false;
+    if (dragRef.current.didDrag) {
+      // 드래그로 A-B 완료
+      setSelectingPoint(null);
+    }
+    // didDrag는 click 핸들러에서 소비 후 리셋
+  }, []);
+
+  // mouseup이 가사 줄 밖에서 발생할 수 있으므로 document 리스너로 처리
+  useEffect(() => {
+    const onMouseUp = () => handleLineDragEnd();
+    document.addEventListener('mouseup', onMouseUp);
+    return () => document.removeEventListener('mouseup', onMouseUp);
+  }, [handleLineDragEnd]);
 
   // 구간 반복 실행 — timeupdate 리스너
   useEffect(() => {
@@ -329,6 +381,8 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
                 .filter(Boolean)
                 .join(' ')}
               onClick={() => handleLineClick(idx, line.time)}
+              onMouseDown={() => handleLineDragStart(idx)}
+              onMouseEnter={() => handleLineDragEnter(idx)}
             >
               <span className={styles.lyricsSidebarTimestamp}>{formatTime(line.time)}</span>
               <span className={styles.lyricsSidebarText}>{line.text}</span>

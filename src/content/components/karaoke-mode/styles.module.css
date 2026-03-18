@@ -426,7 +426,12 @@
   position: relative;
 }
 
-/* A/B 선택 모드일 때 가사 줄 hover 강조 */
+/* A/B 선택 모드일 때 가사 줄 hover 강조 + 드래그 방지 */
+.lyricsSidebarLineSelectable {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 .lyricsSidebarLineSelectable:hover {
   background: rgba(0, 212, 170, 0.1) !important;
   border-left-color: rgba(0, 212, 170, 0.6);
