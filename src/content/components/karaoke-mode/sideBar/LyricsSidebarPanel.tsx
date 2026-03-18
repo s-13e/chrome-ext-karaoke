@@ -71,6 +71,7 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
 
   // ===== 싱크 조정 상태 =====
   const [syncPanelOpen, setSyncPanelOpen] = useState(false);
+  const [syncTab, setSyncTab] = useState<'global' | 'section'>('global');
   const [globalOffset, setGlobalOffset] = useState(0);
   const [globalSyncStep, setGlobalSyncStep] = useState(0.5);
   // 구간 싱크: 분할점(이 줄부터 끝까지 shift)
@@ -560,89 +561,107 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
             </button>
           </div>
 
-          {/* 전체 싱크 */}
-          <div className={styles.syncGlobalRow}>
-            <span className={styles.syncLabel}>{t('extSyncGlobal')}</span>
-            <div className={styles.syncStepRow}>
-              {SYNC_STEP_OPTIONS.map((step) => (
-                <button
-                  key={step}
-                  className={`${styles.loopRepeatButton} ${globalSyncStep === step ? styles.loopRepeatButtonActive : ''}`}
-                  onClick={() => setGlobalSyncStep(step)}
-                >
-                  {step}s
-                </button>
-              ))}
-            </div>
-            <div className={styles.syncAdjustRow}>
-              <button className={styles.syncAdjustButton} onClick={() => handleGlobalOffsetChange(-globalSyncStep)}>
-                <MdRemove size={14} />
-              </button>
-              <span className={styles.syncOffsetDisplay}>
-                {globalOffset >= 0 ? '+' : ''}
-                {globalOffset.toFixed(1)}s
-              </span>
-              <button className={styles.syncAdjustButton} onClick={() => handleGlobalOffsetChange(globalSyncStep)}>
-                <MdAdd size={14} />
-              </button>
-            </div>
-          </div>
-
-          {/* 구간 싱크 — 분할점 방식 */}
-          <div className={styles.syncSectionBlock}>
-            <span className={styles.syncLabel}>{t('extSyncSection')}</span>
-
-            {/* 분할점 선택 */}
+          {/* 탭 전환: 전체 | 구간 */}
+          <div className={styles.syncTabRow}>
             <button
-              className={`${styles.loopPointButton} ${selectingSplit ? styles.loopPointButtonActive : ''} ${splitIndex >= 0 ? styles.loopPointButtonSet : ''}`}
-              onClick={() => setSelectingSplit(true)}
-              style={{ width: '100%' }}
+              className={`${styles.syncTabButton} ${syncTab === 'global' ? styles.syncTabButtonActive : ''}`}
+              onClick={() => {
+                setSyncTab('global');
+                setSelectingSplit(false);
+              }}
             >
-              <span className={styles.loopPointLabel}>▼</span>
-              <span className={styles.loopPointTime}>
-                {splitIndex >= 0 && lyrics[splitIndex]
-                  ? `${formatTime(lyrics[splitIndex].time)} ~ ${t('extSyncSection')}`
-                  : t('extSyncSelectSplit')}
-              </span>
+              {t('extSyncGlobal')}
             </button>
-
-            {selectingSplit && <p className={styles.loopSelectHint}>{t('extSyncSelectSplitHint')}</p>}
-
-            {/* 구간 조정 단위 + 버튼 */}
-            {splitIndex >= 0 && (
-              <>
-                <div className={styles.syncStepRow}>
-                  {SYNC_STEP_OPTIONS.map((step) => (
-                    <button
-                      key={step}
-                      className={`${styles.loopRepeatButton} ${sectionSyncStep === step ? styles.loopRepeatButtonActive : ''}`}
-                      onClick={() => setSectionSyncStep(step)}
-                    >
-                      {step}s
-                    </button>
-                  ))}
-                </div>
-                <div className={styles.syncAdjustRow}>
-                  <button
-                    className={styles.syncAdjustButton}
-                    onClick={() => handleSectionOffsetChange(-sectionSyncStep)}
-                  >
-                    <MdRemove size={14} />
-                  </button>
-                  <span className={styles.syncOffsetDisplay}>
-                    {sectionAdjustmentDisplay >= 0 ? '+' : ''}
-                    {sectionAdjustmentDisplay.toFixed(1)}s
-                  </span>
-                  <button
-                    className={styles.syncAdjustButton}
-                    onClick={() => handleSectionOffsetChange(sectionSyncStep)}
-                  >
-                    <MdAdd size={14} />
-                  </button>
-                </div>
-              </>
-            )}
+            <button
+              className={`${styles.syncTabButton} ${syncTab === 'section' ? styles.syncTabButtonActive : ''}`}
+              onClick={() => setSyncTab('section')}
+            >
+              {t('extSyncSection')}
+            </button>
           </div>
+
+          {/* 전체 싱크 탭 */}
+          {syncTab === 'global' && (
+            <div className={styles.syncGlobalRow}>
+              <div className={styles.syncStepRow}>
+                {SYNC_STEP_OPTIONS.map((step) => (
+                  <button
+                    key={step}
+                    className={`${styles.loopRepeatButton} ${globalSyncStep === step ? styles.loopRepeatButtonActive : ''}`}
+                    onClick={() => setGlobalSyncStep(step)}
+                  >
+                    {step}s
+                  </button>
+                ))}
+              </div>
+              <div className={styles.syncAdjustRow}>
+                <button className={styles.syncAdjustButton} onClick={() => handleGlobalOffsetChange(-globalSyncStep)}>
+                  <MdRemove size={14} />
+                </button>
+                <span className={styles.syncOffsetDisplay}>
+                  {globalOffset >= 0 ? '+' : ''}
+                  {globalOffset.toFixed(1)}s
+                </span>
+                <button className={styles.syncAdjustButton} onClick={() => handleGlobalOffsetChange(globalSyncStep)}>
+                  <MdAdd size={14} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 구간 싱크 탭 — 분할점 방식 */}
+          {syncTab === 'section' && (
+            <div className={styles.syncSectionBlock}>
+              <button
+                className={`${styles.loopPointButton} ${selectingSplit ? styles.loopPointButtonActive : ''} ${splitIndex >= 0 ? styles.loopPointButtonSet : ''}`}
+                onClick={() => setSelectingSplit(true)}
+                style={{ width: '100%' }}
+              >
+                <span className={styles.loopPointLabel}>▼</span>
+                <span className={styles.loopPointTime}>
+                  {splitIndex >= 0 && lyrics[splitIndex]
+                    ? `${formatTime(lyrics[splitIndex].time)} ~ end`
+                    : t('extSyncSelectSplit')}
+                </span>
+              </button>
+
+              {selectingSplit && <p className={styles.loopSelectHint}>{t('extSyncSelectSplitHint')}</p>}
+
+              {splitIndex >= 0 && (
+                <>
+                  <div className={styles.syncStepRow}>
+                    {SYNC_STEP_OPTIONS.map((step) => (
+                      <button
+                        key={step}
+                        className={`${styles.loopRepeatButton} ${sectionSyncStep === step ? styles.loopRepeatButtonActive : ''}`}
+                        onClick={() => setSectionSyncStep(step)}
+                      >
+                        {step}s
+                      </button>
+                    ))}
+                  </div>
+                  <div className={styles.syncAdjustRow}>
+                    <button
+                      className={styles.syncAdjustButton}
+                      onClick={() => handleSectionOffsetChange(-sectionSyncStep)}
+                    >
+                      <MdRemove size={14} />
+                    </button>
+                    <span className={styles.syncOffsetDisplay}>
+                      {sectionAdjustmentDisplay >= 0 ? '+' : ''}
+                      {sectionAdjustmentDisplay.toFixed(1)}s
+                    </span>
+                    <button
+                      className={styles.syncAdjustButton}
+                      onClick={() => handleSectionOffsetChange(sectionSyncStep)}
+                    >
+                      <MdAdd size={14} />
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           {/* 저장 / 초기화 */}
           <div className={styles.syncActionRow}>

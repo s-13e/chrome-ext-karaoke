@@ -681,6 +681,37 @@
   color: rgba(255, 255, 255, 0.7);
 }
 
+/* 싱크 탭 전환 */
+.syncTabRow {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.syncTabButton {
+  flex: 1;
+  padding: 6px 0;
+  border-radius: 6px;
+  border: none;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.syncTabButton:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.syncTabButtonActive {
+  background: rgba(0, 212, 170, 0.15);
+  color: #00d4aa;
+}
+
 /* 조정 단위 선택 행 */
 .syncStepRow {
   display: flex;
