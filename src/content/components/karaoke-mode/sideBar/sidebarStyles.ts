@@ -1,11 +1,11 @@
 /**
  * sidebarStyles.ts
- * 사이드바 공통 스타일 상수
+ * 사이드바 공통 스타일 상수 — 네온 틸 테마
  */
 
 export const SIDEBAR_COLORS = {
   // 배경색
-  background: '#1a1a1a',
+  background: '#141420',
 
   // 텍스트 색상
   textPrimary: '#ffffff',
@@ -14,15 +14,20 @@ export const SIDEBAR_COLORS = {
   textMuted: '#9e9e9e',
   textDisabled: '#757575',
 
-  // 버튼 색상
-  primary: '#2196f3',
-  primaryHover: '#1976d2',
-  primaryActive: '#1565c0',
+  // 버튼 색상 (틸/민트 네온)
+  primary: '#00d4aa',
+  primaryHover: '#00b894',
+  primaryActive: '#009d7e',
 
   secondary: 'rgba(255, 255, 255, 0.1)',
   secondaryHover: 'rgba(255, 255, 255, 0.2)',
   secondaryBorder: 'rgba(255, 255, 255, 0.2)',
   secondaryBorderHover: 'rgba(255, 255, 255, 0.3)',
+
+  // 네온 악센트
+  neonGlow: '#00d4aa',
+  neonPink: '#e879a0',
+  neonYellow: '#d4c940',
 
   // YouTube 빨간색
   youtube: '#ff0000',

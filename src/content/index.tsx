@@ -222,6 +222,12 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
         renderKaraokeModeContainer();
       }
     },
+    onSongInfoChanged: () => {
+      // 곡 정보 변경 시 KaraokeModeContainer 재렌더링 (사이드바 헤더 업데이트)
+      if (karaokeModeManager.isVisible()) {
+        renderKaraokeModeContainer();
+      }
+    },
   });
 
   // 가라오케 모드 자동 종료 이벤트 리스너 (모드 버튼 클릭 시)
@@ -584,7 +590,12 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
 
     // KaraokeModeContainer 렌더링 (visible 상태에 따라 표시/숨김)
     karaokeModeRoot.render(
-      <KaraokeModeContainer visible={karaokeModeManager.isVisible()} lyrics={karaokeModeManager.getLyrics()} />,
+      <KaraokeModeContainer
+        visible={karaokeModeManager.isVisible()}
+        lyrics={karaokeModeManager.getLyrics()}
+        songTitle={karaokeModeManager.getSongTitle()}
+        songArtist={karaokeModeManager.getSongArtist()}
+      />,
     );
   }
 
@@ -773,6 +784,9 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
     // 현재 곡 정보 저장 (handleFeedback에서 사용)
     lastArtist = artist;
     lastTitle = title;
+
+    // 사이드바 곡 정보 헤더 업데이트
+    karaokeModeManager.setSongInfo(title, artist);
 
     overlayManager.renderOverlay(
       'songInfo',

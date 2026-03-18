@@ -25,7 +25,8 @@ export type ChartCategory =
  */
 export interface ChartCategoryInfo {
   id: ChartCategory;
-  labelKey: string; // i18n translation key
+  labelKey: string; // i18n translation key (full label)
+  shortLabelKey: string; // i18n translation key (short tab label)
   playlistId: string; // YouTube Music 플레이리스트 ID
 }
 
@@ -58,46 +59,55 @@ export const CHART_CATEGORIES: ChartCategoryInfo[] = [
   {
     id: 'global-top-100',
     labelKey: 'extChartGlobalTop100',
+    shortLabelKey: 'extChartGlobalShort',
     playlistId: 'PL4fGSI1pDJn6puJdseH2Rt9sMvt9E2M4i',
   },
   {
     id: 'korea-top-100',
     labelKey: 'extChartKoreaTop100',
+    shortLabelKey: 'extChartKoreaShort',
     playlistId: 'PL4fGSI1pDJn6jXS_Tv_N9B8Z0HTRVJE0m',
   },
   {
     id: 'japan-top-100',
     labelKey: 'extChartJapanTop100',
+    shortLabelKey: 'extChartJapanShort',
     playlistId: 'PL4fGSI1pDJn4-UIb6RKHdxam-oAUULIGB',
   },
   {
     id: 'us-top-100',
     labelKey: 'extChartUSTop100',
+    shortLabelKey: 'extChartUSShort',
     playlistId: 'PL4fGSI1pDJn6O1LS0XSdF3RyO0Rq_LDeI',
   },
   {
     id: 'uk-top-100',
     labelKey: 'extChartUKTop100',
+    shortLabelKey: 'extChartUKShort',
     playlistId: 'PL4fGSI1pDJn6_f5P3MnzXg9l3GDfnSlXa',
   },
   {
     id: 'brazil-top-100',
     labelKey: 'extChartBrazilTop100',
+    shortLabelKey: 'extChartBrazilShort',
     playlistId: 'PL4fGSI1pDJn7rGBE8kEC0CqTa1nMh9AKB',
   },
   {
     id: 'india-top-100',
     labelKey: 'extChartIndiaTop100',
+    shortLabelKey: 'extChartIndiaShort',
     playlistId: 'PL4fGSI1pDJn4pTWyM3t61lOyZ6_4jcNOw',
   },
   {
     id: 'spain-top-100',
     labelKey: 'extChartSpainTop100',
+    shortLabelKey: 'extChartSpainShort',
     playlistId: 'PL4fGSI1pDJn6sMPCoD7PdSlEgyUylgxuT',
   },
   {
     id: 'mexico-top-100',
     labelKey: 'extChartMexicoTop100',
+    shortLabelKey: 'extChartMexicoShort',
     playlistId: 'PL4fGSI1pDJn6fko1AmNa_pdGPZr5ROFvd',
   },
   // 아래 카테고리들은 에버그린 플레이리스트 확인 후 주석 해제:

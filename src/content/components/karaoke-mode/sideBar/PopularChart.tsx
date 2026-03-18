@@ -1,36 +1,29 @@
 // PopularChart.tsx
-// 선택된 차트 카테고리의 곡 목록 화면
+// 차트 탭 — 수평 카테고리 탭 + 곡 목록을 단일 뷰로 표시
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MdArrowBackIosNew } from 'react-icons/md';
 import { ChartCategory, ChartItem, CHART_CATEGORIES } from '@lib/types/chart';
 import type { YouTubePlaylistItem } from '@background/api/youtube';
 import acapellaStyles from './AcapellaRecording.module.css';
 import { SIDEBAR_COLORS } from './sidebarStyles';
+import styles from '../styles.module.css';
 
 // Lazy loading 설정
 const ITEMS_PER_PAGE = 10;
 
-interface PopularChartProps {
-  category: ChartCategory;
-  onBackToCategoryMenu: () => void;
-}
-
 /**
- * 차트 곡 목록 화면
- * - 선택된 카테고리의 인기곡 리스트 표시
- * - 각 곡을 클릭하면 해당 YouTube 영상으로 이동
+ * 차트 탭 컴포넌트
+ * - 상단: 수평 스크롤 가능한 카테고리 탭 (기본값: Global)
+ * - 하단: 선택된 카테고리의 인기곡 리스트
  */
-export const PopularChart: React.FC<PopularChartProps> = ({ category, onBackToCategoryMenu }) => {
+export const PopularChart: React.FC = () => {
   const { t } = useTranslation();
+  const [category, setCategory] = useState<ChartCategory>('global-top-100');
   const [chartData, setChartData] = useState<ChartItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
   const loadMoreRef = useRef<HTMLDivElement>(null);
-
-  // 카테고리 정보 가져오기
-  const categoryInfo = CHART_CATEGORIES.find((c) => c.id === category);
-  const categoryLabel = categoryInfo ? t(categoryInfo.labelKey) : category;
+  const tabsRef = useRef<HTMLDivElement>(null);
 
   // 더 많은 항목 로드 (Intersection Observer 콜백)
   const loadMore = useCallback(() => {
@@ -62,13 +55,80 @@ export const PopularChart: React.FC<PopularChartProps> = ({ category, onBackToCa
     };
   }, [loadMore]);
 
-  // 카테고리 변경 시 visibleCount 초기화
+  // 카테고리 변경 시 visibleCount 초기화 + 활성 탭 스크롤
   useEffect(() => {
     setVisibleCount(ITEMS_PER_PAGE);
+
+    // 활성 탭을 뷰포트 중앙으로 스크롤
+    const container = tabsRef.current;
+    if (!container) return;
+    const activeButton = container.querySelector('[data-active="true"]') as HTMLElement | null;
+    if (activeButton) {
+      activeButton.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
   }, [category]);
 
+  // 마우스 드래그 스크롤 구현
   useEffect(() => {
-    // 플레이리스트 ID 가져오기
+    const container = tabsRef.current;
+    if (!container) return;
+
+    let isDown = false;
+    let startX = 0;
+    let scrollLeftStart = 0;
+
+    const onMouseDown = (e: MouseEvent) => {
+      isDown = true;
+      startX = e.pageX - container.offsetLeft;
+      scrollLeftStart = container.scrollLeft;
+      container.style.cursor = 'grabbing';
+    };
+
+    const onMouseLeave = () => {
+      isDown = false;
+      container.style.cursor = 'grab';
+    };
+
+    const onMouseUp = () => {
+      isDown = false;
+      container.style.cursor = 'grab';
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDown) return;
+      e.preventDefault();
+      const x = e.pageX - container.offsetLeft;
+      const walk = (x - startX) * 1.5;
+      container.scrollLeft = scrollLeftStart - walk;
+    };
+
+    // 마우스 휠로도 수평 스크롤 가능하게
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        e.preventDefault();
+        container.scrollLeft += e.deltaY;
+      }
+    };
+
+    container.style.cursor = 'grab';
+    container.addEventListener('mousedown', onMouseDown);
+    container.addEventListener('mouseleave', onMouseLeave);
+    container.addEventListener('mouseup', onMouseUp);
+    container.addEventListener('mousemove', onMouseMove);
+    container.addEventListener('wheel', onWheel, { passive: false });
+
+    return () => {
+      container.removeEventListener('mousedown', onMouseDown);
+      container.removeEventListener('mouseleave', onMouseLeave);
+      container.removeEventListener('mouseup', onMouseUp);
+      container.removeEventListener('mousemove', onMouseMove);
+      container.removeEventListener('wheel', onWheel);
+    };
+  }, []);
+
+  // 차트 데이터 가져오기
+  useEffect(() => {
+    const categoryInfo = CHART_CATEGORIES.find((c) => c.id === category);
     const playlistId = categoryInfo?.playlistId;
     if (!playlistId) {
       console.error('[PopularChart] playlistId 없음:', category);
@@ -110,7 +170,7 @@ export const PopularChart: React.FC<PopularChartProps> = ({ category, onBackToCa
       .finally(() => {
         setLoading(false);
       });
-  }, [category, categoryInfo]);
+  }, [category]);
 
   const handlePlayMV = (videoId: string) => {
     // MV (뮤직비디오) 재생 - YouTube 영상 페이지로 이동
@@ -123,13 +183,22 @@ export const PopularChart: React.FC<PopularChartProps> = ({ category, onBackToCa
   };
 
   return (
-    <>
-      {/* 헤더: 뒤로가기 버튼 */}
-      <div className={acapellaStyles.header}>
-        <button className={acapellaStyles.backButton} onClick={onBackToCategoryMenu} aria-label={t('extBack')}>
-          <MdArrowBackIosNew />
-        </button>
-        <h2 className={acapellaStyles.title}>{categoryLabel}</h2>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', minWidth: 0 }}>
+      {/* 수평 스크롤 카테고리 탭 */}
+      <div ref={tabsRef} className={styles.chartCategoryTabs}>
+        {CHART_CATEGORIES.map((cat) => {
+          const isActive = cat.id === category;
+          return (
+            <button
+              key={cat.id}
+              data-active={isActive ? 'true' : undefined}
+              className={`${styles.chartCategoryTab} ${isActive ? styles.chartCategoryTabActive : ''}`}
+              onClick={() => setCategory(cat.id)}
+            >
+              {t(cat.shortLabelKey)}
+            </button>
+          );
+        })}
       </div>
 
       {/* 차트 목록 */}
@@ -304,6 +373,6 @@ export const PopularChart: React.FC<PopularChartProps> = ({ category, onBackToCa
           </div>
         )}
       </div>
-    </>
+    </div>
   );
 };
