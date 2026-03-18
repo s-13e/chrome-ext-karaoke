@@ -616,6 +616,51 @@
   cursor: not-allowed;
 }
 
+/* 연속 반복 토글 */
+.loopContinuousToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.loopContinuousToggle:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.loopContinuousToggleActive {
+  border-color: rgba(0, 212, 170, 0.4);
+  background: rgba(0, 212, 170, 0.08);
+  color: #00d4aa;
+}
+
+.loopContinuousDesc {
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+/* 반복 횟수 카운트 배지 */
+.loopCountBadge {
+  position: absolute;
+  top: -6px;
+  right: -12px;
+  background: #00d4aa;
+  color: #000000;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 6px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
 /* 차트 카테고리 수평 스크롤 탭 */
 .chartCategoryTabs {
   display: flex;

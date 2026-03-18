@@ -20,6 +20,8 @@ interface LoopConfig {
   endIndex: number;
   /** 반복 횟수 모드 */
   repeatMode: LoopRepeatMode;
+  /** 연속 반복: 구간 완료 후 다음 구간으로 자동 이동 */
+  continuous: boolean;
 }
 
 /** 반복 실행 상태 */
@@ -28,8 +30,10 @@ interface LoopRunState {
   currentRepeat: number;
 }
 
-/** 끝 시간 계산 시 버퍼 (가사 끝이 잘리지 않도록) */
-const LOOP_END_BUFFER = 0.3;
+/** 끝 시간 계산 시 버퍼 — B 파트 가사가 끊기지 않도록 여유 확보 */
+const LOOP_END_BUFFER = 1;
+/** A 지점 시작 전 여유 시간 (사용자가 자연스럽게 준비할 수 있도록) */
+const LOOP_START_LEAD_TIME = 1;
 
 interface LyricsSidebarPanelProps {
   lyrics: Line[];
@@ -120,24 +124,44 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
     const video = getVideo();
     if (!video) return;
 
-    const { startIndex, endIndex, repeatMode } = loopConfig;
+    const { startIndex, endIndex, repeatMode, continuous } = loopConfig;
     const startLyric = lyrics[startIndex];
     const endLyric = lyrics[endIndex];
     if (!startLyric || !endLyric) return;
 
-    const loopStartTime = startLyric.time;
-    // 끝 시간: 다음 가사가 있으면 그 시점, 없으면 끝 가사 + 10초
+    const loopStartTime = Math.max(0, startLyric.time - LOOP_START_LEAD_TIME);
+    // 끝 시간: 다음 가사가 있으면 그 시점 + 버퍼, 없으면 끝 가사 + 10초
     const nextAfterEnd = lyrics[endIndex + 1];
     const loopEndTime = nextAfterEnd ? nextAfterEnd.time + LOOP_END_BUFFER : endLyric.time + 10;
 
+    // 1x = 되돌아가기 1회 (총 2회 재생), 3x = 3회 (총 4회), ∞ = 무한
     const maxRepeats = repeatMode === '1x' ? 1 : repeatMode === '3x' ? 3 : Infinity;
 
     const onTimeUpdate = () => {
       if (video.currentTime >= loopEndTime) {
         setLoopRun((prev) => {
           const nextCount = prev.currentRepeat + 1;
-          if (nextCount >= maxRepeats) {
-            // 반복 완료 → 해제
+          if (nextCount > maxRepeats) {
+            // 반복 완료
+            if (continuous) {
+              // 연속 반복: 다음 구간으로 자동 이동
+              const sectionSize = endIndex - startIndex + 1;
+              const newStart = endIndex + 1;
+              const newEnd = Math.min(newStart + sectionSize - 1, lyrics.length - 1);
+              if (newStart < lyrics.length) {
+                const newStartLyric = lyrics[newStart];
+                if (newStartLyric) {
+                  video.currentTime = Math.max(0, newStartLyric.time - LOOP_START_LEAD_TIME);
+                }
+                setLoopConfig((prevConfig) => ({
+                  ...prevConfig,
+                  startIndex: newStart,
+                  endIndex: newEnd,
+                }));
+                return { active: true, currentRepeat: 0 };
+              }
+            }
+            // 연속 아니거나 가사 끝 → 해제
             return { active: false, currentRepeat: 0 };
           }
           // 되돌리기
@@ -159,7 +183,7 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
     const video = getVideo();
     const startLyric = lyrics[loopConfig.startIndex];
     if (video && startLyric) {
-      video.currentTime = startLyric.time;
+      video.currentTime = Math.max(0, startLyric.time - LOOP_START_LEAD_TIME);
     }
     setLoopRun({ active: true, currentRepeat: 0 });
     setLoopPanelOpen(false);
@@ -182,7 +206,7 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
     setLoopPanelOpen((prev) => {
       if (!prev) {
         // 패널 열 때 초기화
-        setLoopConfig({ startIndex: -1, endIndex: -1, repeatMode: '3x' });
+        setLoopConfig({ startIndex: -1, endIndex: -1, repeatMode: '3x', continuous: false });
         setSelectingPoint('A');
       } else {
         setSelectingPoint(null);
@@ -373,6 +397,17 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
             ))}
           </div>
 
+          {/* 연속 반복 토글 */}
+          <button
+            className={`${styles.loopContinuousToggle} ${loopConfig.continuous ? styles.loopContinuousToggleActive : ''}`}
+            onClick={() => setLoopConfig((prev) => ({ ...prev, continuous: !prev.continuous }))}
+          >
+            <span>연속 반복</span>
+            <span className={styles.loopContinuousDesc}>
+              {loopConfig.continuous ? '구간 완료 후 다음 구간으로 자동 이동' : '선택한 구간만 반복'}
+            </span>
+          </button>
+
           {/* 반복 시작 버튼 */}
           <button className={styles.loopStartButton} disabled={!isLoopConfigComplete} onClick={handleLoopStart}>
             ▶ {t('extKaraokeLoopSection')}
@@ -388,7 +423,15 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
           onClick={handleLoopButtonClick}
           title={t('extKaraokeLoopSection')}
         >
-          <IoRepeat size={18} color={loopRun.active ? SIDEBAR_COLORS.primary : SIDEBAR_COLORS.textPrimary} />
+          <div style={{ position: 'relative' }}>
+            <IoRepeat size={18} color={loopRun.active ? SIDEBAR_COLORS.primary : SIDEBAR_COLORS.textPrimary} />
+            {loopRun.active && loopConfig.repeatMode !== 'infinite' && (
+              <span className={styles.loopCountBadge}>
+                {loopRun.currentRepeat}/{loopConfig.repeatMode === '1x' ? 1 : 3}
+              </span>
+            )}
+            {loopRun.active && loopConfig.repeatMode === 'infinite' && <span className={styles.loopCountBadge}>∞</span>}
+          </div>
           <span>{t('extKaraokeLoopSection')}</span>
         </button>
 
