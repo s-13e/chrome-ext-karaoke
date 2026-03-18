@@ -760,19 +760,42 @@
   gap: 8px;
 }
 
-.syncResetButton {
+/* 전체 초기화 — 빨간 톤 (위험 동작) */
+.syncResetAllButton {
+  padding: 10px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(244, 67, 54, 0.3);
+  background: rgba(244, 67, 54, 0.08);
+  color: rgba(244, 67, 54, 0.8);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.syncResetAllButton:hover {
+  border-color: rgba(244, 67, 54, 0.5);
+  background: rgba(244, 67, 54, 0.15);
+  color: #f44336;
+}
+
+/* 되돌리기 — 중립 톤 */
+.syncRevertButton {
   flex: 1;
-  padding: 10px;
+  padding: 10px 8px;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.15);
   background: transparent;
   color: rgba(255, 255, 255, 0.6);
-  font-size: 13px;
+  font-size: 11px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
+  white-space: nowrap;
 }
 
-.syncResetButton:hover {
+.syncRevertButton:hover {
   border-color: rgba(255, 255, 255, 0.3);
   color: #ffffff;
 }

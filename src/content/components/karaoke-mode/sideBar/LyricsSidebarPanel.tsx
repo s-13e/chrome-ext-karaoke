@@ -85,20 +85,27 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
   // 초기 가사 저장 (싱크 패널이 열린 시점의 가사를 원본으로 사용)
   const baseLyricsRef = useRef<Line[]>(lyrics);
 
-  // 싱크 패널 열릴 때 현재 가사를 기준점으로 저장 + 기존 오프셋 로드
+  // 싱크 패널 열릴 때 원본 가사 복원 + 기존 오프셋 로드
   useEffect(() => {
-    if (syncPanelOpen) {
+    if (!syncPanelOpen) return;
+    const videoId = extractVideoId();
+    if (!videoId) {
       baseLyricsRef.current = lyrics;
-      const videoId = extractVideoId();
-      if (videoId) {
-        getVideoOffset(videoId).then((data) => {
-          if (data) {
-            setGlobalOffset(data.offset);
-            setLineAdjustments(data.lineAdjustments ?? {});
-          }
-        });
-      }
+      return;
     }
+    getVideoOffset(videoId).then((data) => {
+      const savedOffset = data?.offset ?? 0;
+      const savedAdj = data?.lineAdjustments ?? {};
+      // 현재 lyrics는 이미 오프셋 적용된 상태 → 역적용하여 원본 복원
+      let base = applyOffsetToLyrics(lyrics, -savedOffset, 0);
+      base = applyLineAdjustments(
+        base,
+        Object.fromEntries(Object.entries(savedAdj).map(([k, v]) => [k, -(v as number)])),
+      );
+      baseLyricsRef.current = base;
+      setGlobalOffset(savedOffset);
+      setLineAdjustments(savedAdj);
+    });
   }, [syncPanelOpen, lyrics]);
 
   // 현재 재생 중인 가사 인덱스
@@ -244,7 +251,7 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
       // 싱크 구간 선택 모드
       if (syncSelectingPoint === 'A') {
         setSyncRange({ startIndex: idx, endIndex: lyrics.length - 1 });
-        setSyncSelectingPoint('B');
+        setSyncSelectingPoint(null); // A 선택 완료, B는 기본 end (별도 선택 가능)
         return;
       }
       if (syncSelectingPoint === 'B') {
@@ -737,10 +744,10 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
 
           {/* 저장 / 초기화 */}
           <div className={styles.syncActionRow}>
-            <button className={styles.syncResetButton} onClick={handleSyncResetAll} title={t('extSyncResetAll')}>
-              ↺
+            <button className={styles.syncResetAllButton} onClick={handleSyncResetAll} title={t('extSyncResetAll')}>
+              {t('extSyncResetAll')}
             </button>
-            <button className={styles.syncResetButton} onClick={handleSyncRevert} title={t('extSyncRevert')}>
+            <button className={styles.syncRevertButton} onClick={handleSyncRevert} title={t('extSyncRevert')}>
               {t('extSyncRevert')}
             </button>
             <button className={styles.loopStartButton} onClick={handleSyncSave}>
