@@ -757,7 +757,8 @@
 
 .syncActionRow {
   display: flex;
-  gap: 8px;
+  gap: 6px;
+  align-items: center;
 }
 
 /* 전체 초기화 — 빨간 톤 (위험 동작) */
@@ -782,7 +783,6 @@
 
 /* 되돌리기 — 중립 톤 */
 .syncRevertButton {
-  flex: 1;
   padding: 10px 8px;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.15);

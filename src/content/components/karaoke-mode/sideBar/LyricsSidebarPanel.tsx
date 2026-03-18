@@ -148,15 +148,18 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
   }, []);
 
   // 전체 오프셋 조정
+  const globalOffsetRef = useRef(globalOffset);
+  globalOffsetRef.current = globalOffset;
+  const lineAdjustmentsRef = useRef(lineAdjustments);
+  lineAdjustmentsRef.current = lineAdjustments;
+
   const handleGlobalOffsetChange = useCallback(
     (delta: number) => {
-      setGlobalOffset((prev) => {
-        const next = Number((prev + delta).toFixed(1));
-        applySyncToOverlay(next, lineAdjustments);
-        return next;
-      });
+      const next = Number((globalOffsetRef.current + delta).toFixed(1));
+      setGlobalOffset(next);
+      applySyncToOverlay(next, lineAdjustmentsRef.current);
     },
-    [lineAdjustments, applySyncToOverlay],
+    [applySyncToOverlay],
   );
 
   // 구간 오프셋 조정 — A부터 B까지 shift
@@ -164,17 +167,17 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
     (delta: number) => {
       if (syncRange.startIndex < 0) return;
       const end = syncRange.endIndex >= 0 ? syncRange.endIndex : lyrics.length - 1;
-      setLineAdjustments((prev) => {
-        const next = { ...prev };
-        for (let i = syncRange.startIndex; i <= end; i++) {
-          next[i] = Number(((next[i] ?? 0) + delta).toFixed(1));
-          if (next[i] === 0) delete next[i];
-        }
-        applySyncToOverlay(globalOffset, next);
-        return next;
-      });
+      const prev = lineAdjustmentsRef.current;
+      const next = { ...prev };
+      for (let i = syncRange.startIndex; i <= end; i++) {
+        next[i] = Number(((next[i] ?? 0) + delta).toFixed(1));
+        if (next[i] === 0) delete next[i];
+      }
+      setLineAdjustments(next);
+      lineAdjustmentsRef.current = next;
+      applySyncToOverlay(globalOffsetRef.current, next);
     },
-    [syncRange, lyrics.length, globalOffset, applySyncToOverlay],
+    [syncRange, lyrics.length, applySyncToOverlay],
   );
 
   // 싱크 저장
@@ -208,6 +211,8 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
   const handleSyncResetAll = useCallback(() => {
     setGlobalOffset(0);
     setLineAdjustments({});
+    globalOffsetRef.current = 0;
+    lineAdjustmentsRef.current = {};
     setSyncRange({ startIndex: -1, endIndex: -1 });
     setSyncSelectingPoint(null);
     applySyncToOverlay(0, {});
@@ -222,6 +227,8 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
     const savedAdj = data?.lineAdjustments ?? {};
     setGlobalOffset(savedOffset);
     setLineAdjustments(savedAdj);
+    globalOffsetRef.current = savedOffset;
+    lineAdjustmentsRef.current = savedAdj;
     setSyncRange({ startIndex: -1, endIndex: -1 });
     setSyncSelectingPoint(null);
     applySyncToOverlay(savedOffset, savedAdj);
@@ -750,6 +757,7 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
             <button className={styles.syncRevertButton} onClick={handleSyncRevert} title={t('extSyncRevert')}>
               {t('extSyncRevert')}
             </button>
+            <div style={{ flex: 1 }} />
             <button className={styles.loopStartButton} onClick={handleSyncSave}>
               <MdSave size={14} /> {t('extSyncSave')}
             </button>
