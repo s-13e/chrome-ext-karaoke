@@ -681,6 +681,13 @@
   color: rgba(255, 255, 255, 0.7);
 }
 
+/* 조정 단위 선택 행 */
+.syncStepRow {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+
 .syncAdjustRow {
   display: flex;
   align-items: center;

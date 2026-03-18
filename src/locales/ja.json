@@ -412,5 +412,7 @@
   "extSyncGlobal": "全体同期",
   "extSyncSection": "区間同期",
   "extSyncReset": "リセット",
-  "extSyncSave": "保存"
+  "extSyncSave": "保存",
+  "extSyncSelectSplit": "分割点を選択してください",
+  "extSyncSelectSplitHint": "この行から最後まで同期が調整されます"
 }

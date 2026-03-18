@@ -412,5 +412,7 @@
   "extSyncGlobal": "Global Sync",
   "extSyncSection": "Section Sync",
   "extSyncReset": "Reset",
-  "extSyncSave": "Save"
+  "extSyncSave": "Save",
+  "extSyncSelectSplit": "Select a split point",
+  "extSyncSelectSplitHint": "Sync will be adjusted from this line to the end"
 }

@@ -412,5 +412,7 @@
   "extSyncGlobal": "전체 싱크",
   "extSyncSection": "구간 싱크",
   "extSyncReset": "초기화",
-  "extSyncSave": "저장"
+  "extSyncSave": "저장",
+  "extSyncSelectSplit": "분할점을 선택하세요",
+  "extSyncSelectSplitHint": "이 줄부터 끝까지 싱크가 조정됩니다"
 }

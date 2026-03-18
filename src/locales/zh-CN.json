@@ -412,5 +412,7 @@
   "extSyncGlobal": "全局同步",
   "extSyncSection": "区间同步",
   "extSyncReset": "重置",
-  "extSyncSave": "保存"
+  "extSyncSave": "保存",
+  "extSyncSelectSplit": "选择分割点",
+  "extSyncSelectSplitHint": "从此行到末尾的同步将被调整"
 }

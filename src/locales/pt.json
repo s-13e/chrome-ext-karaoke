@@ -412,5 +412,7 @@
   "extSyncGlobal": "Sincronização global",
   "extSyncSection": "Sincronização por seção",
   "extSyncReset": "Redefinir",
-  "extSyncSave": "Salvar"
+  "extSyncSave": "Salvar",
+  "extSyncSelectSplit": "Selecione um ponto de divisão",
+  "extSyncSelectSplitHint": "A sincronização será ajustada desta linha até o final"
 }
