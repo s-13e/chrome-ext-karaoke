@@ -31,6 +31,25 @@ export function applyOffsetToLyrics(lyrics: Line[], offset: number, minOffsetLim
   }));
 }
 
+/**
+ * 줄별 추가 보정값 적용
+ * @param lyrics 가사 배열 (전체 오프셋이 이미 적용된 상태)
+ * @param lineAdjustments 줄 인덱스 → 추가 보정값(초) 맵
+ * @returns 줄별 보정이 적용된 새로운 가사 배열
+ */
+export function applyLineAdjustments(lyrics: Line[], lineAdjustments: Record<number, number>): Line[] {
+  if (!lyrics || lyrics.length === 0 || !lineAdjustments) return lyrics;
+
+  return lyrics.map((line, idx) => {
+    const delta = lineAdjustments[idx];
+    if (delta === undefined || delta === 0) return line;
+    return {
+      ...line,
+      time: Math.max(0, line.time + delta),
+    };
+  });
+}
+
 export function shiftFirstLyricEarlier(lyrics: Line[], advanceSec: number): Line[] {
   if (!lyrics || lyrics.length === 0) return lyrics;
   const [first, ...rest] = lyrics;

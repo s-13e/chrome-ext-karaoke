@@ -666,6 +666,92 @@
   white-space: nowrap;
 }
 
+/* ========== 싱크 조정 패널 ========== */
+
+.syncGlobalRow,
+.syncSectionBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.syncLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.syncAdjustRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.syncAdjustButton {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.syncAdjustButton:hover {
+  border-color: #00d4aa;
+  color: #00d4aa;
+  background: rgba(0, 212, 170, 0.08);
+}
+
+.syncOffsetDisplay {
+  font-size: 16px;
+  font-weight: 700;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  color: #00d4aa;
+  min-width: 60px;
+  text-align: center;
+}
+
+.syncActionRow {
+  display: flex;
+  gap: 8px;
+}
+
+.syncResetButton {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.syncResetButton:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+}
+
+/* 구간 싱크 보정값 배지 */
+.syncAdjBadge {
+  font-size: 9px;
+  font-weight: 600;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  color: #00d4aa;
+  background: rgba(0, 212, 170, 0.15);
+  border-radius: 4px;
+  padding: 1px 4px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
 /* 차트 카테고리 수평 스크롤 탭 */
 .chartCategoryTabs {
   display: flex;

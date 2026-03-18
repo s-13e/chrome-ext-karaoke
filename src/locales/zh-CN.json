@@ -408,5 +408,9 @@
   "extLoopSelectB": "从歌词中选择结束点(B)",
   "extLoopContinuous": "连续循环",
   "extLoopContinuousOnDesc": "区间完成后自动进入下一区间",
-  "extLoopContinuousOffDesc": "仅循环选定区间"
+  "extLoopContinuousOffDesc": "仅循环选定区间",
+  "extSyncGlobal": "全局同步",
+  "extSyncSection": "区间同步",
+  "extSyncReset": "重置",
+  "extSyncSave": "保存"
 }

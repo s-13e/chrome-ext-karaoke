@@ -1,11 +1,13 @@
 // LyricsSidebarPanel.tsx
-// 사이드바 Lyrics 탭 — 전체 가사 뷰 + 자동 하이라이트 + 구간 반복 + 간주 점프
+// 사이드바 Lyrics 탭 — 전체 가사 뷰 + 자동 하이라이트 + 구간 반복 + 간주 점프 + 싱크 조정
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { IoRepeat } from 'react-icons/io5';
-import { MdSkipNext, MdSync, MdClose } from 'react-icons/md';
+import { MdSkipNext, MdSync, MdClose, MdRemove, MdAdd, MdSave } from 'react-icons/md';
 import { Line } from '@lib/types/lyrics';
 import { useCurrentTime } from '@hooks/useCurrentTime';
+import { applyOffsetToLyrics, applyLineAdjustments } from '@lib/utils/lyrics/display/lyricsOffset';
+import { saveVideoOffset, getVideoOffset, type VideoOffsetData } from '@lib/utils/storage/videoOffsetStorage';
 import { SIDEBAR_COLORS } from './sidebarStyles';
 import styles from '../styles.module.css';
 
@@ -14,37 +16,44 @@ type LoopRepeatMode = '1x' | '3x' | 'infinite';
 
 /** 구간 반복 상태 */
 interface LoopConfig {
-  /** A 지점 (시작 가사 인덱스, -1 = 미설정) */
   startIndex: number;
-  /** B 지점 (끝 가사 인덱스, -1 = 미설정) */
   endIndex: number;
-  /** 반복 횟수 모드 */
   repeatMode: LoopRepeatMode;
-  /** 연속 반복: 구간 완료 후 다음 구간으로 자동 이동 */
   continuous: boolean;
 }
 
-/** 반복 실행 상태 */
 interface LoopRunState {
   active: boolean;
   currentRepeat: number;
 }
 
-/** 끝 시간 계산 시 버퍼 — B 파트 가사가 끊기지 않도록 여유 확보 */
+/** 싱크 구간 선택 상태 */
+interface SyncSectionConfig {
+  startIndex: number;
+  endIndex: number;
+}
+
 const LOOP_END_BUFFER = 1;
-/** A 지점 시작 전 여유 시간 (사용자가 자연스럽게 준비할 수 있도록) */
 const LOOP_START_LEAD_TIME = 1;
+/** 전체 싱크 조정 단위 (초) */
+const GLOBAL_SYNC_STEP = 0.5;
+/** 구간 싱크 조정 단위 (초) */
+const SECTION_SYNC_STEP = 0.3;
 
 interface LyricsSidebarPanelProps {
   lyrics: Line[];
 }
 
 /**
+ * URL에서 YouTube 비디오 ID 추출
+ */
+function extractVideoId(): string | null {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('v');
+}
+
+/**
  * 사이드바 Lyrics 탭 컴포넌트
- * - 전체 가사 목록 + 현재 재생 위치 자동 하이라이트
- * - 가사 줄 클릭으로 시점 이동 또는 A/B 구간 설정
- * - 구간 반복: A/B 가사 선택 → 횟수 설정 → 실행
- * - 간주 점프 기능
  */
 export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }) => {
   const { t } = useTranslation();
@@ -52,67 +61,195 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
   const activeLineRef = useRef<HTMLButtonElement>(null);
 
-  // 구간 반복 설정 패널 열림 상태
+  // ===== 구간 반복 상태 =====
   const [loopPanelOpen, setLoopPanelOpen] = useState(false);
-  // A/B 설정 중 어느 포인트를 선택할 차례인지
   const [selectingPoint, setSelectingPoint] = useState<'A' | 'B' | null>(null);
-  // 드래그 선택 상태
   const dragRef = useRef<{ dragging: boolean; startIdx: number; didDrag: boolean }>({
     dragging: false,
     startIdx: -1,
     didDrag: false,
   });
-  // 구간 반복 설정
   const [loopConfig, setLoopConfig] = useState<LoopConfig>({
     startIndex: -1,
     endIndex: -1,
     repeatMode: '3x',
+    continuous: false,
   });
-  // 반복 실행 상태
   const [loopRun, setLoopRun] = useState<LoopRunState>({ active: false, currentRepeat: 0 });
 
-  // 현재 재생 중인 가사 인덱스 계산
+  // ===== 싱크 조정 상태 =====
+  const [syncPanelOpen, setSyncPanelOpen] = useState(false);
+  const [globalOffset, setGlobalOffset] = useState(0);
+  const [lineAdjustments, setLineAdjustments] = useState<Record<number, number>>({});
+  const [syncSection, setSyncSection] = useState<SyncSectionConfig>({ startIndex: -1, endIndex: -1 });
+  const [syncSelectingPoint, setSyncSelectingPoint] = useState<'A' | 'B' | null>(null);
+  // 초기 가사 저장 (싱크 패널이 열린 시점의 가사를 원본으로 사용)
+  const baseLyricsRef = useRef<Line[]>(lyrics);
+
+  // 싱크 패널 열릴 때 현재 가사를 기준점으로 저장
+  useEffect(() => {
+    if (syncPanelOpen) {
+      baseLyricsRef.current = lyrics;
+      // 기존 저장된 오프셋 로드
+      const videoId = extractVideoId();
+      if (videoId) {
+        getVideoOffset(videoId).then((data) => {
+          if (data) {
+            setGlobalOffset(data.offset);
+            setLineAdjustments(data.lineAdjustments ?? {});
+          }
+        });
+      }
+    }
+  }, [syncPanelOpen, lyrics]);
+
+  // 현재 재생 중인 가사 인덱스
   const activeLineIndex = useMemo(() => {
     for (let i = lyrics.length - 1; i >= 0; i--) {
       const lyric = lyrics[i];
-      if (lyric && lyric.time <= currentTime) {
-        return i;
-      }
+      if (lyric && lyric.time <= currentTime) return i;
     }
     return -1;
   }, [lyrics, currentTime]);
 
-  // 현재 줄 자동 스크롤 (반복 실행 중이 아닐 때만)
+  // 현재 줄 자동 스크롤
   useEffect(() => {
     if (activeLineIndex < 0 || !activeLineRef.current) return;
-    activeLineRef.current.scrollIntoView({
-      behavior: 'smooth',
-      block: 'center',
-    });
+    activeLineRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [activeLineIndex]);
 
-  // YouTube 비디오 요소 가져오기
   const getVideo = useCallback((): HTMLVideoElement | null => {
     return document.querySelector<HTMLVideoElement>('video.html5-main-video');
   }, []);
 
-  // 가사 줄 클릭 핸들러
+  // ===== 싱크 조정 — 오프셋 적용 및 전파 =====
+  const applySyncToOverlay = useCallback((offset: number, adjustments: Record<number, number>) => {
+    const base = baseLyricsRef.current;
+    let adjusted = applyOffsetToLyrics(base, offset, 0);
+    adjusted = applyLineAdjustments(adjusted, adjustments);
+
+    // 오버레이에 즉시 반영
+    chrome.runtime.sendMessage(
+      {
+        type: 'APPLY_OFFSET_LYRICS',
+        payload: { offset, lyrics: adjusted },
+      },
+      () => {
+        if (chrome.runtime.lastError) {
+          console.warn('[LyricsSidebarPanel] APPLY_OFFSET_LYRICS 오류:', chrome.runtime.lastError.message);
+        }
+      },
+    );
+  }, []);
+
+  // 전체 오프셋 조정
+  const handleGlobalOffsetChange = useCallback(
+    (delta: number) => {
+      setGlobalOffset((prev) => {
+        const next = Number((prev + delta).toFixed(1));
+        applySyncToOverlay(next, lineAdjustments);
+        return next;
+      });
+    },
+    [lineAdjustments, applySyncToOverlay],
+  );
+
+  // 구간 오프셋 조정
+  const handleSectionOffsetChange = useCallback(
+    (delta: number) => {
+      if (syncSection.startIndex < 0 || syncSection.endIndex < 0) return;
+      setLineAdjustments((prev) => {
+        const next = { ...prev };
+        for (let i = syncSection.startIndex; i <= syncSection.endIndex; i++) {
+          next[i] = Number(((next[i] ?? 0) + delta).toFixed(1));
+          // 0이면 삭제 (저장 공간 절약)
+          if (next[i] === 0) delete next[i];
+        }
+        applySyncToOverlay(globalOffset, next);
+        return next;
+      });
+    },
+    [syncSection, globalOffset, applySyncToOverlay],
+  );
+
+  // 싱크 저장
+  const handleSyncSave = useCallback(async () => {
+    const videoId = extractVideoId();
+    if (!videoId) return;
+
+    const videoTitle = document.querySelector('h1.ytd-watch-metadata yt-formatted-string')?.textContent || 'Unknown';
+
+    const hasLineAdj = Object.keys(lineAdjustments).length > 0;
+    const data: VideoOffsetData = {
+      videoId,
+      title: videoTitle.trim(),
+      offset: globalOffset,
+      ...(hasLineAdj ? { lineAdjustments } : {}),
+      thumbnail: `https://i.ytimg.com/vi/${videoId}/default.jpg`,
+      lastModified: Date.now(),
+    };
+
+    await saveVideoOffset(data);
+    console.log(
+      `[LyricsSidebarPanel] 싱크 저장 완료 (offset: ${globalOffset}, lineAdj: ${Object.keys(lineAdjustments).length}개)`,
+    );
+
+    // 최종 가사를 오버레이에 반영
+    applySyncToOverlay(globalOffset, lineAdjustments);
+    setSyncPanelOpen(false);
+  }, [globalOffset, lineAdjustments, applySyncToOverlay]);
+
+  // 싱크 초기화
+  const handleSyncReset = useCallback(() => {
+    setGlobalOffset(0);
+    setLineAdjustments({});
+    setSyncSection({ startIndex: -1, endIndex: -1 });
+    applySyncToOverlay(0, {});
+  }, [applySyncToOverlay]);
+
+  // 싱크 버튼 클릭
+  const handleSyncButtonClick = useCallback(() => {
+    setSyncPanelOpen((prev) => {
+      if (!prev) {
+        // 열 때: 반복 패널 닫기
+        setLoopPanelOpen(false);
+        setSelectingPoint(null);
+        setSyncSection({ startIndex: -1, endIndex: -1 });
+        setSyncSelectingPoint(null);
+      }
+      return !prev;
+    });
+  }, []);
+
+  // ===== 가사 줄 클릭 핸들러 (반복 / 싱크 / 일반 모드 분기) =====
   const handleLineClick = useCallback(
     (idx: number, time: number) => {
-      // 드래그로 A-B 설정 완료 직후면 클릭 이벤트 무시
       if (dragRef.current.didDrag) {
         dragRef.current.didDrag = false;
         return;
       }
-      // A/B 선택 모드일 때
+
+      // 싱크 구간 선택 모드
+      if (syncSelectingPoint === 'A') {
+        setSyncSection((prev) => ({ ...prev, startIndex: idx, endIndex: -1 }));
+        setSyncSelectingPoint('B');
+        return;
+      }
+      if (syncSelectingPoint === 'B') {
+        const actualEnd = idx > syncSection.startIndex ? idx : syncSection.startIndex;
+        const actualStart = idx > syncSection.startIndex ? syncSection.startIndex : idx;
+        setSyncSection({ startIndex: actualStart, endIndex: actualEnd });
+        setSyncSelectingPoint(null);
+        return;
+      }
+
+      // 구간 반복 A/B 선택 모드
       if (selectingPoint === 'A') {
         setLoopConfig((prev) => ({ ...prev, startIndex: idx }));
-        // A 설정 후 자동으로 B 선택 모드로
         setSelectingPoint('B');
         return;
       }
       if (selectingPoint === 'B') {
-        // B는 A보다 뒤여야 함
         const actualEnd = idx > loopConfig.startIndex ? idx : loopConfig.startIndex;
         const actualStart = idx > loopConfig.startIndex ? loopConfig.startIndex : idx;
         setLoopConfig((prev) => ({ ...prev, startIndex: actualStart, endIndex: actualEnd }));
@@ -122,55 +259,60 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
 
       // 일반 모드: 해당 시점으로 이동
       const video = getVideo();
-      if (video) {
-        video.currentTime = time;
-      }
+      if (video) video.currentTime = time;
     },
-    [selectingPoint, loopConfig.startIndex, getVideo],
+    [selectingPoint, loopConfig.startIndex, syncSelectingPoint, syncSection.startIndex, getVideo],
   );
 
-  // 드래그로 A-B 구간 지정: mousedown → A, mousemove 중 hover → B 실시간, mouseup → 확정
+  // 드래그 A-B (반복 + 싱크 공용)
   const handleLineDragStart = useCallback(
     (idx: number) => {
-      if (!selectingPoint) return;
-      dragRef.current = { dragging: true, startIdx: idx, didDrag: false };
-      // A 즉시 설정
-      setLoopConfig((prev) => ({ ...prev, startIndex: idx, endIndex: -1 }));
-      setSelectingPoint('B');
+      if (selectingPoint) {
+        dragRef.current = { dragging: true, startIdx: idx, didDrag: false };
+        setLoopConfig((prev) => ({ ...prev, startIndex: idx, endIndex: -1 }));
+        setSelectingPoint('B');
+      } else if (syncSelectingPoint) {
+        dragRef.current = { dragging: true, startIdx: idx, didDrag: false };
+        setSyncSection({ startIndex: idx, endIndex: -1 });
+        setSyncSelectingPoint('B');
+      }
     },
-    [selectingPoint],
+    [selectingPoint, syncSelectingPoint],
   );
 
-  const handleLineDragEnter = useCallback((idx: number) => {
-    if (!dragRef.current.dragging) return;
-    // 다른 줄에 진입했으면 실제 드래그 발생
-    if (idx !== dragRef.current.startIdx) {
-      dragRef.current.didDrag = true;
-    }
-    const start = dragRef.current.startIdx;
-    const actualStart = Math.min(start, idx);
-    const actualEnd = Math.max(start, idx);
-    setLoopConfig((prev) => ({ ...prev, startIndex: actualStart, endIndex: actualEnd }));
-  }, []);
+  const handleLineDragEnter = useCallback(
+    (idx: number) => {
+      if (!dragRef.current.dragging) return;
+      if (idx !== dragRef.current.startIdx) dragRef.current.didDrag = true;
+      const start = dragRef.current.startIdx;
+      const actualStart = Math.min(start, idx);
+      const actualEnd = Math.max(start, idx);
+
+      if (selectingPoint || loopConfig.startIndex >= 0) {
+        setLoopConfig((prev) => ({ ...prev, startIndex: actualStart, endIndex: actualEnd }));
+      } else if (syncSelectingPoint || syncSection.startIndex >= 0) {
+        setSyncSection({ startIndex: actualStart, endIndex: actualEnd });
+      }
+    },
+    [selectingPoint, loopConfig.startIndex, syncSelectingPoint, syncSection.startIndex],
+  );
 
   const handleLineDragEnd = useCallback(() => {
     if (!dragRef.current.dragging) return;
     dragRef.current.dragging = false;
     if (dragRef.current.didDrag) {
-      // 드래그로 A-B 완료
       setSelectingPoint(null);
+      setSyncSelectingPoint(null);
     }
-    // didDrag는 click 핸들러에서 소비 후 리셋
   }, []);
 
-  // mouseup이 가사 줄 밖에서 발생할 수 있으므로 document 리스너로 처리
   useEffect(() => {
     const onMouseUp = () => handleLineDragEnd();
     document.addEventListener('mouseup', onMouseUp);
     return () => document.removeEventListener('mouseup', onMouseUp);
   }, [handleLineDragEnd]);
 
-  // 구간 반복 실행 — timeupdate 리스너
+  // ===== 구간 반복 — timeupdate 리스너 =====
   useEffect(() => {
     if (!loopRun.active) return;
     const video = getVideo();
@@ -182,11 +324,8 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
     if (!startLyric || !endLyric) return;
 
     const loopStartTime = Math.max(0, startLyric.time - LOOP_START_LEAD_TIME);
-    // 끝 시간: 다음 가사가 있으면 그 시점 + 버퍼, 없으면 끝 가사 + 10초
     const nextAfterEnd = lyrics[endIndex + 1];
     const loopEndTime = nextAfterEnd ? nextAfterEnd.time + LOOP_END_BUFFER : endLyric.time + 10;
-
-    // 1x = 되돌아가기 1회 (총 2회 재생), 3x = 3회 (총 4회), ∞ = 무한
     const maxRepeats = repeatMode === '1x' ? 1 : repeatMode === '3x' ? 3 : Infinity;
 
     const onTimeUpdate = () => {
@@ -194,26 +333,17 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
         setLoopRun((prev) => {
           const nextCount = prev.currentRepeat + 1;
           if (nextCount > maxRepeats) {
-            // 반복 완료
             if (continuous) {
-              // 연속 반복: 다음 구간으로 자동 이동
               const sectionSize = endIndex - startIndex + 1;
               const newStart = endIndex + 1;
               const newEnd = Math.min(newStart + sectionSize - 1, lyrics.length - 1);
               if (newStart < lyrics.length) {
-                // 연속 진입 시 시점 이동 없음 — 음악이 자연스럽게 이어지도록
-                setLoopConfig((prevConfig) => ({
-                  ...prevConfig,
-                  startIndex: newStart,
-                  endIndex: newEnd,
-                }));
+                setLoopConfig((prevConfig) => ({ ...prevConfig, startIndex: newStart, endIndex: newEnd }));
                 return { active: true, currentRepeat: 0 };
               }
             }
-            // 연속 아니거나 가사 끝 → 해제
             return { active: false, currentRepeat: 0 };
           }
-          // 되돌리기
           video.currentTime = loopStartTime;
           return { ...prev, currentRepeat: nextCount };
         });
@@ -221,40 +351,33 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
     };
 
     video.addEventListener('timeupdate', onTimeUpdate);
-    return () => {
-      video.removeEventListener('timeupdate', onTimeUpdate);
-    };
+    return () => video.removeEventListener('timeupdate', onTimeUpdate);
   }, [loopRun.active, loopConfig, lyrics, getVideo]);
 
-  // 반복 시작
+  // 반복 시작/중지/토글
   const handleLoopStart = useCallback(() => {
     if (loopConfig.startIndex < 0 || loopConfig.endIndex < 0) return;
     const video = getVideo();
     const startLyric = lyrics[loopConfig.startIndex];
-    if (video && startLyric) {
-      video.currentTime = Math.max(0, startLyric.time - LOOP_START_LEAD_TIME);
-    }
+    if (video && startLyric) video.currentTime = Math.max(0, startLyric.time - LOOP_START_LEAD_TIME);
     setLoopRun({ active: true, currentRepeat: 0 });
     setLoopPanelOpen(false);
     setSelectingPoint(null);
   }, [loopConfig, lyrics, getVideo]);
 
-  // 반복 중지
   const handleLoopStop = useCallback(() => {
     setLoopRun({ active: false, currentRepeat: 0 });
   }, []);
 
-  // 구간 반복 버튼 클릭
   const handleLoopButtonClick = useCallback(() => {
     if (loopRun.active) {
-      // 실행 중이면 중지
       handleLoopStop();
       return;
     }
-    // 패널 토글
+    // 싱크 패널 닫기
+    setSyncPanelOpen(false);
     setLoopPanelOpen((prev) => {
       if (!prev) {
-        // 패널 열 때 초기화
         setLoopConfig({ startIndex: -1, endIndex: -1, repeatMode: '3x', continuous: false });
         setSelectingPoint('A');
       } else {
@@ -264,7 +387,6 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
     });
   }, [loopRun.active, handleLoopStop]);
 
-  // 패널 닫기
   const handleLoopPanelClose = useCallback(() => {
     setLoopPanelOpen(false);
     setSelectingPoint(null);
@@ -274,7 +396,6 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
   const handleSkipIntro = useCallback(() => {
     const video = getVideo();
     if (!video || lyrics.length === 0) return;
-
     const time = video.currentTime;
     let currentIndex = -1;
     for (let i = lyrics.length - 1; i >= 0; i--) {
@@ -284,44 +405,49 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
         break;
       }
     }
-
     const nextIndex = currentIndex + 1;
     if (nextIndex >= lyrics.length) return;
-
     const nextLyric = lyrics[nextIndex];
     if (!nextLyric) return;
-
     const gap = nextLyric.time - time;
-    const MIN_GAP = 7;
-
-    if (gap >= MIN_GAP) {
+    if (gap >= 7) {
       video.currentTime = Math.max(0, nextLyric.time - 3);
     } else {
       video.currentTime = nextLyric.time;
     }
   }, [lyrics, getVideo]);
 
-  // 타임스탬프 포맷 (mm:ss)
   const formatTime = (seconds: number): string => {
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  // A-B 구간 내에 있는 줄인지 판별
+  // 구간 판별 (반복)
   const isInLoopRange = (idx: number): boolean => {
     if (loopConfig.startIndex < 0) return false;
-    if (loopConfig.endIndex < 0) {
-      // A만 설정된 경우 A 줄만 표시
-      return idx === loopConfig.startIndex;
-    }
+    if (loopConfig.endIndex < 0) return idx === loopConfig.startIndex;
     return idx >= loopConfig.startIndex && idx <= loopConfig.endIndex;
   };
 
-  // A/B 설정 완료 여부
-  const isLoopConfigComplete = loopConfig.startIndex >= 0 && loopConfig.endIndex >= 0;
+  // 구간 판별 (싱크)
+  const isInSyncRange = (idx: number): boolean => {
+    if (syncSection.startIndex < 0) return false;
+    if (syncSection.endIndex < 0) return idx === syncSection.startIndex;
+    return idx >= syncSection.startIndex && idx <= syncSection.endIndex;
+  };
 
-  // 가사 없을 때
+  const isLoopConfigComplete = loopConfig.startIndex >= 0 && loopConfig.endIndex >= 0;
+  const isSyncSectionComplete = syncSection.startIndex >= 0 && syncSection.endIndex >= 0;
+  const isSelecting = !!selectingPoint || !!syncSelectingPoint;
+
+  // 선택 구간의 현재 보정값 평균 (표시용)
+  const sectionAdjustmentDisplay = useMemo(() => {
+    if (!isSyncSectionComplete) return 0;
+    const first = lineAdjustments[syncSection.startIndex];
+    return first ?? 0;
+  }, [isSyncSectionComplete, syncSection.startIndex, lineAdjustments]);
+
   if (lyrics.length === 0) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -329,9 +455,7 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
           <p>{t('extChartNoData')}</p>
           <button
             className={styles.lyricsGoSearchButton}
-            onClick={() => {
-              window.dispatchEvent(new CustomEvent('open-manual-search'));
-            }}
+            onClick={() => window.dispatchEvent(new CustomEvent('open-manual-search'))}
           >
             {t('extSidebarTabSearch')}
           </button>
@@ -344,7 +468,6 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* 가사 스크롤 영역 */}
       <div ref={lyricsContainerRef} className={styles.lyricsSidebarList}>
-        {/* Intro — 첫 가사 시작 전 구간 */}
         {lyrics.length > 0 && (
           <button
             className={`${styles.lyricsSidebarLine} ${activeLineIndex < 0 ? styles.lyricsSidebarLineActive : styles.lyricsSidebarLinePast}`}
@@ -358,9 +481,11 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
         {lyrics.map((line, idx) => {
           const isActive = idx === activeLineIndex;
           const isPast = activeLineIndex >= 0 && idx < activeLineIndex;
-          const inRange = (loopPanelOpen || loopRun.active) && isInLoopRange(idx);
+          const inLoopRange = (loopPanelOpen || loopRun.active) && isInLoopRange(idx);
+          const inSyncRange = syncPanelOpen && isInSyncRange(idx);
           const isPointA = idx === loopConfig.startIndex && (loopPanelOpen || loopRun.active);
           const isPointB = idx === loopConfig.endIndex && (loopPanelOpen || loopRun.active);
+          const hasLineAdj = lineAdjustments[idx] !== undefined && lineAdjustments[idx] !== 0;
 
           return (
             <button
@@ -370,10 +495,11 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
                 styles.lyricsSidebarLine,
                 isActive ? styles.lyricsSidebarLineActive : '',
                 isPast ? styles.lyricsSidebarLinePast : '',
-                inRange ? styles.lyricsSidebarLineInRange : '',
+                inLoopRange ? styles.lyricsSidebarLineInRange : '',
+                inSyncRange ? styles.lyricsSidebarLineInRange : '',
                 isPointA ? styles.lyricsSidebarLinePointA : '',
                 isPointB ? styles.lyricsSidebarLinePointB : '',
-                selectingPoint ? styles.lyricsSidebarLineSelectable : '',
+                isSelecting ? styles.lyricsSidebarLineSelectable : '',
               ]
                 .filter(Boolean)
                 .join(' ')}
@@ -385,23 +511,26 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
               <span className={styles.lyricsSidebarText}>{line.text}</span>
               {isPointA && <span className={styles.loopPointBadge}>A</span>}
               {isPointB && <span className={styles.loopPointBadge}>B</span>}
+              {hasLineAdj && syncPanelOpen && (
+                <span className={styles.syncAdjBadge}>
+                  {(lineAdjustments[idx] ?? 0) > 0 ? '+' : ''}
+                  {lineAdjustments[idx]}s
+                </span>
+              )}
             </button>
           );
         })}
       </div>
 
-      {/* 구간 반복 설정 패널 (슬라이드업) */}
+      {/* 구간 반복 설정 패널 */}
       {loopPanelOpen && (
         <div className={styles.loopSettingPanel}>
-          {/* 패널 헤더 */}
           <div className={styles.loopSettingHeader}>
             <span className={styles.loopSettingTitle}>{t('extKaraokeLoopSection')}</span>
             <button className={styles.loopSettingCloseButton} onClick={handleLoopPanelClose}>
               <MdClose size={16} />
             </button>
           </div>
-
-          {/* A/B 시간 표시 */}
           <div className={styles.loopPointsRow}>
             <button
               className={`${styles.loopPointButton} ${selectingPoint === 'A' ? styles.loopPointButtonActive : ''} ${loopConfig.startIndex >= 0 ? styles.loopPointButtonSet : ''}`}
@@ -427,15 +556,11 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
               </span>
             </button>
           </div>
-
-          {/* 가사 줄을 클릭하여 A/B 설정 안내 */}
           {selectingPoint && (
             <p className={styles.loopSelectHint}>
               {selectingPoint === 'A' ? t('extLoopSelectA') : t('extLoopSelectB')}
             </p>
           )}
-
-          {/* 횟수 선택 */}
           <div className={styles.loopRepeatRow}>
             {(['1x', '3x', 'infinite'] as LoopRepeatMode[]).map((mode) => (
               <button
@@ -447,8 +572,6 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
               </button>
             ))}
           </div>
-
-          {/* 연속 반복 토글 */}
           <button
             className={`${styles.loopContinuousToggle} ${loopConfig.continuous ? styles.loopContinuousToggleActive : ''}`}
             onClick={() => setLoopConfig((prev) => ({ ...prev, continuous: !prev.continuous }))}
@@ -458,17 +581,113 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
               {loopConfig.continuous ? t('extLoopContinuousOnDesc') : t('extLoopContinuousOffDesc')}
             </span>
           </button>
-
-          {/* 반복 시작 버튼 */}
           <button className={styles.loopStartButton} disabled={!isLoopConfigComplete} onClick={handleLoopStart}>
             ▶ {t('extKaraokeLoopSection')}
           </button>
         </div>
       )}
 
+      {/* 싱크 조정 패널 */}
+      {syncPanelOpen && (
+        <div className={styles.loopSettingPanel}>
+          <div className={styles.loopSettingHeader}>
+            <span className={styles.loopSettingTitle}>{t('extKaraokeSyncSettings')}</span>
+            <button className={styles.loopSettingCloseButton} onClick={() => setSyncPanelOpen(false)}>
+              <MdClose size={16} />
+            </button>
+          </div>
+
+          {/* 전체 싱크 */}
+          <div className={styles.syncGlobalRow}>
+            <span className={styles.syncLabel}>{t('extSyncGlobal')}</span>
+            <div className={styles.syncAdjustRow}>
+              <button className={styles.syncAdjustButton} onClick={() => handleGlobalOffsetChange(-GLOBAL_SYNC_STEP)}>
+                <MdRemove size={14} /> {GLOBAL_SYNC_STEP}s
+              </button>
+              <span className={styles.syncOffsetDisplay}>
+                {globalOffset >= 0 ? '+' : ''}
+                {globalOffset.toFixed(1)}s
+              </span>
+              <button className={styles.syncAdjustButton} onClick={() => handleGlobalOffsetChange(GLOBAL_SYNC_STEP)}>
+                <MdAdd size={14} /> {GLOBAL_SYNC_STEP}s
+              </button>
+            </div>
+          </div>
+
+          {/* 구간 싱크 */}
+          <div className={styles.syncSectionBlock}>
+            <span className={styles.syncLabel}>{t('extSyncSection')}</span>
+
+            {/* 구간 선택 */}
+            <div className={styles.loopPointsRow}>
+              <button
+                className={`${styles.loopPointButton} ${syncSelectingPoint === 'A' ? styles.loopPointButtonActive : ''} ${syncSection.startIndex >= 0 ? styles.loopPointButtonSet : ''}`}
+                onClick={() => setSyncSelectingPoint('A')}
+              >
+                <span className={styles.loopPointLabel}>A</span>
+                <span className={styles.loopPointTime}>
+                  {syncSection.startIndex >= 0 && lyrics[syncSection.startIndex]
+                    ? formatTime(lyrics[syncSection.startIndex].time)
+                    : '--:--'}
+                </span>
+              </button>
+              <span className={styles.loopPointDivider}>―</span>
+              <button
+                className={`${styles.loopPointButton} ${syncSelectingPoint === 'B' ? styles.loopPointButtonActive : ''} ${syncSection.endIndex >= 0 ? styles.loopPointButtonSet : ''}`}
+                onClick={() => setSyncSelectingPoint('B')}
+              >
+                <span className={styles.loopPointLabel}>B</span>
+                <span className={styles.loopPointTime}>
+                  {syncSection.endIndex >= 0 && lyrics[syncSection.endIndex]
+                    ? formatTime(lyrics[syncSection.endIndex].time)
+                    : '--:--'}
+                </span>
+              </button>
+            </div>
+
+            {syncSelectingPoint && (
+              <p className={styles.loopSelectHint}>
+                {syncSelectingPoint === 'A' ? t('extLoopSelectA') : t('extLoopSelectB')}
+              </p>
+            )}
+
+            {/* 구간 조정 버튼 */}
+            {isSyncSectionComplete && (
+              <div className={styles.syncAdjustRow}>
+                <button
+                  className={styles.syncAdjustButton}
+                  onClick={() => handleSectionOffsetChange(-SECTION_SYNC_STEP)}
+                >
+                  <MdRemove size={14} /> {SECTION_SYNC_STEP}s
+                </button>
+                <span className={styles.syncOffsetDisplay}>
+                  {sectionAdjustmentDisplay >= 0 ? '+' : ''}
+                  {sectionAdjustmentDisplay.toFixed(1)}s
+                </span>
+                <button
+                  className={styles.syncAdjustButton}
+                  onClick={() => handleSectionOffsetChange(SECTION_SYNC_STEP)}
+                >
+                  <MdAdd size={14} /> {SECTION_SYNC_STEP}s
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* 저장 / 초기화 */}
+          <div className={styles.syncActionRow}>
+            <button className={styles.syncResetButton} onClick={handleSyncReset}>
+              {t('extSyncReset')}
+            </button>
+            <button className={styles.loopStartButton} onClick={handleSyncSave}>
+              <MdSave size={14} /> {t('extSyncSave')}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 하단 고정 컨트롤 바 */}
       <div className={styles.lyricsSidebarControls}>
-        {/* 구간반복 */}
         <button
           className={`${styles.lyricsSidebarControlButton} ${loopRun.active ? styles.lyricsSidebarControlButtonActive : ''}`}
           onClick={handleLoopButtonClick}
@@ -486,7 +705,6 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
           <span>{t('extKaraokeLoopSection')}</span>
         </button>
 
-        {/* 간주 점프 */}
         <button
           className={styles.lyricsSidebarControlButton}
           onClick={handleSkipIntro}
@@ -496,9 +714,12 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
           <span>{t('extKaraokeSkipIntro')}</span>
         </button>
 
-        {/* 싱크 — UI only */}
-        <button className={styles.lyricsSidebarControlButton} disabled title={t('extKaraokeSyncSettings')}>
-          <MdSync size={18} color={SIDEBAR_COLORS.textMuted} />
+        <button
+          className={`${styles.lyricsSidebarControlButton} ${syncPanelOpen ? styles.lyricsSidebarControlButtonActive : ''}`}
+          onClick={handleSyncButtonClick}
+          title={t('extKaraokeSyncSettings')}
+        >
+          <MdSync size={18} color={syncPanelOpen ? SIDEBAR_COLORS.primary : SIDEBAR_COLORS.textPrimary} />
           <span>{t('extKaraokeSyncSettings')}</span>
         </button>
       </div>

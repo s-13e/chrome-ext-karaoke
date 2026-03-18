@@ -408,5 +408,9 @@
   "extLoopSelectB": "끝점(B)을 가사에서 선택하세요",
   "extLoopContinuous": "연속 반복",
   "extLoopContinuousOnDesc": "구간 완료 후 다음 구간으로 자동 이동",
-  "extLoopContinuousOffDesc": "선택한 구간만 반복"
+  "extLoopContinuousOffDesc": "선택한 구간만 반복",
+  "extSyncGlobal": "전체 싱크",
+  "extSyncSection": "구간 싱크",
+  "extSyncReset": "초기화",
+  "extSyncSave": "저장"
 }

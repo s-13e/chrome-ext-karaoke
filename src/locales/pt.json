@@ -408,5 +408,9 @@
   "extLoopSelectB": "Selecione o ponto final (B) na letra",
   "extLoopContinuous": "Contínuo",
   "extLoopContinuousOnDesc": "Avançar automaticamente para a próxima seção",
-  "extLoopContinuousOffDesc": "Repetir apenas a seção selecionada"
+  "extLoopContinuousOffDesc": "Repetir apenas a seção selecionada",
+  "extSyncGlobal": "Sincronização global",
+  "extSyncSection": "Sincronização por seção",
+  "extSyncReset": "Redefinir",
+  "extSyncSave": "Salvar"
 }

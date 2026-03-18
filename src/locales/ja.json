@@ -408,5 +408,9 @@
   "extLoopSelectB": "終了点(B)を歌詞から選択してください",
   "extLoopContinuous": "連続リピート",
   "extLoopContinuousOnDesc": "区間完了後、次の区間へ自動移動",
-  "extLoopContinuousOffDesc": "選択した区間のみリピート"
+  "extLoopContinuousOffDesc": "選択した区間のみリピート",
+  "extSyncGlobal": "全体同期",
+  "extSyncSection": "区間同期",
+  "extSyncReset": "リセット",
+  "extSyncSave": "保存"
 }

@@ -408,5 +408,9 @@
   "extLoopSelectB": "Select end point (B) from lyrics",
   "extLoopContinuous": "Continuous",
   "extLoopContinuousOnDesc": "Auto-advance to next section after loop",
-  "extLoopContinuousOffDesc": "Repeat selected section only"
+  "extLoopContinuousOffDesc": "Repeat selected section only",
+  "extSyncGlobal": "Global Sync",
+  "extSyncSection": "Section Sync",
+  "extSyncReset": "Reset",
+  "extSyncSave": "Save"
 }
