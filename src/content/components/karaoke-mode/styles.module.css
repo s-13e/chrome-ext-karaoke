@@ -257,6 +257,156 @@
   color: #00d4aa;
 }
 
+/* ========== Lyrics 사이드바 패널 ========== */
+
+/* 가사 스크롤 목록 */
+.lyricsSidebarList {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 0;
+  scroll-behavior: smooth;
+}
+
+.lyricsSidebarList::-webkit-scrollbar {
+  width: 4px;
+}
+
+.lyricsSidebarList::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.lyricsSidebarList::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+/* 가사 줄 버튼 */
+.lyricsSidebarLine {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+  border-left: 3px solid transparent;
+}
+
+.lyricsSidebarLine:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 1);
+}
+
+/* 지나간 가사 */
+.lyricsSidebarLinePast {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+/* 현재 가사 — 틸 하이라이트 */
+.lyricsSidebarLineActive {
+  background: rgba(0, 212, 170, 0.1);
+  color: #00d4aa;
+  border-left-color: #00d4aa;
+  transform: scale(1.02);
+  transform-origin: left center;
+}
+
+.lyricsSidebarLineActive:hover {
+  background: rgba(0, 212, 170, 0.15);
+}
+
+/* 타임스탬프 */
+.lyricsSidebarTimestamp {
+  font-size: 11px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  color: rgba(255, 255, 255, 0.3);
+  min-width: 36px;
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.lyricsSidebarLineActive .lyricsSidebarTimestamp {
+  color: rgba(0, 212, 170, 0.6);
+}
+
+/* 가사 텍스트 */
+.lyricsSidebarText {
+  font-size: 14px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.lyricsSidebarLineActive .lyricsSidebarText {
+  font-weight: 600;
+  text-shadow: 0 0 12px rgba(0, 212, 170, 0.4);
+}
+
+/* 가사 없을 때 빈 상태 */
+.lyricsEmptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 16px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 14px;
+}
+
+.lyricsGoSearchButton {
+  padding: 8px 20px;
+  border-radius: 20px;
+  border: 1px solid rgba(0, 212, 170, 0.4);
+  background: rgba(0, 212, 170, 0.1);
+  color: #00d4aa;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.lyricsGoSearchButton:hover {
+  background: rgba(0, 212, 170, 0.2);
+  border-color: rgba(0, 212, 170, 0.6);
+}
+
+/* 하단 고정 컨트롤 바 */
+.lyricsSidebarControls {
+  display: flex;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.lyricsSidebarControlButton {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 4px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.lyricsSidebarControlButton:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  color: #00d4aa;
+}
+
+.lyricsSidebarControlButton:disabled {
+  color: rgba(255, 255, 255, 0.3);
+  cursor: not-allowed;
+}
+
 /* 차트 카테고리 수평 스크롤 탭 */
 .chartCategoryTabs {
   display: flex;

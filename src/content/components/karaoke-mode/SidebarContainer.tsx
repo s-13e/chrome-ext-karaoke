@@ -30,6 +30,9 @@ const ManualLyricsSearch = lazy(() =>
   import('./sideBar/ManualLyricsSearch').then((module) => ({ default: module.ManualLyricsSearch })),
 );
 const TutorialMenu = lazy(() => import('./sideBar/TutorialMenu').then((module) => ({ default: module.TutorialMenu })));
+const LyricsSidebarPanel = lazy(() =>
+  import('./sideBar/LyricsSidebarPanel').then((module) => ({ default: module.LyricsSidebarPanel })),
+);
 
 /** 탭 식별자 */
 type SidebarTabId = 'lyrics' | 'search' | 'charts' | 'library' | 'tune' | 'tutorial' | 'settings';
@@ -69,7 +72,7 @@ const SuspenseFallback = () => <div style={{ padding: '20px', color: '#fff' }}>L
  * - 왼쪽: 52px 아이콘 탭 내비게이션 바
  * - 오른쪽: 접기/펼치기 가능한 콘텐츠 패널
  */
-export const SidebarContainer: React.FC<SidebarContainerProps> = ({ width, songTitle, songArtist }) => {
+export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, width, songTitle, songArtist }) => {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<SidebarTabId | null>(null);
   const [librarySubTab, setLibrarySubTab] = useState<LibrarySubTab>('recordings');
@@ -216,12 +219,11 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ width, songT
 
           {/* 탭 콘텐츠 영역 */}
           <div className={styles.tabContent}>
-            {/* 가사 탭 — Phase 1에서는 placeholder */}
+            {/* 가사 탭 — 전체 가사 뷰 + 자동 하이라이트 + 하단 컨트롤 */}
             {activeTab === 'lyrics' && (
-              <div className={styles.comingSoon}>
-                <MdMusicNote size={32} />
-                <span>{t('extSidebarComingSoon')}</span>
-              </div>
+              <Suspense fallback={<SuspenseFallback />}>
+                <LyricsSidebarPanel lyrics={lyrics ?? []} />
+              </Suspense>
             )}
 
             {/* 검색 탭 — ManualLyricsSearch 재사용 */}
