@@ -403,5 +403,10 @@
   "extSidebarComingSoon": "Em breve",
   "extSidebarSettingsGeneral": "Configurações gerais",
   "extSidebarSettingsAutoSkipDesc": "Pular a introdução automaticamente",
-  "extSidebarSettingsOpen": "Abrir"
+  "extSidebarSettingsOpen": "Abrir",
+  "extLoopSelectA": "Selecione o ponto inicial (A) na letra",
+  "extLoopSelectB": "Selecione o ponto final (B) na letra",
+  "extLoopContinuous": "Contínuo",
+  "extLoopContinuousOnDesc": "Avançar automaticamente para a próxima seção",
+  "extLoopContinuousOffDesc": "Repetir apenas a seção selecionada"
 }

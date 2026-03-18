@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { IoRepeat } from 'react-icons/io5';
-import { MdSkipNext, MdTune, MdClose } from 'react-icons/md';
+import { MdSkipNext, MdSync, MdClose } from 'react-icons/md';
 import { Line } from '@lib/types/lyrics';
 import { useCurrentTime } from '@hooks/useCurrentTime';
 import { SIDEBAR_COLORS } from './sidebarStyles';
@@ -431,7 +431,7 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
           {/* 가사 줄을 클릭하여 A/B 설정 안내 */}
           {selectingPoint && (
             <p className={styles.loopSelectHint}>
-              {selectingPoint === 'A' ? '시작점(A)을 가사에서 선택하세요' : '끝점(B)을 가사에서 선택하세요'}
+              {selectingPoint === 'A' ? t('extLoopSelectA') : t('extLoopSelectB')}
             </p>
           )}
 
@@ -453,9 +453,9 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
             className={`${styles.loopContinuousToggle} ${loopConfig.continuous ? styles.loopContinuousToggleActive : ''}`}
             onClick={() => setLoopConfig((prev) => ({ ...prev, continuous: !prev.continuous }))}
           >
-            <span>연속 반복</span>
+            <span>{t('extLoopContinuous')}</span>
             <span className={styles.loopContinuousDesc}>
-              {loopConfig.continuous ? '구간 완료 후 다음 구간으로 자동 이동' : '선택한 구간만 반복'}
+              {loopConfig.continuous ? t('extLoopContinuousOnDesc') : t('extLoopContinuousOffDesc')}
             </span>
           </button>
 
@@ -497,9 +497,9 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
         </button>
 
         {/* 싱크 — UI only */}
-        <button className={styles.lyricsSidebarControlButton} disabled title={t('extSidebarTabTune')}>
-          <MdTune size={18} color={SIDEBAR_COLORS.textMuted} />
-          <span>{t('extSidebarTabTune')}</span>
+        <button className={styles.lyricsSidebarControlButton} disabled title={t('extKaraokeSyncSettings')}>
+          <MdSync size={18} color={SIDEBAR_COLORS.textMuted} />
+          <span>{t('extKaraokeSyncSettings')}</span>
         </button>
       </div>
     </div>

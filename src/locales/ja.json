@@ -403,5 +403,10 @@
   "extSidebarComingSoon": "準備中です",
   "extSidebarSettingsGeneral": "一般設定",
   "extSidebarSettingsAutoSkipDesc": "前奏を自動でスキップします",
-  "extSidebarSettingsOpen": "開く"
+  "extSidebarSettingsOpen": "開く",
+  "extLoopSelectA": "開始点(A)を歌詞から選択してください",
+  "extLoopSelectB": "終了点(B)を歌詞から選択してください",
+  "extLoopContinuous": "連続リピート",
+  "extLoopContinuousOnDesc": "区間完了後、次の区間へ自動移動",
+  "extLoopContinuousOffDesc": "選択した区間のみリピート"
 }

@@ -403,5 +403,10 @@
   "extSidebarComingSoon": "即将推出",
   "extSidebarSettingsGeneral": "常规设置",
   "extSidebarSettingsAutoSkipDesc": "自动跳过前奏",
-  "extSidebarSettingsOpen": "打开"
+  "extSidebarSettingsOpen": "打开",
+  "extLoopSelectA": "从歌词中选择起始点(A)",
+  "extLoopSelectB": "从歌词中选择结束点(B)",
+  "extLoopContinuous": "连续循环",
+  "extLoopContinuousOnDesc": "区间完成后自动进入下一区间",
+  "extLoopContinuousOffDesc": "仅循环选定区间"
 }

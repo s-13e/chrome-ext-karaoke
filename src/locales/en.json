@@ -403,5 +403,10 @@
   "extSidebarComingSoon": "Coming soon",
   "extSidebarSettingsGeneral": "General Settings",
   "extSidebarSettingsAutoSkipDesc": "Skip instrumental intro automatically",
-  "extSidebarSettingsOpen": "Open"
+  "extSidebarSettingsOpen": "Open",
+  "extLoopSelectA": "Select start point (A) from lyrics",
+  "extLoopSelectB": "Select end point (B) from lyrics",
+  "extLoopContinuous": "Continuous",
+  "extLoopContinuousOnDesc": "Auto-advance to next section after loop",
+  "extLoopContinuousOffDesc": "Repeat selected section only"
 }
