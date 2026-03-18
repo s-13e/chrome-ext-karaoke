@@ -175,7 +175,7 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onBack }) => {
                       onClick={handleStop}
                       aria-label={t('extAcapellaStopRecording')}
                     >
-                      <MdPlayArrow size={20} color="#2196F3" />
+                      <MdPlayArrow size={20} color="#00d4aa" />
                     </button>
                   ) : (
                     <button

@@ -5,7 +5,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #1a1a1a;
+  background: transparent;
   color: #ffffff;
 }
 
@@ -86,20 +86,20 @@
 
 /* 완료된 튜토리얼 */
 .tutorialItem.completed {
-  background: rgba(29, 185, 84, 0.1);
-  border-color: rgba(29, 185, 84, 0.3);
+  background: rgba(0, 212, 170, 0.1);
+  border-color: rgba(0, 212, 170, 0.3);
 }
 
 .tutorialItem.completed:hover:not(:disabled) {
-  background: rgba(29, 185, 84, 0.15);
-  border-color: rgba(29, 185, 84, 0.4);
+  background: rgba(0, 212, 170, 0.15);
+  border-color: rgba(0, 212, 170, 0.4);
 }
 
 /* 진행 중인 튜토리얼 */
 .tutorialItem.active {
-  background: linear-gradient(135deg, rgba(29, 185, 84, 0.2) 0%, rgba(30, 215, 96, 0.1) 100%);
-  border-color: #1db954;
-  box-shadow: 0 0 12px rgba(29, 185, 84, 0.3);
+  background: linear-gradient(135deg, rgba(0, 212, 170, 0.2) 0%, rgba(30, 215, 96, 0.1) 100%);
+  border-color: #00d4aa;
+  box-shadow: 0 0 12px rgba(0, 212, 170, 0.3);
 }
 
 .itemIcon {
@@ -134,11 +134,11 @@
 }
 
 .checkIcon {
-  color: #1db954;
+  color: #00d4aa;
 }
 
 .playingIcon {
-  color: #1ed760;
+  color: #00b894;
   animation: pulse 1.5s ease-in-out infinite;
 }
 
