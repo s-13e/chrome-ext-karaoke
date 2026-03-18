@@ -407,6 +407,215 @@
   cursor: not-allowed;
 }
 
+/* 구간 반복 활성 상태 컨트롤 버튼 */
+.lyricsSidebarControlButtonActive {
+  color: #00d4aa;
+  background: rgba(0, 212, 170, 0.08);
+}
+
+/* 구간 반복 범위 내 가사 줄 — 왼쪽 틸 바 */
+.lyricsSidebarLineInRange {
+  border-left-color: rgba(0, 212, 170, 0.4);
+  background: rgba(0, 212, 170, 0.04);
+}
+
+/* A/B 포인트 줄 */
+.lyricsSidebarLinePointA,
+.lyricsSidebarLinePointB {
+  border-left-color: #00d4aa;
+  position: relative;
+}
+
+/* A/B 선택 모드일 때 가사 줄 hover 강조 */
+.lyricsSidebarLineSelectable:hover {
+  background: rgba(0, 212, 170, 0.1) !important;
+  border-left-color: rgba(0, 212, 170, 0.6);
+  cursor: crosshair;
+}
+
+/* A/B 배지 */
+.loopPointBadge {
+  font-size: 10px;
+  font-weight: 700;
+  color: #00d4aa;
+  background: rgba(0, 212, 170, 0.2);
+  border: 1px solid rgba(0, 212, 170, 0.4);
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* ========== 구간 반복 설정 패널 ========== */
+.loopSettingPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border-top: 1px solid rgba(0, 212, 170, 0.2);
+  background: rgba(0, 212, 170, 0.04);
+  flex-shrink: 0;
+  animation: loopPanelSlideUp 0.2s ease-out;
+}
+
+@keyframes loopPanelSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.loopSettingHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.loopSettingTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #00d4aa;
+}
+
+.loopSettingCloseButton {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.loopSettingCloseButton:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* A/B 포인트 표시 행 */
+.loopPointsRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.loopPointButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 90px;
+}
+
+.loopPointButton:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* 현재 선택 중인 포인트 */
+.loopPointButtonActive {
+  border-color: #00d4aa;
+  background: rgba(0, 212, 170, 0.1);
+  color: #00d4aa;
+  box-shadow: 0 0 8px rgba(0, 212, 170, 0.2);
+}
+
+/* 이미 설정된 포인트 */
+.loopPointButtonSet {
+  color: #ffffff;
+}
+
+.loopPointLabel {
+  font-size: 11px;
+  font-weight: 700;
+  color: #00d4aa;
+}
+
+.loopPointTime {
+  font-size: 13px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+.loopPointDivider {
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 14px;
+}
+
+/* A/B 선택 안내 텍스트 */
+.loopSelectHint {
+  font-size: 11px;
+  color: rgba(0, 212, 170, 0.7);
+  text-align: center;
+  margin: 0;
+}
+
+/* 횟수 선택 행 */
+.loopRepeatRow {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.loopRepeatButton {
+  padding: 6px 16px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.loopRepeatButton:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+}
+
+.loopRepeatButtonActive {
+  border-color: #00d4aa;
+  background: rgba(0, 212, 170, 0.15);
+  color: #00d4aa;
+  font-weight: 600;
+}
+
+/* 반복 시작 버튼 */
+.loopStartButton {
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  background: #00d4aa;
+  color: #000000;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.loopStartButton:hover:not(:disabled) {
+  background: #00b894;
+}
+
+.loopStartButton:disabled {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.3);
+  cursor: not-allowed;
+}
+
 /* 차트 카테고리 수평 스크롤 탭 */
 .chartCategoryTabs {
   display: flex;
