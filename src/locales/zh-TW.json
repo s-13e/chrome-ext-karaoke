@@ -414,5 +414,7 @@
   "extSyncReset": "重置",
   "extSyncSave": "儲存",
   "extSyncSelectSplit": "選擇分割點",
-  "extSyncSelectSplitHint": "從此行到末尾的同步將被調整"
+  "extSyncSelectSplitHint": "從此行到末尾的同步將被調整",
+  "extSyncResetAll": "全部重置",
+  "extSyncRevert": "還原"
 }

@@ -414,5 +414,7 @@
   "extSyncReset": "초기화",
   "extSyncSave": "저장",
   "extSyncSelectSplit": "분할점을 선택하세요",
-  "extSyncSelectSplitHint": "이 줄부터 끝까지 싱크가 조정됩니다"
+  "extSyncSelectSplitHint": "이 줄부터 끝까지 싱크가 조정됩니다",
+  "extSyncResetAll": "전체 초기화",
+  "extSyncRevert": "되돌리기"
 }

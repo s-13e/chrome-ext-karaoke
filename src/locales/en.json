@@ -414,5 +414,7 @@
   "extSyncReset": "Reset",
   "extSyncSave": "Save",
   "extSyncSelectSplit": "Select a split point",
-  "extSyncSelectSplitHint": "Sync will be adjusted from this line to the end"
+  "extSyncSelectSplitHint": "Sync will be adjusted from this line to the end",
+  "extSyncResetAll": "Reset all",
+  "extSyncRevert": "Revert"
 }
