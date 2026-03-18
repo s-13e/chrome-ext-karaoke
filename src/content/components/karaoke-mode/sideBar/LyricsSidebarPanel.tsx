@@ -85,19 +85,27 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
   // 초기 가사 저장 (싱크 패널이 열린 시점의 가사를 원본으로 사용)
   const baseLyricsRef = useRef<Line[]>(lyrics);
 
-  // 싱크 패널 열릴 때 원본 가사 복원 + 기존 오프셋 로드
+  // 싱크 패널 열릴 때 원본 가사 복원 + 기존 오프셋 로드 (열리는 시점에만 1회 실행)
+  const prevSyncPanelOpen = useRef(false);
   useEffect(() => {
-    if (!syncPanelOpen) return;
+    // 패널이 닫힘→열림으로 전환된 시점에만 실행
+    if (!syncPanelOpen || prevSyncPanelOpen.current) {
+      prevSyncPanelOpen.current = syncPanelOpen;
+      return;
+    }
+    prevSyncPanelOpen.current = true;
+
+    const currentLyrics = lyrics;
     const videoId = extractVideoId();
     if (!videoId) {
-      baseLyricsRef.current = lyrics;
+      baseLyricsRef.current = currentLyrics;
       return;
     }
     getVideoOffset(videoId).then((data) => {
       const savedOffset = data?.offset ?? 0;
       const savedAdj = data?.lineAdjustments ?? {};
       // 현재 lyrics는 이미 오프셋 적용된 상태 → 역적용하여 원본 복원
-      let base = applyOffsetToLyrics(lyrics, -savedOffset, 0);
+      let base = applyOffsetToLyrics(currentLyrics, -savedOffset, 0);
       base = applyLineAdjustments(
         base,
         Object.fromEntries(Object.entries(savedAdj).map(([k, v]) => [k, -(v as number)])),
@@ -105,6 +113,8 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
       baseLyricsRef.current = base;
       setGlobalOffset(savedOffset);
       setLineAdjustments(savedAdj);
+      globalOffsetRef.current = savedOffset;
+      lineAdjustmentsRef.current = savedAdj;
     });
   }, [syncPanelOpen, lyrics]);
 
