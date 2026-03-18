@@ -201,10 +201,7 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
               const newStart = endIndex + 1;
               const newEnd = Math.min(newStart + sectionSize - 1, lyrics.length - 1);
               if (newStart < lyrics.length) {
-                const newStartLyric = lyrics[newStart];
-                if (newStartLyric) {
-                  video.currentTime = Math.max(0, newStartLyric.time - LOOP_START_LEAD_TIME);
-                }
+                // 연속 진입 시 시점 이동 없음 — 음악이 자연스럽게 이어지도록
                 setLoopConfig((prevConfig) => ({
                   ...prevConfig,
                   startIndex: newStart,
