@@ -194,6 +194,13 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
     const videoTitle = document.querySelector('h1.ytd-watch-metadata yt-formatted-string')?.textContent || 'Unknown';
 
     const hasLineAdj = Object.keys(lineAdjustments).length > 0;
+
+    // 조정 내용 없으면 저장하지 않음
+    if (globalOffset === 0 && !hasLineAdj) {
+      alert(t('extSyncNothingToSave'));
+      return;
+    }
+
     const data: VideoOffsetData = {
       videoId,
       title: videoTitle.trim(),

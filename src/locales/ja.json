@@ -416,5 +416,6 @@
   "extSyncSelectSplit": "分割点を選択してください",
   "extSyncSelectSplitHint": "この行から最後まで同期が調整されます",
   "extSyncResetAll": "全リセット",
-  "extSyncRevert": "元に戻す"
+  "extSyncRevert": "元に戻す",
+  "extSyncNothingToSave": "調整された内容がありません。"
 }

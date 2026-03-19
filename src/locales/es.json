@@ -416,5 +416,6 @@
   "extSyncSelectSplit": "Selecciona un punto de división",
   "extSyncSelectSplitHint": "La sincronización se ajustará desde esta línea hasta el final",
   "extSyncResetAll": "Restablecer todo",
-  "extSyncRevert": "Revertir"
+  "extSyncRevert": "Revertir",
+  "extSyncNothingToSave": "No hay cambios para guardar."
 }
