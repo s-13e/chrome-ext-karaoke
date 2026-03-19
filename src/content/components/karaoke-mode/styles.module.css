@@ -6,18 +6,26 @@
 /* 전체 사이드바 래퍼 — 화면 오른쪽에 고정, 아이콘 바 + 콘텐츠 패널을 가로로 배치 */
 .sidebarWrapper {
   position: absolute;
-  top: 0;
-  right: 0;
+  top: 8px;
+  right: 8px;
   /* width는 inline style로 주입 (반응형) */
-  height: calc(100% - 100px); /* 100px (bottom bar) */
+  height: calc(100% - 56px); /* 상단 8px + 하단 48px 여유 */
   z-index: 10;
   pointer-events: auto;
   display: flex;
   flex-direction: row;
   overflow: hidden;
+  border-radius: 14px;
+  border: 1.5px solid rgba(255, 255, 255, 0.15);
+  box-sizing: border-box;
 }
 
-/* 아이콘 탭 내비게이션 — 68px 너비, 세로 배치 */
+/* 축약형(아이콘만) — 라운딩 강하게 */
+.sidebarWrapperCollapsed {
+  border-radius: 24px;
+}
+
+/* 아이콘 탭 내비게이션 — 68px 기본 너비, 세로 배치 */
 .iconNav {
   width: 68px;
   flex-shrink: 0;
@@ -26,9 +34,9 @@
   align-items: center;
   gap: 4px;
   padding: 12px 6px;
+  box-sizing: border-box;
   background-color: rgba(18, 18, 30, 0.95);
   backdrop-filter: blur(16px);
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 /* 개별 아이콘 탭 버튼 */
@@ -108,7 +116,7 @@
 .contentPanel {
   background-color: rgba(18, 18, 30, 0.95);
   backdrop-filter: blur(16px);
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
   overflow: hidden;

@@ -19,7 +19,7 @@ const TextEffectsModal = lazy(() =>
  */
 const YOUTUBE_TOOLBAR = 56; // YouTube 상단 툴바 높이
 const BOTTOM_BAR_HEIGHT = 100; // 동영상 플레이어 하단 여백 (실제 하단바는 100px이지만 겹치도록 설정)
-const ICON_NAV_WIDTH = 68; // 아이콘 탭 내비게이션 너비
+const ICON_NAV_WIDTH = 71; // 아이콘 탭 내비게이션 너비 (68px + border 3px)
 
 const KARAOKE_STYLE_ID = 'yt-karaoke-player-overrides';
 
@@ -330,13 +330,22 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({
         return;
       }
 
-      // ytd-app 하단 여백 제거 (overflow 숨김 + 높이 제한)
+      // ytd-app 하단 여백 제거 + 배경색 YouTube 다크 테마와 일치
       if (ytdApp) {
         ytdApp.style.setProperty('margin', '0', 'important');
         ytdApp.style.setProperty('padding', '0', 'important');
         ytdApp.style.setProperty('overflow', 'hidden', 'important');
         ytdApp.style.setProperty('max-height', '100vh', 'important');
         ytdApp.style.setProperty('height', '100vh', 'important');
+        ytdApp.style.setProperty('background-color', '#0f0f0f', 'important');
+      }
+
+      // YouTube Ambient mode(영화 조명) 효과를 하단 영역까지 확장
+      const cinematics = document.querySelector<HTMLElement>('#cinematics-container, #cinematics');
+      if (cinematics) {
+        cinematics.style.setProperty('height', '100vh', 'important');
+        cinematics.style.setProperty('max-height', '100vh', 'important');
+        cinematics.style.setProperty('overflow', 'visible', 'important');
       }
 
       // #columns 숨기기 (영상 설명, 추천/댓글 영역 모두 포함)
@@ -466,6 +475,14 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({
         ytdApp.style.removeProperty('max-height');
         ytdApp.style.removeProperty('height');
         ytdApp.style.removeProperty('overflow');
+        ytdApp.style.removeProperty('background-color');
+      }
+      // Ambient mode 복원
+      const cinematicsRestore = document.querySelector<HTMLElement>('#cinematics-container, #cinematics');
+      if (cinematicsRestore) {
+        cinematicsRestore.style.removeProperty('height');
+        cinematicsRestore.style.removeProperty('max-height');
+        cinematicsRestore.style.removeProperty('overflow');
       }
       // body/documentElement overflow 복원
       document.body.style.overflow = '';
@@ -534,7 +551,7 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({
   return (
     <CurrentTimeProvider>
       <SidebarContainer lyrics={lyrics} width={sidebarWidth} songTitle={songTitle} songArtist={songArtist} />
-      <BottomContainer lyrics={lyrics} />
+      <BottomContainer lyrics={lyrics} sidebarWidth={sidebarWidth} />
 
       {/* TextEffectsModal — KaraokeModeContainer 레벨에서 렌더링 */}
       {showTextEffectsModal && (

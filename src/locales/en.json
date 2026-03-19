@@ -445,5 +445,9 @@
   "extTunePresetOriginal": "Original",
   "extTunePresetPractice": "Practice (Slow)",
   "extTunePresetHigher": "Higher Key +2",
-  "extTunePresetLower": "Lower Key -2"
+  "extTunePresetLower": "Lower Key -2",
+  "extPause": "Pause",
+  "extRecord": "Record",
+  "extMute": "Mute",
+  "extUnmute": "Unmute"
 }

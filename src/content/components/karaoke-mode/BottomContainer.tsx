@@ -1,1356 +1,293 @@
 // BottomContainer.tsx
-// 가라오케 모드 하단 컨테이너
-// 구간 반복, 싱크셋 등 음악 영상 관련 기능 제공
-import React, { Suspense, lazy } from 'react';
-import styles from './styles.module.css';
-import { IoRepeat } from 'react-icons/io5';
-import {
-  MdReplay,
-  MdTune,
-  MdSkipNext,
-  MdAutoMode,
-  MdNavigateBefore,
-  MdNavigateNext,
-  MdOutlineDragHandle,
-  MdRemove,
-  MdSubtitles,
-  MdRecordVoiceOver,
-  MdReorder,
-  MdFormatColorText,
-} from 'react-icons/md';
+// 가라오케 모드 하단 컨트롤 바
+// 영상 바로 아래에 고정 배치, 사이드바와 자연스럽게 연결
+// 재생/일시정지, 곡 처음으로, 녹음, 음량 조절
+
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { MdReplay, MdPlayArrow, MdPause, MdMic, MdVolumeUp, MdVolumeOff } from 'react-icons/md';
 import { useTranslation } from 'react-i18next';
 import { Line } from '@lib/types/lyrics';
-import { applyOffsetToLyrics } from '@lib/utils/lyrics/display/lyricsOffset';
-import { extractVideoIdFromUrl } from '@lib/utils/platform/videoDetection';
-import { saveVideoOffset, getVideoOffset, deleteVideoOffset } from '@lib/utils/storage/videoOffsetStorage';
-import { Toast } from '../common/Toast';
-import { canExecuteThrottled, THROTTLE_DELAYS } from '@lib/utils/common/common';
-
-// TextEffectsModal을 lazy loading으로 변경 (메모리 최적화)
-const TextEffectsModal = lazy(() =>
-  import('./TextEffectsModal').then((module) => ({ default: module.TextEffectsModal })),
-);
-
-// DEV_MODE 전용 상수
-const IS_DEV_MODE = process.env.DEV_MODE === 'true';
-const API_SERVER_URL = process.env.API_SERVER_URL ?? '';
-const DEBUG_API_KEY = process.env.DEBUG_API_KEY ?? '';
-
-// 아이콘 공통 스타일 상수
-const ICON_SIZE = 28;
-const ICON_COLOR = '#ffffff';
-const ICON_COLOR_GOLD = '#FFEB3B';
-
-// 구간 반복 끝 시간 버퍼 (초) - 가사 끝부분이 잘리지 않도록
-const LOOP_END_BUFFER = 0.3;
-
-/**
- * 구간 반복 모드
- * - off: 비활성화
- * - once: 1번 반복 (전역)
- * - triple: 3번 반복 (전역)
- * - infinite: 무한 반복 (지역)
- */
-type LoopMode = 'off' | 'once' | 'triple' | 'infinite';
-
-/**
- * 가사 방식 모드
- * - sync: 기본 (현재 가사 + 다음 가사) - LyricsDisplayMenu와 호환
- * - single: 싱글 (현재 가사만)
- * - full: 전체 가사
- */
-type LyricsDisplayMode = 'sync' | 'single' | 'full';
-
-/**
- * 구간 반복 상태
- */
-interface LoopState {
-  mode: LoopMode;
-  sectionStartIndex: number; // 반복 구간 시작 인덱스
-  sectionEndIndex: number; // 반복 구간 끝 인덱스
-  repeatCount: number; // 현재 구간 반복 횟수
-}
 
 interface BottomContainerProps {
   lyrics: Line[];
-  offset?: number;
-  onOffsetChange?: (offset: number, offsetLyrics: Line[]) => void;
+  sidebarWidth: number;
 }
 
+/** YouTube 비디오 요소 가져오기 */
+const getVideo = (): HTMLVideoElement | null => document.querySelector<HTMLVideoElement>('video.html5-main-video');
+
 /**
- * 가라오케 모드 하단 컨테이너
- * - 동영상 플레이어 하단에 위치
- * - 구간반복, 간주점프, 노래처음으로, 싱크셋 등 기능 제공
+ * 가라오케 모드 하단 컨트롤 바
+ * - 영상 하단에 고정 (fixed), 사이드바 왼쪽까지
+ * - 재생/일시정지, 곡 처음으로, 녹음, 음량 조절
  */
-export const BottomContainer: React.FC<BottomContainerProps> = ({
-  lyrics,
-  offset: initialOffset = 0,
-  onOffsetChange,
-}) => {
+export const BottomContainer: React.FC<BottomContainerProps> = ({ sidebarWidth }) => {
   const { t } = useTranslation();
-  const [loopMode, setLoopMode] = React.useState<LoopMode>('off');
-  const [autoSkipEnabled, setAutoSkipEnabled] = React.useState<boolean>(false);
-  const [loopState, setLoopState] = React.useState<LoopState>({
-    mode: 'off',
-    sectionStartIndex: -1,
-    sectionEndIndex: -1,
-    repeatCount: 0,
-  });
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [volume, setVolume] = useState(100);
+  const [isMuted, setIsMuted] = useState(false);
+  const [showVolume, setShowVolume] = useState(false);
+  const volumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevVolumeRef = useRef(100);
 
-  // 가사 디스플레이 상태
-  const [lyricsDisplayMode, setLyricsDisplayMode] = React.useState<LyricsDisplayMode>('sync');
-  const [showCurrentLyrics, setShowCurrentLyrics] = React.useState<boolean>(true);
-  const [showPronunciation, setShowPronunciation] = React.useState<boolean>(true);
+  // YouTube 비디오 재생 상태 동기화
+  useEffect(() => {
+    const video = getVideo();
+    if (!video) return;
 
-  // 오프셋 조정 모달 상태
-  const [showOffsetModal, setShowOffsetModal] = React.useState<boolean>(false);
-  const [currentOffset, setCurrentOffset] = React.useState<number>(initialOffset);
-  const syncModalRef = React.useRef<HTMLDivElement | null>(null);
+    setIsPlaying(!video.paused);
+    setVolume(Math.round(video.volume * 100));
+    setIsMuted(video.muted);
 
-  // 텍스트 효과 모달 상태
-  const [showTextEffectsModal, setShowTextEffectsModal] = React.useState<boolean>(false);
-  const textEffectsModalRef = React.useRef<HTMLDivElement | null>(null);
-  const textEffectsButtonRef = React.useRef<HTMLButtonElement | null>(null);
-  // 모달이 제공하는 취소(원본 복구) 콜백 보관용 ref
-  const textEffectsCancelRef = React.useRef<(() => void) | null>(null);
-
-  // 새로운 싱크셋 방식 상태
-  const [isSyncRecording, setIsSyncRecording] = React.useState<boolean>(false);
-  const [userClickTime, setUserClickTime] = React.useState<number | null>(null);
-  const [calculatedOffset, setCalculatedOffset] = React.useState<number>(0);
-  const [syncStarted, setSyncStarted] = React.useState<boolean>(false); // 시작 버튼을 눌렀는지 추적
-
-  // Toast 알림 상태
-  const [showSyncSavedToast, setShowSyncSavedToast] = React.useState<boolean>(false);
-
-  // DEV_MODE: 서버 캐시 상태
-  const [isSavingServerCache, setIsSavingServerCache] = React.useState<boolean>(false);
-  const [isDeletingServerCache, setIsDeletingServerCache] = React.useState<boolean>(false);
-  const [showServerCacheToast, setShowServerCacheToast] = React.useState<boolean>(false);
-  const [serverCacheToastMessage, setServerCacheToastMessage] = React.useState<string>('');
-  const [hasServerOffset, setHasServerOffset] = React.useState<boolean>(false);
-
-  // 버튼 쓰로틀링을 위한 refs
-  const lastButtonClickRef = React.useRef<number>(0);
-
-  // 원본 가사 보관 (초기화용) - lyrics prop이 변경될 때만 업데이트
-  const originalLyricsRef = React.useRef<Line[]>(lyrics);
-  React.useEffect(() => {
-    // lyrics가 새로 로드되었을 때만 원본으로 저장 (길이나 첫 가사 텍스트가 다를 때)
-    if (lyrics.length !== originalLyricsRef.current.length || lyrics[0]?.text !== originalLyricsRef.current[0]?.text) {
-      originalLyricsRef.current = lyrics;
-      console.log('[BottomContainer] 원본 가사 업데이트:', lyrics.length, '줄');
-    }
-  }, [lyrics]);
-
-  // 페이지 로드 시 오프셋 자동 적용
-  // 서버 오프셋은 index.tsx에서 이미 적용됨 → 여기서는 존재 여부만 확인 (DEV 삭제 버튼용)
-  React.useEffect(() => {
-    const loadSavedOffset = async () => {
-      const videoId = extractVideoIdFromUrl(window.location.href);
-      if (!videoId || lyrics.length === 0) {
-        return;
-      }
-
-      // 1. 서버 오프셋 존재 여부 확인 (적용은 index.tsx에서 이미 완료)
-      const serverOffsetResponse = await new Promise<{
-        success: boolean;
-        offset: number | null;
-        lineAdjustments: Record<number, number> | null;
-      }>((resolve) => {
-        chrome.runtime.sendMessage({ type: 'FETCH_SERVER_OFFSET', videoId }, (response) => {
-          if (chrome.runtime.lastError) {
-            resolve({ success: false, offset: null, lineAdjustments: null });
-          } else {
-            resolve(response ?? { success: false, offset: null, lineAdjustments: null });
-          }
-        });
-      });
-
-      const serverOffset = serverOffsetResponse.success ? serverOffsetResponse.offset : null;
-      const serverLineAdj = serverOffsetResponse.success ? serverOffsetResponse.lineAdjustments : null;
-      const hasServerLineAdj = serverLineAdj !== null && Object.keys(serverLineAdj).length > 0;
-
-      if ((serverOffset !== null && serverOffset !== 0) || hasServerLineAdj) {
-        // 서버 오프셋 존재 → DEV 삭제 버튼 활성화, 로컬 오프셋 무시
-        setHasServerOffset(true);
-        setCurrentOffset(0);
-        deleteVideoOffset(videoId).catch(() => {});
-        return;
-      } else {
-        setHasServerOffset(false);
-      }
-
-      // 2. 서버 오프셋 없음 → 로컬 오프셋 확인 (state만 업데이트, 적용은 index.tsx에서 이미 완료)
-      const savedData = await getVideoOffset(videoId);
-      if (savedData && savedData.offset !== 0) {
-        setCurrentOffset(savedData.offset);
-        console.log(`[BottomContainer] 로컬 오프셋 state 동기화: ${savedData.offset}초 (적용은 index.tsx에서 완료)`);
-      }
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+    const onVolumeChange = () => {
+      setVolume(Math.round(video.volume * 100));
+      setIsMuted(video.muted);
     };
 
-    loadSavedOffset();
-  }, [lyrics.length]);
-
-  // 외부(SyncOffsetList 등)에서 APPLY_OFFSET_LYRICS 메시지 수신 시 state 업데이트
-  React.useEffect(() => {
-    const handleOffsetMessage = (
-      message: { type: string; payload?: { offset: number; lyrics: Line[] } },
-      _sender: chrome.runtime.MessageSender,
-      sendResponse: (response?: unknown) => void,
-    ) => {
-      if (message.type === 'APPLY_OFFSET_LYRICS' && message.payload) {
-        const { offset, lyrics: appliedLyrics } = message.payload;
-        console.log(`[BottomContainer] APPLY_OFFSET_LYRICS 메시지 수신 (offset: ${offset}초)`);
-
-        // BottomContainer의 state 업데이트
-        setCurrentOffset(offset);
-        onOffsetChange?.(offset, appliedLyrics);
-
-        sendResponse({ success: true });
-      }
-    };
-
-    chrome.runtime.onMessage.addListener(handleOffsetMessage);
+    video.addEventListener('play', onPlay);
+    video.addEventListener('pause', onPause);
+    video.addEventListener('volumechange', onVolumeChange);
 
     return () => {
-      chrome.runtime.onMessage.removeListener(handleOffsetMessage);
-    };
-  }, [onOffsetChange]);
-
-  /**
-   * YouTube 동영상 플레이어 제어
-   */
-  const getYouTubePlayer = (): HTMLVideoElement | null => {
-    return document.querySelector<HTMLVideoElement>('video.html5-main-video');
-  };
-
-  /**
-   * 영상을 0초로 이동하고 재생
-   */
-  const playVideoFromStart = (): void => {
-    const videoElement = getYouTubePlayer();
-    if (videoElement) {
-      videoElement.currentTime = 0;
-      videoElement.play();
-    }
-  };
-
-  /**
-   * 현재 재생 중인 가사의 인덱스 찾기
-   */
-  const getCurrentLyricIndex = React.useCallback(
-    (currentTime: number): number => {
-      for (let i = lyrics.length - 1; i >= 0; i--) {
-        const lyric = lyrics[i];
-        if (lyric && lyric.time <= currentTime) {
-          return i;
-        }
-      }
-      return -1; // 첫 가사 시작 전
-    },
-    [lyrics],
-  );
-  /**
-   * 오프셋 조정 모달 닫기 (취소 또는 외부 클릭 또는 버튼 재클릭)
-   * 영상 정지/이동 로직은 여기서 제거 - 시작/적용/초기화 버튼에서만 처리
-   */
-  const handleCloseOffsetModal = React.useCallback(() => {
-    setShowOffsetModal(false);
-    setIsSyncRecording(false);
-    setUserClickTime(null);
-    setCalculatedOffset(0);
-    setSyncStarted(false);
-  }, []);
-  // initialOffset 변경 시 업데이트
-  React.useEffect(() => {
-    setCurrentOffset(initialOffset);
-  }, [initialOffset]);
-
-  // 싱크셋 모달 외부 클릭 감지
-  React.useEffect(() => {
-    if (!showOffsetModal) return;
-
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-
-      // 싱크셋 버튼을 찾아서 클릭 여부 확인
-      const syncButton = document.querySelector('[aria-label="' + t('extKaraokeSyncSettings') + '"]');
-      if (syncButton && syncButton.contains(target)) {
-        // 싱크셋 버튼 클릭 시 handleSyncSettings에서 처리하므로 여기서는 무시
-        return;
-      }
-
-      // 모달 외부 클릭 시
-      if (syncModalRef.current && !syncModalRef.current.contains(target)) {
-        handleCloseOffsetModal();
-      }
-    };
-
-    // 약간의 딜레이를 주어 모달 오픈 클릭 이벤트와 분리
-    const timeoutId = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
-    }, 0);
-
-    return () => {
-      clearTimeout(timeoutId);
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showOffsetModal, handleCloseOffsetModal, t]);
-
-  // ActionableToast에서 show-sync-panel 이벤트 수신
-  React.useEffect(() => {
-    const handleShowSyncPanel = () => {
-      console.log('[BottomContainer] show-sync-panel 이벤트 수신 - 싱크셋 모달 열기');
-      setShowOffsetModal(true);
-    };
-
-    window.addEventListener('show-sync-panel', handleShowSyncPanel);
-
-    return () => {
-      window.removeEventListener('show-sync-panel', handleShowSyncPanel);
+      video.removeEventListener('play', onPlay);
+      video.removeEventListener('pause', onPause);
+      video.removeEventListener('volumechange', onVolumeChange);
     };
   }, []);
 
-  // 텍스트 효과 모달 외부 클릭 감지
-  React.useEffect(() => {
-    if (!showTextEffectsModal) return;
+  const handlePlayPause = useCallback(() => {
+    const video = getVideo();
+    if (!video) return;
+    if (video.paused) {
+      video.play();
+    } else {
+      video.pause();
+    }
+  }, []);
 
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
+  const handleRestart = useCallback(() => {
+    const video = getVideo();
+    if (video) {
+      video.currentTime = 0;
+    }
+  }, []);
 
-      // 텍스트 효과 버튼 클릭 시 (같은 버튼 재클릭) - 버튼의 onClick에서 처리하므로 여기서는 무시
-      if (textEffectsButtonRef.current && textEffectsButtonRef.current.contains(target)) {
-        return;
+  const handleRecord = useCallback(() => {
+    // TODO: 녹음 기능 구현
+    console.log('[BottomContainer] 녹음 기능 (미구현)');
+  }, []);
+
+  const handleVolumeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = parseInt(e.target.value, 10);
+    setVolume(val);
+    const video = getVideo();
+    if (video) {
+      video.volume = val / 100;
+      if (val > 0 && video.muted) {
+        video.muted = false;
       }
+    }
+  }, []);
 
-      // 모달 외부 클릭 시: 모달이 등록한 취소 콜백이 있으면 호출 (원본 복구), 아니면 그냥 닫기
-      if (textEffectsModalRef.current && !textEffectsModalRef.current.contains(target)) {
-        if (textEffectsCancelRef.current) {
-          try {
-            textEffectsCancelRef.current();
-          } catch {
-            setShowTextEffectsModal(false);
-          }
-        } else {
-          setShowTextEffectsModal(false);
-        }
-      }
-    };
+  const handleMuteToggle = useCallback(() => {
+    const video = getVideo();
+    if (!video) return;
+    if (isMuted) {
+      video.muted = false;
+      video.volume = prevVolumeRef.current / 100;
+    } else {
+      prevVolumeRef.current = volume;
+      video.muted = true;
+    }
+  }, [isMuted, volume]);
 
-    // 약간의 딜레이를 주어 모달 오픈 클릭 이벤트와 분리
-    const timeoutId = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
-    }, 0);
+  const handleVolumeEnter = useCallback(() => {
+    if (volumeTimerRef.current) {
+      clearTimeout(volumeTimerRef.current);
+      volumeTimerRef.current = null;
+    }
+    setShowVolume(true);
+  }, []);
 
+  const handleVolumeLeave = useCallback(() => {
+    volumeTimerRef.current = setTimeout(() => {
+      setShowVolume(false);
+    }, 500);
+  }, []);
+
+  useEffect(() => {
     return () => {
-      clearTimeout(timeoutId);
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showTextEffectsModal]);
-
-  // chrome.storage에서 상태 불러오기
-  React.useEffect(() => {
-    // sync 영역: lyricsMode, realtimeLyrics, announceLyrics
-    chrome.storage.sync.get(['lyricsMode', 'realtimeLyrics', 'announceLyrics'], (result) => {
-      if (result.lyricsMode !== undefined) {
-        setLyricsDisplayMode(result.lyricsMode as LyricsDisplayMode);
-      }
-      if (result.realtimeLyrics !== undefined) {
-        setShowCurrentLyrics(result.realtimeLyrics as boolean);
-      }
-      if (result.announceLyrics !== undefined) {
-        setShowPronunciation(result.announceLyrics as boolean);
-      }
-    });
-    // local 영역: karaokeAutoSkipEnabled
-    chrome.storage.local.get(['karaokeAutoSkipEnabled'], (result) => {
-      if (result.karaokeAutoSkipEnabled !== undefined) {
-        setAutoSkipEnabled(result.karaokeAutoSkipEnabled as boolean);
-      }
-    });
-
-    // storage 변경 감지 리스너
-    const handleStorageChange = (
-      changes: { [key: string]: chrome.storage.StorageChange },
-      areaName: chrome.storage.AreaName,
-    ) => {
-      if (areaName === 'sync') {
-        if (changes.lyricsMode) {
-          setLyricsDisplayMode(changes.lyricsMode.newValue as LyricsDisplayMode);
-        }
-        if (changes.realtimeLyrics) {
-          setShowCurrentLyrics(changes.realtimeLyrics.newValue as boolean);
-        }
-        if (changes.announceLyrics) {
-          setShowPronunciation(changes.announceLyrics.newValue as boolean);
-        }
-      }
-      if (areaName === 'local') {
-        if (changes.karaokeAutoSkipEnabled) {
-          setAutoSkipEnabled(changes.karaokeAutoSkipEnabled.newValue as boolean);
-        }
-      }
-    };
-
-    chrome.storage.onChanged.addListener(handleStorageChange);
-
-    return () => {
-      chrome.storage.onChanged.removeListener(handleStorageChange);
+      if (volumeTimerRef.current) clearTimeout(volumeTimerRef.current);
     };
   }, []);
 
-  // 자동 점프 기능: 활성화 시 가사 로드 후 첫 가사 3초 전으로 이동
-  React.useEffect(() => {
-    if (!autoSkipEnabled || lyrics.length === 0) {
-      return;
-    }
-
-    const videoElement = getYouTubePlayer();
-    if (!videoElement) {
-      return;
-    }
-
-    const firstLyric = lyrics[0];
-    if (!firstLyric) {
-      return;
-    }
-
-    // 첫 가사가 4초 이내면 자동 점프 작동하지 않음
-    if (firstLyric.time <= 4) {
-      console.log('[BottomContainer] 자동 점프: 첫 가사가 4초 이내여서 작동하지 않음');
-      return;
-    }
-
-    // 3초 전 위치 계산 (음수가 되지 않도록)
-    const targetTime = Math.max(0, firstLyric.time - 3);
-
-    // 현재 시간이 0초이거나 첫 가사 이전일 때만 자동 점프 실행
-    const currentTime = videoElement.currentTime;
-    if (currentTime <= firstLyric.time) {
-      // 0초로 초기화
-      videoElement.currentTime = 0;
-
-      // 잠시 후 목표 시간으로 이동 (0초 초기화 후 점프)
-      setTimeout(() => {
-        videoElement.currentTime = targetTime;
-        console.log(
-          `[BottomContainer] 자동 점프: 0초 → ${targetTime.toFixed(2)}초로 이동 (첫 가사: ${firstLyric.time}초)`,
-        );
-      }, 100);
-    }
-  }, [autoSkipEnabled, lyrics]);
-
-  // 구간 반복 로직 - timeupdate 이벤트 리스너
-  React.useEffect(() => {
-    const videoElement = getYouTubePlayer();
-    if (!videoElement || lyrics.length === 0) {
-      console.log('[BottomContainer] useEffect - videoElement 또는 lyrics 없음');
-      return;
-    }
-
-    console.log('[BottomContainer] useEffect 실행 - loopState.mode:', loopState.mode);
-
-    const handleTimeUpdate = () => {
-      if (loopState.mode === 'off') {
-        return;
-      }
-
-      const currentTime = videoElement.currentTime;
-      const currentIndex = getCurrentLyricIndex(currentTime);
-
-      // 무한 반복 모드 (지역 반복)
-      if (loopState.mode === 'infinite') {
-        // 반복 구간이 설정되지 않았으면 현재 구간으로 설정
-        if (loopState.sectionStartIndex === -1 && currentIndex >= 0) {
-          const startIndex = currentIndex;
-          const endIndex = Math.min(currentIndex + 1, lyrics.length - 1);
-          setLoopState({
-            mode: 'infinite',
-            sectionStartIndex: startIndex,
-            sectionEndIndex: endIndex,
-            repeatCount: 0,
-          });
-          console.log(`[BottomContainer] 무한 반복 구간 설정: ${startIndex + 1}-${endIndex + 1}줄`);
-          return;
-        }
-
-        // 구간 끝 지점을 넘어가면 구간 시작으로 이동
-        const endLyric = lyrics[loopState.sectionEndIndex];
-        const nextLyric = lyrics[loopState.sectionEndIndex + 1];
-        // 다음 가사 시작 시간 + 버퍼 (가사 끝부분이 잘리지 않도록)
-        const endTime = nextLyric ? nextLyric.time + LOOP_END_BUFFER : videoElement.duration;
-
-        if (endLyric && currentTime >= endTime) {
-          const startLyric = lyrics[loopState.sectionStartIndex];
-          if (startLyric) {
-            videoElement.currentTime = startLyric.time;
-            console.log(
-              `[BottomContainer] 무한 반복: ${loopState.sectionStartIndex + 1}-${loopState.sectionEndIndex + 1}줄 반복 중`,
-            );
-          }
-        }
-      }
-      // 1번/3번 반복 모드 (전역 반복)
-      else if (loopState.mode === 'once' || loopState.mode === 'triple') {
-        const maxRepeats = loopState.mode === 'once' ? 1 : 3;
-
-        // 반복 구간이 설정되지 않았으면 현재 구간으로 설정
-        if (loopState.sectionStartIndex === -1 && currentIndex >= 0) {
-          const startIndex = currentIndex;
-          const endIndex = Math.min(currentIndex + 1, lyrics.length - 1);
-          setLoopState({
-            mode: loopState.mode,
-            sectionStartIndex: startIndex,
-            sectionEndIndex: endIndex,
-            repeatCount: 0,
-          });
-          console.log(
-            `[BottomContainer] 구간 설정: ${startIndex + 1}-${endIndex + 1}줄 (${loopState.mode === 'once' ? '1' : '3'}번 반복)`,
-          );
-          return;
-        }
-
-        // 현재 구간 끝 지점 체크
-        const endLyric = lyrics[loopState.sectionEndIndex];
-        const nextLyric = lyrics[loopState.sectionEndIndex + 1];
-        // 다음 가사 시작 시간 + 버퍼 (가사 끝부분이 잘리지 않도록)
-        const endTime = nextLyric ? nextLyric.time + LOOP_END_BUFFER : videoElement.duration;
-
-        if (endLyric && currentTime >= endTime) {
-          if (loopState.repeatCount < maxRepeats) {
-            // 반복 횟수가 남았으면 구간 시작으로 이동
-            const startLyric = lyrics[loopState.sectionStartIndex];
-            if (startLyric) {
-              videoElement.currentTime = startLyric.time;
-              setLoopState({
-                ...loopState,
-                repeatCount: loopState.repeatCount + 1,
-              });
-              console.log(
-                `[BottomContainer] 구간 반복: ${loopState.sectionStartIndex + 1}-${loopState.sectionEndIndex + 1}줄 ${loopState.repeatCount + 1}/${maxRepeats}번째`,
-              );
-            }
-          } else {
-            // 반복 완료 - 다음 구간으로 설정
-            const newStartIndex = loopState.sectionEndIndex + 1;
-            if (newStartIndex < lyrics.length) {
-              const newEndIndex = Math.min(newStartIndex + 1, lyrics.length - 1);
-              setLoopState({
-                mode: loopState.mode,
-                sectionStartIndex: newStartIndex,
-                sectionEndIndex: newEndIndex,
-                repeatCount: 0,
-              });
-              console.log(`[BottomContainer] 다음 구간: ${newStartIndex + 1}-${newEndIndex + 1}줄`);
-            }
-          }
-        }
-      }
-    };
-
-    videoElement.addEventListener('timeupdate', handleTimeUpdate);
-
-    return () => {
-      videoElement.removeEventListener('timeupdate', handleTimeUpdate);
-    };
-  }, [loopState, lyrics, getCurrentLyricIndex]);
-
-  /**
-   * 노래 처음으로 (0:00으로 이동)
-   */
-  const handleRestartSong = () => {
-    if (!canExecuteThrottled(lastButtonClickRef, THROTTLE_DELAYS.UI_INTERACTION)) return;
-    const videoElement = getYouTubePlayer();
-    if (videoElement) {
-      videoElement.currentTime = 0;
-      console.log('[BottomContainer] 노래 처음으로: 0:00으로 이동');
-    } else {
-      console.error('[BottomContainer] YouTube 비디오 요소를 찾을 수 없습니다');
-    }
-  };
-
-  /**
-   * 구간 반복 모드 토글
-   * off → once(1번) → triple(3번) → infinite(무한) → off
-   */
-  const handleLoopToggle = () => {
-    if (!canExecuteThrottled(lastButtonClickRef, THROTTLE_DELAYS.UI_INTERACTION)) return;
-    setLoopMode((prev: LoopMode): LoopMode => {
-      const modes: LoopMode[] = ['off', 'once', 'triple', 'infinite'];
-      const currentIndex = modes.indexOf(prev);
-      const nextIndex = (currentIndex + 1) % modes.length;
-      const nextMode = modes[nextIndex] as LoopMode;
-
-      console.log(`[BottomContainer] 구간 반복 모드: ${prev} → ${nextMode}`);
-
-      // loopState 초기화 (모드 변경 시 새로운 구간으로 설정)
-      setLoopState({
-        mode: nextMode,
-        sectionStartIndex: -1,
-        sectionEndIndex: -1,
-        repeatCount: 0,
-      });
-
-      return nextMode;
-    });
-  };
-
-  /**
-   * 구간 반복 아이콘 색상
-   */
-  const getLoopIconColor = (): string => {
-    return loopMode === 'infinite' ? ICON_COLOR_GOLD : ICON_COLOR;
-  };
-
-  /**
-   * 구간 반복 배지 표시 (1, 3만 표시, 무한은 금색 아이콘으로 구분)
-   */
-  const getLoopBadgeText = (): string | null => {
-    switch (loopMode) {
-      case 'once':
-        return '1';
-      case 'triple':
-        return '3';
-      default:
-        return null;
-    }
-  };
-
-  /**
-   * 자동 간주 점프 토글
-   */
-  const handleAutoSkipToggle = () => {
-    if (!canExecuteThrottled(lastButtonClickRef, THROTTLE_DELAYS.UI_INTERACTION)) return;
-    setAutoSkipEnabled((prev) => {
-      const newState = !prev;
-      // chrome.storage에 상태 저장
-      chrome.storage.local.set({ karaokeAutoSkipEnabled: newState });
-      console.log(`[BottomContainer] 자동 간주 점프: ${newState ? '활성화' : '비활성화'}`);
-      return newState;
-    });
-  };
-
-  /**
-   * 자동 간주 점프 아이콘 색상 (구간 반복 무한 모드와 같은 금색)
-   */
-  const getAutoSkipIconColor = (): string => {
-    return autoSkipEnabled ? ICON_COLOR_GOLD : ICON_COLOR;
-  };
-
-  /**
-   * 이전 가사 타임스탬프로 이동
-   */
-  const handlePrevLyric = () => {
-    if (!canExecuteThrottled(lastButtonClickRef, THROTTLE_DELAYS.UI_INTERACTION)) return;
-    console.log('[BottomContainer] handlePrevLyric 호출');
-    const videoElement = getYouTubePlayer();
-    if (!videoElement || lyrics.length === 0) {
-      console.log('[BottomContainer] videoElement 또는 lyrics 없음');
-      return;
-    }
-
-    const currentTime = videoElement.currentTime;
-    const currentIndex = getCurrentLyricIndex(currentTime);
-    console.log('[BottomContainer] 이전 버튼 - currentTime:', currentTime, 'currentIndex:', currentIndex);
-
-    // 이전 가사로 이동
-    if (currentIndex > 0) {
-      const prevLyric = lyrics[currentIndex - 1];
-      if (prevLyric) {
-        videoElement.currentTime = prevLyric.time;
-        console.log('[BottomContainer] 이전 가사로 이동:', prevLyric.time);
-      }
-    } else {
-      // 첫 가사거나 그 이전이면 0초로
-      videoElement.currentTime = 0;
-      console.log('[BottomContainer] 0초로 이동');
-    }
-  };
-
-  /**
-   * 다음 가사 타임스탬프로 이동
-   */
-  const handleNextLyric = () => {
-    if (!canExecuteThrottled(lastButtonClickRef, THROTTLE_DELAYS.UI_INTERACTION)) return;
-    console.log('[BottomContainer] handleNextLyric 호출');
-    const videoElement = getYouTubePlayer();
-    if (!videoElement || lyrics.length === 0) {
-      console.log('[BottomContainer] videoElement 또는 lyrics 없음');
-      return;
-    }
-
-    const currentTime = videoElement.currentTime;
-    const currentIndex = getCurrentLyricIndex(currentTime);
-    console.log('[BottomContainer] 다음 버튼 - currentTime:', currentTime, 'currentIndex:', currentIndex);
-
-    // 다음 가사로 이동
-    if (currentIndex >= 0 && currentIndex < lyrics.length - 1) {
-      const nextLyric = lyrics[currentIndex + 1];
-      if (nextLyric) {
-        videoElement.currentTime = nextLyric.time;
-        console.log('[BottomContainer] 다음 가사로 이동:', nextLyric.time);
-      }
-    } else if (currentIndex === -1 && lyrics.length > 0) {
-      // 첫 가사 시작 전이면 첫 가사로
-      const firstLyric = lyrics[0];
-      if (firstLyric) {
-        videoElement.currentTime = firstLyric.time;
-        console.log('[BottomContainer] 첫 가사로 이동:', firstLyric.time);
-      }
-    }
-  };
-
-  /**
-   * 간주 점프
-   * - 다음 가사까지 간주가 길면(7초 이상) 다음 가사 3초 전으로 이동
-   * - 간주가 짧으면 다음 가사 정확한 시간으로 이동
-   */
-  const handleSkipIntro = () => {
-    if (!canExecuteThrottled(lastButtonClickRef, THROTTLE_DELAYS.UI_INTERACTION)) return;
-    console.log('[BottomContainer] handleSkipIntro 호출');
-    const videoElement = getYouTubePlayer();
-    if (!videoElement || lyrics.length === 0) {
-      console.log('[BottomContainer] videoElement 또는 lyrics 없음');
-      return;
-    }
-
-    const currentTime = videoElement.currentTime;
-    const currentIndex = getCurrentLyricIndex(currentTime);
-    console.log('[BottomContainer] 간주 점프 - currentTime:', currentTime, 'currentIndex:', currentIndex);
-
-    // 다음 가사 찾기
-    const nextIndex = currentIndex + 1;
-    if (nextIndex >= lyrics.length) {
-      console.log('[BottomContainer] 다음 가사 없음 (마지막 가사)');
-      return;
-    }
-
-    const nextLyric = lyrics[nextIndex];
-    if (!nextLyric) {
-      console.log('[BottomContainer] 다음 가사 데이터 없음');
-      return;
-    }
-
-    // 간주 길이 체크
-    const gap = nextLyric.time - currentTime;
-    const MIN_GAP = 7; // 최소 간주 길이 (초)
-
-    if (gap >= MIN_GAP) {
-      // 간주가 길면 다음 가사 3초 전으로 이동
-      const targetTime = Math.max(0, nextLyric.time - 3);
-      videoElement.currentTime = targetTime;
-      console.log(
-        `[BottomContainer] 간주 점프 (긴 간주): ${currentTime.toFixed(2)}초 → ${targetTime.toFixed(2)}초 (간주 ${gap.toFixed(1)}초 건너뜀)`,
-      );
-    } else {
-      // 간주가 짧으면 다음 가사 정확한 시간으로 이동
-      videoElement.currentTime = nextLyric.time;
-      console.log(
-        `[BottomContainer] 간주 점프 (짧은 간주): ${currentTime.toFixed(2)}초 → ${nextLyric.time}초 (간주 ${gap.toFixed(1)}초)`,
-      );
-    }
-  };
-
-  /**
-   * 싱크셋 버튼 - 오프셋 조정 모달 토글
-   */
-  const handleSyncSettings = () => {
-    if (!canExecuteThrottled(lastButtonClickRef, THROTTLE_DELAYS.UI_INTERACTION)) return;
-    if (showOffsetModal) {
-      // 이미 모달이 열려있으면 닫기 (같은 버튼 재클릭)
-      handleCloseOffsetModal();
-    } else {
-      // 모달 열기
-      setShowOffsetModal(true);
-      setIsSyncRecording(false);
-      setUserClickTime(null);
-      setCalculatedOffset(0);
-      setSyncStarted(false); // 모달 열 때 초기화
-    }
-  };
-
-  /**
-   * 싱크 녹음 시작/지금! 버튼 클릭
-   */
-  const handleSyncButtonClick = () => {
-    const videoElement = getYouTubePlayer();
-    if (!videoElement) return;
-
-    if (!isSyncRecording) {
-      // 시작 버튼 클릭 시
-      setIsSyncRecording(true);
-      setUserClickTime(null);
-      setCalculatedOffset(0);
-      setSyncStarted(true); // 시작 버튼 눌렀음을 표시
-
-      // 영상을 0초로 이동 후 재생
-      playVideoFromStart();
-      console.log('[BottomContainer] 싱크 녹음 시작 - 영상 0초부터 재생');
-    } else {
-      // 지금! 버튼 클릭 시
-      const currentTime = videoElement.currentTime;
-      setUserClickTime(currentTime);
-
-      // 원본 가사의 첫 가사 시간 가져오기
-      const originalLyrics = originalLyricsRef.current;
-      const firstLyricTime = originalLyrics.length > 0 && originalLyrics[0] ? originalLyrics[0].time : 0;
-
-      // 오프셋 계산: 사용자가 누른 시간 - 첫 가사 시간
-      const newOffset = Number((currentTime - firstLyricTime).toFixed(1));
-      setCalculatedOffset(newOffset);
-
-      // 영상 일시정지 및 0초로 이동
-      videoElement.pause();
-      videoElement.currentTime = 0;
-      setIsSyncRecording(false);
-
-      console.log(
-        '[BottomContainer] 싱크 녹음 완료 - 사용자 클릭:',
-        currentTime,
-        '첫 가사 (원본):',
-        firstLyricTime,
-        '오프셋:',
-        newOffset,
-      );
-    }
-  };
-
-  /**
-   * 오프셋 적용 버튼
-   */
-  const handleApplyOffset = async () => {
-    const finalOffset = calculatedOffset;
-
-    // 원본 가사를 기준으로 오프셋 적용
-    const originalLyrics = originalLyricsRef.current;
-    const appliedLyrics = applyOffsetToLyrics(originalLyrics, finalOffset, 0);
-    setCurrentOffset(finalOffset);
-
-    // 부모에게 적용된 값 알림
-    onOffsetChange?.(finalOffset, appliedLyrics);
-
-    // content script에 메시지 전송하여 즉시 반영
-    chrome.runtime.sendMessage(
-      {
-        type: 'APPLY_OFFSET_LYRICS',
-        payload: { offset: finalOffset, lyrics: appliedLyrics },
-      },
-      () => {
-        if (chrome.runtime.lastError) {
-          console.warn('[BottomContainer] APPLY_OFFSET_LYRICS 전송 오류:', chrome.runtime.lastError.message);
-        } else {
-          console.log(`[BottomContainer] APPLY_OFFSET_LYRICS 전송 완료 (offset: ${finalOffset}초)`);
-        }
-      },
-    );
-
-    // Chrome storage에 오프셋 저장
-    const videoId = extractVideoIdFromUrl(window.location.href);
-    if (videoId) {
-      const videoTitle = document.querySelector('h1.ytd-watch-metadata yt-formatted-string')?.textContent || 'Unknown';
-      await saveVideoOffset({
-        videoId,
-        title: videoTitle.trim(),
-        offset: finalOffset,
-        thumbnail: `https://i.ytimg.com/vi/${videoId}/default.jpg`,
-        lastModified: Date.now(),
-      });
-      console.log(`[BottomContainer] 오프셋 storage 저장 완료 (videoId: ${videoId}, offset: ${finalOffset}초)`);
-    }
-
-    // 영상을 0초로 이동하고 재생하여 적용된 오프셋 확인
-    playVideoFromStart();
-    console.log('[BottomContainer] 적용 후 영상 0초부터 재생');
-
-    // 모달 닫기 및 상태 초기화
-    setShowOffsetModal(false);
-    setIsSyncRecording(false);
-    setUserClickTime(null);
-    setCalculatedOffset(0);
-
-    // Toast 알림 표시
-    setShowSyncSavedToast(true);
-  };
-
-  /**
-   * 오프셋 초기화 버튼 - offset = 0 (원본 가사 타임스탬프)으로 되돌리기
-   */
-  const handleResetOffset = async () => {
-    const resetOffset = 0;
-
-    // 원본 가사를 그대로 사용 (offset 0 적용 - 원본 타임스탬프 그대로)
-    const originalLyrics = originalLyricsRef.current;
-    const appliedLyrics = applyOffsetToLyrics(originalLyrics, resetOffset, 0);
-    setCurrentOffset(resetOffset);
-
-    // 부모에게 적용된 값 알림
-    onOffsetChange?.(resetOffset, appliedLyrics);
-
-    // content script에 메시지 전송하여 즉시 반영
-    chrome.runtime.sendMessage(
-      {
-        type: 'APPLY_OFFSET_LYRICS',
-        payload: { offset: resetOffset, lyrics: appliedLyrics },
-      },
-      () => {
-        if (chrome.runtime.lastError) {
-          console.warn('[BottomContainer] APPLY_OFFSET_LYRICS 전송 오류:', chrome.runtime.lastError.message);
-        } else {
-          console.log('[BottomContainer] APPLY_OFFSET_LYRICS 초기화 완료 (offset = 0) - 원본 가사 복원');
-        }
-      },
-    );
-
-    // Chrome storage에 오프셋 0으로 업데이트 (삭제하지 않고 0으로 저장)
-    const videoId = extractVideoIdFromUrl(window.location.href);
-    if (videoId) {
-      const videoTitle = document.querySelector('h1.ytd-watch-metadata yt-formatted-string')?.textContent || 'Unknown';
-      await saveVideoOffset({
-        videoId,
-        title: videoTitle.trim(),
-        offset: resetOffset,
-        thumbnail: `https://i.ytimg.com/vi/${videoId}/default.jpg`,
-        lastModified: Date.now(),
-      });
-      console.log(`[BottomContainer] 오프셋 초기화 storage 저장 완료 (videoId: ${videoId}, offset: 0초)`);
-    }
-
-    // 영상을 0초로 이동하고 재생하여 초기화된 오프셋 확인
-    playVideoFromStart();
-    console.log('[BottomContainer] 초기화 후 영상 0초부터 재생');
-
-    // 모달 닫기 및 상태 초기화
-    setShowOffsetModal(false);
-    setIsSyncRecording(false);
-    setUserClickTime(null);
-    setCalculatedOffset(0);
-  };
-
-  /**
-   * [DEV_MODE 전용] 현재 오프셋을 서버 캐시로 저장
-   * 성공 시: 오프셋을 원본 가사에 베이킹 → 로컬 오프셋 삭제 → currentOffset = 0
-   */
-  const handleSaveServerOffset = async () => {
-    const videoId = extractVideoIdFromUrl(window.location.href);
-    if (!videoId) return;
-
-    setIsSavingServerCache(true);
-    try {
-      const response = await fetch(`${API_SERVER_URL}/api/v1/youtube/offset`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': DEBUG_API_KEY,
-        },
-        body: JSON.stringify({ videoId, offset: currentOffset }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`서버 오류: ${response.status}`);
-      }
-
-      // 서버 저장 성공 → 현재 오프셋을 원본에 베이킹 (보이지 않는 베이스라인으로 전환)
-      const bakedLyrics = applyOffsetToLyrics(originalLyricsRef.current, currentOffset, 0);
-      originalLyricsRef.current = bakedLyrics;
-      setCurrentOffset(0);
-      onOffsetChange?.(0, bakedLyrics);
-
-      // 로컬 Chrome Storage 오프셋 삭제 (싱크셋 목록에서 제거)
-      await deleteVideoOffset(videoId);
-
-      // 다른 컴포넌트에 적용 알림
-      chrome.runtime.sendMessage({ type: 'APPLY_OFFSET_LYRICS', payload: { offset: 0, lyrics: bakedLyrics } }, () => {
-        if (chrome.runtime.lastError) {
-          console.warn('[BottomContainer] 서버 캐시 저장 후 메시지 전송 실패:', chrome.runtime.lastError.message);
-        }
-      });
-
-      setHasServerOffset(true);
-      setServerCacheToastMessage('[DEV] 서버 오프셋 캐시 저장 완료');
-      setShowServerCacheToast(true);
-    } catch (err) {
-      console.error('[BottomContainer] 서버 캐시 저장 실패:', err);
-    } finally {
-      setIsSavingServerCache(false);
-    }
-  };
-
-  /**
-   * [DEV_MODE 전용] 서버 오프셋 캐시 삭제
-   * 삭제 후 페이지 새로고침하여 원본 가사 복원
-   */
-  const handleDeleteServerOffset = async () => {
-    const videoId = extractVideoIdFromUrl(window.location.href);
-    if (!videoId) return;
-
-    setIsDeletingServerCache(true);
-    try {
-      const response = await fetch(`${API_SERVER_URL}/api/v1/youtube/offset/${encodeURIComponent(videoId)}`, {
-        method: 'DELETE',
-        headers: { 'x-api-key': DEBUG_API_KEY },
-      });
-
-      if (!response.ok) {
-        throw new Error(`서버 오류: ${response.status}`);
-      }
-
-      setHasServerOffset(false);
-      setServerCacheToastMessage('[DEV] 서버 오프셋 캐시 삭제 완료 — 새로고침합니다');
-      setShowServerCacheToast(true);
-
-      // 잠시 후 새로고침 (Toast 표시 후)
-      setTimeout(() => window.location.reload(), 1000);
-    } catch (err) {
-      console.error('[BottomContainer] 서버 캐시 삭제 실패:', err);
-    } finally {
-      setIsDeletingServerCache(false);
-    }
-  };
-
-  /**
-   * 가사 방식 모드 순환 토글
-   * sync(기본) → single(싱글) → full(전체) → sync
-   */
-  const handleLyricsDisplayModeToggle = () => {
-    if (!canExecuteThrottled(lastButtonClickRef, THROTTLE_DELAYS.UI_INTERACTION)) return;
-    setLyricsDisplayMode((prev: LyricsDisplayMode): LyricsDisplayMode => {
-      const modes: LyricsDisplayMode[] = ['sync', 'single', 'full'];
-      const currentIndex = modes.indexOf(prev);
-      const nextIndex = (currentIndex + 1) % modes.length;
-      const nextMode = modes[nextIndex] as LyricsDisplayMode;
-
-      // chrome.storage에 저장
-      chrome.storage.sync.set({ lyricsMode: nextMode });
-      console.log(`[BottomContainer] 가사 방식 모드: ${prev} → ${nextMode}`);
-
-      return nextMode;
-    });
-  };
-
-  /**
-   * 현재 가사 On/Off 토글
-   */
-  const handleCurrentLyricsToggle = () => {
-    if (!canExecuteThrottled(lastButtonClickRef, THROTTLE_DELAYS.UI_INTERACTION)) return;
-    setShowCurrentLyrics((prev) => {
-      const newState = !prev;
-      chrome.storage.sync.set({ realtimeLyrics: newState });
-      console.log(`[BottomContainer] 현재 가사: ${newState ? 'On' : 'Off'}`);
-      return newState;
-    });
-  };
-
-  /**
-   * 발음 가사 On/Off 토글
-   */
-  const handlePronunciationToggle = () => {
-    if (!canExecuteThrottled(lastButtonClickRef, THROTTLE_DELAYS.UI_INTERACTION)) return;
-    setShowPronunciation((prev) => {
-      const newState = !prev;
-      chrome.storage.sync.set({ announceLyrics: newState });
-      console.log(`[BottomContainer] 발음 가사: ${newState ? 'On' : 'Off'}`);
-      return newState;
-    });
-  };
-
-  /**
-   * 가사 방식 모드에 따른 아이콘 반환
-   */
-  const getLyricsDisplayModeIcon = (): React.ReactElement => {
-    switch (lyricsDisplayMode) {
-      case 'sync':
-        return <MdOutlineDragHandle size={ICON_SIZE} color={ICON_COLOR} />;
-      case 'single':
-        return <MdRemove size={ICON_SIZE} color={ICON_COLOR} />;
-      case 'full':
-        return <MdReorder size={ICON_SIZE} color={ICON_COLOR} />;
-      default:
-        return <MdOutlineDragHandle size={ICON_SIZE} color={ICON_COLOR} />;
-    }
-  };
-
-  /**
-   * 현재 가사 On/Off 아이콘 색상
-   */
-  const getCurrentLyricsIconColor = (): string => {
-    return showCurrentLyrics ? ICON_COLOR : '#666666';
-  };
-
-  /**
-   * 발음 가사 On/Off 아이콘 색상
-   */
-  const getPronunciationIconColor = (): string => {
-    return showPronunciation ? ICON_COLOR : '#666666';
-  };
-
-  /**
-   * 텍스트 효과 버튼 클릭
-   */
-  const handleTextEffectsToggle = () => {
-    if (!canExecuteThrottled(lastButtonClickRef, THROTTLE_DELAYS.UI_INTERACTION)) return;
-    // 이미 모달이 열려있으면 모달의 취소 콜백을 호출하여 원본 복구 후 닫기
-    if (showTextEffectsModal) {
-      if (textEffectsCancelRef.current) {
-        try {
-          textEffectsCancelRef.current();
-        } catch {
-          setShowTextEffectsModal(false);
-        }
-      } else {
-        setShowTextEffectsModal(false);
-      }
-    } else {
-      setShowTextEffectsModal(true);
-    }
-  };
-
-  /**
-   * 가사 방식 모드 텍스트 반환
-   */
-  const getLyricsDisplayModeText = (): string => {
-    switch (lyricsDisplayMode) {
-      case 'sync':
-        return t('extKaraokeModeSync');
-      case 'single':
-        return t('extKaraokeModeSingle');
-      case 'full':
-        return t('extKaraokeModeFull');
-      default:
-        return t('extKaraokeModeSync');
-    }
+  const volumePercent = isMuted ? 0 : volume;
+
+  const btnBase: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: 'none',
+    background: 'transparent',
+    color: 'rgba(255, 255, 255, 0.6)',
+    cursor: 'pointer',
+    transition: 'all 0.15s',
+    padding: 0,
   };
 
   return (
-    <>
-      <div className={`${styles.bottomContainer} ytk-bottom-container`}>
-        <div className={styles.bottomContent}>
-          {/* 왼쪽 그룹: 이전/다음 버튼 */}
-          <div className={styles.buttonGroupLeft}>
-            <button className={styles.bottomButton} onClick={handlePrevLyric} aria-label={t('extKaraokePrevLyric')}>
-              <MdNavigateBefore size={ICON_SIZE} color={ICON_COLOR} />
-              <span className={styles.buttonText}>{t('extKaraokePrevLyric')}</span>
-            </button>
-            <button className={styles.bottomButton} onClick={handleNextLyric} aria-label={t('extKaraokeNextLyric')}>
-              <MdNavigateNext size={ICON_SIZE} color={ICON_COLOR} />
-              <span className={styles.buttonText}>{t('extKaraokeNextLyric')}</span>
-            </button>
-          </div>
+    <div
+      className="ytk-bottom-container"
+      style={{
+        position: 'fixed',
+        bottom: '30px',
+        left: `calc((100vw - ${sidebarWidth}px) / 2)`,
+        transform: 'translateX(-50%)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '8px 20px',
+        borderRadius: '28px',
+        background: 'rgba(18, 18, 30, 0.85)',
+        backdropFilter: 'blur(16px)',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        boxShadow: '0 4px 24px rgba(0, 0, 0, 0.4)',
+        zIndex: 9999,
+        pointerEvents: 'auto',
+        userSelect: 'none',
+      }}
+    >
+      {/* 곡 처음으로 */}
+      <span
+        role="button"
+        tabIndex={0}
+        style={{ ...btnBase, width: '40px', height: '40px', borderRadius: '50%' }}
+        title={t('extKaraokeRestartSong')}
+        onClick={handleRestart}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') handleRestart();
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.color = '#00d4aa';
+          e.currentTarget.style.background = 'rgba(0, 212, 170, 0.1)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)';
+          e.currentTarget.style.background = 'transparent';
+        }}
+      >
+        <MdReplay size={22} />
+      </span>
 
-          {/* 중앙 그룹: 기존 기능 버튼들 */}
-          <div className={styles.buttonGroupCenter}>
-            <button className={styles.bottomButton} onClick={handleLoopToggle} aria-label={t('extKaraokeLoopSection')}>
-              <div style={{ position: 'relative' }}>
-                <div className={loopMode === 'infinite' ? styles.infiniteLoopIcon : ''}>
-                  <IoRepeat size={ICON_SIZE} color={getLoopIconColor()} />
-                </div>
-                {getLoopBadgeText() && <span className={styles.loopBadge}>{getLoopBadgeText()}</span>}
-              </div>
-              <span className={styles.buttonText}>{t('extKaraokeLoopSection')}</span>
-            </button>
-            <button className={styles.bottomButton} onClick={handleSkipIntro} aria-label={t('extKaraokeSkipIntro')}>
-              <MdSkipNext size={ICON_SIZE} color={ICON_COLOR} />
-              <span className={styles.buttonText}>{t('extKaraokeSkipIntro')}</span>
-            </button>
-            <button className={styles.bottomButton} onClick={handleAutoSkipToggle} aria-label={t('extKaraokeAutoSkip')}>
-              <div className={autoSkipEnabled ? styles.autoSkipIconActive : styles.autoSkipIcon}>
-                <MdAutoMode size={ICON_SIZE} color={getAutoSkipIconColor()} />
-              </div>
-              <span className={styles.buttonText}>{t('extKaraokeAutoSkip')}</span>
-            </button>
-            <button className={styles.bottomButton} onClick={handleRestartSong} aria-label={t('extKaraokeRestartSong')}>
-              <MdReplay size={ICON_SIZE} color={ICON_COLOR} />
-              <span className={styles.buttonText}>{t('extKaraokeRestartSong')}</span>
-            </button>
-            <button
-              className={styles.bottomButton}
-              onClick={handleSyncSettings}
-              aria-label={t('extKaraokeSyncSettings')}
-            >
-              <MdTune size={ICON_SIZE} color={ICON_COLOR} />
-              <span className={styles.buttonText}>{t('extKaraokeSyncSettings')}</span>
-            </button>
-          </div>
+      {/* 재생/일시정지 */}
+      <span
+        role="button"
+        tabIndex={0}
+        style={{
+          ...btnBase,
+          width: '48px',
+          height: '48px',
+          background: '#00d4aa',
+          color: '#000',
+          borderRadius: '50%',
+        }}
+        title={isPlaying ? t('extPause') : t('extPlay')}
+        onClick={handlePlayPause}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') handlePlayPause();
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = '#00eebb';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = '#00d4aa';
+        }}
+      >
+        {isPlaying ? <MdPause size={28} /> : <MdPlayArrow size={28} />}
+      </span>
 
-          {/* 오른쪽 그룹: 가사 디스플레이 설정 */}
-          <div className={styles.buttonGroupRight}>
-            <button
-              className={styles.bottomButton}
-              onClick={handleLyricsDisplayModeToggle}
-              aria-label={t('extKaraokeLyricsDisplayMode')}
-              title={`${t('extKaraokeLyricsDisplayMode')}: ${getLyricsDisplayModeText()}`}
-            >
-              {getLyricsDisplayModeIcon()}
-              <span className={styles.buttonText}>{getLyricsDisplayModeText()}</span>
-            </button>
-            <button
-              className={styles.bottomButton}
-              onClick={handleCurrentLyricsToggle}
-              aria-label={t('extKaraokeShowCurrentLyrics')}
-              title={`${t('extKaraokeShowCurrentLyrics')}: ${showCurrentLyrics ? 'On' : 'Off'}`}
-            >
-              <MdSubtitles size={ICON_SIZE} color={getCurrentLyricsIconColor()} />
-              <span className={styles.buttonText} style={{ color: getCurrentLyricsIconColor() }}>
-                {t('extKaraokeShowCurrentLyrics')}
-              </span>
-            </button>
-            <button
-              className={styles.bottomButton}
-              onClick={handlePronunciationToggle}
-              aria-label={t('extKaraokeShowPronunciation')}
-              title={`${t('extKaraokeShowPronunciation')}: ${showPronunciation ? 'On' : 'Off'}`}
-            >
-              <MdRecordVoiceOver size={ICON_SIZE} color={getPronunciationIconColor()} />
-              <span className={styles.buttonText} style={{ color: getPronunciationIconColor() }}>
-                {t('extKaraokeShowPronunciation')}
-              </span>
-            </button>
-            <button
-              ref={textEffectsButtonRef}
-              className={styles.bottomButton}
-              onClick={handleTextEffectsToggle}
-              aria-label={t('extKaraokeTextEffects')}
-              title={t('extKaraokeTextEffects')}
-            >
-              <MdFormatColorText size={ICON_SIZE} color={ICON_COLOR} />
-              <span className={styles.buttonText}>{t('extKaraokeTextEffects')}</span>
-            </button>
-          </div>
+      {/* 녹음 */}
+      <span
+        role="button"
+        tabIndex={0}
+        style={{ ...btnBase, width: '40px', height: '40px', borderRadius: '50%' }}
+        title={t('extRecord')}
+        onClick={handleRecord}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') handleRecord();
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.color = '#ff6b6b';
+          e.currentTarget.style.background = 'rgba(255, 107, 107, 0.1)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)';
+          e.currentTarget.style.background = 'transparent';
+        }}
+      >
+        <MdMic size={22} />
+      </span>
+
+      {/* 구분선 */}
+      <div style={{ width: '1px', height: '24px', background: 'rgba(255, 255, 255, 0.08)', margin: '0 8px' }} />
+
+      {/* 음량 */}
+      <div
+        style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+        onMouseEnter={handleVolumeEnter}
+        onMouseLeave={handleVolumeLeave}
+      >
+        <span
+          role="button"
+          tabIndex={0}
+          style={{ ...btnBase, width: '40px', height: '40px', borderRadius: '50%' }}
+          title={isMuted ? t('extUnmute') : t('extMute')}
+          onClick={handleMuteToggle}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleMuteToggle();
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = '#00d4aa';
+            e.currentTarget.style.background = 'rgba(0, 212, 170, 0.1)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)';
+            e.currentTarget.style.background = 'transparent';
+          }}
+        >
+          {isMuted || volume === 0 ? <MdVolumeOff size={22} /> : <MdVolumeUp size={22} />}
+        </span>
+
+        {/* 음량 슬라이더 (호버 시 확장) */}
+        <div
+          style={{
+            overflow: 'hidden',
+            width: showVolume ? '100px' : '0px',
+            transition: 'width 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={volumePercent}
+            onChange={handleVolumeChange}
+            style={{
+              width: '100px',
+              height: '4px',
+              borderRadius: '2px',
+              appearance: 'none',
+              cursor: 'pointer',
+              background: `linear-gradient(to right, #00d4aa ${volumePercent}%, rgba(255,255,255,0.12) ${volumePercent}%)`,
+              outline: 'none',
+            }}
+          />
         </div>
       </div>
-
-      {/* 텍스트 효과 모달 - Lazy Loading */}
-      {showTextEffectsModal && (
-        <div className={styles.textEffectsModalContainer} ref={textEffectsModalRef}>
-          <Suspense fallback={<div style={{ padding: '20px', color: '#fff' }}>Loading...</div>}>
-            <TextEffectsModal
-              onClose={() => setShowTextEffectsModal(false)}
-              registerCancel={(fn) => {
-                textEffectsCancelRef.current = fn || null;
-              }}
-              initialTab={lyricsDisplayMode === 'sync' ? 'dual' : lyricsDisplayMode}
-            />
-          </Suspense>
-        </div>
-      )}
-
-      {/* 새로운 싱크셋 조정 모달 */}
-      {showOffsetModal && (
-        <div className={styles.syncModalContainer} ref={syncModalRef}>
-          <div className={styles.syncModalContent}>
-            {/* 설명 */}
-            <p className={styles.syncDescription}>{t('extKaraokeSyncDescription')}</p>
-
-            {/* 시작/지금! 토글 버튼 */}
-            <button
-              className={isSyncRecording ? styles.syncRecordingButton : styles.syncStartButton}
-              onClick={handleSyncButtonClick}
-              aria-label={isSyncRecording ? t('extKaraokeSyncNow') : t('extKaraokeSyncStart')}
-            >
-              {isSyncRecording ? t('extKaraokeSyncNow') : t('extKaraokeSyncStart')}
-            </button>
-
-            {/* 오프셋 정보 표시 (버튼 클릭 후에만 표시) */}
-            {userClickTime !== null && (
-              <div className={styles.syncInfo}>
-                <div className={styles.syncInfoRow}>
-                  <span>{t('extKaraokeSyncUserClickTime')}:</span>
-                  <span>
-                    {userClickTime.toFixed(1)}
-                    {t('extKaraokeSyncTimeUnit') ?? '초'}
-                  </span>
-                </div>
-                <div className={styles.syncInfoRow}>
-                  <span>{t('extKaraokeSyncFirstLyricTime')}:</span>
-                  <span>
-                    {originalLyricsRef.current.length > 0 && originalLyricsRef.current[0]
-                      ? originalLyricsRef.current[0].time.toFixed(1)
-                      : '0.0'}
-                    {t('extKaraokeSyncTimeUnit') ?? '초'}
-                  </span>
-                </div>
-                <div className={styles.syncInfoRow}>
-                  <span>{t('extKaraokeSyncCalculatedOffset')}:</span>
-                  <span className={styles.syncOffsetValue}>
-                    {calculatedOffset > 0 ? `+${calculatedOffset}` : calculatedOffset}
-                    {t('extKaraokeSyncTimeUnit') ?? '초'}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* 확인 문구 (오프셋 계산 후에만 표시) */}
-            {userClickTime !== null && (
-              <p className={styles.syncConfirmMessage}>
-                {calculatedOffset < 0
-                  ? t('extKaraokeSyncConfirmFaster', {
-                      offset: Math.abs(calculatedOffset),
-                      unit: t('extKaraokeSyncTimeUnit') ?? '초',
-                    })
-                  : t('extKaraokeSyncConfirmSlower', {
-                      offset: calculatedOffset,
-                      unit: t('extKaraokeSyncTimeUnit') ?? '초',
-                    })}
-              </p>
-            )}
-
-            {/* 버튼 그룹 */}
-            <div className={styles.syncButtonGroup}>
-              {/* 초기화 버튼 - 항상 표시하되, 오프셋이 0이면 비활성화 */}
-              <button
-                className={styles.syncResetButton}
-                onClick={handleResetOffset}
-                disabled={currentOffset === 0}
-                title={currentOffset === 0 ? t('extSyncOffsetZero') : t('extSyncResetToOriginal')}
-              >
-                {t('extReset')}
-              </button>
-
-              {/* 취소/적용 버튼 - 시작 버튼을 눌렀을 때만 표시 */}
-              {syncStarted && (
-                <>
-                  <button className={styles.syncCancelButton} onClick={handleCloseOffsetModal}>
-                    {t('extCancel')}
-                  </button>
-                  <button
-                    className={styles.syncApplyButton}
-                    onClick={handleApplyOffset}
-                    disabled={userClickTime === null}
-                  >
-                    {t('extApply')}
-                  </button>
-                </>
-              )}
-            </div>
-
-            {/* DEV_MODE 전용: 서버 캐시 저장/삭제 버튼 */}
-            {IS_DEV_MODE && currentOffset !== 0 && (
-              <button className={styles.devCacheButton} onClick={handleSaveServerOffset} disabled={isSavingServerCache}>
-                {isSavingServerCache ? '[DEV] 저장 중...' : `[DEV] 서버 캐시 저장 (${currentOffset}초)`}
-              </button>
-            )}
-            {IS_DEV_MODE && hasServerOffset && (
-              <button
-                className={styles.devCacheDeleteButton}
-                onClick={handleDeleteServerOffset}
-                disabled={isDeletingServerCache}
-              >
-                {isDeletingServerCache ? '[DEV] 삭제 중...' : '[DEV] 서버 캐시 삭제'}
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 싱크셋 저장 완료 Toast 알림 */}
-      {showSyncSavedToast && (
-        <Toast message={t('extKaraokeSyncSaved')} duration={3000} onClose={() => setShowSyncSavedToast(false)} />
-      )}
-
-      {/* DEV_MODE: 서버 캐시 Toast */}
-      {showServerCacheToast && (
-        <Toast message={serverCacheToastMessage} duration={3000} onClose={() => setShowServerCacheToast(false)} />
-      )}
-    </>
+    </div>
   );
 };

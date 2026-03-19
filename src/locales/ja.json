@@ -445,5 +445,9 @@
   "extTunePresetOriginal": "オリジナル",
   "extTunePresetPractice": "練習 (ゆっくり)",
   "extTunePresetHigher": "キー上げ +2",
-  "extTunePresetLower": "キー下げ -2"
+  "extTunePresetLower": "キー下げ -2",
+  "extPause": "一時停止",
+  "extRecord": "録音",
+  "extMute": "ミュート",
+  "extUnmute": "ミュート解除"
 }

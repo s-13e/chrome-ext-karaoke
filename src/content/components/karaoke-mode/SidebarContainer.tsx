@@ -171,7 +171,10 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, widt
   const contentPanelWidth = width ? width - 68 : undefined;
 
   return (
-    <div className={styles.sidebarWrapper} style={width ? { width: `${width}px` } : {}}>
+    <div
+      className={`${styles.sidebarWrapper} ${!activeTab ? styles.sidebarWrapperCollapsed : ''}`}
+      style={width ? { width: `${width}px` } : {}}
+    >
       {/* 아이콘 탭 내비게이션 */}
       <nav className={styles.iconNav}>
         {TAB_CONFIG.map((tab) => {

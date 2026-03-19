@@ -445,5 +445,10 @@
   "extTunePresetOriginal": "원본",
   "extTunePresetPractice": "연습 (느리게)",
   "extTunePresetHigher": "키 올림 +2",
-  "extTunePresetLower": "키 내림 -2"
+  "extTunePresetLower": "키 내림 -2",
+  "extPlay": "재생",
+  "extPause": "일시정지",
+  "extRecord": "녹음",
+  "extMute": "음소거",
+  "extUnmute": "음소거 해제"
 }

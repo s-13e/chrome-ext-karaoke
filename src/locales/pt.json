@@ -445,5 +445,9 @@
   "extTunePresetOriginal": "Original",
   "extTunePresetPractice": "Prática (Lento)",
   "extTunePresetHigher": "Tom +2",
-  "extTunePresetLower": "Tom -2"
+  "extTunePresetLower": "Tom -2",
+  "extPause": "Pausar",
+  "extRecord": "Gravar",
+  "extMute": "Silenciar",
+  "extUnmute": "Ativar som"
 }

@@ -445,5 +445,9 @@
   "extTunePresetOriginal": "原始",
   "extTunePresetPractice": "练习 (慢速)",
   "extTunePresetHigher": "升调 +2",
-  "extTunePresetLower": "降调 -2"
+  "extTunePresetLower": "降调 -2",
+  "extPause": "暂停",
+  "extRecord": "录音",
+  "extMute": "静音",
+  "extUnmute": "取消静音"
 }

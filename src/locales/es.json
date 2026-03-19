@@ -445,5 +445,9 @@
   "extTunePresetOriginal": "Original",
   "extTunePresetPractice": "Práctica (Lento)",
   "extTunePresetHigher": "Tono +2",
-  "extTunePresetLower": "Tono -2"
+  "extTunePresetLower": "Tono -2",
+  "extPause": "Pausa",
+  "extRecord": "Grabar",
+  "extMute": "Silenciar",
+  "extUnmute": "Activar sonido"
 }
