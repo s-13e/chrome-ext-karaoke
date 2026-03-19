@@ -40,6 +40,8 @@ type SidebarTabId = 'lyrics' | 'search' | 'charts' | 'library' | 'tune' | 'tutor
 /** 보관함 서브탭 */
 type LibrarySubTab = 'recordings' | 'syncPresets';
 
+const IS_DEV_MODE = process.env.DEV_MODE === 'true';
+
 /** 탭 설정 */
 interface TabConfig {
   id: SidebarTabId;
@@ -240,30 +242,32 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, widt
               </Suspense>
             )}
 
-            {/* 보관함 탭 — 녹음 목록 / 싱크셋 목록 */}
+            {/* 보관함 탭 — 일반: 녹음 목록만 / DEV: 녹음 + 싱크 프리셋 서브탭 */}
             {activeTab === 'library' && (
               <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                <div className={styles.librarySubTabs}>
-                  <button
-                    className={`${styles.librarySubTab} ${librarySubTab === 'recordings' ? styles.librarySubTabActive : ''}`}
-                    onClick={() => setLibrarySubTab('recordings')}
-                  >
-                    {t('extSidebarTabRecordings')}
-                  </button>
-                  <button
-                    className={`${styles.librarySubTab} ${librarySubTab === 'syncPresets' ? styles.librarySubTabActive : ''}`}
-                    onClick={() => setLibrarySubTab('syncPresets')}
-                  >
-                    {t('extSidebarTabSyncPresets')}
-                  </button>
-                </div>
+                {IS_DEV_MODE && (
+                  <div className={styles.librarySubTabs}>
+                    <button
+                      className={`${styles.librarySubTab} ${librarySubTab === 'recordings' ? styles.librarySubTabActive : ''}`}
+                      onClick={() => setLibrarySubTab('recordings')}
+                    >
+                      {t('extSidebarTabRecordings')}
+                    </button>
+                    <button
+                      className={`${styles.librarySubTab} ${librarySubTab === 'syncPresets' ? styles.librarySubTabActive : ''}`}
+                      onClick={() => setLibrarySubTab('syncPresets')}
+                    >
+                      {t('extSidebarTabSyncPresets')}
+                    </button>
+                  </div>
+                )}
                 <div style={{ flex: 1, overflow: 'auto' }}>
-                  {librarySubTab === 'recordings' && (
+                  {(!IS_DEV_MODE || librarySubTab === 'recordings') && (
                     <Suspense fallback={<SuspenseFallback />}>
                       <RecordingsList onBack={() => {}} />
                     </Suspense>
                   )}
-                  {librarySubTab === 'syncPresets' && (
+                  {IS_DEV_MODE && librarySubTab === 'syncPresets' && (
                     <Suspense fallback={<SuspenseFallback />}>
                       <SyncOffsetList onBack={() => {}} />
                     </Suspense>
