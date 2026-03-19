@@ -776,6 +776,11 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
     );
   }
 
+  // 사이드바 피드백 이벤트 리스닝
+  window.addEventListener('send-lyrics-feedback', ((e: CustomEvent<{ type: 'wrong_lyrics' | 'sync_mismatch' }>) => {
+    handleFeedback(e.detail.type);
+  }) as EventListener);
+
   // 노래 정보 렌더링
   function renderSongInfo(title: string, artist: string) {
     // 기존 리스너 제거

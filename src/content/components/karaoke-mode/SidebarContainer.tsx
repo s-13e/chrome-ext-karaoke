@@ -1,6 +1,6 @@
 // SidebarContainer.tsx
 // 가라오케 모드 오른쪽 사이드바 컨테이너 — 아이콘 탭 내비게이션 + 콘텐츠 패널 2패널 구조
-import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Line } from '@lib/types/lyrics';
 import {
@@ -17,6 +17,7 @@ import {
   MdTextFields,
   MdSubtitles,
   MdRecordVoiceOver,
+  MdFlag,
 } from 'react-icons/md';
 import styles from './styles.module.css';
 
@@ -219,6 +220,8 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, widt
                 <p className={styles.songInfoArtist}>{songArtist || ''}</p>
               </div>
             </div>
+            {/* 피드백 신고 버튼 */}
+            <FeedbackReportButton />
           </div>
 
           {/* 탭 콘텐츠 영역 */}
@@ -298,6 +301,131 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, widt
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+/** 피드백 신고 버튼 — 곡 정보 헤더 오른쪽에 배치 */
+const FeedbackReportButton: React.FC = () => {
+  const { t } = useTranslation();
+  const [isOpen, setIsOpen] = useState(false);
+  const [sent, setSent] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  const handleReport = (type: 'wrong_lyrics' | 'sync_mismatch') => {
+    // content/index.tsx의 handleFeedback과 동일한 메시지 전달
+    window.dispatchEvent(new CustomEvent('send-lyrics-feedback', { detail: { type } }));
+    setIsOpen(false);
+    setSent(true);
+    setTimeout(() => setSent(false), 2000);
+  };
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative', flexShrink: 0 }}>
+      <span
+        role="button"
+        tabIndex={0}
+        onClick={() => !sent && setIsOpen((prev) => !prev)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') setIsOpen((prev) => !prev);
+        }}
+        title={t('extFeedbackReportIssue')}
+        style={{
+          color: sent ? '#00d4aa' : 'rgba(255,255,255,0.3)',
+          cursor: 'pointer',
+          fontSize: '14px',
+          padding: '4px',
+          transition: 'color 0.15s',
+        }}
+        onMouseEnter={(e) => {
+          if (!sent) e.currentTarget.style.color = 'rgba(255,255,255,0.7)';
+        }}
+        onMouseLeave={(e) => {
+          if (!sent) e.currentTarget.style.color = 'rgba(255,255,255,0.3)';
+        }}
+      >
+        {sent ? '✓' : <MdFlag size={14} />}
+      </span>
+      {isOpen && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '100%',
+            right: 0,
+            marginTop: '4px',
+            background: 'rgba(30, 30, 45, 0.95)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            borderRadius: '6px',
+            padding: '4px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '2px',
+            zIndex: 100,
+            minWidth: '120px',
+          }}
+        >
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={() => handleReport('wrong_lyrics')}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleReport('wrong_lyrics');
+            }}
+            style={{
+              padding: '6px 10px',
+              fontSize: '11px',
+              color: 'rgba(255,255,255,0.8)',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              userSelect: 'none',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent';
+            }}
+          >
+            {t('extFeedbackWrongLyrics')}
+          </span>
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={() => handleReport('sync_mismatch')}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleReport('sync_mismatch');
+            }}
+            style={{
+              padding: '6px 10px',
+              fontSize: '11px',
+              color: 'rgba(255,255,255,0.8)',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              userSelect: 'none',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent';
+            }}
+          >
+            {t('extFeedbackSyncMismatch')}
+          </span>
+        </div>
+      )}
     </div>
   );
 };
