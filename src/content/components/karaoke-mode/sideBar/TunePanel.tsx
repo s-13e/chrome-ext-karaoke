@@ -1,10 +1,17 @@
 // TunePanel.tsx
-// Tune 탭 — 피치(Key) 및 템포(Speed) 조절 패널
-// playbackRate + preservesPitch 조합으로 피치/템포 조절
+// Tune 탭 — 피치(Key) 및 템포(Speed) 조절 UI
+// 오디오 처리는 tunePipelineManager 싱글톤에 위임 (탭 전환에도 유지)
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MdMusicNote, MdSpeed, MdRefresh } from 'react-icons/md';
+import {
+  getTuneState,
+  setPitch as setPipelinePitch,
+  setTempo as setPipelineTempo,
+  resetAll as resetPipeline,
+  subscribe,
+} from './tunePipelineManager';
 
 /** 슬라이더 컨트롤 공통 Props */
 interface TuneSliderProps {
@@ -189,102 +196,41 @@ const TuneSlider: React.FC<TuneSliderProps> = ({
 
 /**
  * Tune 패널 — 피치(Key)와 템포(Speed) 조절
- * - 피치: Web Audio API의 playbackRate + preservesPitch 조합으로 근사 처리
- *   (반음 단위 ±6, detune 방식)
- * - 템포: video.playbackRate + preservesPitch로 속도만 변경
+ * 오디오 처리는 tunePipelineManager 싱글톤에 위임
+ * - 피치: SoundTouch pitchSemitones (video.playbackRate는 건드리지 않음)
+ * - 템포: video.playbackRate + preservesPitch (브라우저 내장)
  */
 export const TunePanel: React.FC = () => {
   const { t } = useTranslation();
-  const [pitch, setPitch] = useState(0); // 반음 단위 (-6 ~ +6)
-  const [tempo, setTempo] = useState(1.0); // 배속 (0.5 ~ 2.0)
-  /** YouTube 비디오 요소 가져오기 */
-  const getVideoElement = useCallback((): HTMLVideoElement | null => {
-    return document.querySelector<HTMLVideoElement>('video.html5-main-video');
+  const initial = getTuneState();
+  const [pitch, setPitch] = useState(initial.pitch);
+  const [tempo, setTempo] = useState(initial.tempo);
+
+  // 싱글톤 상태 변경 구독 (다른 곳에서 변경 시 UI 동기화)
+  useEffect(() => {
+    return subscribe(() => {
+      const state = getTuneState();
+      setPitch(state.pitch);
+      setTempo(state.tempo);
+    });
   }, []);
 
-  /** 피치 변경 적용 — playbackRate + preservesPitch 조합 */
-  const applyPitch = useCallback(
-    (semitones: number) => {
-      const video = getVideoElement();
-      if (!video) return;
+  const handlePitchChange = useCallback((value: number) => {
+    const rounded = Math.round(value);
+    setPitch(rounded);
+    setPipelinePitch(rounded);
+  }, []);
 
-      if (semitones === 0) {
-        // 피치 리셋: 템포만 반영
-        video.playbackRate = tempo;
-        video.preservesPitch = true;
-        return;
-      }
+  const handleTempoChange = useCallback((value: number) => {
+    const rounded = Math.round(value * 10) / 10;
+    setTempo(rounded);
+    setPipelineTempo(rounded);
+  }, []);
 
-      // 피치 시프트: playbackRate로 피치 변경 후 preservesPitch=false
-      // 반음 = 2^(1/12) 비율
-      const pitchRate = Math.pow(2, semitones / 12);
-      // 최종 playbackRate = 템포 × 피치 비율
-      video.playbackRate = tempo * pitchRate;
-      video.preservesPitch = false;
-    },
-    [tempo, getVideoElement],
-  );
-
-  /** 템포 변경 적용 */
-  const applyTempo = useCallback(
-    (rate: number) => {
-      const video = getVideoElement();
-      if (!video) return;
-
-      if (pitch === 0) {
-        // 피치 없으면 단순 속도 변경
-        video.playbackRate = rate;
-        video.preservesPitch = true;
-      } else {
-        // 피치 있으면 함께 적용
-        const pitchRate = Math.pow(2, pitch / 12);
-        video.playbackRate = rate * pitchRate;
-        video.preservesPitch = false;
-      }
-    },
-    [pitch, getVideoElement],
-  );
-
-  /** 피치 변경 핸들러 */
-  const handlePitchChange = useCallback(
-    (value: number) => {
-      const rounded = Math.round(value);
-      setPitch(rounded);
-      applyPitch(rounded);
-    },
-    [applyPitch],
-  );
-
-  /** 템포 변경 핸들러 */
-  const handleTempoChange = useCallback(
-    (value: number) => {
-      const rounded = Math.round(value * 10) / 10;
-      setTempo(rounded);
-      applyTempo(rounded);
-    },
-    [applyTempo],
-  );
-
-  /** 전체 리셋 */
   const handleResetAll = useCallback(() => {
     setPitch(0);
     setTempo(1.0);
-    const video = getVideoElement();
-    if (video) {
-      video.playbackRate = 1.0;
-      video.preservesPitch = true;
-    }
-  }, [getVideoElement]);
-
-  // 언마운트 시 원래 상태로 복구
-  useEffect(() => {
-    return () => {
-      const video = document.querySelector<HTMLVideoElement>('video.html5-main-video');
-      if (video) {
-        video.playbackRate = 1.0;
-        video.preservesPitch = true;
-      }
-    };
+    resetPipeline();
   }, []);
 
   const isModified = pitch !== 0 || Math.abs(tempo - 1.0) > 0.01;
