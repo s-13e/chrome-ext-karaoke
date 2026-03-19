@@ -434,5 +434,16 @@
   "extSyncSelectSplitHint": "이 줄부터 끝까지 싱크가 조정됩니다",
   "extSyncResetAll": "전체 초기화",
   "extSyncRevert": "되돌리기",
-  "extSyncNothingToSave": "조정된 내용이 없습니다."
+  "extSyncNothingToSave": "조정된 내용이 없습니다.",
+  "extTuneTitle": "오디오 조율",
+  "extTuneResetAll": "초기화",
+  "extTuneKey": "키",
+  "extTuneKeySub": "반음 단위",
+  "extTuneSpeed": "속도",
+  "extTuneSpeedSub": "재생 배속",
+  "extTunePresets": "빠른 프리셋",
+  "extTunePresetOriginal": "원본",
+  "extTunePresetPractice": "연습 (느리게)",
+  "extTunePresetHigher": "키 올림 +2",
+  "extTunePresetLower": "키 내림 -2"
 }

@@ -434,5 +434,16 @@
   "extSyncSelectSplitHint": "A sincronização será ajustada desta linha até o final",
   "extSyncResetAll": "Redefinir tudo",
   "extSyncRevert": "Reverter",
-  "extSyncNothingToSave": "Nada para salvar."
+  "extSyncNothingToSave": "Nada para salvar.",
+  "extTuneTitle": "Ajuste de áudio",
+  "extTuneResetAll": "Redefinir",
+  "extTuneKey": "Tom",
+  "extTuneKeySub": "Semitons",
+  "extTuneSpeed": "Velocidade",
+  "extTuneSpeedSub": "Taxa de reprodução",
+  "extTunePresets": "Presets rápidos",
+  "extTunePresetOriginal": "Original",
+  "extTunePresetPractice": "Prática (Lento)",
+  "extTunePresetHigher": "Tom +2",
+  "extTunePresetLower": "Tom -2"
 }

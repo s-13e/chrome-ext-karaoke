@@ -33,6 +33,7 @@ const ManualLyricsSearch = lazy(() =>
   import('./sideBar/ManualLyricsSearch').then((module) => ({ default: module.ManualLyricsSearch })),
 );
 const TutorialMenu = lazy(() => import('./sideBar/TutorialMenu').then((module) => ({ default: module.TutorialMenu })));
+const TunePanel = lazy(() => import('./sideBar/TunePanel').then((module) => ({ default: module.TunePanel })));
 const LyricsSidebarPanel = lazy(() =>
   import('./sideBar/LyricsSidebarPanel').then((module) => ({ default: module.LyricsSidebarPanel })),
 );
@@ -281,12 +282,11 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, widt
               </div>
             )}
 
-            {/* 조율 탭 — Phase 1에서는 placeholder */}
+            {/* 조율 탭 — 피치/템포 조절 */}
             {activeTab === 'tune' && (
-              <div className={styles.comingSoon}>
-                <MdTune size={32} />
-                <span>{t('extSidebarComingSoon')}</span>
-              </div>
+              <Suspense fallback={<SuspenseFallback />}>
+                <TunePanel />
+              </Suspense>
             )}
 
             {/* 가이드 탭 — TutorialMenu 재사용 */}

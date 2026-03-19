@@ -434,5 +434,16 @@
   "extSyncSelectSplitHint": "この行から最後まで同期が調整されます",
   "extSyncResetAll": "全リセット",
   "extSyncRevert": "元に戻す",
-  "extSyncNothingToSave": "調整された内容がありません。"
+  "extSyncNothingToSave": "調整内容がありません。",
+  "extTuneTitle": "オーディオチューニング",
+  "extTuneResetAll": "リセット",
+  "extTuneKey": "キー",
+  "extTuneKeySub": "半音単位",
+  "extTuneSpeed": "速度",
+  "extTuneSpeedSub": "再生速度",
+  "extTunePresets": "クイックプリセット",
+  "extTunePresetOriginal": "オリジナル",
+  "extTunePresetPractice": "練習 (ゆっくり)",
+  "extTunePresetHigher": "キー上げ +2",
+  "extTunePresetLower": "キー下げ -2"
 }

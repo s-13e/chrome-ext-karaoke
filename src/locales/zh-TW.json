@@ -434,5 +434,16 @@
   "extSyncSelectSplitHint": "從此行到末尾的同步將被調整",
   "extSyncResetAll": "全部重置",
   "extSyncRevert": "還原",
-  "extSyncNothingToSave": "沒有需要儲存的內容。"
+  "extSyncNothingToSave": "沒有需要儲存的內容。",
+  "extTuneTitle": "音訊調節",
+  "extTuneResetAll": "重置",
+  "extTuneKey": "音調",
+  "extTuneKeySub": "半音",
+  "extTuneSpeed": "速度",
+  "extTuneSpeedSub": "播放速率",
+  "extTunePresets": "快捷預設",
+  "extTunePresetOriginal": "原始",
+  "extTunePresetPractice": "練習 (慢速)",
+  "extTunePresetHigher": "升調 +2",
+  "extTunePresetLower": "降調 -2"
 }
