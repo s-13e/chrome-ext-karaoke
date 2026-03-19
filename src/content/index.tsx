@@ -1601,17 +1601,11 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
           console.log(
             `[AutoOffset] 로컬 오프셋 발견 (videoId: ${videoId}, offset: ${savedData?.offset ?? 0}초, lineAdj: ${hasLineAdj ? Object.keys(savedData!.lineAdjustments!).length + '개' : '없음'}) - 자동 적용`,
           );
-          const origTimes = parsedLyrics.slice(0, 2).map((l) => l.time);
-          console.log('[AutoOffset] 원본 첫 2줄 time:', origTimes);
           if (hasGlobalOffset) {
             finalParsedLyrics = applyOffsetToLyrics(parsedLyrics, savedData!.offset, 0);
-            const afterGlobal = finalParsedLyrics.slice(0, 2).map((l) => l.time);
-            console.log('[AutoOffset] 전체 오프셋 적용 후:', afterGlobal);
           }
           if (hasLineAdj) {
             finalParsedLyrics = applyLineAdjustments(finalParsedLyrics, savedData!.lineAdjustments!);
-            const afterAdj = finalParsedLyrics.slice(0, 2).map((l) => l.time);
-            console.log('[AutoOffset] 줄별 보정 적용 후:', afterAdj);
           }
           hasUserOffset = true;
         } else {
