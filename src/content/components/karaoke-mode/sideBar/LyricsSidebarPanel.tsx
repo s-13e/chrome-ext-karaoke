@@ -265,10 +265,10 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
         return;
       }
 
-      // 싱크 구간 선택 모드
+      // 싱크 구간 선택 모드 (구간 반복과 동일: A 선택 → 자동 B 모드 → B 선택)
       if (syncSelectingPoint === 'A') {
-        setSyncRange({ startIndex: idx, endIndex: -1 }); // B는 미설정 (별도 선택 필요)
-        setSyncSelectingPoint(null);
+        setSyncRange({ startIndex: idx, endIndex: -1 });
+        setSyncSelectingPoint('B');
         return;
       }
       if (syncSelectingPoint === 'B') {
