@@ -74,13 +74,10 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
   const [syncTab, setSyncTab] = useState<'global' | 'section'>('global');
   const [globalOffset, setGlobalOffset] = useState(0);
   const [globalSyncStep, setGlobalSyncStep] = useState(0.5);
-  // 구간 싱크: A-B 범위 (B 기본값 = 마지막 줄)
+  // 구간 싱크: 분할점 (이 줄부터 끝까지 shift)
   const [lineAdjustments, setLineAdjustments] = useState<Record<number, number>>({});
-  const [syncRange, setSyncRange] = useState<{ startIndex: number; endIndex: number }>({
-    startIndex: -1,
-    endIndex: -1,
-  });
-  const [syncSelectingPoint, setSyncSelectingPoint] = useState<'A' | 'B' | null>(null);
+  const [splitIndex, setSplitIndex] = useState(-1);
+  const [selectingSplit, setSelectingSplit] = useState(false);
   const [sectionSyncStep, setSectionSyncStep] = useState(0.5);
   // 초기 가사 저장 (싱크 패널이 열린 시점의 가사를 원본으로 사용)
   const baseLyricsRef = useRef<Line[]>(lyrics);
@@ -172,14 +169,13 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
     [applySyncToOverlay],
   );
 
-  // 구간 오프셋 조정 — A부터 B까지 shift
+  // 구간 오프셋 조정 — 분할점부터 끝까지 shift
   const handleSectionOffsetChange = useCallback(
     (delta: number) => {
-      if (syncRange.startIndex < 0) return;
-      const end = syncRange.endIndex >= 0 ? syncRange.endIndex : lyrics.length - 1;
+      if (splitIndex < 0) return;
       const prev = lineAdjustmentsRef.current;
       const next = { ...prev };
-      for (let i = syncRange.startIndex; i <= end; i++) {
+      for (let i = splitIndex; i < lyrics.length; i++) {
         next[i] = Number(((next[i] ?? 0) + delta).toFixed(1));
         if (next[i] === 0) delete next[i];
       }
@@ -187,7 +183,7 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
       lineAdjustmentsRef.current = next;
       applySyncToOverlay(globalOffsetRef.current, next);
     },
-    [syncRange, lyrics.length, applySyncToOverlay],
+    [splitIndex, lyrics.length, applySyncToOverlay],
   );
 
   // 싱크 저장
@@ -223,8 +219,8 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
     setLineAdjustments({});
     globalOffsetRef.current = 0;
     lineAdjustmentsRef.current = {};
-    setSyncRange({ startIndex: -1, endIndex: -1 });
-    setSyncSelectingPoint(null);
+    setSplitIndex(-1);
+    setSelectingSplit(false);
     applySyncToOverlay(0, {});
   }, [applySyncToOverlay]);
 
@@ -239,8 +235,8 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
     setLineAdjustments(savedAdj);
     globalOffsetRef.current = savedOffset;
     lineAdjustmentsRef.current = savedAdj;
-    setSyncRange({ startIndex: -1, endIndex: -1 });
-    setSyncSelectingPoint(null);
+    setSplitIndex(-1);
+    setSelectingSplit(false);
     applySyncToOverlay(savedOffset, savedAdj);
   }, [applySyncToOverlay]);
 
@@ -251,8 +247,8 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
         // 열 때
         setLoopPanelOpen(false);
         setSelectingPoint(null);
-        setSyncRange({ startIndex: -1, endIndex: -1 });
-        setSyncSelectingPoint(null);
+        setSplitIndex(-1);
+        setSelectingSplit(false);
       } else {
         // 닫을 때 — 저장하지 않은 변경 되돌리기
         handleSyncRevert();
@@ -269,17 +265,10 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
         return;
       }
 
-      // 싱크 구간 선택 모드 (구간 반복과 동일: A 선택 → 자동 B 모드 → B 선택)
-      if (syncSelectingPoint === 'A') {
-        setSyncRange({ startIndex: idx, endIndex: -1 });
-        setSyncSelectingPoint('B');
-        return;
-      }
-      if (syncSelectingPoint === 'B') {
-        const actualEnd = idx > syncRange.startIndex ? idx : syncRange.startIndex;
-        const actualStart = idx > syncRange.startIndex ? syncRange.startIndex : idx;
-        setSyncRange({ startIndex: actualStart, endIndex: actualEnd });
-        setSyncSelectingPoint(null);
+      // 싱크 분할점 선택 모드
+      if (selectingSplit) {
+        setSplitIndex(idx);
+        setSelectingSplit(false);
         return;
       }
 
@@ -301,37 +290,19 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
       const video = getVideo();
       if (video) video.currentTime = time;
     },
-    [selectingPoint, loopConfig.startIndex, syncSelectingPoint, syncRange.startIndex, lyrics.length, getVideo],
+    [selectingPoint, loopConfig.startIndex, selectingSplit, getVideo],
   );
 
   // 드래그 A-B (반복 + 싱크 공용)
   // 드래그 모드 구분: 'loop' | 'sync'
-  const dragModeRef = useRef<'loop' | 'sync'>('loop');
-
   const handleLineDragStart = useCallback(
     (idx: number) => {
-      // 구간 반복: A/B 어느 모드든 드래그 시작
-      if (selectingPoint) {
-        dragModeRef.current = 'loop';
-        dragRef.current = { dragging: true, startIdx: idx, didDrag: false };
-        setLoopConfig((prev) => ({ ...prev, startIndex: idx, endIndex: -1 }));
-        setSelectingPoint('B');
-      }
-      // 싱크: A 선택 중에는 드래그 시작 안 함 (클릭으로만 A 설정)
-      // B 선택 중이 아니고 A가 이미 설정된 상태에서만 드래그로 A-B 동시 선택
-      else if (syncSelectingPoint === 'B') {
-        // B 선택 중 드래그 → 기존 A에서 드래그된 줄까지
-        dragModeRef.current = 'sync';
-        dragRef.current = { dragging: true, startIdx: syncRange.startIndex, didDrag: false };
-      } else if (syncPanelOpen && syncTab === 'section' && !syncSelectingPoint) {
-        // 선택 모드가 아닌 상태에서 드래그 → A-B 동시 설정
-        dragModeRef.current = 'sync';
-        dragRef.current = { dragging: true, startIdx: idx, didDrag: false };
-        setSyncRange({ startIndex: idx, endIndex: -1 });
-        setSyncSelectingPoint('B');
-      }
+      if (!selectingPoint) return;
+      dragRef.current = { dragging: true, startIdx: idx, didDrag: false };
+      setLoopConfig((prev) => ({ ...prev, startIndex: idx, endIndex: -1 }));
+      setSelectingPoint('B');
     },
-    [selectingPoint, syncSelectingPoint, syncRange.startIndex, syncPanelOpen, syncTab],
+    [selectingPoint],
   );
 
   const handleLineDragEnter = useCallback((idx: number) => {
@@ -340,12 +311,7 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
     const start = dragRef.current.startIdx;
     const actualStart = Math.min(start, idx);
     const actualEnd = Math.max(start, idx);
-
-    if (dragModeRef.current === 'loop') {
-      setLoopConfig((prev) => ({ ...prev, startIndex: actualStart, endIndex: actualEnd }));
-    } else {
-      setSyncRange({ startIndex: actualStart, endIndex: actualEnd });
-    }
+    setLoopConfig((prev) => ({ ...prev, startIndex: actualStart, endIndex: actualEnd }));
   }, []);
 
   const handleLineDragEnd = useCallback(() => {
@@ -353,7 +319,6 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
     dragRef.current.dragging = false;
     if (dragRef.current.didDrag) {
       setSelectingPoint(null);
-      setSyncSelectingPoint(null);
     }
   }, []);
 
@@ -482,13 +447,13 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
   };
 
   const isLoopConfigComplete = loopConfig.startIndex >= 0 && loopConfig.endIndex >= 0;
-  const isSelecting = !!selectingPoint || !!syncSelectingPoint;
+  const isSelecting = !!selectingPoint || selectingSplit;
 
-  // 구간 싱크의 현재 보정값 (표시용 — A 지점 기준)
+  // 분할점의 현재 보정값 (표시용)
   const sectionAdjustmentDisplay = useMemo(() => {
-    if (syncRange.startIndex < 0) return 0;
-    return lineAdjustments[syncRange.startIndex] ?? 0;
-  }, [syncRange.startIndex, lineAdjustments]);
+    if (splitIndex < 0) return 0;
+    return lineAdjustments[splitIndex] ?? 0;
+  }, [splitIndex, lineAdjustments]);
 
   if (lyrics.length === 0) {
     return (
@@ -524,9 +489,7 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
           const isActive = idx === activeLineIndex;
           const isPast = activeLineIndex >= 0 && idx < activeLineIndex;
           const inLoopRange = (loopPanelOpen || loopRun.active) && isInLoopRange(idx);
-          const syncEnd = syncRange.endIndex >= 0 ? syncRange.endIndex : lyrics.length - 1;
-          const inSyncRange =
-            syncPanelOpen && syncRange.startIndex >= 0 && idx >= syncRange.startIndex && idx <= syncEnd;
+          const inSyncRange = syncPanelOpen && splitIndex >= 0 && idx >= splitIndex;
           const isPointA = idx === loopConfig.startIndex && (loopPanelOpen || loopRun.active);
           const isPointB = idx === loopConfig.endIndex && (loopPanelOpen || loopRun.active);
           const hasLineAdj = lineAdjustments[idx] !== undefined && lineAdjustments[idx] !== 0;
@@ -653,7 +616,7 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
               className={`${styles.syncTabButton} ${syncTab === 'global' ? styles.syncTabButtonActive : ''}`}
               onClick={() => {
                 setSyncTab('global');
-                setSyncSelectingPoint(null);
+                setSelectingSplit(false);
               }}
             >
               {t('extSyncGlobal')}
@@ -695,54 +658,25 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
             </div>
           )}
 
-          {/* 구간 싱크 탭 — A-B 범위 방식 */}
+          {/* 구간 싱크 탭 — 분할점 방식 */}
           {syncTab === 'section' && (
             <div className={styles.syncSectionBlock}>
-              <div className={styles.loopPointsRow}>
-                <button
-                  className={`${styles.loopPointButton} ${syncSelectingPoint === 'A' ? styles.loopPointButtonActive : ''} ${syncRange.startIndex >= 0 ? styles.loopPointButtonSet : ''}`}
-                  onClick={() => setSyncSelectingPoint('A')}
-                >
-                  <span className={styles.loopPointLabel}>A</span>
-                  <span className={styles.loopPointTime}>
-                    {syncRange.startIndex >= 0 && lyrics[syncRange.startIndex]
-                      ? formatTime(lyrics[syncRange.startIndex].time)
-                      : '--:--'}
-                  </span>
-                </button>
-                <span className={styles.loopPointDivider}>―</span>
-                <button
-                  className={`${styles.loopPointButton} ${syncSelectingPoint === 'B' ? styles.loopPointButtonActive : ''} ${syncRange.endIndex >= 0 ? styles.loopPointButtonSet : ''}`}
-                  onClick={() => setSyncSelectingPoint('B')}
-                >
-                  <span className={styles.loopPointLabel}>B</span>
-                  <span className={styles.loopPointTime}>
-                    {syncRange.endIndex >= 0 && lyrics[syncRange.endIndex]
-                      ? syncRange.endIndex === lyrics.length - 1
-                        ? 'end'
-                        : formatTime(lyrics[syncRange.endIndex].time)
-                      : syncRange.startIndex >= 0
-                        ? 'end'
-                        : '--:--'}
-                  </span>
-                </button>
-                {syncRange.startIndex >= 0 && syncRange.endIndex >= 0 && syncRange.endIndex < lyrics.length - 1 && (
-                  <button
-                    className={styles.syncEndButton}
-                    onClick={() => setSyncRange((prev) => ({ ...prev, endIndex: lyrics.length - 1 }))}
-                  >
-                    end
-                  </button>
-                )}
-              </div>
+              <button
+                className={`${styles.loopPointButton} ${selectingSplit ? styles.loopPointButtonActive : ''} ${splitIndex >= 0 ? styles.loopPointButtonSet : ''}`}
+                onClick={() => setSelectingSplit(true)}
+                style={{ width: '100%' }}
+              >
+                <span className={styles.loopPointLabel}>▼</span>
+                <span className={styles.loopPointTime}>
+                  {splitIndex >= 0 && lyrics[splitIndex]
+                    ? `${formatTime(lyrics[splitIndex].time)} ~ end`
+                    : t('extSyncSelectSplit')}
+                </span>
+              </button>
 
-              {syncSelectingPoint && (
-                <p className={styles.loopSelectHint}>
-                  {syncSelectingPoint === 'A' ? t('extLoopSelectA') : t('extLoopSelectB')}
-                </p>
-              )}
+              {selectingSplit && <p className={styles.loopSelectHint}>{t('extSyncSelectSplitHint')}</p>}
 
-              {syncRange.startIndex >= 0 && syncRange.endIndex >= 0 && (
+              {splitIndex >= 0 && (
                 <>
                   <div className={styles.syncStepRow}>
                     {SYNC_STEP_OPTIONS.map((step) => (
