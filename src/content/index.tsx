@@ -1563,7 +1563,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
 
       // 5) 저장된 오프셋 확인 및 자동 적용 (서버 오프셋 우선 → 로컬 오프셋 fallback)
       const { getVideoOffset } = await import('@lib/utils/storage/videoOffsetStorage');
-      const { applyOffsetToLyrics } = await import('@lib/utils/lyrics/display/lyricsOffset');
+      const { applyOffsetToLyrics, applyLineAdjustments } = await import('@lib/utils/lyrics/display/lyricsOffset');
 
       let finalParsedLyrics = parsedLyrics;
       let hasUserOffset = false;
@@ -1595,9 +1595,18 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
       } else {
         // 5-2. 로컬 오프셋 확인 (fallback)
         const savedData = await getVideoOffset(videoId);
-        if (savedData && savedData.offset !== 0) {
-          console.log(`[AutoOffset] 로컬 오프셋 발견 (videoId: ${videoId}, offset: ${savedData.offset}초) - 자동 적용`);
-          finalParsedLyrics = applyOffsetToLyrics(parsedLyrics, savedData.offset, 0);
+        const hasGlobalOffset = savedData && savedData.offset !== 0;
+        const hasLineAdj = savedData?.lineAdjustments && Object.keys(savedData.lineAdjustments).length > 0;
+        if (hasGlobalOffset || hasLineAdj) {
+          console.log(
+            `[AutoOffset] 로컬 오프셋 발견 (videoId: ${videoId}, offset: ${savedData?.offset ?? 0}초, lineAdj: ${hasLineAdj ? Object.keys(savedData!.lineAdjustments!).length + '개' : '없음'}) - 자동 적용`,
+          );
+          if (hasGlobalOffset) {
+            finalParsedLyrics = applyOffsetToLyrics(parsedLyrics, savedData!.offset, 0);
+          }
+          if (hasLineAdj) {
+            finalParsedLyrics = applyLineAdjustments(finalParsedLyrics, savedData!.lineAdjustments!);
+          }
           hasUserOffset = true;
         } else {
           console.log(`[AutoOffset] 저장된 오프셋 없음 - 원본 가사 사용`);
