@@ -7,7 +7,12 @@ import { MdSkipNext, MdSync, MdClose, MdRemove, MdAdd, MdSave } from 'react-icon
 import { Line } from '@lib/types/lyrics';
 import { useCurrentTime } from '@hooks/useCurrentTime';
 import { applyOffsetToLyrics, applyLineAdjustments } from '@lib/utils/lyrics/display/lyricsOffset';
-import { saveVideoOffset, getVideoOffset, type VideoOffsetData } from '@lib/utils/storage/videoOffsetStorage';
+import {
+  saveVideoOffset,
+  getVideoOffset,
+  deleteVideoOffset,
+  type VideoOffsetData,
+} from '@lib/utils/storage/videoOffsetStorage';
 import { SIDEBAR_COLORS } from './sidebarStyles';
 import styles from '../styles.module.css';
 
@@ -195,9 +200,18 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
 
     const hasLineAdj = Object.keys(lineAdjustments).length > 0;
 
-    // 조정 내용 없으면 저장하지 않음
+    // 조정 내용 없고 기존 저장 데이터도 없으면 저장하지 않음
     if (globalOffset === 0 && !hasLineAdj) {
-      alert(t('extSyncNothingToSave'));
+      const existing = await getVideoOffset(videoId);
+      if (!existing) {
+        alert(t('extSyncNothingToSave'));
+        return;
+      }
+      // 기존 데이터 있으면 삭제 (0으로 초기화 저장 = 기존 오프셋 제거)
+      await deleteVideoOffset(videoId);
+      console.log(`[LyricsSidebarPanel] 오프셋 삭제 완료 (videoId: ${videoId})`);
+      applySyncToOverlay(0, {});
+      setSyncPanelOpen(false);
       return;
     }
 
