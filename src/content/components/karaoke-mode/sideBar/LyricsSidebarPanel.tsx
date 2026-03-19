@@ -248,14 +248,18 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
   const handleSyncButtonClick = useCallback(() => {
     setSyncPanelOpen((prev) => {
       if (!prev) {
+        // 열 때
         setLoopPanelOpen(false);
         setSelectingPoint(null);
         setSyncRange({ startIndex: -1, endIndex: -1 });
         setSyncSelectingPoint(null);
+      } else {
+        // 닫을 때 — 저장하지 않은 변경 되돌리기
+        handleSyncRevert();
       }
       return !prev;
     });
-  }, []);
+  }, [handleSyncRevert]);
 
   // ===== 가사 줄 클릭 핸들러 (반복 / 싱크 / 일반 모드 분기) =====
   const handleLineClick = useCallback(
@@ -632,7 +636,13 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
         <div className={styles.loopSettingPanel}>
           <div className={styles.loopSettingHeader}>
             <span className={styles.loopSettingTitle}>{t('extKaraokeSyncSettings')}</span>
-            <button className={styles.loopSettingCloseButton} onClick={() => setSyncPanelOpen(false)}>
+            <button
+              className={styles.loopSettingCloseButton}
+              onClick={() => {
+                handleSyncRevert();
+                setSyncPanelOpen(false);
+              }}
+            >
               <MdClose size={16} />
             </button>
           </div>
