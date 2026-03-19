@@ -175,30 +175,15 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
         setHasServerOffset(false);
       }
 
-      // 2. 서버 오프셋 없음 → 로컬 오프셋 fallback
+      // 2. 서버 오프셋 없음 → 로컬 오프셋 확인 (state만 업데이트, 적용은 index.tsx에서 이미 완료)
       const savedData = await getVideoOffset(videoId);
       if (savedData && savedData.offset !== 0) {
-        const originalLyrics = originalLyricsRef.current;
-        const appliedLyrics = applyOffsetToLyrics(originalLyrics, savedData.offset, 0);
         setCurrentOffset(savedData.offset);
-        onOffsetChange?.(savedData.offset, appliedLyrics);
-
-        chrome.runtime.sendMessage(
-          {
-            type: 'APPLY_OFFSET_LYRICS',
-            payload: { offset: savedData.offset, lyrics: appliedLyrics },
-          },
-          () => {
-            if (chrome.runtime.lastError) {
-              console.warn('[BottomContainer] 저장된 오프셋 적용 실패:', chrome.runtime.lastError.message);
-            }
-          },
-        );
+        console.log(`[BottomContainer] 로컬 오프셋 state 동기화: ${savedData.offset}초 (적용은 index.tsx에서 완료)`);
       }
     };
 
     loadSavedOffset();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lyrics.length]);
 
   // 외부(SyncOffsetList 등)에서 APPLY_OFFSET_LYRICS 메시지 수신 시 state 업데이트
