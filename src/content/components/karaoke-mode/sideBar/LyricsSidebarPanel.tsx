@@ -306,19 +306,28 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
 
   const handleLineDragStart = useCallback(
     (idx: number) => {
+      // 구간 반복: A/B 어느 모드든 드래그 시작
       if (selectingPoint) {
         dragModeRef.current = 'loop';
         dragRef.current = { dragging: true, startIdx: idx, didDrag: false };
         setLoopConfig((prev) => ({ ...prev, startIndex: idx, endIndex: -1 }));
         setSelectingPoint('B');
-      } else if (syncSelectingPoint) {
+      }
+      // 싱크: A 선택 중에는 드래그 시작 안 함 (클릭으로만 A 설정)
+      // B 선택 중이 아니고 A가 이미 설정된 상태에서만 드래그로 A-B 동시 선택
+      else if (syncSelectingPoint === 'B') {
+        // B 선택 중 드래그 → 기존 A에서 드래그된 줄까지
+        dragModeRef.current = 'sync';
+        dragRef.current = { dragging: true, startIdx: syncRange.startIndex, didDrag: false };
+      } else if (syncPanelOpen && syncTab === 'section' && !syncSelectingPoint) {
+        // 선택 모드가 아닌 상태에서 드래그 → A-B 동시 설정
         dragModeRef.current = 'sync';
         dragRef.current = { dragging: true, startIdx: idx, didDrag: false };
         setSyncRange({ startIndex: idx, endIndex: -1 });
         setSyncSelectingPoint('B');
       }
     },
-    [selectingPoint, syncSelectingPoint, lyrics.length],
+    [selectingPoint, syncSelectingPoint, syncRange.startIndex, syncPanelOpen, syncTab],
   );
 
   const handleLineDragEnter = useCallback((idx: number) => {
