@@ -270,6 +270,7 @@
   "extChartPopHits": "POP 히트곡",
   "extChartRockClassics": "록 클래식",
   "extChartHipHopHeat": "힙합 인기곡",
+  "extChartInstLabel": "MR",
   "extChartLoading": "로딩 중...",
   "extChartLoadingMore": "{{current}} / {{total}}곡 로드됨",
   "extChartNoData": "데이터가 없습니다",

@@ -879,6 +879,103 @@
   background-color: rgba(0, 212, 170, 0.22);
 }
 
+/* 차트 목록 */
+.chartList {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 12px;
+}
+
+.chartItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px;
+  border-radius: 8px;
+  transition: background-color 0.15s ease;
+  cursor: default;
+}
+
+.chartItem:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+/* 순위 번호 */
+.chartRank {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  min-width: 22px;
+  text-align: center;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.chartRankTop {
+  color: #00d4aa;
+  font-weight: 700;
+}
+
+/* 곡 정보 (title + artist 수직 정렬) */
+.chartSongInfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chartSongTitle {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+  transition: color 0.15s ease;
+}
+
+.chartItem:hover .chartSongTitle {
+  color: #00d4aa;
+}
+
+.chartArtist {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+}
+
+/* MV/MR 버튼 그룹 */
+.chartActions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* MV/MR 버튼은 YouTube 전역 스타일 간섭으로 인라인 스타일 사용 (PopularChart.tsx) */
+
+/* 차트 로딩/빈 상태 */
+.chartStatus {
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+  margin-top: 24px;
+  font-size: 13px;
+}
+
+/* 차트 더보기 트리거 */
+.chartLoadMore {
+  padding: 12px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 11px;
+}
+
 /* 하단 컨테이너 - 화면 하단에 고정 */
 .bottomContainer {
   position: fixed;

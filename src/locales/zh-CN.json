@@ -257,6 +257,7 @@
   "extChartPopHits": "POP 热门歌曲",
   "extChartRockClassics": "摇滚经典",
   "extChartHipHopHeat": "嘻哈热门",
+  "extChartInstLabel": "Inst",
   "extChartLoading": "加载中...",
   "extChartLoadingMore": "已加载 {{current}} / {{total}} 首歌曲",
   "extChartNoData": "无数据",

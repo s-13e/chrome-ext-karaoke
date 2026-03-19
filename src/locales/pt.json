@@ -257,6 +257,7 @@
   "extChartPopHits": "Sucessos POP",
   "extChartRockClassics": "Clássicos do Rock",
   "extChartHipHopHeat": "Hip-Hop Popular",
+  "extChartInstLabel": "Inst",
   "extChartLoading": "Carregando...",
   "extChartLoadingMore": "{{current}} / {{total}} músicas carregadas",
   "extChartNoData": "Nenhum dado disponível",

@@ -270,6 +270,7 @@
   "extChartPopHits": "POP Hits",
   "extChartRockClassics": "Rock Classics",
   "extChartHipHopHeat": "Hip-Hop Heat",
+  "extChartInstLabel": "Inst",
   "extChartLoading": "Loading...",
   "extChartLoadingMore": "{{current}} / {{total}} songs loaded",
   "extChartNoData": "No data available",
