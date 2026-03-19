@@ -121,6 +121,12 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({
       const isCurrentlyFullscreen = !!document.fullscreenElement;
       setIsFullscreen(isCurrentlyFullscreen);
 
+      // 전체화면 해제 시 사이드바 패널 접기 (remount 후 빈 패널 방지)
+      if (!isCurrentlyFullscreen) {
+        setIsPanelExpanded(false);
+        setSidebarWidth(getSidebarWidth(false));
+      }
+
       const fullBleedContainer = document.querySelector<HTMLElement>('#full-bleed-container');
       const columns = document.querySelector<HTMLElement>('#columns');
       const ytdApp = document.querySelector<HTMLElement>('ytd-app');
