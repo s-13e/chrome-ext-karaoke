@@ -59,7 +59,14 @@ export const SyncOffsetList: React.FC<SyncOffsetListProps> = ({ onBack }) => {
           'Content-Type': 'application/json',
           'x-api-key': DEBUG_API_KEY,
         },
-        body: JSON.stringify({ videoId: offset.videoId, offset: offset.offset }),
+        body: JSON.stringify({
+          videoId: offset.videoId,
+          offset: offset.offset,
+          ...(offset.lineAdjustments &&
+            Object.keys(offset.lineAdjustments).length > 0 && {
+              lineAdjustments: offset.lineAdjustments,
+            }),
+        }),
       });
 
       if (!response.ok) {
@@ -70,7 +77,10 @@ export const SyncOffsetList: React.FC<SyncOffsetListProps> = ({ onBack }) => {
       await deleteVideoOffset(offset.videoId);
       await loadOffsets();
 
-      console.log(`[SyncOffsetList] 서버 캐시 저장 완료 (videoId: ${offset.videoId}, offset: ${offset.offset}초)`);
+      const lineAdjCount = offset.lineAdjustments ? Object.keys(offset.lineAdjustments).length : 0;
+      console.log(
+        `[SyncOffsetList] 서버 캐시 저장 완료 (videoId: ${offset.videoId}, offset: ${offset.offset}초${lineAdjCount > 0 ? `, 구간 보정: ${lineAdjCount}줄` : ''})`,
+      );
       alert(`[DEV] 서버 캐시 저장 완료: ${offset.title}`);
 
       // 현재 영상이면 새로고침하여 서버 오프셋 적용

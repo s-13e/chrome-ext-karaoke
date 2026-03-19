@@ -59,12 +59,19 @@ export async function fetchYouTubeLRCLibCache(videoId: string): Promise<{ lrclib
   }
 }
 
+/** 서버 오프셋 캐시 조회 결과 */
+export interface ServerOffsetResult {
+  offset: number;
+  lineAdjustments?: Record<number, number>;
+  lyricsLineCount?: number;
+}
+
 /**
  * 서버 오프셋 캐시 조회
- * - videoId에 대한 서버 저장 오프셋(초)을 반환
+ * - videoId에 대한 서버 저장 오프셋(초) + 구간 보정을 반환
  * - 없으면 null 반환
  */
-export async function fetchServerOffset(videoId: string): Promise<number | null> {
+export async function fetchServerOffset(videoId: string): Promise<ServerOffsetResult | null> {
   try {
     const res = await fetchWithTimeout(
       `${API_SERVER_URL}/api/v1/youtube/offset/${encodeURIComponent(videoId)}`,
@@ -77,7 +84,23 @@ export async function fetchServerOffset(videoId: string): Promise<number | null>
       const offset = data?.offset;
 
       if (typeof offset === 'number') {
-        return offset;
+        const result: ServerOffsetResult = { offset };
+        if (data.lineAdjustments && typeof data.lineAdjustments === 'object') {
+          // 서버에서 string key로 전달됨 → number key로 변환
+          const converted: Record<number, number> = {};
+          for (const [key, val] of Object.entries(data.lineAdjustments)) {
+            if (typeof val === 'number') {
+              converted[Number(key)] = val;
+            }
+          }
+          if (Object.keys(converted).length > 0) {
+            result.lineAdjustments = converted;
+          }
+        }
+        if (typeof data.lyricsLineCount === 'number') {
+          result.lyricsLineCount = data.lyricsLineCount;
+        }
+        return result;
       }
     }
     return null;

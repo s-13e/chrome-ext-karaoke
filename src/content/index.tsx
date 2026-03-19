@@ -1569,38 +1569,67 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
       let hasUserOffset = false;
 
       // 5-1. 서버 오프셋 조회 (보이지 않는 베이스라인 보정)
-      let serverOffset: number | null = null;
+      interface ServerOffsetResponse {
+        success: boolean;
+        offset: number | null;
+        lineAdjustments: Record<number, number> | null;
+        lyricsLineCount: number | null;
+      }
+      let serverOffsetData: ServerOffsetResponse | null = null;
       if (isExtensionContextValid()) {
         try {
-          const serverOffsetResponse = await new Promise<{ success: boolean; offset: number | null }>((resolve) => {
+          serverOffsetData = await new Promise<ServerOffsetResponse>((resolve) => {
             chrome.runtime.sendMessage({ type: 'FETCH_SERVER_OFFSET', videoId }, (response) => {
               if (chrome.runtime.lastError) {
-                resolve({ success: false, offset: null });
+                resolve({ success: false, offset: null, lineAdjustments: null, lyricsLineCount: null });
               } else {
-                resolve(response ?? { success: false, offset: null });
+                resolve(response ?? { success: false, offset: null, lineAdjustments: null, lyricsLineCount: null });
               }
             });
           });
-          serverOffset = serverOffsetResponse.success ? serverOffsetResponse.offset : null;
         } catch {
-          serverOffset = null;
+          serverOffsetData = null;
         }
       }
 
+      const serverOffset = serverOffsetData?.success ? serverOffsetData.offset : null;
+      const serverLineAdj = serverOffsetData?.success ? serverOffsetData.lineAdjustments : null;
+      const serverLyricsLineCount = serverOffsetData?.success ? serverOffsetData.lyricsLineCount : null;
+
       if (serverOffset !== null && serverOffset !== 0) {
         // 서버 오프셋 존재 → 원본 가사에 적용 (사용자 눈에는 0초로 보임)
-        console.log(`[AutoOffset] 서버 오프셋 발견 (videoId: ${videoId}, offset: ${serverOffset}초) - 자동 적용`);
         finalParsedLyrics = applyOffsetToLyrics(parsedLyrics, serverOffset, 0);
+
+        // 서버 lineAdjustments 적용 (가사 줄 수가 일치할 때만)
+        if (serverLineAdj && Object.keys(serverLineAdj).length > 0) {
+          const lineCountMatch = serverLyricsLineCount === null || serverLyricsLineCount === parsedLyrics.length;
+          if (lineCountMatch) {
+            finalParsedLyrics = applyLineAdjustments(finalParsedLyrics, serverLineAdj);
+          } else {
+            console.warn(
+              `[AutoOffset] 서버 구간 보정 무시 (가사 줄 수 불일치: 서버=${serverLyricsLineCount}, 현재=${parsedLyrics.length})`,
+            );
+          }
+        }
         hasUserOffset = true;
+      } else if (
+        serverOffset !== null &&
+        serverOffset === 0 &&
+        serverLineAdj &&
+        Object.keys(serverLineAdj).length > 0
+      ) {
+        // 서버 오프셋 0이지만 구간 보정 있음
+        const lineCountMatch = serverLyricsLineCount === null || serverLyricsLineCount === parsedLyrics.length;
+        if (lineCountMatch) {
+          finalParsedLyrics = applyLineAdjustments(parsedLyrics, serverLineAdj);
+          hasUserOffset = true;
+        }
       } else {
         // 5-2. 로컬 오프셋 확인 (fallback)
         const savedData = await getVideoOffset(videoId);
         const hasGlobalOffset = savedData && savedData.offset !== 0;
         const hasLineAdj = savedData?.lineAdjustments && Object.keys(savedData.lineAdjustments).length > 0;
         if (hasGlobalOffset || hasLineAdj) {
-          console.log(
-            `[AutoOffset] 로컬 오프셋 발견 (videoId: ${videoId}, offset: ${savedData?.offset ?? 0}초, lineAdj: ${hasLineAdj ? Object.keys(savedData!.lineAdjustments!).length + '개' : '없음'}) - 자동 적용`,
-          );
           if (hasGlobalOffset) {
             finalParsedLyrics = applyOffsetToLyrics(parsedLyrics, savedData!.offset, 0);
           }
@@ -1609,7 +1638,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
           }
           hasUserOffset = true;
         } else {
-          console.log(`[AutoOffset] 저장된 오프셋 없음 - 원본 가사 사용`);
+          // 저장된 오프셋 없음 - 원본 가사 사용
         }
       }
 

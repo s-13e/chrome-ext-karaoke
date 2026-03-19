@@ -320,11 +320,16 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendRespon
   if (msg.type === 'FETCH_SERVER_OFFSET') {
     (async () => {
       try {
-        const offset = await fetchServerOffset(msg.videoId);
-        sendResponse({ success: true, offset });
+        const result = await fetchServerOffset(msg.videoId);
+        sendResponse({
+          success: true,
+          offset: result?.offset ?? null,
+          lineAdjustments: result?.lineAdjustments ?? null,
+          lyricsLineCount: result?.lyricsLineCount ?? null,
+        });
       } catch (error) {
         console.error('[background] FETCH_SERVER_OFFSET 실패:', error);
-        sendResponse({ success: false, offset: null });
+        sendResponse({ success: false, offset: null, lineAdjustments: null, lyricsLineCount: null });
       }
     })();
 

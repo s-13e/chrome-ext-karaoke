@@ -153,19 +153,25 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
       }
 
       // 1. 서버 오프셋 존재 여부 확인 (적용은 index.tsx에서 이미 완료)
-      const serverOffsetResponse = await new Promise<{ success: boolean; offset: number | null }>((resolve) => {
+      const serverOffsetResponse = await new Promise<{
+        success: boolean;
+        offset: number | null;
+        lineAdjustments: Record<number, number> | null;
+      }>((resolve) => {
         chrome.runtime.sendMessage({ type: 'FETCH_SERVER_OFFSET', videoId }, (response) => {
           if (chrome.runtime.lastError) {
-            resolve({ success: false, offset: null });
+            resolve({ success: false, offset: null, lineAdjustments: null });
           } else {
-            resolve(response ?? { success: false, offset: null });
+            resolve(response ?? { success: false, offset: null, lineAdjustments: null });
           }
         });
       });
 
       const serverOffset = serverOffsetResponse.success ? serverOffsetResponse.offset : null;
+      const serverLineAdj = serverOffsetResponse.success ? serverOffsetResponse.lineAdjustments : null;
+      const hasServerLineAdj = serverLineAdj !== null && Object.keys(serverLineAdj).length > 0;
 
-      if (serverOffset !== null && serverOffset !== 0) {
+      if ((serverOffset !== null && serverOffset !== 0) || hasServerLineAdj) {
         // 서버 오프셋 존재 → DEV 삭제 버튼 활성화, 로컬 오프셋 무시
         setHasServerOffset(true);
         setCurrentOffset(0);
