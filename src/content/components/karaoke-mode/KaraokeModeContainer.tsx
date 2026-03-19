@@ -1,11 +1,17 @@
 // KaraokeModeContainer.tsx
 // 가라오케 모드의 메인 컨테이너 컴포넌트
 // MusicNoteButton 클릭 시 사이드바, 하단 컨테이너를 표시/숨김 처리
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useRef, lazy, Suspense } from 'react';
 import { SidebarContainer } from './SidebarContainer';
 import { BottomContainer } from './BottomContainer';
 import { Line } from '@lib/types/lyrics';
 import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
+import styles from './styles.module.css';
+
+// TextEffectsModal lazy loading (KaraokeModeContainer 레벨에서 관리)
+const TextEffectsModal = lazy(() =>
+  import('./TextEffectsModal').then((module) => ({ default: module.TextEffectsModal })),
+);
 
 /**
  * 레이아웃 상수
@@ -475,6 +481,51 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({
     };
   }, [visible, isPanelExpanded]);
 
+  // TextEffectsModal 상태 (KaraokeModeContainer 레벨에서 관리)
+  const [showTextEffectsModal, setShowTextEffectsModal] = useState(false);
+  const textEffectsModalRef = useRef<HTMLDivElement | null>(null);
+  const textEffectsCancelRef = useRef<(() => void) | null>(null);
+
+  // 커스텀 이벤트로 TextEffectsModal 열기/닫기 (사이드바, 하단바 모두 사용 가능)
+  useEffect(() => {
+    const handleOpen = () => setShowTextEffectsModal(true);
+    const handleClose = () => {
+      if (textEffectsCancelRef.current) {
+        textEffectsCancelRef.current();
+        textEffectsCancelRef.current = null;
+      }
+      setShowTextEffectsModal(false);
+    };
+    window.addEventListener('open-text-effects-modal', handleOpen);
+    window.addEventListener('close-text-effects-modal', handleClose);
+    return () => {
+      window.removeEventListener('open-text-effects-modal', handleOpen);
+      window.removeEventListener('close-text-effects-modal', handleClose);
+    };
+  }, []);
+
+  // TextEffectsModal 외부 클릭 감지
+  useEffect(() => {
+    if (!showTextEffectsModal) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (textEffectsModalRef.current && !textEffectsModalRef.current.contains(target)) {
+        if (textEffectsCancelRef.current) {
+          textEffectsCancelRef.current();
+          textEffectsCancelRef.current = null;
+        }
+        setShowTextEffectsModal(false);
+      }
+    };
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+    }, 100);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showTextEffectsModal]);
+
   if (!visible) return null;
 
   // 전체화면일 때는 커스텀 컨테이너들 숨김
@@ -484,6 +535,20 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({
     <CurrentTimeProvider>
       <SidebarContainer lyrics={lyrics} width={sidebarWidth} songTitle={songTitle} songArtist={songArtist} />
       <BottomContainer lyrics={lyrics} />
+
+      {/* TextEffectsModal — KaraokeModeContainer 레벨에서 렌더링 */}
+      {showTextEffectsModal && (
+        <div className={styles.textEffectsModalContainer} ref={textEffectsModalRef}>
+          <Suspense fallback={<div style={{ padding: '20px', color: '#fff' }}>Loading...</div>}>
+            <TextEffectsModal
+              onClose={() => setShowTextEffectsModal(false)}
+              registerCancel={(fn) => {
+                textEffectsCancelRef.current = fn || null;
+              }}
+            />
+          </Suspense>
+        </div>
+      )}
     </CurrentTimeProvider>
   );
 };

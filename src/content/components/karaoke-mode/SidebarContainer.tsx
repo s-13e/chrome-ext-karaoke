@@ -15,6 +15,8 @@ import {
   MdChevronLeft,
   MdSkipNext,
   MdTextFields,
+  MdSubtitles,
+  MdRecordVoiceOver,
 } from 'react-icons/md';
 import styles from './styles.module.css';
 
@@ -305,6 +307,8 @@ interface SettingsPanelProps {
   t: (key: string) => string;
 }
 
+type LyricsDisplayMode = 'sync' | 'single' | 'full';
+
 const settingsRowStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
@@ -331,89 +335,246 @@ const settingsDescStyle: React.CSSProperties = {
   margin: 0,
 };
 
+const sectionTitleStyle: React.CSSProperties = {
+  fontSize: '13px',
+  fontWeight: 600,
+  color: '#fff',
+  margin: 0,
+};
+
+const dividerStyle: React.CSSProperties = {
+  borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+  paddingTop: '12px',
+};
+
+/** 토글 스위치 공통 컴포넌트 */
+const ToggleSwitch: React.FC<{ checked: boolean; onChange: () => void }> = ({ checked, onChange }) => (
+  <span
+    role="switch"
+    tabIndex={0}
+    aria-checked={checked}
+    onClick={onChange}
+    onKeyDown={(e) => {
+      if (e.key === 'Enter' || e.key === ' ') onChange();
+    }}
+    style={{
+      width: '36px',
+      height: '20px',
+      borderRadius: '10px',
+      border: 'none',
+      cursor: 'pointer',
+      position: 'relative',
+      display: 'inline-block',
+      transition: 'background 0.2s',
+      background: checked ? '#00d4aa' : 'rgba(255,255,255,0.15)',
+      flexShrink: 0,
+    }}
+  >
+    <span
+      style={{
+        position: 'absolute',
+        top: '2px',
+        left: checked ? '18px' : '2px',
+        width: '16px',
+        height: '16px',
+        borderRadius: '50%',
+        background: '#fff',
+        transition: 'left 0.2s',
+      }}
+    />
+  </span>
+);
+
+/** 표시 모드 선택 버튼 그룹 */
+const DisplayModeSelector: React.FC<{
+  mode: LyricsDisplayMode;
+  onChange: (mode: LyricsDisplayMode) => void;
+  t: (key: string) => string;
+}> = ({ mode, onChange, t }) => {
+  const modes: { value: LyricsDisplayMode; labelKey: string }[] = [
+    { value: 'sync', labelKey: 'extSidebarSettingsModeDual' },
+    { value: 'single', labelKey: 'extSidebarSettingsModeSingle' },
+    { value: 'full', labelKey: 'extSidebarSettingsModeFull' },
+  ];
+
+  return (
+    <div
+      style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.06)', borderRadius: '6px', padding: '3px' }}
+    >
+      {modes.map((m) => (
+        <span
+          key={m.value}
+          role="button"
+          tabIndex={0}
+          onClick={() => onChange(m.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onChange(m.value);
+          }}
+          style={{
+            flex: 1,
+            padding: '4px 8px',
+            borderRadius: '4px',
+            fontSize: '11px',
+            fontWeight: mode === m.value ? 600 : 400,
+            textAlign: 'center',
+            cursor: 'pointer',
+            transition: 'all 0.15s',
+            background: mode === m.value ? 'rgba(0, 212, 170, 0.2)' : 'transparent',
+            color: mode === m.value ? '#00d4aa' : 'rgba(255,255,255,0.5)',
+            userSelect: 'none',
+          }}
+        >
+          {t(m.labelKey)}
+        </span>
+      ))}
+    </div>
+  );
+};
+
 const SettingsPanel: React.FC<SettingsPanelProps> = ({ t }) => {
   const [autoSkipEnabled, setAutoSkipEnabled] = useState(false);
+  const [displayMode, setDisplayMode] = useState<LyricsDisplayMode>('sync');
+  const [showCurrentLyrics, setShowCurrentLyrics] = useState(true);
+  const [showPronunciation, setShowPronunciation] = useState(true);
 
-  // BottomContainer의 자동점프 아이콘 글로우 상태로 초기값 동기화
+  // Chrome Storage에서 초기값 로드 + 변경 리스닝
   useEffect(() => {
-    const autoSkipIcon = document.querySelector('[class*="autoSkipIconActive"]');
-    if (autoSkipIcon) {
-      setAutoSkipEnabled(true);
-    }
+    chrome.storage.sync.get(['lyricsMode', 'realtimeLyrics', 'announceLyrics'], (result) => {
+      if (result.lyricsMode !== undefined) setDisplayMode(result.lyricsMode as LyricsDisplayMode);
+      if (result.realtimeLyrics !== undefined) setShowCurrentLyrics(result.realtimeLyrics as boolean);
+      if (result.announceLyrics !== undefined) setShowPronunciation(result.announceLyrics as boolean);
+    });
+    chrome.storage.local.get(['karaokeAutoSkipEnabled'], (result) => {
+      if (result.karaokeAutoSkipEnabled !== undefined) setAutoSkipEnabled(result.karaokeAutoSkipEnabled as boolean);
+    });
+
+    const handleChange = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area === 'sync') {
+        if (changes.lyricsMode) setDisplayMode(changes.lyricsMode.newValue as LyricsDisplayMode);
+        if (changes.realtimeLyrics) setShowCurrentLyrics(changes.realtimeLyrics.newValue as boolean);
+        if (changes.announceLyrics) setShowPronunciation(changes.announceLyrics.newValue as boolean);
+      }
+      if (area === 'local' && changes.karaokeAutoSkipEnabled) {
+        setAutoSkipEnabled(changes.karaokeAutoSkipEnabled.newValue as boolean);
+      }
+    };
+    chrome.storage.onChanged.addListener(handleChange);
+    return () => chrome.storage.onChanged.removeListener(handleChange);
   }, []);
 
+  const handleDisplayModeChange = (mode: LyricsDisplayMode) => {
+    setDisplayMode(mode);
+    chrome.storage.sync.set({ lyricsMode: mode });
+  };
+
+  const handleCurrentLyricsToggle = () => {
+    const newVal = !showCurrentLyrics;
+    setShowCurrentLyrics(newVal);
+    chrome.storage.sync.set({ realtimeLyrics: newVal });
+  };
+
+  const handlePronunciationToggle = () => {
+    const newVal = !showPronunciation;
+    setShowPronunciation(newVal);
+    chrome.storage.sync.set({ announceLyrics: newVal });
+  };
+
   const handleAutoSkipToggle = () => {
-    // BottomContainer의 자동점프 버튼을 직접 클릭
-    const autoSkipBtn = document.querySelector<HTMLButtonElement>('[aria-label="' + t('extKaraokeAutoSkip') + '"]');
-    if (autoSkipBtn) {
-      autoSkipBtn.click();
-    }
-    setAutoSkipEnabled((prev) => !prev);
+    const newVal = !autoSkipEnabled;
+    setAutoSkipEnabled(newVal);
+    chrome.storage.local.set({ karaokeAutoSkipEnabled: newVal });
+    // BottomContainer도 storage 변경을 리스닝하므로 자동 동기화됨
   };
 
   const handleOpenTextEffects = () => {
-    // BottomContainer의 텍스트 효과 버튼을 직접 클릭
-    const textEffectsBtn = document.querySelector<HTMLButtonElement>(
-      '[aria-label="' + t('extKaraokeTextEffects') + '"]',
-    );
-    if (textEffectsBtn) {
-      textEffectsBtn.click();
-    }
+    window.dispatchEvent(new CustomEvent('open-text-effects-modal'));
   };
 
-  return (
-    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto' }}>
-      <h3 style={{ fontSize: '13px', fontWeight: 600, color: '#fff', margin: 0 }}>{t('extSidebarSettingsGeneral')}</h3>
+  const iconStyle: React.CSSProperties = { color: 'rgba(255,255,255,0.5)', flexShrink: 0 };
 
-      {/* 자동 간주 점프 토글 */}
+  return (
+    <div
+      style={{
+        padding: '16px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px',
+        overflowY: 'auto',
+        height: '100%',
+      }}
+    >
+      {/* 가사 표시 섹션 */}
+      <h3 style={sectionTitleStyle}>{t('extSidebarSettingsLyricsDisplay')}</h3>
+
+      {/* 표시 모드 */}
+      <div style={{ ...settingsRowStyle, flexDirection: 'column', alignItems: 'stretch', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={settingsRowLeftStyle}>
+            <MdTune size={16} style={iconStyle} />
+            <div>
+              <span style={settingsLabelStyle}>{t('extSidebarSettingsDisplayMode')}</span>
+              <p style={settingsDescStyle}>{t('extSidebarSettingsDisplayModeDesc')}</p>
+            </div>
+          </div>
+        </div>
+        <DisplayModeSelector mode={displayMode} onChange={handleDisplayModeChange} t={t} />
+      </div>
+
+      {/* 현재 가사 표시 */}
       <div style={settingsRowStyle}>
         <div style={settingsRowLeftStyle}>
-          <MdSkipNext size={16} style={{ color: 'rgba(255,255,255,0.5)' }} />
+          <MdSubtitles size={16} style={iconStyle} />
+          <div>
+            <span style={settingsLabelStyle}>{t('extSidebarSettingsShowCurrentLyrics')}</span>
+            <p style={settingsDescStyle}>{t('extSidebarSettingsShowCurrentLyricsDesc')}</p>
+          </div>
+        </div>
+        <ToggleSwitch checked={showCurrentLyrics} onChange={handleCurrentLyricsToggle} />
+      </div>
+
+      {/* 발음 표시 */}
+      <div style={settingsRowStyle}>
+        <div style={settingsRowLeftStyle}>
+          <MdRecordVoiceOver size={16} style={iconStyle} />
+          <div>
+            <span style={settingsLabelStyle}>{t('extSidebarSettingsShowPronunciation')}</span>
+            <p style={settingsDescStyle}>{t('extSidebarSettingsShowPronunciationDesc')}</p>
+          </div>
+        </div>
+        <ToggleSwitch checked={showPronunciation} onChange={handlePronunciationToggle} />
+      </div>
+
+      {/* 재생 섹션 */}
+      <div style={dividerStyle}>
+        <h3 style={sectionTitleStyle}>{t('extSidebarSettingsPlayback')}</h3>
+      </div>
+
+      {/* 자동 간주 점프 */}
+      <div style={settingsRowStyle}>
+        <div style={settingsRowLeftStyle}>
+          <MdSkipNext size={16} style={iconStyle} />
           <div>
             <span style={settingsLabelStyle}>{t('extKaraokeAutoSkip')}</span>
             <p style={settingsDescStyle}>{t('extSidebarSettingsAutoSkipDesc')}</p>
           </div>
         </div>
-        <button
-          onClick={handleAutoSkipToggle}
-          role="switch"
-          aria-checked={autoSkipEnabled}
-          style={{
-            width: '36px',
-            height: '20px',
-            borderRadius: '10px',
-            border: 'none',
-            cursor: 'pointer',
-            position: 'relative',
-            transition: 'background 0.2s',
-            background: autoSkipEnabled ? '#00d4aa' : 'rgba(255,255,255,0.15)',
-            flexShrink: 0,
-          }}
-        >
-          <span
-            style={{
-              position: 'absolute',
-              top: '2px',
-              left: autoSkipEnabled ? '18px' : '2px',
-              width: '16px',
-              height: '16px',
-              borderRadius: '50%',
-              background: '#fff',
-              transition: 'left 0.2s',
-            }}
-          />
-        </button>
+        <ToggleSwitch checked={autoSkipEnabled} onChange={handleAutoSkipToggle} />
       </div>
 
-      {/* 텍스트 효과 설정 바로가기 */}
-      <button
+      {/* 외관 섹션 */}
+      <div style={dividerStyle}>
+        <h3 style={sectionTitleStyle}>{t('extSidebarSettingsAppearance')}</h3>
+      </div>
+
+      {/* 텍스트 효과 설정 */}
+      <div
+        role="button"
+        tabIndex={0}
         onClick={handleOpenTextEffects}
-        style={{
-          ...settingsRowStyle,
-          border: 'none',
-          cursor: 'pointer',
-          width: '100%',
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') handleOpenTextEffects();
         }}
+        style={{ ...settingsRowStyle, cursor: 'pointer' }}
         onMouseEnter={(e) => {
           e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
         }}
@@ -422,11 +583,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ t }) => {
         }}
       >
         <div style={settingsRowLeftStyle}>
-          <MdTextFields size={16} style={{ color: 'rgba(255,255,255,0.5)' }} />
+          <MdTextFields size={16} style={iconStyle} />
           <span style={settingsLabelStyle}>{t('extKaraokeTextEffects')}</span>
         </div>
         <span style={{ fontSize: '11px', color: '#00d4aa' }}>{t('extSidebarSettingsOpen')}</span>
-      </button>
+      </div>
     </div>
   );
 };

@@ -351,13 +351,9 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
 
   // chrome.storage에서 상태 불러오기
   React.useEffect(() => {
-    chrome.storage.sync.get(['karaokeAutoSkipEnabled', 'lyricsMode', 'realtimeLyrics', 'announceLyrics'], (result) => {
-      console.log('[BottomContainer] storage 불러오기:', result);
-      if (result.karaokeAutoSkipEnabled !== undefined) {
-        setAutoSkipEnabled(result.karaokeAutoSkipEnabled as boolean);
-      }
+    // sync 영역: lyricsMode, realtimeLyrics, announceLyrics
+    chrome.storage.sync.get(['lyricsMode', 'realtimeLyrics', 'announceLyrics'], (result) => {
       if (result.lyricsMode !== undefined) {
-        console.log('[BottomContainer] lyricsMode 설정:', result.lyricsMode);
         setLyricsDisplayMode(result.lyricsMode as LyricsDisplayMode);
       }
       if (result.realtimeLyrics !== undefined) {
@@ -365,6 +361,12 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
       }
       if (result.announceLyrics !== undefined) {
         setShowPronunciation(result.announceLyrics as boolean);
+      }
+    });
+    // local 영역: karaokeAutoSkipEnabled
+    chrome.storage.local.get(['karaokeAutoSkipEnabled'], (result) => {
+      if (result.karaokeAutoSkipEnabled !== undefined) {
+        setAutoSkipEnabled(result.karaokeAutoSkipEnabled as boolean);
       }
     });
 
@@ -375,7 +377,6 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
     ) => {
       if (areaName === 'sync') {
         if (changes.lyricsMode) {
-          console.log('[BottomContainer] lyricsMode 변경 감지:', changes.lyricsMode.newValue);
           setLyricsDisplayMode(changes.lyricsMode.newValue as LyricsDisplayMode);
         }
         if (changes.realtimeLyrics) {
@@ -383,6 +384,11 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({
         }
         if (changes.announceLyrics) {
           setShowPronunciation(changes.announceLyrics.newValue as boolean);
+        }
+      }
+      if (areaName === 'local') {
+        if (changes.karaokeAutoSkipEnabled) {
+          setAutoSkipEnabled(changes.karaokeAutoSkipEnabled.newValue as boolean);
         }
       }
     };

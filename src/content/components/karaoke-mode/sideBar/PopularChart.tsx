@@ -228,8 +228,9 @@ export const PopularChart: React.FC = () => {
                     tabIndex={0}
                     style={{
                       padding: '4px 10px',
-                      backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                      color: 'rgba(255, 255, 255, 0.6)',
+                      backgroundColor: 'transparent',
+                      color: 'rgba(255, 255, 255, 0.7)',
+                      border: '1px solid rgba(255, 255, 255, 0.25)',
                       borderRadius: '4px',
                       fontSize: '10px',
                       fontWeight: 700,
@@ -245,6 +246,16 @@ export const PopularChart: React.FC = () => {
                     }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') handlePlayMV(item.videoId);
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.15)';
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.5)';
+                      e.currentTarget.style.color = '#fff';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.25)';
+                      e.currentTarget.style.color = 'rgba(255, 255, 255, 0.7)';
                     }}
                   >
                     MV

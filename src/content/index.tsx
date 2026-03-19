@@ -1046,6 +1046,36 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
 
     // 광고 모니터링 시작: 가사가 렌더링된 후 광고 상태를 지속적으로 체크
     startLyricsAdMonitoringIfNeeded();
+
+    // 자동 인트로 스킵: karaoke 모드 활성화 여부와 무관하게 가사 로드 시 실행
+    tryAutoSkipIntro(newLyrics);
+  }
+
+  /**
+   * 자동 인트로 스킵 — 가사 로드 시 첫 가사 3초 전으로 자동 이동
+   * karaokeAutoSkipEnabled 설정이 활성화되어 있을 때만 실행
+   */
+  function tryAutoSkipIntro(lyrics: Line[]) {
+    chrome.storage.local.get(['karaokeAutoSkipEnabled'], (result) => {
+      if (!result.karaokeAutoSkipEnabled) return;
+      if (lyrics.length === 0) return;
+
+      const videoElement = document.querySelector<HTMLVideoElement>('video.html5-main-video');
+      if (!videoElement) return;
+
+      const firstLyric = lyrics[0];
+      if (!firstLyric || firstLyric.time <= 4) return;
+
+      const targetTime = Math.max(0, firstLyric.time - 3);
+      const currentTime = videoElement.currentTime;
+
+      if (currentTime <= firstLyric.time) {
+        videoElement.currentTime = targetTime;
+        console.log(
+          `[AutoSkip] 인트로 스킵: ${currentTime.toFixed(1)}초 → ${targetTime.toFixed(1)}초 (첫 가사: ${firstLyric.time}초)`,
+        );
+      }
+    });
   }
 
   /**
