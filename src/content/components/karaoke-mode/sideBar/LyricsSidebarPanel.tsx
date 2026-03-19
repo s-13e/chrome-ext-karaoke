@@ -267,8 +267,8 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
 
       // 싱크 구간 선택 모드
       if (syncSelectingPoint === 'A') {
-        setSyncRange({ startIndex: idx, endIndex: lyrics.length - 1 });
-        setSyncSelectingPoint(null); // A 선택 완료, B는 기본 end (별도 선택 가능)
+        setSyncRange({ startIndex: idx, endIndex: -1 }); // B는 미설정 (별도 선택 필요)
+        setSyncSelectingPoint(null);
         return;
       }
       if (syncSelectingPoint === 'B') {
@@ -314,7 +314,7 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
       } else if (syncSelectingPoint) {
         dragModeRef.current = 'sync';
         dragRef.current = { dragging: true, startIdx: idx, didDrag: false };
-        setSyncRange({ startIndex: idx, endIndex: lyrics.length - 1 });
+        setSyncRange({ startIndex: idx, endIndex: -1 });
         setSyncSelectingPoint('B');
       }
     },
@@ -707,7 +707,7 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
                         : '--:--'}
                   </span>
                 </button>
-                {syncRange.startIndex >= 0 && syncRange.endIndex < lyrics.length - 1 && (
+                {syncRange.startIndex >= 0 && syncRange.endIndex >= 0 && syncRange.endIndex < lyrics.length - 1 && (
                   <button
                     className={styles.syncEndButton}
                     onClick={() => setSyncRange((prev) => ({ ...prev, endIndex: lyrics.length - 1 }))}
@@ -723,7 +723,7 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
                 </p>
               )}
 
-              {syncRange.startIndex >= 0 && (
+              {syncRange.startIndex >= 0 && syncRange.endIndex >= 0 && (
                 <>
                   <div className={styles.syncStepRow}>
                     {SYNC_STEP_OPTIONS.map((step) => (
