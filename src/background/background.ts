@@ -9,7 +9,7 @@ import { LyricsError, LyricsErrorCode } from '@lib/types/lyricsError';
 // API 모듈 정적 import (dynamic import 제거로 메시지 처리 지연 최소화)
 import { fetchYouTubeLRCLibCache, fetchLyricsById, fetchYouTubeLyrics, fetchServerOffset } from './api/lrclib';
 import { fetchYouTubeVideoMeta, fetchPlaylistItems } from './api/youtube';
-import { sendFeedback } from './api/feedback';
+import { sendFeedback, sendGeneralFeedback } from './api/feedback';
 
 // ===== 전역 변수 및 상태 =====
 // activeTabs를 chrome.storage.session에 저장하여 Service Worker 재시작 후에도 유지
@@ -511,6 +511,24 @@ chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendRespon
         sendResponse({ success: true, feedbackId: result.feedbackId });
       } catch (error) {
         console.error('[background] SEND_FEEDBACK 실패:', error);
+        sendResponse({ success: false, error: String(error) });
+      }
+    })();
+
+    return true; // 비동기 응답
+  }
+
+  // 일반 피드백 전송 (버그 제보 / 기능 제안)
+  if (msg.type === 'SEND_GENERAL_FEEDBACK') {
+    console.log('[background] SEND_GENERAL_FEEDBACK 요청 수신 - type:', msg.payload.type);
+
+    (async () => {
+      try {
+        const result = await sendGeneralFeedback(msg.payload);
+        console.log('[background] SEND_GENERAL_FEEDBACK 성공:', result.feedbackId);
+        sendResponse({ success: true, feedbackId: result.feedbackId });
+      } catch (error) {
+        console.error('[background] SEND_GENERAL_FEEDBACK 실패:', error);
         sendResponse({ success: false, error: String(error) });
       }
     })();

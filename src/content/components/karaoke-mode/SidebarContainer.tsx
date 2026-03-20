@@ -18,6 +18,8 @@ import {
   MdSubtitles,
   MdRecordVoiceOver,
   MdFlag,
+  MdBugReport,
+  MdSend,
 } from 'react-icons/md';
 import styles from './styles.module.css';
 
@@ -346,17 +348,17 @@ const FeedbackReportButton: React.FC = () => {
         }}
         title={t('extFeedbackReportIssue')}
         style={{
-          color: sent ? '#00d4aa' : 'rgba(255,255,255,0.3)',
+          color: sent ? '#00d4aa' : 'rgba(0, 212, 170, 0.6)',
           cursor: 'pointer',
           fontSize: '14px',
           padding: '4px',
           transition: 'color 0.15s',
         }}
         onMouseEnter={(e) => {
-          if (!sent) e.currentTarget.style.color = 'rgba(255,255,255,0.7)';
+          if (!sent) e.currentTarget.style.color = '#00d4aa';
         }}
         onMouseLeave={(e) => {
-          if (!sent) e.currentTarget.style.color = 'rgba(255,255,255,0.3)';
+          if (!sent) e.currentTarget.style.color = 'rgba(0, 212, 170, 0.6)';
         }}
       >
         {sent ? '✓' : <MdFlag size={14} />}
@@ -719,6 +721,248 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ t }) => {
         </div>
         <span style={{ fontSize: '11px', color: '#00d4aa' }}>{t('extSidebarSettingsOpen')}</span>
       </div>
+
+      {/* 피드백 섹션 */}
+      <div style={dividerStyle}>
+        <h3 style={sectionTitleStyle}>{t('extSidebarSettingsFeedback')}</h3>
+      </div>
+
+      <GeneralFeedbackForm t={t} />
+    </div>
+  );
+};
+
+/** 일반 피드백 폼 — 버그 제보 / 기능 제안 / 기타 → Discord 전송 */
+type GeneralFeedbackType = 'bug' | 'feature' | 'other';
+
+interface GeneralFeedbackFormProps {
+  t: (key: string) => string;
+}
+
+/** 서브 카테고리 정의 — type별 세부 선택지 */
+const feedbackSubTypes: Record<string, { value: string; labelKey: string }[]> = {
+  bug: [
+    { value: 'lyrics_display', labelKey: 'extFeedbackSubBugLyricsDisplay' },
+    { value: 'sync', labelKey: 'extFeedbackSubBugSync' },
+    { value: 'extension_error', labelKey: 'extFeedbackSubBugExtensionError' },
+    { value: 'ui', labelKey: 'extFeedbackSubBugUi' },
+    { value: 'other', labelKey: 'extGeneralFeedbackOther' },
+  ],
+  feature: [
+    { value: 'new_feature', labelKey: 'extFeedbackSubFeatureNew' },
+    { value: 'improve_existing', labelKey: 'extFeedbackSubFeatureImprove' },
+    { value: 'ui_design', labelKey: 'extFeedbackSubFeatureUiDesign' },
+    { value: 'other', labelKey: 'extGeneralFeedbackOther' },
+  ],
+};
+
+const subTypePillStyle: React.CSSProperties = {
+  padding: '4px 10px',
+  borderRadius: '12px',
+  fontSize: '11px',
+  cursor: 'pointer',
+  transition: 'all 0.15s',
+  border: '1px solid transparent',
+  userSelect: 'none',
+  whiteSpace: 'nowrap',
+};
+
+const GeneralFeedbackForm: React.FC<GeneralFeedbackFormProps> = ({ t }) => {
+  const { i18n } = useTranslation();
+  const [selectedType, setSelectedType] = useState<GeneralFeedbackType | null>(null);
+  const [selectedSubType, setSelectedSubType] = useState<string | null>(null);
+  const [message, setMessage] = useState('');
+  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+
+  const feedbackTypes: { type: GeneralFeedbackType; labelKey: string; icon: React.ReactNode }[] = [
+    { type: 'bug', labelKey: 'extGeneralFeedbackBug', icon: <MdBugReport size={14} /> },
+    { type: 'feature', labelKey: 'extGeneralFeedbackFeature', icon: <MdTrendingUp size={14} /> },
+    { type: 'other', labelKey: 'extGeneralFeedbackOther', icon: <MdFlag size={14} /> },
+  ];
+
+  const handleTypeSelect = (type: GeneralFeedbackType) => {
+    setSelectedType(type);
+    setSelectedSubType(null);
+  };
+
+  const hasSubTypes = selectedType !== null && selectedType !== 'other' && feedbackSubTypes[selectedType] !== undefined;
+  const canShowTextarea = selectedType === 'other' || selectedSubType !== null;
+
+  const handleSubmit = () => {
+    if (!selectedType || !message.trim() || status === 'sending') return;
+
+    setStatus('sending');
+
+    const manifest = chrome.runtime.getManifest();
+
+    chrome.runtime.sendMessage(
+      {
+        type: 'SEND_GENERAL_FEEDBACK',
+        payload: {
+          type: selectedType,
+          subType: selectedSubType ?? undefined,
+          message: message.trim(),
+          extensionVersion: manifest.version,
+          browser: navigator.userAgent,
+          lang: i18n.language || 'unknown',
+        },
+      },
+      (response) => {
+        if (response?.success) {
+          setStatus('sent');
+          setMessage('');
+          setSelectedType(null);
+          setSelectedSubType(null);
+          setTimeout(() => setStatus('idle'), 3000);
+        } else {
+          setStatus('error');
+          setTimeout(() => setStatus('idle'), 3000);
+        }
+      },
+    );
+  };
+
+  if (status === 'sent') {
+    return (
+      <div
+        style={{
+          ...settingsRowStyle,
+          justifyContent: 'center',
+          color: '#00d4aa',
+          fontSize: '13px',
+          fontWeight: 500,
+        }}
+      >
+        {t('extGeneralFeedbackSent')}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      {/* 유형 선택 */}
+      <div style={{ display: 'flex', gap: '4px' }}>
+        {feedbackTypes.map((fb) => (
+          <span
+            key={fb.type}
+            role="button"
+            tabIndex={0}
+            onClick={() => handleTypeSelect(fb.type)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleTypeSelect(fb.type);
+            }}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              padding: '6px 4px',
+              borderRadius: '6px',
+              fontSize: '11px',
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+              background: selectedType === fb.type ? 'rgba(0, 212, 170, 0.15)' : 'rgba(255,255,255,0.04)',
+              color: selectedType === fb.type ? '#00d4aa' : 'rgba(255,255,255,0.5)',
+              border: selectedType === fb.type ? '1px solid rgba(0, 212, 170, 0.3)' : '1px solid transparent',
+              userSelect: 'none',
+            }}
+          >
+            {fb.icon}
+            {t(fb.labelKey)}
+          </span>
+        ))}
+      </div>
+
+      {/* 서브 카테고리 선택 */}
+      {hasSubTypes && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+          {feedbackSubTypes[selectedType].map((sub) => (
+            <span
+              key={sub.value}
+              role="button"
+              tabIndex={0}
+              onClick={() => setSelectedSubType(sub.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') setSelectedSubType(sub.value);
+              }}
+              style={{
+                ...subTypePillStyle,
+                background: selectedSubType === sub.value ? 'rgba(0, 212, 170, 0.12)' : 'rgba(255,255,255,0.04)',
+                color: selectedSubType === sub.value ? '#00d4aa' : 'rgba(255,255,255,0.45)',
+                border:
+                  selectedSubType === sub.value
+                    ? '1px solid rgba(0, 212, 170, 0.25)'
+                    : '1px solid rgba(255,255,255,0.08)',
+              }}
+            >
+              {t(sub.labelKey)}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* 메시지 입력 + 전송 */}
+      {canShowTextarea && (
+        <>
+          <textarea
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder={t('extGeneralFeedbackPlaceholder')}
+            maxLength={1000}
+            style={{
+              width: '100%',
+              minHeight: '60px',
+              padding: '8px 10px',
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '6px',
+              color: '#e1e1e1',
+              fontFamily: 'inherit',
+              fontSize: '12px',
+              resize: 'vertical',
+              outline: 'none',
+            }}
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = 'rgba(0, 212, 170, 0.4)';
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+            }}
+          />
+
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!message.trim() || status === 'sending'}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              padding: '8px',
+              borderRadius: '6px',
+              border: 'none',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: message.trim() && status !== 'sending' ? 'pointer' : 'default',
+              transition: 'all 0.15s',
+              background: message.trim() ? 'rgba(0, 212, 170, 0.2)' : 'rgba(255,255,255,0.04)',
+              color: message.trim() ? '#00d4aa' : 'rgba(255,255,255,0.3)',
+              opacity: status === 'sending' ? 0.6 : 1,
+            }}
+          >
+            <MdSend size={14} />
+            {status === 'sending' ? t('extGeneralFeedbackSending') : t('extGeneralFeedbackSubmit')}
+          </button>
+
+          {status === 'error' && (
+            <span style={{ fontSize: '11px', color: '#ff6b6b', textAlign: 'center' }}>
+              {t('extGeneralFeedbackError')}
+            </span>
+          )}
+        </>
+      )}
     </div>
   );
 };
