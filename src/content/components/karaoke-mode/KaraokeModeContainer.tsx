@@ -1,7 +1,7 @@
 // KaraokeModeContainer.tsx
 // 가라오케 모드의 메인 컨테이너 컴포넌트
 // MusicNoteButton 클릭 시 사이드바, 하단 컨테이너를 표시/숨김 처리
-import React, { useEffect, useState, useRef, lazy, Suspense } from 'react';
+import React, { useEffect, useLayoutEffect, useState, useRef, lazy, Suspense } from 'react';
 import { SidebarContainer } from './SidebarContainer';
 import { BottomContainer } from './BottomContainer';
 import { Line } from '@lib/types/lyrics';
@@ -65,6 +65,25 @@ const injectPlayerStyles = () => {
       top: 0 !important;
       object-fit: contain !important;
       object-position: center center !important;
+    }
+    /* 카라오케 모드: 플레이어 외 YouTube 콘텐츠 전부 숨김 */
+    #primary-inner > *:not(#player):not(#player-container-outer),
+    #secondary,
+    #below,
+    #columns,
+    #comments,
+    #related,
+    ytd-engagement-panel-section-list-renderer,
+    ytd-popup-container,
+    ytd-mealbar-promo-renderer,
+    ytd-miniplayer,
+    tp-yt-paper-dialog,
+    .ytd-popup-container,
+    .ytp-suggested-action,
+    ytd-shorts,
+    #chat {
+      display: none !important;
+      visibility: hidden !important;
     }
   `;
   document.head.appendChild(style);
@@ -185,10 +204,6 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({
           if (columns) {
             columns.style.removeProperty('display');
           }
-          const belowFs = document.querySelector<HTMLElement>('#below');
-          if (belowFs) {
-            belowFs.style.removeProperty('display');
-          }
           if (ytdApp) {
             ytdApp.style.removeProperty('margin');
             ytdApp.style.removeProperty('padding');
@@ -292,26 +307,28 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({
     };
   }, [visible]);
 
+  // 사이드바 너비 변경 시 플레이어 너비를 paint 전에 동기 업데이트
+  // resize 이벤트는 dispatch하지 않음 — YouTube JS의 resize 핸들러가
+  // 우리 스타일을 잠깐 되돌려 콘텐츠가 비치는 원인이었음
+  // 비디오는 object-fit: contain으로 CSS만으로 자동 조절됨
+  useLayoutEffect(() => {
+    if (!visible) return;
+    const fullBleedContainer = document.querySelector<HTMLElement>('#full-bleed-container');
+    if (fullBleedContainer) {
+      fullBleedContainer.style.setProperty('width', `calc(100vw - ${sidebarWidth}px)`, 'important');
+      fullBleedContainer.style.setProperty('max-width', `calc(100vw - ${sidebarWidth}px)`, 'important');
+    }
+  }, [visible, sidebarWidth]);
+
   useEffect(() => {
     if (!visible) return;
 
-    // 사이드바 패널 토글 이벤트 리스너
+    // 사이드바 패널 토글 이벤트 리스너 (상태만 업데이트, DOM 조작은 useLayoutEffect에서 처리)
     const handlePanelToggle = (event: Event) => {
       const customEvent = event as CustomEvent<{ expanded: boolean }>;
       const expanded = customEvent.detail.expanded;
       setIsPanelExpanded(expanded);
-      const newWidth = getSidebarWidth(expanded);
-      setSidebarWidth(newWidth);
-
-      // YouTube 플레이어 너비 즉시 재조정
-      const fullBleedContainer = document.querySelector<HTMLElement>('#full-bleed-container');
-      if (fullBleedContainer) {
-        fullBleedContainer.style.setProperty('width', `calc(100vw - ${newWidth}px)`, 'important');
-        fullBleedContainer.style.setProperty('max-width', `calc(100vw - ${newWidth}px)`, 'important');
-      }
-      requestAnimationFrame(() => {
-        window.dispatchEvent(new Event('resize'));
-      });
+      setSidebarWidth(getSidebarWidth(expanded));
     };
     window.addEventListener('sidebar-panel-toggle', handlePanelToggle);
 
@@ -354,10 +371,6 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({
 
       // #columns 숨기기 (영상 설명, 추천/댓글 영역 모두 포함)
       if (columns) columns.style.setProperty('display', 'none', 'important');
-
-      // #below 숨기기 (영상 제목, 설명, 댓글 — 사이드바 토글 시 비쳐 보이는 문제 방지)
-      const below = document.querySelector<HTMLElement>('#below');
-      if (below) below.style.setProperty('display', 'none', 'important');
 
       // 플레이어를 전체화면처럼 확장 (영화관 모드의 #full-bleed-container 조작)
       fullBleedContainer.style.setProperty('position', 'fixed', 'important');
@@ -476,11 +489,6 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({
       if (columns) {
         columns.style.removeProperty('display');
       }
-      // #below 복원
-      const belowRestore = document.querySelector<HTMLElement>('#below');
-      if (belowRestore) {
-        belowRestore.style.removeProperty('display');
-      }
       if (ytdApp) {
         ytdApp.style.removeProperty('margin');
         ytdApp.style.removeProperty('padding');
@@ -509,7 +517,8 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({
         theaterModeButton.removeEventListener('click', handleTheaterModeButtonClick);
       }
     };
-  }, [visible, isPanelExpanded]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isPanelExpanded 제거: 사이드바 토글 시 클린업→재적용 사이 300ms 동안 YouTube 원래 레이아웃이 노출되는 문제 방지. 너비 변경은 useLayoutEffect에서 처리.
+  }, [visible]);
 
   // TextEffectsModal 상태 (KaraokeModeContainer 레벨에서 관리)
   const [showTextEffectsModal, setShowTextEffectsModal] = useState(false);
