@@ -73,15 +73,16 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({ sidebarWidth }
   const [isBarVisible, setIsBarVisible] = useState(true);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const showBar = useCallback(() => {
-    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-    setIsBarVisible(true);
-  }, []);
-
   const scheduleHide = useCallback(() => {
     if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
     hideTimerRef.current = setTimeout(() => setIsBarVisible(false), AUTO_HIDE_DELAY);
   }, []);
+
+  const showBar = useCallback(() => {
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    setIsBarVisible(true);
+    scheduleHide();
+  }, [scheduleHide]);
 
   // 마운트 시 CSS 애니메이션 주입 + 초기 auto-hide
   useEffect(() => {
@@ -444,9 +445,12 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({ sidebarWidth }
     pointerEvents: 'auto',
   };
 
-  /** pill 공통 마우스 이벤트 핸들러 */
+  /** pill 공통 마우스 이벤트 핸들러 — pill 위에서는 auto-hide 일시 중지 */
   const pillMouseHandlers = {
-    onMouseEnter: showBar,
+    onMouseEnter: () => {
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      setIsBarVisible(true);
+    },
     onMouseLeave: scheduleHide,
   };
 
