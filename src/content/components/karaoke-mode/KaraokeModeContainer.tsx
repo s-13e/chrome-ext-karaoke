@@ -18,7 +18,7 @@ const TextEffectsModal = lazy(() =>
  * styles.module.css의 값과 일치해야 함
  */
 const YOUTUBE_TOOLBAR = 56; // YouTube 상단 툴바 높이
-const BOTTOM_BAR_HEIGHT = 100; // 동영상 플레이어 하단 여백 (실제 하단바는 100px이지만 겹치도록 설정)
+const PLAYER_VERTICAL_MARGIN = 50; // 동영상 플레이어 상하 여백 (상단·하단 동일)
 const ICON_NAV_WIDTH = 71; // 아이콘 탭 내비게이션 너비 (68px + border 3px)
 
 const KARAOKE_STYLE_ID = 'yt-karaoke-player-overrides';
@@ -184,6 +184,10 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({
           }
           if (columns) {
             columns.style.removeProperty('display');
+          }
+          const belowFs = document.querySelector<HTMLElement>('#below');
+          if (belowFs) {
+            belowFs.style.removeProperty('display');
           }
           if (ytdApp) {
             ytdApp.style.removeProperty('margin');
@@ -351,14 +355,18 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({
       // #columns 숨기기 (영상 설명, 추천/댓글 영역 모두 포함)
       if (columns) columns.style.setProperty('display', 'none', 'important');
 
+      // #below 숨기기 (영상 제목, 설명, 댓글 — 사이드바 토글 시 비쳐 보이는 문제 방지)
+      const below = document.querySelector<HTMLElement>('#below');
+      if (below) below.style.setProperty('display', 'none', 'important');
+
       // 플레이어를 전체화면처럼 확장 (영화관 모드의 #full-bleed-container 조작)
       fullBleedContainer.style.setProperty('position', 'fixed', 'important');
-      fullBleedContainer.style.setProperty('top', `${YOUTUBE_TOOLBAR}px`, 'important');
+      fullBleedContainer.style.setProperty('top', `${YOUTUBE_TOOLBAR + PLAYER_VERTICAL_MARGIN}px`, 'important');
       fullBleedContainer.style.setProperty('left', '0', 'important');
       fullBleedContainer.style.setProperty('width', `calc(100vw - ${SIDEBAR_WIDTH}px)`, 'important');
       fullBleedContainer.style.setProperty(
         'height',
-        `calc(100vh - ${YOUTUBE_TOOLBAR + BOTTOM_BAR_HEIGHT}px)`,
+        `calc(100vh - ${YOUTUBE_TOOLBAR + PLAYER_VERTICAL_MARGIN * 2}px)`,
         'important',
       );
       fullBleedContainer.style.setProperty('z-index', '2000', 'important');
@@ -367,7 +375,7 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({
       fullBleedContainer.style.setProperty('max-width', `calc(100vw - ${SIDEBAR_WIDTH}px)`, 'important');
       fullBleedContainer.style.setProperty(
         'max-height',
-        `calc(100vh - ${YOUTUBE_TOOLBAR + BOTTOM_BAR_HEIGHT}px)`,
+        `calc(100vh - ${YOUTUBE_TOOLBAR + PLAYER_VERTICAL_MARGIN * 2}px)`,
         'important',
       );
       // 플레이어 내부 요소 스타일은 <style> 태그로 주입 (YouTube의 inline style 재설정에 강건함)
@@ -432,12 +440,12 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({
         // 높이 재조정 (창 높이 변경 시 대응)
         fullBleedContainer.style.setProperty(
           'height',
-          `calc(100vh - ${YOUTUBE_TOOLBAR + BOTTOM_BAR_HEIGHT}px)`,
+          `calc(100vh - ${YOUTUBE_TOOLBAR + PLAYER_VERTICAL_MARGIN * 2}px)`,
           'important',
         );
         fullBleedContainer.style.setProperty(
           'max-height',
-          `calc(100vh - ${YOUTUBE_TOOLBAR + BOTTOM_BAR_HEIGHT}px)`,
+          `calc(100vh - ${YOUTUBE_TOOLBAR + PLAYER_VERTICAL_MARGIN * 2}px)`,
           'important',
         );
       }
@@ -467,6 +475,11 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({
       }
       if (columns) {
         columns.style.removeProperty('display');
+      }
+      // #below 복원
+      const belowRestore = document.querySelector<HTMLElement>('#below');
+      if (belowRestore) {
+        belowRestore.style.removeProperty('display');
       }
       if (ytdApp) {
         ytdApp.style.removeProperty('margin');
