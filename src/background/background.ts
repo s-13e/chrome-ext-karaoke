@@ -567,6 +567,8 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 
   if (details.reason === 'install') {
     console.log('[Background] Extension installed');
+    // Welcome Page 열기
+    chrome.tabs.create({ url: chrome.runtime.getURL('options/options.html') });
   } else if (details.reason === 'update') {
     console.log('[Background] Extension updated, reinjecting content scripts to existing tabs...');
 

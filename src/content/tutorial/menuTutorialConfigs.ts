@@ -117,18 +117,29 @@ export const Tutorial3Config: MenuTutorialConfig = {
   storageKey: STORAGE_KEYS.TUTORIAL_LOOP_COMPLETED,
   substeps: [
     { titleKey: 'extTutorial3Step1Title', descKey: 'extTutorial3Step1Desc' },
-    { titleKey: 'extTutorial3Step2Title', descKey: 'extTutorial3Step2Desc' },
-    { titleKey: 'extTutorial3Step3Title', descKey: 'extTutorial3Step3Desc' },
-    { titleKey: 'extTutorial3Step4Title', descKey: 'extTutorial3Step4Desc' },
-    { titleKey: 'extTutorial3Step5Title', descKey: 'extTutorial3Step5Desc' },
+    { titleKey: 'extTutorial3Step2Title_v2', descKey: 'extTutorial3Step2Desc_v2' },
     { titleKey: 'extTutorial3Step6Title', descKey: 'extTutorial3Step6Desc' },
     { titleKey: 'extTutorial3Step7Title', descKey: 'extTutorial3Step7Desc' },
   ],
   getHighlightForStep(step: number): StepHighlightResult {
     const bottomContainer = document.querySelector('.ytk-bottom-container');
 
-    if (step < 6) {
-      // Step 1-6: 구간 반복 버튼 (ko: "구간반복", en/ja/es/pt/zh: "A-B ...")
+    if (step <= 1) {
+      // Step 1-2: 구간 반복 버튼 (ko: "구간반복", en/ja/es/pt/zh: "A-B ...")
+      const targetButton = bottomContainer?.querySelector(
+        '[aria-label*="구간"], [aria-label*="A-B"]',
+      ) as HTMLElement | null;
+      if (targetButton) {
+        const rect = targetButton.getBoundingClientRect();
+        const bottom = window.innerHeight - rect.top + 15;
+        const left = rect.left + rect.width / 2;
+        return {
+          targetElements: [targetButton],
+          positionStyle: `bottom: ${bottom}px; left: ${left}px; transform: translateX(-50%);`,
+        };
+      }
+    } else if (step === 2) {
+      // Step 3: 연속 재생 — 같은 루프 버튼 하이라이트
       const targetButton = bottomContainer?.querySelector(
         '[aria-label*="구간"], [aria-label*="A-B"]',
       ) as HTMLElement | null;
@@ -142,7 +153,7 @@ export const Tutorial3Config: MenuTutorialConfig = {
         };
       }
     } else {
-      // Step 7: 이전/다음 버튼 (둘 다 강조)
+      // Step 4: 이전/다음 버튼 (둘 다 강조)
       const prevButton = bottomContainer?.querySelector(
         '[aria-label*="이전"], [aria-label*="Prev"], [aria-label*="前"]',
       ) as HTMLElement | null;

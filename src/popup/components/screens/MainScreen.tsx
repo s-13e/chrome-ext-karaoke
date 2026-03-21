@@ -71,6 +71,10 @@ export function MainScreen({ autoDisableState, onOpenSettings, isDarkMode }: Pro
           <span className={styles.toggleText}>{enabled ? t('extPopupStatusOn') : t('extPopupStatusOff')}</span>
         </button>
 
+        <p className={styles.toggleHint} style={{ color: isDarkMode ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)' }}>
+          {t('extPopupToggleHint')}
+        </p>
+
         {/* Auto Pause 알림 */}
         {autoDisableState?.autoDisabled && autoDisableState.autoDisabledReason === 'consecutive_non_music' && (
           <div

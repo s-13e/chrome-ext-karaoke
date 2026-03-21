@@ -1,67 +1,82 @@
-import React from 'react';
+// Options/App.tsx
+// 설치 직후 Welcome Page 표시 → 완료 후 "가이드 다시 보기" 링크
+
+import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useLangLoader } from '@hooks/useLangLoader';
 import { ErrorFallback } from '@components/common/ErrorFallback';
+import { STORAGE_KEYS } from '@constants/storageKeys';
+import { WelcomePage } from './components/WelcomePage';
 
 export function App() {
   const { phase, error } = useLangLoader();
+  const { t } = useTranslation();
+  const [welcomeCompleted, setWelcomeCompleted] = useState<boolean | null>(null);
+  const [showWelcome, setShowWelcome] = useState(false);
 
-  // 상태별 UI 처리
+  useEffect(() => {
+    chrome.storage.sync.get(STORAGE_KEYS.HAS_COMPLETED_WELCOME, (result) => {
+      const completed = result[STORAGE_KEYS.HAS_COMPLETED_WELCOME] === true;
+      setWelcomeCompleted(completed);
+      // 첫 방문이면 자동으로 Welcome Page 표시
+      if (!completed) setShowWelcome(true);
+    });
+  }, []);
+
   if (phase === 'error') return <ErrorFallback error={error!} resetErrorBoundary={() => window.location.reload()} />;
-  if (phase !== 'ready') return null;
+  if (phase !== 'ready' || welcomeCompleted === null) return null;
 
+  // Welcome Page 표시
+  if (showWelcome) return <WelcomePage />;
+
+  // 이미 완료한 유저: "가이드 다시 보기" 링크
   return (
-    <div className="options-container" style={styles.container}>
+    <div style={styles.container}>
       <header style={styles.header}>
         <h1 style={styles.title}>YouTube Karaoke</h1>
-        <p style={styles.subtitle}>Advanced Settings</p>
+        <p style={styles.subtitle}>{t('extOptionsSubtitle')}</p>
       </header>
 
-      <div style={styles.notice}>
-        <p style={styles.noticeText}>🔍 Debug tools have been moved to the popup settings menu (Contact section).</p>
-        <p style={styles.noticeSubtext}>
-          Click the extension icon and navigate to Settings → Contact to access error logs and debugging features.
-        </p>
-      </div>
+      <button type="button" onClick={() => setShowWelcome(true)} style={styles.guideBtn}>
+        {t('extOptionsViewGuide')}
+      </button>
     </div>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
+    minHeight: '100vh',
+    background: '#0f0f0f',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
     padding: '24px',
-    maxWidth: '800px',
-    margin: '0 auto',
+    gap: '24px',
   },
   header: {
-    marginBottom: '32px',
     textAlign: 'center',
   },
   title: {
     fontSize: '28px',
     fontWeight: 600,
-    color: '#333',
+    color: '#fff',
     marginBottom: '8px',
   },
   subtitle: {
     fontSize: '14px',
-    color: '#666',
+    color: 'rgba(255,255,255,0.5)',
   },
-  notice: {
-    backgroundColor: '#f0f7ff',
-    border: '1px solid #90caf9',
-    borderRadius: '8px',
-    padding: '20px',
-    textAlign: 'center',
-  },
-  noticeText: {
-    fontSize: '16px',
+  guideBtn: {
+    padding: '12px 32px',
+    borderRadius: '10px',
+    border: '1px solid rgba(0, 212, 170, 0.3)',
+    background: 'rgba(0, 212, 170, 0.08)',
+    color: '#00d4aa',
+    fontSize: '15px',
     fontWeight: 500,
-    color: '#1976d2',
-    marginBottom: '8px',
-  },
-  noticeSubtext: {
-    fontSize: '14px',
-    color: '#555',
-    margin: 0,
+    cursor: 'pointer',
+    transition: 'all 0.15s',
   },
 };

@@ -102,6 +102,11 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, widt
     [activeTab],
   );
 
+  // 사이드바 마운트 시 JIT 튜토리얼 이벤트 발행
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('sidebar-first-open'));
+  }, []);
+
   // 패널 접기/펼치기 토글
   const handleCollapseToggle = useCallback(() => {
     if (isPanelOpen) {

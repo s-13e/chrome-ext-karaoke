@@ -17,6 +17,7 @@ import {
   showTutorialStep2 as autoFlowStep2,
 } from './autoFlowTutorial';
 import { showFeatureTutorial, hideFeatureTutorial } from './featureTutorialRunner';
+import { showJitTutorial } from './justInTimeTutorial';
 
 /**
  * 튜토리얼 컨트롤러 클래스
@@ -54,6 +55,15 @@ export class TutorialController {
       const { tutorialId } = customEvent.detail;
       console.log('[Index] start-tutorial 이벤트 수신:', tutorialId);
       this.handleTutorialStart(tutorialId);
+    });
+
+    // JIT 튜토리얼 이벤트 리스너
+    window.addEventListener('sidebar-first-open', () => {
+      this.showSidebarJitIfNeeded();
+    });
+
+    window.addEventListener('karaoke-mode-first-activate', () => {
+      this.showJumpJitIfNeeded();
     });
 
     window.addEventListener('toggle-feature-tutorial', (e) => {
@@ -94,6 +104,18 @@ export class TutorialController {
   /** Step2 완료 여부 (onModeChanged에서 참조) */
   public isStep2Completed(): boolean {
     return this.step2Completed;
+  }
+
+  // ─── Just-In-Time 튜토리얼 ─────────────────────────
+
+  /** 사이드바 첫 진입 시 JIT 튜토리얼 표시 */
+  public showSidebarJitIfNeeded(): void {
+    showJitTutorial('sidebar');
+  }
+
+  /** 간주 구간 감지 시 JIT 튜토리얼 표시 */
+  public showJumpJitIfNeeded(): void {
+    showJitTutorial('jump');
   }
 
   // ─── 메뉴 튜토리얼 라우팅 ───────────────────────────

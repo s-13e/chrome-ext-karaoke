@@ -220,6 +220,11 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
           tutorialController.showTutorialStep2();
         }
       }
+
+      // 가라오케 모드 활성화 시 점프 JIT 튜토리얼 트리거
+      if (isVisible) {
+        window.dispatchEvent(new CustomEvent('karaoke-mode-first-activate'));
+      }
     },
     onLyricsChanged: () => {
       // 가사 변경 시 KaraokeModeContainer 재렌더링
