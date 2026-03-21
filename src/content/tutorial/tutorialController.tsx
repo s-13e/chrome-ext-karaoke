@@ -10,6 +10,7 @@ import {
   Tutorial4Config,
   Tutorial5Config,
   Tutorial6Config,
+  TutorialKaraokeModeConfig,
   TutorialLyricsViewConfig,
   TutorialLyricsLoopConfig,
   TutorialLyricsSkipConfig,
@@ -154,6 +155,9 @@ export class TutorialController {
         await showMenuTutorial(Tutorial6Config, this);
         break;
       // 새 사이드바 기반 튜토리얼
+      case 'tutorialKaraokeMode':
+        await showMenuTutorial(TutorialKaraokeModeConfig, this);
+        break;
       case 'tutorialLyricsView':
         await showMenuTutorial(TutorialLyricsViewConfig, this);
         break;

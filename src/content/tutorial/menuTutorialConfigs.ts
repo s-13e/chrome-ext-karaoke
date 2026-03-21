@@ -361,14 +361,23 @@ function findLyricsControlButton(buttonIndex: number, panelOpen = false): StepHi
     const buttons = controls.querySelectorAll('button');
     const targetButton = buttons[buttonIndex] as HTMLElement | undefined;
     if (targetButton) {
-      // 패널이 열려있으면 사이드바 왼쪽에 배치
-      if (panelOpen) {
-        const sidebarContainer = document.querySelector('[class*="sidebarWrapper"]') as HTMLElement | null;
-        if (sidebarContainer) {
-          const sRect = sidebarContainer.getBoundingClientRect();
+      // 사이드바 왼쪽에 배치 (패널 열림 or 버튼이 화면 오른쪽 끝에 위치)
+      const sidebarEl = document.querySelector('[class*="sidebarWrapper"]') as HTMLElement | null;
+      if (sidebarEl) {
+        const sRect = sidebarEl.getBoundingClientRect();
+        if (panelOpen) {
           return {
             targetElements: [targetButton],
-            positionStyle: `top: ${sRect.top + 100}px; right: ${window.innerWidth - sRect.left + 16}px;`,
+            positionStyle: `bottom: ${window.innerHeight - sRect.bottom + 80}px; right: ${window.innerWidth - sRect.left + 16}px;`,
+          };
+        }
+        // step0: 버튼 위치에 따라 왼쪽 배치 (잘림 방지)
+        const btnRect = targetButton.getBoundingClientRect();
+        const rightSpace = window.innerWidth - btnRect.right;
+        if (rightSpace < 150) {
+          return {
+            targetElements: [targetButton],
+            positionStyle: `bottom: ${window.innerHeight - btnRect.top + 12}px; right: ${window.innerWidth - btnRect.right + btnRect.width + 16}px;`,
           };
         }
       }
@@ -399,6 +408,46 @@ function findLyricsControlBar(): StepHighlightResult {
   }
   return { targetElements: [], positionStyle: calculateMenuTutorialPosition('sidebar-left') };
 }
+
+// ─── Tutorial: 가라오케 모드 활성화 ─────────────────
+
+export const TutorialKaraokeModeConfig: MenuTutorialConfig = {
+  tutorialId: 'tutorialKaraokeMode',
+  storageKey: STORAGE_KEYS.TUTORIAL_STEP1_COMPLETED,
+  substeps: [
+    { titleKey: 'extTutorialKaraokeModeStep1Title', descKey: 'extTutorialKaraokeModeStep1Desc' },
+    { titleKey: 'extTutorialKaraokeModeStep2Title', descKey: 'extTutorialKaraokeModeStep2Desc' },
+  ],
+  getHighlightForStep(step: number): StepHighlightResult {
+    if (step === 0) {
+      // 영상 우하단 음표 버튼
+      const musicNoteBtn = document.querySelector('[class*="musicNoteButton"]') as HTMLElement | null;
+      if (musicNoteBtn) {
+        const rect = musicNoteBtn.getBoundingClientRect();
+        const bottom = window.innerHeight - rect.top + 12;
+        const left = rect.left + rect.width / 2;
+        return {
+          targetElements: [musicNoteBtn],
+          positionStyle: `bottom: ${bottom}px; left: ${left}px; transform: translateX(-50%);`,
+        };
+      }
+    } else {
+      // 툴바의 가라오케 버튼 (만들기/알림 사이)
+      const toolbarBtn = document.querySelector(
+        '[class*="toolbarKaraokeButton"], [class*="ToolbarKaraoke"]',
+      ) as HTMLElement | null;
+      if (toolbarBtn) {
+        const rect = toolbarBtn.getBoundingClientRect();
+        const left = rect.left + rect.width / 2;
+        return {
+          targetElements: [toolbarBtn],
+          positionStyle: `top: ${rect.bottom + 12}px; left: ${left}px; transform: translateX(-50%);`,
+        };
+      }
+    }
+    return { targetElements: [], positionStyle: calculateMenuTutorialPosition('bottom-center') };
+  },
+};
 
 // ─── Tutorial: 가사 보기 (Lyrics 서브) ───────────────
 
@@ -543,7 +592,12 @@ export const TutorialSettingsConfig: MenuTutorialConfig = {
   tutorialId: 'tutorialSettings',
   storageKey: STORAGE_KEYS.TUTORIAL_SETTINGS_COMPLETED,
   navigateToTab: 'settings',
-  substeps: [{ titleKey: 'extTutorialSettingsStep1Title', descKey: 'extTutorialSettingsStep1Desc' }],
+  substeps: [
+    { titleKey: 'extTutorialSettingsStep1Title', descKey: 'extTutorialSettingsStep1Desc' },
+    { titleKey: 'extTutorialSettingsStep2Title', descKey: 'extTutorialSettingsStep2Desc' },
+    { titleKey: 'extTutorialSettingsStep3Title', descKey: 'extTutorialSettingsStep3Desc' },
+    { titleKey: 'extTutorialSettingsStep4Title', descKey: 'extTutorialSettingsStep4Desc' },
+  ],
   getHighlightForStep(): StepHighlightResult {
     return findSidebarTabButton(6);
   },

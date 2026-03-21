@@ -30,6 +30,13 @@ interface TutorialItem {
 
 const TUTORIAL_ITEMS: TutorialItem[] = [
   {
+    id: 'tutorialKaraokeMode',
+    storageKey: STORAGE_KEYS.TUTORIAL_STEP1_COMPLETED,
+    titleKey: 'extTutorialKaraokeModeTitle',
+    descKey: 'extTutorialKaraokeModeDesc',
+    icon: '🎤',
+  },
+  {
     id: 'tutorialLyrics',
     storageKey: STORAGE_KEYS.TUTORIAL_LYRICS_COMPLETED,
     titleKey: 'extTutorialLyricsTitle',
@@ -178,6 +185,7 @@ export const TutorialMenu: React.FC<TutorialMenuProps> = ({ onBack: _onBack }) =
   return (
     <div className={styles.container}>
       <div className={styles.content}>
+        <p className={styles.guideHint}>{t('extGuideHint')}</p>
         <div className={styles.tutorialList}>
           {TUTORIAL_ITEMS.map((item) => {
             const hasSubItems = item.subItems && item.subItems.length > 0;

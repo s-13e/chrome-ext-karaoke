@@ -14,6 +14,13 @@
   overflow-y: auto;
 }
 
+.guideHint {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  margin: 0 0 8px 2px;
+  line-height: 1.4;
+}
+
 .tutorialList {
   display: flex;
   flex-direction: column;
