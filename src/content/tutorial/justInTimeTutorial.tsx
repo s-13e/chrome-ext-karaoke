@@ -25,7 +25,7 @@ const jitConfigs: Record<string, JitTutorialConfig> = {
     titleKey: 'extJitSidebarTitle',
     descKey: 'extJitSidebarDesc',
     getPosition: () => {
-      const sidebar = document.querySelector('[class*="sidebarContainer"]') as HTMLElement | null;
+      const sidebar = document.querySelector('[class*="sidebarWrapper"]') as HTMLElement | null;
       if (sidebar) {
         const rect = sidebar.getBoundingClientRect();
         const top = rect.top + 80;

@@ -9,7 +9,7 @@ import type { MenuTutorialConfig, StepHighlightResult } from './tutorialTypes';
 /** 하단바/사이드바 기준 fallback 위치 계산 */
 export function calculateMenuTutorialPosition(position: 'bottom-center' | 'bottom-right' | 'sidebar-left'): string {
   const bottomContainer = document.querySelector('.ytk-bottom-container') as HTMLElement;
-  const sidebarContainer = document.querySelector('[class*="sidebarContainer"]') as HTMLElement;
+  const sidebarContainer = document.querySelector('[class*="sidebarWrapper"]') as HTMLElement;
 
   switch (position) {
     case 'bottom-center': {
@@ -94,7 +94,7 @@ export const Tutorial2Config: MenuTutorialConfig = {
           };
         }
         // fallback: 사이드바 왼쪽
-        const sidebarContainer = document.querySelector('[class*="sidebarContainer"]') as HTMLElement;
+        const sidebarContainer = document.querySelector('[class*="sidebarWrapper"]') as HTMLElement;
         if (sidebarContainer) {
           const rect = sidebarContainer.getBoundingClientRect();
           const top = rect.top + 100;
@@ -363,7 +363,7 @@ function findLyricsControlButton(buttonIndex: number, panelOpen = false): StepHi
     if (targetButton) {
       // 패널이 열려있으면 사이드바 왼쪽에 배치
       if (panelOpen) {
-        const sidebarContainer = document.querySelector('[class*="sidebarContainer"]') as HTMLElement | null;
+        const sidebarContainer = document.querySelector('[class*="sidebarWrapper"]') as HTMLElement | null;
         if (sidebarContainer) {
           const sRect = sidebarContainer.getBoundingClientRect();
           return {
@@ -388,7 +388,7 @@ function findLyricsControlButton(buttonIndex: number, panelOpen = false): StepHi
 function findLyricsControlBar(): StepHighlightResult {
   const controls = document.querySelector('[class*="lyricsSidebarControls"]') as HTMLElement | null;
   if (controls) {
-    const sidebarContainer = document.querySelector('[class*="sidebarContainer"]') as HTMLElement | null;
+    const sidebarContainer = document.querySelector('[class*="sidebarWrapper"]') as HTMLElement | null;
     if (sidebarContainer) {
       const sRect = sidebarContainer.getBoundingClientRect();
       return {
