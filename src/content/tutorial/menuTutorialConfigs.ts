@@ -458,9 +458,24 @@ export const TutorialLyricsViewConfig: MenuTutorialConfig = {
   substeps: [
     { titleKey: 'extTutorialLyricsViewStep1Title', descKey: 'extTutorialLyricsViewStep1Desc' },
     { titleKey: 'extTutorialLyricsViewStep2Title', descKey: 'extTutorialLyricsViewStep2Desc' },
+    { titleKey: 'extTutorialLyricsViewStep3Title', descKey: 'extTutorialLyricsViewStep3Desc' },
   ],
   getHighlightForStep(step: number): StepHighlightResult {
     if (step === 0) {
+      return findSidebarTabButton(0);
+    }
+    if (step === 2) {
+      // step 2: 곡 정보 헤더의 flag 아이콘
+      const flagBtn = document.querySelector(
+        '[class*="songInfoHeader"] [title*="문제"], [class*="songInfoHeader"] [title*="Report"]',
+      ) as HTMLElement | null;
+      if (flagBtn) {
+        const rect = flagBtn.getBoundingClientRect();
+        return {
+          targetElements: [flagBtn],
+          positionStyle: `top: ${rect.bottom + 10}px; right: ${window.innerWidth - rect.right}px;`,
+        };
+      }
       return findSidebarTabButton(0);
     }
     // step 1: lyrics 하단 컨트롤 바 전체

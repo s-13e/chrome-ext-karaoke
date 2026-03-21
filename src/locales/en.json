@@ -197,6 +197,8 @@
   "extTutorialLyricsViewStep1Desc": "View all lyrics in the lyrics tab. Click a line to jump to that section.",
   "extTutorialLyricsViewStep2Title": "Bottom Controls",
   "extTutorialLyricsViewStep2Desc": "There are 3 control buttons at the bottom: section loop, skip instrumental, and sync adjust. Check each guide for details.",
+  "extTutorialLyricsViewStep3Title": "Report Lyrics Issues",
+  "extTutorialLyricsViewStep3Desc": "If lyrics are wrong or out of sync, click the flag icon at the top-right to let us know. You can also search for correct lyrics manually or adjust the sync yourself.",
   "extTutorialLyricsLoopTitle": "Section Loop",
   "extTutorialLyricsLoopDesc": "Set A-B section and repeat",
   "extTutorialLoopStep1Title": "What is Section Loop?",

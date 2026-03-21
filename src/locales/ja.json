@@ -184,6 +184,8 @@
   "extTutorialLyricsViewStep1Desc": "歌詞タブで全歌詞を確認できます。歌詞をクリックするとその区間に移動します。",
   "extTutorialLyricsViewStep2Title": "下部コントロール",
   "extTutorialLyricsViewStep2Desc": "下部に3つのコントロールボタンがあります：区間リピート、間奏スキップ、同期調整。詳しい使い方はガイドで個別に確認してください。",
+  "extTutorialLyricsViewStep3Title": "歌詞の問題を報告",
+  "extTutorialLyricsViewStep3Desc": "歌詞が間違っている、または同期がずれている場合は、右上の旗アイコンをクリックしてお知らせください。手動検索で正しい歌詞を探したり、同期調整でタイミングを合わせることもできます。",
   "extTutorialLyricsLoopTitle": "区間リピート",
   "extTutorialLyricsLoopDesc": "A-B区間を設定してリピート",
   "extTutorialLoopStep1Title": "区間リピートとは？",

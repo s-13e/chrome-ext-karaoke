@@ -197,6 +197,8 @@
   "extTutorialLyricsViewStep1Desc": "가사 탭에서 전체 가사를 확인할 수 있습니다. 가사를 클릭하면 해당 구간으로 이동합니다.",
   "extTutorialLyricsViewStep2Title": "하단 컨트롤",
   "extTutorialLyricsViewStep2Desc": "하단에 3개의 컨트롤 버튼이 있습니다: 구간 반복, 반주 건너뛰기, 싱크 조절. 각 기능의 자세한 사용법은 가이드에서 개별로 확인하세요.",
+  "extTutorialLyricsViewStep3Title": "가사 문제 제보",
+  "extTutorialLyricsViewStep3Desc": "잘못된 가사나 싱크가 맞지 않는 경우, 오른쪽 위의 깃발 아이콘을 클릭하여 알려주세요. 수동 검색으로 직접 가사를 찾거나, 싱크 조절로 타이밍을 맞출 수도 있습니다.",
   "extTutorialLyricsLoopTitle": "구간 반복",
   "extTutorialLyricsLoopDesc": "A-B 구간을 설정하고 반복",
   "extTutorialLoopStep1Title": "구간 반복이란?",

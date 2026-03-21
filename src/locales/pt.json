@@ -184,6 +184,8 @@
   "extTutorialLyricsViewStep1Desc": "Veja todas as letras na aba. Clique em uma linha para ir para essa secao.",
   "extTutorialLyricsViewStep2Title": "Controles inferiores",
   "extTutorialLyricsViewStep2Desc": "Ha 3 botoes de controle: repeticao, pular instrumental e ajuste de sincronia. Consulte cada guia para detalhes.",
+  "extTutorialLyricsViewStep3Title": "Reportar problemas",
+  "extTutorialLyricsViewStep3Desc": "Se as letras estao erradas ou dessincronizadas, clique no icone de bandeira no canto superior direito. Voce tambem pode buscar letras manualmente ou ajustar a sincronia.",
   "extTutorialLyricsLoopTitle": "Repeticao de secao",
   "extTutorialLyricsLoopDesc": "Definir secao A-B e repetir",
   "extTutorialLoopStep1Title": "O que e repeticao?",

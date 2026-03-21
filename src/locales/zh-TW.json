@@ -184,6 +184,8 @@
   "extTutorialLyricsViewStep1Desc": "在歌詞標籤中查看所有歌詞。點擊歌詞行可跳轉到對應位置。",
   "extTutorialLyricsViewStep2Title": "底部控制",
   "extTutorialLyricsViewStep2Desc": "底部有3個控制按鈕：段落循環、跳過間奏、同步調整。請在指南中查看各功能的詳細用法。",
+  "extTutorialLyricsViewStep3Title": "回報歌詞問題",
+  "extTutorialLyricsViewStep3Desc": "如果歌詞有誤或同步不準，請點擊右上角的旗幟圖示告訴我們。您也可以手動搜尋正確歌詞或自行調整同步。",
   "extTutorialLyricsLoopTitle": "段落循環",
   "extTutorialLyricsLoopDesc": "設定A-B段落並循環",
   "extTutorialLoopStep1Title": "什麼是段落循環？",
