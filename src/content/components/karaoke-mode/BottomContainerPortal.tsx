@@ -8,12 +8,13 @@ import { Line } from '@lib/types/lyrics';
 interface BottomContainerPortalProps {
   visible: boolean;
   lyrics: Line[];
+  sidebarWidth: number;
 }
 
 /**
  * 하단 컨테이너를 #primary-inner의 첫 번째 자식으로 portal 렌더링
  */
-export const BottomContainerPortal: React.FC<BottomContainerPortalProps> = ({ visible, lyrics }) => {
+export const BottomContainerPortal: React.FC<BottomContainerPortalProps> = ({ visible, lyrics, sidebarWidth }) => {
   const [targetElement, setTargetElement] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -65,5 +66,5 @@ export const BottomContainerPortal: React.FC<BottomContainerPortalProps> = ({ vi
     return null;
   }
 
-  return createPortal(<BottomContainer lyrics={lyrics} />, targetElement);
+  return createPortal(<BottomContainer lyrics={lyrics} sidebarWidth={sidebarWidth} />, targetElement);
 };

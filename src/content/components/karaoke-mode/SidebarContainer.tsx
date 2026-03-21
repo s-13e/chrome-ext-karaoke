@@ -891,7 +891,7 @@ const GeneralFeedbackForm: React.FC<GeneralFeedbackFormProps> = ({ t }) => {
       {/* 서브 카테고리 선택 */}
       {hasSubTypes && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-          {feedbackSubTypes[selectedType].map((sub) => (
+          {feedbackSubTypes[selectedType]?.map((sub) => (
             <span
               key={sub.value}
               role="button"

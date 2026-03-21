@@ -73,8 +73,8 @@ function ensurePipeline(): PitchPipeline | null {
       // 입력 → SoundTouch (interleaved)
       const interleaved = new Float32Array(numFrames * 2);
       for (let i = 0; i < numFrames; i++) {
-        interleaved[i * 2] = inLeft[i];
-        interleaved[i * 2 + 1] = inRight[i];
+        interleaved[i * 2] = inLeft[i]!;
+        interleaved[i * 2 + 1] = inRight[i]!;
       }
       st.inputBuffer.putSamples(interleaved, 0, numFrames);
 
@@ -91,20 +91,20 @@ function ensurePipeline(): PitchPipeline | null {
         const outInterleaved = new Float32Array(numFrames * 2);
         st.outputBuffer.receiveSamples(outInterleaved, numFrames);
         for (let i = 0; i < numFrames; i++) {
-          outLeft[i] = outInterleaved[i * 2];
-          outRight[i] = outInterleaved[i * 2 + 1];
+          outLeft[i] = outInterleaved[i * 2]!;
+          outRight[i] = outInterleaved[i * 2 + 1]!;
         }
       } else if (available > 0) {
         const outInterleaved = new Float32Array(available * 2);
         st.outputBuffer.receiveSamples(outInterleaved, available);
         for (let i = 0; i < available; i++) {
-          outLeft[i] = outInterleaved[i * 2];
-          outRight[i] = outInterleaved[i * 2 + 1];
+          outLeft[i] = outInterleaved[i * 2]!;
+          outRight[i] = outInterleaved[i * 2 + 1]!;
         }
         // 부족분은 입력 복사
         for (let i = available; i < numFrames; i++) {
-          outLeft[i] = inLeft[i];
-          outRight[i] = inRight[i];
+          outLeft[i] = inLeft[i]!;
+          outRight[i] = inRight[i]!;
         }
       } else {
         outLeft.set(inLeft);

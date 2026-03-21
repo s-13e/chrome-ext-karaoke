@@ -121,6 +121,18 @@ interface SendFeedbackMessage {
   };
 }
 
+interface SendGeneralFeedbackMessage {
+  type: 'SEND_GENERAL_FEEDBACK';
+  payload: {
+    type: 'bug' | 'feature' | 'other';
+    subType?: string;
+    message: string;
+    extensionVersion?: string;
+    browser?: string;
+    lang?: string;
+  };
+}
+
 export type ExtensionMessage =
   | LyricsReadyMessage
   | GetLatestLyricsMessage
@@ -133,7 +145,8 @@ export type ExtensionMessage =
   | FetchPlaylistItemsMessage
   | FetchServerOffsetMessage
   | FetchVideoInitMessage
-  | SendFeedbackMessage;
+  | SendFeedbackMessage
+  | SendGeneralFeedbackMessage;
 
 // ===== Chrome 확장 이벤트 리스너 =====
 

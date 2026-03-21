@@ -19,7 +19,7 @@ interface JitTutorialConfig {
   getPosition: () => string;
 }
 
-const jitConfigs: Record<string, JitTutorialConfig> = {
+const jitConfigs: Record<'sidebar' | 'jump', JitTutorialConfig> = {
   sidebar: {
     storageKey: STORAGE_KEYS.TUTORIAL_SIDEBAR_COMPLETED,
     titleKey: 'extJitSidebarTitle',

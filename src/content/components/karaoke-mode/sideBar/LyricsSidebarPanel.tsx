@@ -591,8 +591,8 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
             >
               <span className={styles.loopPointLabel}>A</span>
               <span className={styles.loopPointTime}>
-                {loopConfig.startIndex >= 0 && lyrics[loopConfig.startIndex]
-                  ? formatTime(lyrics[loopConfig.startIndex].time)
+                {loopConfig.startIndex >= 0 && lyrics[loopConfig.startIndex] != null
+                  ? formatTime(lyrics[loopConfig.startIndex]!.time)
                   : '--:--'}
               </span>
             </button>
@@ -603,8 +603,8 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
             >
               <span className={styles.loopPointLabel}>B</span>
               <span className={styles.loopPointTime}>
-                {loopConfig.endIndex >= 0 && lyrics[loopConfig.endIndex]
-                  ? formatTime(lyrics[loopConfig.endIndex].time)
+                {loopConfig.endIndex >= 0 && lyrics[loopConfig.endIndex] != null
+                  ? formatTime(lyrics[loopConfig.endIndex]!.time)
                   : '--:--'}
               </span>
             </button>
