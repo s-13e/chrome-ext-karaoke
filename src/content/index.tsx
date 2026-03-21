@@ -36,6 +36,7 @@ import { SongInfoOverlay } from './components/song-info/SongInfoOverlay';
 import { overlayManager } from '@lib/utils/infra/overlayManager';
 import { KaraokeModeManager } from '@lib/utils/infra/karaokeModeManager';
 import { MusicNoteButton } from './components/karaoke-mode/MusicNoteButton';
+import { ToolbarKaraokeButton } from './components/karaoke-mode/ToolbarKaraokeButton';
 import { RiMusicAiLine } from 'react-icons/ri';
 import musicNoteStyles from './components/karaoke-mode/musicNoteButton.module.css';
 import ReactDOM from 'react-dom/client';
@@ -193,6 +194,9 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
   // MusicNoteButton 전용 React Root
   let musicNoteButtonRoot: ReactDOM.Root | null = null;
 
+  // ToolbarKaraokeButton 전용 React Root
+  let toolbarButtonRoot: ReactDOM.Root | null = null;
+
   // KaraokeModeContainer 전용 React Root
   let karaokeModeRoot: ReactDOM.Root | null = null;
 
@@ -207,6 +211,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
       // 모드 변경 시 렌더링 및 버튼 상태 업데이트
       renderKaraokeModeContainer();
       updateMusicNoteButtonState(isVisible);
+      updateToolbarButtonState(isVisible);
 
       // 튜토리얼 처리
       if (isVisible && !tutorialController.isStep1Completed()) {
@@ -633,6 +638,42 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
 
     // 튜토리얼 Step1 표시 (첫 사용자용)
     tutorialController.showTutorialStep1IfNeeded();
+  }
+
+  // YouTube 상단 툴바에 카라오케 버튼 렌더링
+  function renderToolbarKaraokeButton() {
+    if (toolbarButtonRoot) return;
+
+    let container = document.getElementById('toolbar-karaoke-button-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toolbar-karaoke-button-container';
+      container.style.position = 'fixed';
+      container.style.zIndex = '9999';
+      container.style.pointerEvents = 'none';
+      document.body.appendChild(container);
+    }
+
+    toolbarButtonRoot = ReactDOM.createRoot(container);
+    toolbarButtonRoot.render(
+      <ToolbarKaraokeButton
+        icon={<RiMusicAiLine size={18} color="#ffffff" />}
+        isActive={karaokeModeManager.isVisible()}
+        onClick={() => karaokeModeManager.toggleKaraokeMode()}
+      />,
+    );
+  }
+
+  // ToolbarKaraokeButton 상태 업데이트
+  function updateToolbarButtonState(isVisible: boolean) {
+    if (!toolbarButtonRoot) return;
+    toolbarButtonRoot.render(
+      <ToolbarKaraokeButton
+        icon={<RiMusicAiLine size={18} color="#ffffff" />}
+        isActive={isVisible}
+        onClick={() => karaokeModeManager.toggleKaraokeMode()}
+      />,
+    );
   }
 
   // 재활성화 토스트 표시
@@ -2227,6 +2268,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
 
           if (playerControls) {
             renderMusicNoteButton();
+            renderToolbarKaraokeButton();
             break;
           }
 
