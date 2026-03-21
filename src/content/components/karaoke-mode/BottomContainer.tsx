@@ -72,8 +72,10 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({ sidebarWidth }
   // auto-hide 상태
   const [isBarVisible, setIsBarVisible] = useState(true);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tutorialActiveRef = useRef(false);
 
   const scheduleHide = useCallback(() => {
+    if (tutorialActiveRef.current) return; // 튜토리얼 중 auto-hide 비활성화
     if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
     hideTimerRef.current = setTimeout(() => setIsBarVisible(false), AUTO_HIDE_DELAY);
   }, []);
@@ -102,6 +104,27 @@ export const BottomContainer: React.FC<BottomContainerProps> = ({ sidebarWidth }
     window.addEventListener('mousemove', handleMouseMove);
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, [showBar]);
+
+  // 튜토리얼 진행 중 auto-hide 비활성화
+  useEffect(() => {
+    const handleTutorialStart = () => {
+      tutorialActiveRef.current = true;
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      setIsBarVisible(true);
+    };
+    const handleTutorialEnd = () => {
+      tutorialActiveRef.current = false;
+      scheduleHide();
+    };
+    window.addEventListener('start-tutorial', handleTutorialStart);
+    window.addEventListener('tutorial-complete', handleTutorialEnd);
+    window.addEventListener('tutorial-cancel', handleTutorialEnd);
+    return () => {
+      window.removeEventListener('start-tutorial', handleTutorialStart);
+      window.removeEventListener('tutorial-complete', handleTutorialEnd);
+      window.removeEventListener('tutorial-cancel', handleTutorialEnd);
+    };
+  }, [scheduleHide]);
 
   // 재생 상태
   const [isPlaying, setIsPlaying] = useState(false);

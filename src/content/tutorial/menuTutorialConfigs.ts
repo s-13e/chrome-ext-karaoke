@@ -384,17 +384,18 @@ function findLyricsControlButton(buttonIndex: number, panelOpen = false): StepHi
   return { targetElements: [], positionStyle: calculateMenuTutorialPosition('sidebar-left') };
 }
 
-/** lyrics 하단 컨트롤 바 전체를 하이라이트 */
+/** lyrics 하단 컨트롤 바 전체를 하이라이트 — 툴팁은 사이드바 왼쪽에 배치 */
 function findLyricsControlBar(): StepHighlightResult {
   const controls = document.querySelector('[class*="lyricsSidebarControls"]') as HTMLElement | null;
   if (controls) {
-    const rect = controls.getBoundingClientRect();
-    const bottom = window.innerHeight - rect.top + 12;
-    const right = window.innerWidth - rect.right;
-    return {
-      targetElements: [controls],
-      positionStyle: `bottom: ${bottom}px; right: ${right}px; transform: translateY(-100%);`,
-    };
+    const sidebarContainer = document.querySelector('[class*="sidebarContainer"]') as HTMLElement | null;
+    if (sidebarContainer) {
+      const sRect = sidebarContainer.getBoundingClientRect();
+      return {
+        targetElements: [controls],
+        positionStyle: `bottom: ${window.innerHeight - sRect.bottom + 80}px; right: ${window.innerWidth - sRect.left + 16}px;`,
+      };
+    }
   }
   return { targetElements: [], positionStyle: calculateMenuTutorialPosition('sidebar-left') };
 }

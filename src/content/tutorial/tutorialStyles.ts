@@ -16,10 +16,8 @@ export function injectTutorialHighlightStyles(): void {
   styleEl.textContent = `
     .${HIGHLIGHT_CLASS} {
       animation: ytk-highlight-pulse 1.5s ease-in-out infinite !important;
-      outline: 2px solid rgba(0, 212, 170, 0.7) !important;
-      outline-offset: 3px !important;
+      box-shadow: inset 0 0 0 2px rgba(0, 212, 170, 0.7) !important;
       border-radius: 8px !important;
-      overflow: visible !important;
       transition: none !important;
     }
     /* iconNav 버튼 — active 배경색 제거하여 겹침 방지 */
@@ -28,12 +26,10 @@ export function injectTutorialHighlightStyles(): void {
     }
     @keyframes ytk-highlight-pulse {
       0%, 100% {
-        outline-color: rgba(0, 212, 170, 0.7);
-        box-shadow: 0 0 12px rgba(0, 212, 170, 0.4), 0 0 24px rgba(0, 212, 170, 0.15);
+        box-shadow: inset 0 0 0 2px rgba(0, 212, 170, 0.7) !important;
       }
       50% {
-        outline-color: rgba(0, 212, 170, 0.9);
-        box-shadow: 0 0 18px rgba(0, 212, 170, 0.6), 0 0 36px rgba(0, 212, 170, 0.25);
+        box-shadow: inset 0 0 0 2px rgba(0, 212, 170, 1), inset 0 0 8px rgba(0, 212, 170, 0.3) !important;
       }
     }
   `;
