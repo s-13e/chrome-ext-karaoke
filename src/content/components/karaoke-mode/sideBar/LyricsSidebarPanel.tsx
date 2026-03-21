@@ -319,28 +319,32 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
   const handleLineDragStart = useCallback(
     (idx: number) => {
       if (!selectingPoint) return;
+      // 드래그 시작만 기록, 실제 A/B 설정은 handleLineClick에서 처리
       dragRef.current = { dragging: true, startIdx: idx, didDrag: false };
-      setLoopConfig((prev) => ({ ...prev, startIndex: idx, endIndex: -1 }));
-      setSelectingPoint('B');
     },
     [selectingPoint],
   );
 
   const handleLineDragEnter = useCallback((idx: number) => {
     if (!dragRef.current.dragging) return;
-    if (idx !== dragRef.current.startIdx) dragRef.current.didDrag = true;
-    const start = dragRef.current.startIdx;
-    const actualStart = Math.min(start, idx);
-    const actualEnd = Math.max(start, idx);
-    setLoopConfig((prev) => ({ ...prev, startIndex: actualStart, endIndex: actualEnd }));
+    if (idx !== dragRef.current.startIdx) {
+      dragRef.current.didDrag = true;
+      // 드래그로 A-B 범위 설정
+      const start = dragRef.current.startIdx;
+      const actualStart = Math.min(start, idx);
+      const actualEnd = Math.max(start, idx);
+      setLoopConfig((prev) => ({ ...prev, startIndex: actualStart, endIndex: actualEnd }));
+    }
   }, []);
 
   const handleLineDragEnd = useCallback(() => {
     if (!dragRef.current.dragging) return;
     dragRef.current.dragging = false;
     if (dragRef.current.didDrag) {
+      // 드래그로 A-B 범위가 설정됨 → 선택 완료
       setSelectingPoint(null);
     }
+    // didDrag=false면 단순 클릭 → handleLineClick에서 처리
   }, []);
 
   useEffect(() => {
@@ -348,6 +352,27 @@ export const LyricsSidebarPanel: React.FC<LyricsSidebarPanelProps> = ({ lyrics }
     document.addEventListener('mouseup', onMouseUp);
     return () => document.removeEventListener('mouseup', onMouseUp);
   }, [handleLineDragEnd]);
+
+  // ===== 튜토리얼 패널 열기 이벤트 리스너 =====
+  useEffect(() => {
+    const handleTutorialOpenPanel = (e: Event) => {
+      const { panel, tab } = (e as CustomEvent<{ panel: string; tab?: string }>).detail;
+      if (panel === 'loop') {
+        setSyncPanelOpen(false);
+        setLoopPanelOpen(true);
+        // 튜토리얼 모드: A/B 선택 비활성화 (설명만 표시)
+        setSelectingPoint(null);
+      } else if (panel === 'sync') {
+        setLoopPanelOpen(false);
+        setSyncPanelOpen(true);
+        if (tab === 'global' || tab === 'section') {
+          setSyncTab(tab);
+        }
+      }
+    };
+    window.addEventListener('tutorial-open-panel', handleTutorialOpenPanel);
+    return () => window.removeEventListener('tutorial-open-panel', handleTutorialOpenPanel);
+  }, []);
 
   // ===== 구간 반복 — timeupdate 리스너 =====
   useEffect(() => {

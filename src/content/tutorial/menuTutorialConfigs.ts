@@ -355,12 +355,23 @@ function findSidebarTabButton(tabIndex: number): StepHighlightResult {
 }
 
 /** lyrics 하단 컨트롤 바의 N번째 버튼을 하이라이트하는 헬퍼 */
-function findLyricsControlButton(buttonIndex: number): StepHighlightResult {
+function findLyricsControlButton(buttonIndex: number, panelOpen = false): StepHighlightResult {
   const controls = document.querySelector('[class*="lyricsSidebarControls"]') as HTMLElement | null;
   if (controls) {
     const buttons = controls.querySelectorAll('button');
     const targetButton = buttons[buttonIndex] as HTMLElement | undefined;
     if (targetButton) {
+      // 패널이 열려있으면 사이드바 왼쪽에 배치
+      if (panelOpen) {
+        const sidebarContainer = document.querySelector('[class*="sidebarContainer"]') as HTMLElement | null;
+        if (sidebarContainer) {
+          const sRect = sidebarContainer.getBoundingClientRect();
+          return {
+            targetElements: [targetButton],
+            positionStyle: `top: ${sRect.top + 100}px; right: ${window.innerWidth - sRect.left + 16}px;`,
+          };
+        }
+      }
       const rect = targetButton.getBoundingClientRect();
       const bottom = window.innerHeight - rect.top + 12;
       const left = rect.left + rect.width / 2;
@@ -369,13 +380,6 @@ function findLyricsControlButton(buttonIndex: number): StepHighlightResult {
         positionStyle: `bottom: ${bottom}px; left: ${left}px; transform: translateX(-50%);`,
       };
     }
-    // fallback: 컨트롤 바 전체
-    const rect = controls.getBoundingClientRect();
-    const bottom = window.innerHeight - rect.top + 12;
-    return {
-      targetElements: [controls],
-      positionStyle: `bottom: ${bottom}px; right: ${window.innerWidth - rect.right}px;`,
-    };
   }
   return { targetElements: [], positionStyle: calculateMenuTutorialPosition('sidebar-left') };
 }
@@ -426,15 +430,10 @@ export const TutorialLyricsLoopConfig: MenuTutorialConfig = {
     { titleKey: 'extTutorialLoopStep3Title', descKey: 'extTutorialLoopStep3Desc' },
   ],
   getHighlightForStep(step: number): StepHighlightResult {
-    const result = findLyricsControlButton(0);
-    // step 1+: 구간 반복 패널 자동 열기 (버튼 클릭 시뮬레이션)
-    if (step >= 1 && result.targetElements.length > 0) {
-      const panel = document.querySelector('[class*="loopSettingPanel"]');
-      if (!panel) {
-        result.targetElements[0].click();
-      }
+    if (step >= 1) {
+      window.dispatchEvent(new CustomEvent('tutorial-open-panel', { detail: { panel: 'loop' } }));
     }
-    return result;
+    return findLyricsControlButton(0, step >= 1);
   },
 };
 
@@ -468,15 +467,11 @@ export const TutorialLyricsSyncConfig: MenuTutorialConfig = {
     { titleKey: 'extTutorialSyncStep5Title', descKey: 'extTutorialSyncStep5Desc' },
   ],
   getHighlightForStep(step: number): StepHighlightResult {
-    const result = findLyricsControlButton(2);
-    // step 1+: 싱크 패널 자동 열기 (버튼 클릭 시뮬레이션)
-    if (step >= 1 && result.targetElements.length > 0) {
-      const panel = document.querySelector('[class*="loopSettingPanel"]');
-      if (!panel) {
-        result.targetElements[0].click();
-      }
+    if (step >= 1) {
+      const syncTab = step >= 3 ? 'section' : 'global';
+      window.dispatchEvent(new CustomEvent('tutorial-open-panel', { detail: { panel: 'sync', tab: syncTab } }));
     }
-    return result;
+    return findLyricsControlButton(2, step >= 1);
   },
 };
 
@@ -510,9 +505,9 @@ export const TutorialRecordingConfig: MenuTutorialConfig = {
   ],
   getHighlightForStep(step: number): StepHighlightResult {
     if (step === 0) {
-      const bottomContainer = document.querySelector('.ytk-bottom-container');
-      const recBtn = bottomContainer?.querySelector(
-        '[aria-label*="녹음"], [aria-label*="Record"], [aria-label*="録音"]',
+      // 하단 바의 마이크 아이콘 (title 속성으로 검색)
+      const recBtn = document.querySelector(
+        '[title*="녹음"], [title*="Record"], [title*="録音"], [title*="Grabar"], [title*="Gravar"]',
       ) as HTMLElement | null;
       if (recBtn) {
         const rect = recBtn.getBoundingClientRect();

@@ -18,17 +18,13 @@ export function injectTutorialHighlightStyles(): void {
       animation: ytk-highlight-pulse 1.5s ease-in-out infinite !important;
       outline: 2px solid rgba(0, 212, 170, 0.7) !important;
       outline-offset: 3px !important;
-      box-shadow: 0 0 12px rgba(0, 212, 170, 0.4), 0 0 24px rgba(0, 212, 170, 0.15) !important;
       border-radius: 8px !important;
-      position: relative !important;
       overflow: visible !important;
-      z-index: 9990 !important;
       transition: none !important;
     }
-    /* iconNav 버튼의 active 스타일과 겹침 방지 */
+    /* iconNav 버튼 — active 배경색 제거하여 겹침 방지 */
     [class*="iconNav"] .${HIGHLIGHT_CLASS} {
       background: transparent !important;
-      box-shadow: 0 0 12px rgba(0, 212, 170, 0.4) !important;
     }
     @keyframes ytk-highlight-pulse {
       0%, 100% {
