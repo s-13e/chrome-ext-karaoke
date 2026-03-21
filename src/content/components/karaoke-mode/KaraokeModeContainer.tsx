@@ -66,6 +66,11 @@ const injectPlayerStyles = () => {
       object-fit: contain !important;
       object-position: center center !important;
     }
+    /* 플레이어 하단 컨트롤 바가 사이드바에 의해 잘리지 않도록 */
+    .ytp-chrome-bottom {
+      width: 100% !important;
+      max-width: 100% !important;
+    }
     /* 카라오케 모드: 플레이어 외 YouTube 콘텐츠 전부 숨김 */
     #primary-inner > *:not(#player):not(#player-container-outer),
     #secondary,
