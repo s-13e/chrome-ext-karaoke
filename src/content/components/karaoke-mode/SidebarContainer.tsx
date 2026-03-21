@@ -161,16 +161,25 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, widt
       window.dispatchEvent(new CustomEvent('sidebar-panel-toggle', { detail: { expanded: false } }));
     };
 
+    const handleTutorialNavigateTab = (e: Event) => {
+      const { tab } = (e as CustomEvent<{ tab: string }>).detail;
+      console.log('[SidebarContainer] tutorial-navigate-tab 이벤트 수신 - 탭 전환:', tab);
+      setActiveTab(tab as SidebarTabId);
+      window.dispatchEvent(new CustomEvent('sidebar-panel-toggle', { detail: { expanded: true } }));
+    };
+
     window.addEventListener('open-manual-search', handleOpenManualSearch);
     window.addEventListener('open-sync-settings', handleOpenSyncSettings);
     window.addEventListener('tutorial-complete', handleTutorialComplete);
     window.addEventListener('tutorial-go-main', handleTutorialGoMain);
+    window.addEventListener('tutorial-navigate-tab', handleTutorialNavigateTab);
 
     return () => {
       window.removeEventListener('open-manual-search', handleOpenManualSearch);
       window.removeEventListener('open-sync-settings', handleOpenSyncSettings);
       window.removeEventListener('tutorial-complete', handleTutorialComplete);
       window.removeEventListener('tutorial-go-main', handleTutorialGoMain);
+      window.removeEventListener('tutorial-navigate-tab', handleTutorialNavigateTab);
     };
   }, []);
 

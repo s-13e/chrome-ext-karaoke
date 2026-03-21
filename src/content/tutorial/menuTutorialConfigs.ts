@@ -354,49 +354,129 @@ function findSidebarTabButton(tabIndex: number): StepHighlightResult {
   return { targetElements: [], positionStyle: calculateMenuTutorialPosition('sidebar-left') };
 }
 
-/** 사이드바 컨테이너 내 aria-label로 버튼을 찾아 하이라이트하는 헬퍼 */
-function findSidebarButton(ariaLabels: string[]): StepHighlightResult {
-  const sidebarContainer = document.querySelector('[class*="sidebarContainer"]');
-  if (!sidebarContainer) {
-    return { targetElements: [], positionStyle: calculateMenuTutorialPosition('sidebar-left') };
-  }
-
-  for (const label of ariaLabels) {
-    const btn = sidebarContainer.querySelector(`[aria-label*="${label}"]`) as HTMLElement | null;
-    if (btn) {
-      const rect = btn.getBoundingClientRect();
-      const top = rect.top + rect.height / 2;
-      const right = window.innerWidth - rect.left + 20;
+/** lyrics 하단 컨트롤 바의 N번째 버튼을 하이라이트하는 헬퍼 */
+function findLyricsControlButton(buttonIndex: number): StepHighlightResult {
+  const controls = document.querySelector('[class*="lyricsSidebarControls"]') as HTMLElement | null;
+  if (controls) {
+    const buttons = controls.querySelectorAll('button');
+    const targetButton = buttons[buttonIndex] as HTMLElement | undefined;
+    if (targetButton) {
+      const rect = targetButton.getBoundingClientRect();
+      const bottom = window.innerHeight - rect.top + 12;
+      const left = rect.left + rect.width / 2;
       return {
-        targetElements: [btn],
-        positionStyle: `top: ${top}px; right: ${right}px; transform: translateY(-50%);`,
+        targetElements: [targetButton],
+        positionStyle: `bottom: ${bottom}px; left: ${left}px; transform: translateX(-50%);`,
       };
     }
+    // fallback: 컨트롤 바 전체
+    const rect = controls.getBoundingClientRect();
+    const bottom = window.innerHeight - rect.top + 12;
+    return {
+      targetElements: [controls],
+      positionStyle: `bottom: ${bottom}px; right: ${window.innerWidth - rect.right}px;`,
+    };
   }
   return { targetElements: [], positionStyle: calculateMenuTutorialPosition('sidebar-left') };
 }
 
-// ─── Tutorial: 가사 & 컨트롤 ─────────────────────────
+/** lyrics 하단 컨트롤 바 전체를 하이라이트 */
+function findLyricsControlBar(): StepHighlightResult {
+  const controls = document.querySelector('[class*="lyricsSidebarControls"]') as HTMLElement | null;
+  if (controls) {
+    const rect = controls.getBoundingClientRect();
+    const bottom = window.innerHeight - rect.top + 12;
+    const right = window.innerWidth - rect.right;
+    return {
+      targetElements: [controls],
+      positionStyle: `bottom: ${bottom}px; right: ${right}px; transform: translateY(-100%);`,
+    };
+  }
+  return { targetElements: [], positionStyle: calculateMenuTutorialPosition('sidebar-left') };
+}
 
-export const TutorialLyricsConfig: MenuTutorialConfig = {
-  tutorialId: 'tutorialLyrics',
+// ─── Tutorial: 가사 보기 (Lyrics 서브) ───────────────
+
+export const TutorialLyricsViewConfig: MenuTutorialConfig = {
+  tutorialId: 'tutorialLyricsView',
   storageKey: STORAGE_KEYS.TUTORIAL_LYRICS_COMPLETED,
+  navigateToTab: 'lyrics',
   substeps: [
-    { titleKey: 'extTutorialLyricsStep1Title', descKey: 'extTutorialLyricsStep1Desc' },
-    { titleKey: 'extTutorialLyricsStep2Title', descKey: 'extTutorialLyricsStep2Desc' },
-    { titleKey: 'extTutorialLyricsStep3Title', descKey: 'extTutorialLyricsStep3Desc' },
-    { titleKey: 'extTutorialLyricsStep4Title', descKey: 'extTutorialLyricsStep4Desc' },
+    { titleKey: 'extTutorialLyricsViewStep1Title', descKey: 'extTutorialLyricsViewStep1Desc' },
+    { titleKey: 'extTutorialLyricsViewStep2Title', descKey: 'extTutorialLyricsViewStep2Desc' },
   ],
   getHighlightForStep(step: number): StepHighlightResult {
     if (step === 0) {
       return findSidebarTabButton(0);
-    } else if (step === 1) {
-      return findSidebarButton(['구간', 'A-B', 'Loop']);
-    } else if (step === 2) {
-      return findSidebarButton(['간주', 'Skip', 'スキップ']);
-    } else {
-      return findSidebarButton(['싱크', 'Sync', '同期']);
     }
+    // step 1: lyrics 하단 컨트롤 바 전체
+    return findLyricsControlBar();
+  },
+};
+
+// ─── Tutorial: 구간 반복 (Lyrics 서브) ───────────────
+
+export const TutorialLyricsLoopConfig: MenuTutorialConfig = {
+  tutorialId: 'tutorialLyricsLoop',
+  storageKey: STORAGE_KEYS.TUTORIAL_LOOP_COMPLETED,
+  navigateToTab: 'lyrics',
+  substeps: [
+    { titleKey: 'extTutorialLoopStep1Title', descKey: 'extTutorialLoopStep1Desc' },
+    { titleKey: 'extTutorialLoopStep2Title', descKey: 'extTutorialLoopStep2Desc' },
+    { titleKey: 'extTutorialLoopStep3Title', descKey: 'extTutorialLoopStep3Desc' },
+  ],
+  getHighlightForStep(step: number): StepHighlightResult {
+    const result = findLyricsControlButton(0);
+    // step 1+: 구간 반복 패널 자동 열기 (버튼 클릭 시뮬레이션)
+    if (step >= 1 && result.targetElements.length > 0) {
+      const panel = document.querySelector('[class*="loopSettingPanel"]');
+      if (!panel) {
+        result.targetElements[0].click();
+      }
+    }
+    return result;
+  },
+};
+
+// ─── Tutorial: 반주 건너뛰기 (Lyrics 서브) ───────────
+
+export const TutorialLyricsSkipConfig: MenuTutorialConfig = {
+  tutorialId: 'tutorialLyricsSkip',
+  storageKey: STORAGE_KEYS.TUTORIAL_JUMP_COMPLETED,
+  navigateToTab: 'lyrics',
+  substeps: [
+    { titleKey: 'extTutorialSkipStep1Title', descKey: 'extTutorialSkipStep1Desc' },
+    { titleKey: 'extTutorialSkipStep2Title', descKey: 'extTutorialSkipStep2Desc' },
+  ],
+  getHighlightForStep(): StepHighlightResult {
+    // 하단 컨트롤의 두 번째 버튼 (건너뛰기)
+    return findLyricsControlButton(1);
+  },
+};
+
+// ─── Tutorial: 싱크 조절 (Lyrics 서브) ───────────────
+
+export const TutorialLyricsSyncConfig: MenuTutorialConfig = {
+  tutorialId: 'tutorialLyricsSync',
+  storageKey: STORAGE_KEYS.TUTORIAL_SYNC_COMPLETED,
+  navigateToTab: 'lyrics',
+  substeps: [
+    { titleKey: 'extTutorialSyncStep1Title', descKey: 'extTutorialSyncStep1Desc' },
+    { titleKey: 'extTutorialSyncStep2Title', descKey: 'extTutorialSyncStep2Desc' },
+    { titleKey: 'extTutorialSyncStep3Title', descKey: 'extTutorialSyncStep3Desc' },
+    { titleKey: 'extTutorialSyncStep4Title', descKey: 'extTutorialSyncStep4Desc' },
+    { titleKey: 'extTutorialSyncStep5Title', descKey: 'extTutorialSyncStep5Desc' },
+  ],
+  getHighlightForStep(step: number): StepHighlightResult {
+    const result = findLyricsControlButton(2);
+    // step 1+: 싱크 패널 자동 열기 (버튼 클릭 시뮬레이션)
+    if (step >= 1 && result.targetElements.length > 0) {
+      const panel = document.querySelector('[class*="loopSettingPanel"]');
+      if (!panel) {
+        result.targetElements[0].click();
+      }
+    }
+    return result;
   },
 };
 
@@ -405,6 +485,7 @@ export const TutorialLyricsConfig: MenuTutorialConfig = {
 export const TutorialSearchConfig: MenuTutorialConfig = {
   tutorialId: 'tutorialSearch',
   storageKey: STORAGE_KEYS.TUTORIAL_SEARCH_COMPLETED,
+  navigateToTab: 'search',
   substeps: [
     { titleKey: 'extTutorialSearchStep1Title', descKey: 'extTutorialSearchStep1Desc' },
     { titleKey: 'extTutorialSearchStep2Title', descKey: 'extTutorialSearchStep2Desc' },
@@ -422,6 +503,7 @@ export const TutorialSearchConfig: MenuTutorialConfig = {
 export const TutorialRecordingConfig: MenuTutorialConfig = {
   tutorialId: 'tutorialRecording',
   storageKey: STORAGE_KEYS.TUTORIAL_RECORDING_COMPLETED,
+  navigateToTab: 'library',
   substeps: [
     { titleKey: 'extTutorialRecordingStep1Title', descKey: 'extTutorialRecordingStep1Desc' },
     { titleKey: 'extTutorialRecordingStep2Title', descKey: 'extTutorialRecordingStep2Desc' },
@@ -452,6 +534,7 @@ export const TutorialRecordingConfig: MenuTutorialConfig = {
 export const TutorialTuneConfig: MenuTutorialConfig = {
   tutorialId: 'tutorialTune',
   storageKey: STORAGE_KEYS.TUTORIAL_TUNE_COMPLETED,
+  navigateToTab: 'tune',
   substeps: [{ titleKey: 'extTutorialTuneStep1Title', descKey: 'extTutorialTuneStep1Desc' }],
   getHighlightForStep(): StepHighlightResult {
     return findSidebarTabButton(4);
@@ -463,6 +546,7 @@ export const TutorialTuneConfig: MenuTutorialConfig = {
 export const TutorialSettingsConfig: MenuTutorialConfig = {
   tutorialId: 'tutorialSettings',
   storageKey: STORAGE_KEYS.TUTORIAL_SETTINGS_COMPLETED,
+  navigateToTab: 'settings',
   substeps: [{ titleKey: 'extTutorialSettingsStep1Title', descKey: 'extTutorialSettingsStep1Desc' }],
   getHighlightForStep(): StepHighlightResult {
     return findSidebarTabButton(6);

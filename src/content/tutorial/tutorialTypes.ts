@@ -19,5 +19,7 @@ export interface MenuTutorialConfig {
   readonly substeps: readonly MenuTutorialSubstep[];
   readonly storageKey: string;
   readonly navigateToMainFirst?: boolean;
+  /** 튜토리얼 시작 시 자동으로 전환할 사이드바 탭 */
+  readonly navigateToTab?: string;
   getHighlightForStep(step: number): StepHighlightResult;
 }

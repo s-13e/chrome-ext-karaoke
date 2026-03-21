@@ -10,7 +10,10 @@ import {
   Tutorial4Config,
   Tutorial5Config,
   Tutorial6Config,
-  TutorialLyricsConfig,
+  TutorialLyricsViewConfig,
+  TutorialLyricsLoopConfig,
+  TutorialLyricsSkipConfig,
+  TutorialLyricsSyncConfig,
   TutorialSearchConfig,
   TutorialRecordingConfig,
   TutorialTuneConfig,
@@ -151,8 +154,17 @@ export class TutorialController {
         await showMenuTutorial(Tutorial6Config, this);
         break;
       // 새 사이드바 기반 튜토리얼
-      case 'tutorialLyrics':
-        await showMenuTutorial(TutorialLyricsConfig, this);
+      case 'tutorialLyricsView':
+        await showMenuTutorial(TutorialLyricsViewConfig, this);
+        break;
+      case 'tutorialLyricsLoop':
+        await showMenuTutorial(TutorialLyricsLoopConfig, this);
+        break;
+      case 'tutorialLyricsSkip':
+        await showMenuTutorial(TutorialLyricsSkipConfig, this);
+        break;
+      case 'tutorialLyricsSync':
+        await showMenuTutorial(TutorialLyricsSyncConfig, this);
         break;
       case 'tutorialSearch':
         await showMenuTutorial(TutorialSearchConfig, this);
