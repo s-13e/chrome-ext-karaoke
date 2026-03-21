@@ -152,6 +152,7 @@ export const TutorialTooltip: React.FC<TutorialTooltipProps> = ({
             <div className={styles.step1Text}>
               <span className={styles.title}>{t('extTutorialStep1Title')}</span>
               <span className={styles.desc}>{t('extTutorialStep1Desc')}</span>
+              <span className={styles.step1Extra}>{t('extTutorialStep1Extra')}</span>
             </div>
             <span className={styles.action}>{t('extTutorialStep1Action')}</span>
           </>

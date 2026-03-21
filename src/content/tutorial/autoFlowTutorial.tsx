@@ -135,9 +135,7 @@ async function renderTutorialStep1(buttonElement: HTMLElement, controller: Tutor
 
   // toolbar 버튼도 하이라이트
   injectTutorialHighlightStyles();
-  const toolbarBtn = document.querySelector(
-    '[class*="toolbarKaraokeButton"], [class*="ToolbarKaraoke"]',
-  ) as HTMLElement | null;
+  const toolbarBtn = document.querySelector('.ytk-toolbar-karaoke-btn') as HTMLElement | null;
   if (toolbarBtn) {
     toolbarBtn.classList.add('ytk-tutorial-highlight');
   }

@@ -30,13 +30,6 @@ interface TutorialItem {
 
 const TUTORIAL_ITEMS: TutorialItem[] = [
   {
-    id: 'tutorialKaraokeMode',
-    storageKey: STORAGE_KEYS.TUTORIAL_STEP1_COMPLETED,
-    titleKey: 'extTutorialKaraokeModeTitle',
-    descKey: 'extTutorialKaraokeModeDesc',
-    icon: '🎤',
-  },
-  {
     id: 'tutorialLyrics',
     storageKey: STORAGE_KEYS.TUTORIAL_LYRICS_COMPLETED,
     titleKey: 'extTutorialLyricsTitle',
