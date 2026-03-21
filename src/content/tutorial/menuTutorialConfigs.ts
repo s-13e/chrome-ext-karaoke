@@ -465,15 +465,15 @@ export const TutorialLyricsViewConfig: MenuTutorialConfig = {
       return findSidebarTabButton(0);
     }
     if (step === 2) {
-      // step 2: 곡 정보 헤더의 flag 아이콘
+      // step 2: 곡 정보 헤더의 flag 아이콘 (title 속성으로 검색)
       const flagBtn = document.querySelector(
-        '[class*="songInfoHeader"] [title*="문제"], [class*="songInfoHeader"] [title*="Report"]',
+        '[class*="songInfoHeader"] [title*="문제"], [class*="songInfoHeader"] [title*="issue"], [class*="songInfoHeader"] [title*="Report"]',
       ) as HTMLElement | null;
       if (flagBtn) {
         const rect = flagBtn.getBoundingClientRect();
         return {
           targetElements: [flagBtn],
-          positionStyle: `top: ${rect.bottom + 10}px; right: ${window.innerWidth - rect.right}px;`,
+          positionStyle: `top: ${rect.bottom + 10}px; right: ${window.innerWidth - rect.left + 10}px;`,
         };
       }
       return findSidebarTabButton(0);
