@@ -21,46 +21,39 @@ interface TutorialItem {
 
 const TUTORIAL_ITEMS: TutorialItem[] = [
   {
-    id: 'tutorial1',
-    storageKey: STORAGE_KEYS.TUTORIAL_STEP1_COMPLETED,
-    titleKey: 'extTutorial1Title',
-    descKey: 'extTutorial1Desc',
+    id: 'tutorialLyrics',
+    storageKey: STORAGE_KEYS.TUTORIAL_LYRICS_COMPLETED,
+    titleKey: 'extTutorialLyricsTitle',
+    descKey: 'extTutorialLyricsDesc',
     icon: '🎵',
   },
   {
-    id: 'tutorial2',
-    storageKey: STORAGE_KEYS.TUTORIAL_SYNC_COMPLETED,
-    titleKey: 'extTutorial2Title',
-    descKey: 'extTutorial2Desc',
-    icon: '⏱️',
+    id: 'tutorialSearch',
+    storageKey: STORAGE_KEYS.TUTORIAL_SEARCH_COMPLETED,
+    titleKey: 'extTutorialSearchTitle',
+    descKey: 'extTutorialSearchDesc',
+    icon: '🔍',
   },
   {
-    id: 'tutorial3',
-    storageKey: STORAGE_KEYS.TUTORIAL_LOOP_COMPLETED,
-    titleKey: 'extTutorial3Title',
-    descKey: 'extTutorial3Desc',
-    icon: '🔁',
+    id: 'tutorialRecording',
+    storageKey: STORAGE_KEYS.TUTORIAL_RECORDING_COMPLETED,
+    titleKey: 'extTutorialRecordingTitle',
+    descKey: 'extTutorialRecordingDesc',
+    icon: '🎤',
   },
   {
-    id: 'tutorial4',
-    storageKey: STORAGE_KEYS.TUTORIAL_CUSTOM_LYRICS_COMPLETED,
-    titleKey: 'extTutorial4Title',
-    descKey: 'extTutorial4Desc',
-    icon: '🎨',
+    id: 'tutorialTune',
+    storageKey: STORAGE_KEYS.TUTORIAL_TUNE_COMPLETED,
+    titleKey: 'extTutorialTuneTitle',
+    descKey: 'extTutorialTuneDesc',
+    icon: '🎛️',
   },
   {
-    id: 'tutorial5',
-    storageKey: STORAGE_KEYS.TUTORIAL_SIDEBAR_COMPLETED,
-    titleKey: 'extTutorial5Title',
-    descKey: 'extTutorial5Desc',
-    icon: '📂',
-  },
-  {
-    id: 'tutorial6',
-    storageKey: STORAGE_KEYS.TUTORIAL_JUMP_COMPLETED,
-    titleKey: 'extTutorial6Title',
-    descKey: 'extTutorial6Desc',
-    icon: '⏭️',
+    id: 'tutorialSettings',
+    storageKey: STORAGE_KEYS.TUTORIAL_SETTINGS_COMPLETED,
+    titleKey: 'extTutorialSettingsTitle',
+    descKey: 'extTutorialSettingsDesc',
+    icon: '⚙️',
   },
 ];
 
@@ -83,12 +76,7 @@ export const TutorialMenu: React.FC<TutorialMenuProps> = ({ onBack }) => {
 
       const completed: Record<string, boolean> = {};
       TUTORIAL_ITEMS.forEach((item) => {
-        // tutorial1은 튜토리얼 메뉴에 접근했다는 것 자체가 목표 달성 (항상 완료 표시)
-        if (item.id === 'tutorial1') {
-          completed[item.id] = true;
-        } else {
-          completed[item.id] = (result[item.storageKey] as boolean | undefined) ?? false;
-        }
+        completed[item.id] = (result[item.storageKey] as boolean | undefined) ?? false;
       });
       setCompletedTutorials(completed);
     };

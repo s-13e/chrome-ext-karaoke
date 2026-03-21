@@ -332,3 +332,139 @@ export const Tutorial6Config: MenuTutorialConfig = {
     return { targetElements: [], positionStyle: calculateMenuTutorialPosition('bottom-center') };
   },
 };
+
+// ─── 새 튜토리얼: 사이드바 탭 기반 ─────────────────────
+
+/** 사이드바 탭 버튼을 찾아 하이라이트하는 헬퍼 */
+function findSidebarTabButton(tabIndex: number): StepHighlightResult {
+  const iconNav = document.querySelector('[class*="iconNav"]');
+  if (iconNav) {
+    const buttons = iconNav.querySelectorAll('button');
+    const targetButton = buttons[tabIndex] as HTMLElement | undefined;
+    if (targetButton) {
+      const rect = targetButton.getBoundingClientRect();
+      const top = rect.top + rect.height / 2;
+      const right = window.innerWidth - rect.left + 20;
+      return {
+        targetElements: [targetButton],
+        positionStyle: `top: ${top}px; right: ${right}px; transform: translateY(-50%);`,
+      };
+    }
+  }
+  return { targetElements: [], positionStyle: calculateMenuTutorialPosition('sidebar-left') };
+}
+
+/** 사이드바 컨테이너 내 aria-label로 버튼을 찾아 하이라이트하는 헬퍼 */
+function findSidebarButton(ariaLabels: string[]): StepHighlightResult {
+  const sidebarContainer = document.querySelector('[class*="sidebarContainer"]');
+  if (!sidebarContainer) {
+    return { targetElements: [], positionStyle: calculateMenuTutorialPosition('sidebar-left') };
+  }
+
+  for (const label of ariaLabels) {
+    const btn = sidebarContainer.querySelector(`[aria-label*="${label}"]`) as HTMLElement | null;
+    if (btn) {
+      const rect = btn.getBoundingClientRect();
+      const top = rect.top + rect.height / 2;
+      const right = window.innerWidth - rect.left + 20;
+      return {
+        targetElements: [btn],
+        positionStyle: `top: ${top}px; right: ${right}px; transform: translateY(-50%);`,
+      };
+    }
+  }
+  return { targetElements: [], positionStyle: calculateMenuTutorialPosition('sidebar-left') };
+}
+
+// ─── Tutorial: 가사 & 컨트롤 ─────────────────────────
+
+export const TutorialLyricsConfig: MenuTutorialConfig = {
+  tutorialId: 'tutorialLyrics',
+  storageKey: STORAGE_KEYS.TUTORIAL_LYRICS_COMPLETED,
+  substeps: [
+    { titleKey: 'extTutorialLyricsStep1Title', descKey: 'extTutorialLyricsStep1Desc' },
+    { titleKey: 'extTutorialLyricsStep2Title', descKey: 'extTutorialLyricsStep2Desc' },
+    { titleKey: 'extTutorialLyricsStep3Title', descKey: 'extTutorialLyricsStep3Desc' },
+    { titleKey: 'extTutorialLyricsStep4Title', descKey: 'extTutorialLyricsStep4Desc' },
+  ],
+  getHighlightForStep(step: number): StepHighlightResult {
+    if (step === 0) {
+      return findSidebarTabButton(0);
+    } else if (step === 1) {
+      return findSidebarButton(['구간', 'A-B', 'Loop']);
+    } else if (step === 2) {
+      return findSidebarButton(['간주', 'Skip', 'スキップ']);
+    } else {
+      return findSidebarButton(['싱크', 'Sync', '同期']);
+    }
+  },
+};
+
+// ─── Tutorial: 가사 검색 ─────────────────────────────
+
+export const TutorialSearchConfig: MenuTutorialConfig = {
+  tutorialId: 'tutorialSearch',
+  storageKey: STORAGE_KEYS.TUTORIAL_SEARCH_COMPLETED,
+  substeps: [
+    { titleKey: 'extTutorialSearchStep1Title', descKey: 'extTutorialSearchStep1Desc' },
+    { titleKey: 'extTutorialSearchStep2Title', descKey: 'extTutorialSearchStep2Desc' },
+  ],
+  getHighlightForStep(step: number): StepHighlightResult {
+    if (step === 0) {
+      return findSidebarTabButton(1);
+    }
+    return findSidebarTabButton(1);
+  },
+};
+
+// ─── Tutorial: 녹음 ─────────────────────────────────
+
+export const TutorialRecordingConfig: MenuTutorialConfig = {
+  tutorialId: 'tutorialRecording',
+  storageKey: STORAGE_KEYS.TUTORIAL_RECORDING_COMPLETED,
+  substeps: [
+    { titleKey: 'extTutorialRecordingStep1Title', descKey: 'extTutorialRecordingStep1Desc' },
+    { titleKey: 'extTutorialRecordingStep2Title', descKey: 'extTutorialRecordingStep2Desc' },
+  ],
+  getHighlightForStep(step: number): StepHighlightResult {
+    if (step === 0) {
+      const bottomContainer = document.querySelector('.ytk-bottom-container');
+      const recBtn = bottomContainer?.querySelector(
+        '[aria-label*="녹음"], [aria-label*="Record"], [aria-label*="録音"]',
+      ) as HTMLElement | null;
+      if (recBtn) {
+        const rect = recBtn.getBoundingClientRect();
+        const bottom = window.innerHeight - rect.top + 15;
+        const left = rect.left + rect.width / 2;
+        return {
+          targetElements: [recBtn],
+          positionStyle: `bottom: ${bottom}px; left: ${left}px; transform: translateX(-50%);`,
+        };
+      }
+      return { targetElements: [], positionStyle: calculateMenuTutorialPosition('bottom-center') };
+    }
+    return findSidebarTabButton(3);
+  },
+};
+
+// ─── Tutorial: 튜닝 ─────────────────────────────────
+
+export const TutorialTuneConfig: MenuTutorialConfig = {
+  tutorialId: 'tutorialTune',
+  storageKey: STORAGE_KEYS.TUTORIAL_TUNE_COMPLETED,
+  substeps: [{ titleKey: 'extTutorialTuneStep1Title', descKey: 'extTutorialTuneStep1Desc' }],
+  getHighlightForStep(): StepHighlightResult {
+    return findSidebarTabButton(4);
+  },
+};
+
+// ─── Tutorial: 설정 ─────────────────────────────────
+
+export const TutorialSettingsConfig: MenuTutorialConfig = {
+  tutorialId: 'tutorialSettings',
+  storageKey: STORAGE_KEYS.TUTORIAL_SETTINGS_COMPLETED,
+  substeps: [{ titleKey: 'extTutorialSettingsStep1Title', descKey: 'extTutorialSettingsStep1Desc' }],
+  getHighlightForStep(): StepHighlightResult {
+    return findSidebarTabButton(6);
+  },
+};

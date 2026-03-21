@@ -3,12 +3,12 @@
 // 테마 통일, 파일명 정리, 날짜/시간 분리
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { MdPlayArrow, MdPause, MdDownload, MdDelete, MdArrowBackIosNew, MdMic } from 'react-icons/md';
+import { MdPlayArrow, MdPause, MdDownload, MdDelete, MdMic } from 'react-icons/md';
 import { useTranslation } from 'react-i18next';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 
 interface RecordingsListProps {
-  onBack: () => void;
+  onBack?: () => void; // 미사용이지만 호출 측 호환성 유지
 }
 
 interface RecordingItem {
@@ -56,7 +56,7 @@ function formatDuration(seconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export const RecordingsList: React.FC<RecordingsListProps> = ({ onBack }) => {
+export const RecordingsList: React.FC<RecordingsListProps> = ({ onBack: _onBack }) => {
   const { t } = useTranslation();
   const [recordings, setRecordings] = useState<RecordingItem[]>([]);
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -145,39 +145,6 @@ export const RecordingsList: React.FC<RecordingsListProps> = ({ onBack }) => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* 헤더 */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          padding: '12px 14px',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
-          flexShrink: 0,
-        }}
-      >
-        <span
-          role="button"
-          tabIndex={0}
-          onClick={onBack}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') onBack();
-          }}
-          style={{ ...btnStyle, width: '28px', height: '28px' }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = '#fff';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = 'rgba(255,255,255,0.5)';
-          }}
-        >
-          <MdArrowBackIosNew size={14} />
-        </span>
-        <span style={{ fontSize: '13px', fontWeight: 600, color: '#fff' }}>
-          {t('extAcapellaRecordingsList')} ({recordings.length})
-        </span>
-      </div>
-
       {/* 목록 */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px' }}>
         {recordings.length === 0 ? (

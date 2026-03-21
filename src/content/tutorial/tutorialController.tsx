@@ -10,6 +10,11 @@ import {
   Tutorial4Config,
   Tutorial5Config,
   Tutorial6Config,
+  TutorialLyricsConfig,
+  TutorialSearchConfig,
+  TutorialRecordingConfig,
+  TutorialTuneConfig,
+  TutorialSettingsConfig,
 } from './menuTutorialConfigs';
 import {
   showTutorialStep1IfNeeded as autoFlowStep1,
@@ -126,6 +131,7 @@ export class TutorialController {
     injectTutorialHighlightStyles();
 
     switch (tutorialId) {
+      // 레거시 튜토리얼 (호환성 유지)
       case 'tutorial1':
         await showTutorial1FromMenu();
         break;
@@ -143,6 +149,22 @@ export class TutorialController {
         break;
       case 'tutorial6':
         await showMenuTutorial(Tutorial6Config, this);
+        break;
+      // 새 사이드바 기반 튜토리얼
+      case 'tutorialLyrics':
+        await showMenuTutorial(TutorialLyricsConfig, this);
+        break;
+      case 'tutorialSearch':
+        await showMenuTutorial(TutorialSearchConfig, this);
+        break;
+      case 'tutorialRecording':
+        await showMenuTutorial(TutorialRecordingConfig, this);
+        break;
+      case 'tutorialTune':
+        await showMenuTutorial(TutorialTuneConfig, this);
+        break;
+      case 'tutorialSettings':
+        await showMenuTutorial(TutorialSettingsConfig, this);
         break;
       default:
         console.warn('[Tutorial] 알 수 없는 튜토리얼 ID:', tutorialId);
