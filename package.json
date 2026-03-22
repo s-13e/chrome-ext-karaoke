@@ -87,5 +87,8 @@
     "soundtouchjs": "^0.3.0",
     "styled-components": "^6.3.12",
     "styled-normalize": "^8.1.1"
+  },
+  "overrides": {
+    "serialize-javascript": "^7.0.4"
   }
 }
