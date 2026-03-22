@@ -15,8 +15,6 @@ import {
   SingleLineLyricsStyleConfig,
   GeneralLyricsSettings,
 } from '@lib/types/lyricsStyles';
-import { LyricsFeedbackButton } from './LyricsFeedbackButton';
-
 type FeedbackType = 'wrong_lyrics' | 'sync_mismatch';
 
 export interface LyricsOverlayWrapperProps {
@@ -46,7 +44,8 @@ const LyricsOverlayWrapperComponent: React.FC<LyricsOverlayWrapperProps> = ({
   styleConfigFull,
   styleConfigSingle,
   generalSettings,
-  onFeedback,
+  // 피드백 버튼은 사이드바 곡 정보 헤더로 이동됨 (prop은 인터페이스 호환용 유지)
+  onFeedback: _onFeedback,
 }) => {
   return (
     <CurrentTimeProvider>
@@ -86,7 +85,7 @@ const LyricsOverlayWrapperComponent: React.FC<LyricsOverlayWrapperProps> = ({
           generalSettings={generalSettings}
         />
       )}
-      {onFeedback && <LyricsFeedbackButton onFeedback={onFeedback} />}
+      {/* 피드백 버튼은 사이드바 곡 정보 헤더로 이동됨 */}
     </CurrentTimeProvider>
   );
 };

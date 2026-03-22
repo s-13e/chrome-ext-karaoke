@@ -1,0 +1,385 @@
+// TunePanel.tsx
+// Tune 탭 — 피치(Key) 및 템포(Speed) 조절 UI
+// 오디오 처리는 tunePipelineManager 싱글톤에 위임 (탭 전환에도 유지)
+
+import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import { MdMusicNote, MdSpeed, MdRefresh } from 'react-icons/md';
+import {
+  getTuneState,
+  setPitch as setPipelinePitch,
+  setTempo as setPipelineTempo,
+  resetAll as resetPipeline,
+  subscribe,
+} from './tunePipelineManager';
+
+/** 슬라이더 컨트롤 공통 Props */
+interface TuneSliderProps {
+  label: string;
+  sublabel: string;
+  icon: React.ReactNode;
+  value: number;
+  displayValue: string;
+  min: number;
+  max: number;
+  step: number;
+  defaultValue: number;
+  onChange: (v: number) => void;
+  color: string;
+}
+
+/** 슬라이더 컨트롤 컴포넌트 — v0 레퍼런스 기반 */
+const TuneSlider: React.FC<TuneSliderProps> = ({
+  label,
+  sublabel,
+  icon,
+  value,
+  displayValue,
+  min,
+  max,
+  step,
+  defaultValue,
+  onChange,
+  color,
+}) => {
+  const isModified = Math.abs(value - defaultValue) > 0.001;
+  const percentage = ((value - min) / (max - min)) * 100;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      {/* 라벨 + 값 */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ color: isModified ? color : 'rgba(255,255,255,0.4)', transition: 'color 0.15s' }}>{icon}</span>
+          <div>
+            <span style={{ fontSize: '13px', fontWeight: 500, color: '#fff' }}>{label}</span>
+            <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginLeft: '6px' }}>{sublabel}</span>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span
+            style={{
+              fontSize: '13px',
+              fontFamily: 'monospace',
+              fontWeight: 700,
+              fontVariantNumeric: 'tabular-nums',
+              color: isModified ? color : '#fff',
+              transition: 'color 0.15s',
+            }}
+          >
+            {displayValue}
+          </span>
+          {isModified && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={() => onChange(defaultValue)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onChange(defaultValue);
+              }}
+              title="Reset"
+              style={{
+                width: '20px',
+                height: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '4px',
+                color: 'rgba(255,255,255,0.4)',
+                cursor: 'pointer',
+                fontSize: '12px',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = '#fff';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'rgba(255,255,255,0.4)';
+              }}
+            >
+              <MdRefresh size={14} />
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* - 슬라이더 + */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={() => onChange(Math.max(min, Math.round((value - step) * 100) / 100))}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onChange(Math.max(min, Math.round((value - step) * 100) / 100));
+          }}
+          style={{
+            width: '28px',
+            height: '28px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '6px',
+            background: 'rgba(255,255,255,0.06)',
+            color: 'rgba(255,255,255,0.6)',
+            cursor: 'pointer',
+            fontSize: '14px',
+            fontWeight: 700,
+            flexShrink: 0,
+            userSelect: 'none',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(255,255,255,0.12)';
+            e.currentTarget.style.color = '#fff';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
+            e.currentTarget.style.color = 'rgba(255,255,255,0.6)';
+          }}
+        >
+          -
+        </span>
+        <div style={{ position: 'relative', flex: 1, height: '28px', display: 'flex', alignItems: 'center' }}>
+          <input
+            type="range"
+            min={min}
+            max={max}
+            step={step}
+            value={value}
+            onChange={(e) => onChange(parseFloat(e.target.value))}
+            style={{
+              width: '100%',
+              height: '6px',
+              borderRadius: '3px',
+              appearance: 'none',
+              cursor: 'pointer',
+              background: `linear-gradient(to right, ${color} ${percentage}%, rgba(255,255,255,0.1) ${percentage}%)`,
+              outline: 'none',
+            }}
+          />
+        </div>
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={() => onChange(Math.min(max, Math.round((value + step) * 100) / 100))}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onChange(Math.min(max, Math.round((value + step) * 100) / 100));
+          }}
+          style={{
+            width: '28px',
+            height: '28px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '6px',
+            background: 'rgba(255,255,255,0.06)',
+            color: 'rgba(255,255,255,0.6)',
+            cursor: 'pointer',
+            fontSize: '14px',
+            fontWeight: 700,
+            flexShrink: 0,
+            userSelect: 'none',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(255,255,255,0.12)';
+            e.currentTarget.style.color = '#fff';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
+            e.currentTarget.style.color = 'rgba(255,255,255,0.6)';
+          }}
+        >
+          +
+        </span>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Tune 패널 — 피치(Key)와 템포(Speed) 조절
+ * 오디오 처리는 tunePipelineManager 싱글톤에 위임
+ * - 피치: SoundTouch pitchSemitones (video.playbackRate는 건드리지 않음)
+ * - 템포: video.playbackRate + preservesPitch (브라우저 내장)
+ */
+export const TunePanel: React.FC = () => {
+  const { t } = useTranslation();
+  const initial = getTuneState();
+  const [pitch, setPitch] = useState(initial.pitch);
+  const [tempo, setTempo] = useState(initial.tempo);
+
+  // 싱글톤 상태 변경 구독 (다른 곳에서 변경 시 UI 동기화)
+  useEffect(() => {
+    return subscribe(() => {
+      const state = getTuneState();
+      setPitch(state.pitch);
+      setTempo(state.tempo);
+    });
+  }, []);
+
+  const handlePitchChange = useCallback((value: number) => {
+    const rounded = Math.round(value);
+    setPitch(rounded);
+    setPipelinePitch(rounded);
+  }, []);
+
+  const handleTempoChange = useCallback((value: number) => {
+    const rounded = Math.round(value * 10) / 10;
+    setTempo(rounded);
+    setPipelineTempo(rounded);
+  }, []);
+
+  const handleResetAll = useCallback(() => {
+    setPitch(0);
+    setTempo(1.0);
+    resetPipeline();
+  }, []);
+
+  const isModified = pitch !== 0 || Math.abs(tempo - 1.0) > 0.01;
+
+  const presets = [
+    { labelKey: 'extTunePresetOriginal', pitch: 0, tempo: 1.0 },
+    { labelKey: 'extTunePresetPractice', pitch: 0, tempo: 0.8 },
+    { labelKey: 'extTunePresetHigher', pitch: 2, tempo: 1.0 },
+    { labelKey: 'extTunePresetLower', pitch: -2, tempo: 1.0 },
+  ];
+
+  return (
+    <div
+      style={{
+        padding: '16px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '20px',
+        height: '100%',
+        overflowY: 'auto',
+      }}
+    >
+      {/* 헤더 */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h3 style={{ fontSize: '13px', fontWeight: 600, color: '#fff', margin: 0 }}>{t('extTuneTitle')}</h3>
+        {isModified && (
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={handleResetAll}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleResetAll();
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontSize: '11px',
+              color: 'rgba(255,255,255,0.4)',
+              cursor: 'pointer',
+              userSelect: 'none',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = '#00d4aa';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = 'rgba(255,255,255,0.4)';
+            }}
+          >
+            <MdRefresh size={12} />
+            {t('extTuneResetAll')}
+          </span>
+        )}
+      </div>
+
+      {/* 피치 (Key) 슬라이더 */}
+      <TuneSlider
+        label={t('extTuneKey')}
+        sublabel={t('extTuneKeySub')}
+        icon={<MdMusicNote size={16} />}
+        value={pitch}
+        displayValue={pitch > 0 ? `+${pitch}` : `${pitch}`}
+        min={-6}
+        max={6}
+        step={1}
+        defaultValue={0}
+        onChange={handlePitchChange}
+        color="#00d4aa"
+      />
+
+      {/* 템포 (Speed) 슬라이더 */}
+      <TuneSlider
+        label={t('extTuneSpeed')}
+        sublabel={t('extTuneSpeedSub')}
+        icon={<MdSpeed size={16} />}
+        value={tempo}
+        displayValue={`${tempo.toFixed(1)}x`}
+        min={0.5}
+        max={2.0}
+        step={0.1}
+        defaultValue={1.0}
+        onChange={handleTempoChange}
+        color="#ff6b9d"
+      />
+
+      {/* 퀵 프리셋 */}
+      <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '16px' }}>
+        <h4
+          style={{
+            fontSize: '10px',
+            fontWeight: 600,
+            color: 'rgba(255,255,255,0.4)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px',
+            marginBottom: '10px',
+          }}
+        >
+          {t('extTunePresets')}
+        </h4>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          {presets.map((preset) => {
+            const isActive = pitch === preset.pitch && Math.abs(tempo - preset.tempo) < 0.01;
+            return (
+              <span
+                key={preset.labelKey}
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  handlePitchChange(preset.pitch);
+                  handleTempoChange(preset.tempo);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handlePitchChange(preset.pitch);
+                    handleTempoChange(preset.tempo);
+                  }
+                }}
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  fontSize: '11px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'all 0.15s',
+                  userSelect: 'none',
+                  background: isActive ? 'rgba(0, 212, 170, 0.12)' : 'rgba(255,255,255,0.04)',
+                  color: isActive ? '#00d4aa' : 'rgba(255,255,255,0.7)',
+                  border: isActive ? '1px solid rgba(0, 212, 170, 0.3)' : '1px solid transparent',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+                    e.currentTarget.style.color = '#fff';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+                    e.currentTarget.style.color = 'rgba(255,255,255,0.7)';
+                  }
+                }}
+              >
+                {t(preset.labelKey)}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};

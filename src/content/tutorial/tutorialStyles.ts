@@ -6,7 +6,9 @@ const HIGHLIGHT_CLASS = 'ytk-tutorial-highlight';
 
 /** 튜토리얼 하이라이트 CSS 스타일을 document.head에 주입 (중복 방지) */
 export function injectTutorialHighlightStyles(): void {
-  if (document.getElementById(STYLE_ELEMENT_ID)) return;
+  // 기존 스타일 제거 후 재주입 (업데이트 반영)
+  const existing = document.getElementById(STYLE_ELEMENT_ID);
+  if (existing) existing.remove();
   if (!document.head) return;
 
   const styleEl = document.createElement('style');
@@ -14,23 +16,20 @@ export function injectTutorialHighlightStyles(): void {
   styleEl.textContent = `
     .${HIGHLIGHT_CLASS} {
       animation: ytk-highlight-pulse 1.5s ease-in-out infinite !important;
-      outline: 3px solid #1db954 !important;
-      outline-offset: 4px !important;
-      box-shadow: 0 0 20px rgba(29, 185, 84, 0.6), 0 0 40px rgba(29, 185, 84, 0.3) !important;
+      box-shadow: inset 0 0 0 2px rgba(0, 212, 170, 0.7) !important;
       border-radius: 8px !important;
-      position: relative !important;
-      overflow: visible !important;
-      z-index: 1 !important;
       transition: none !important;
+    }
+    /* iconNav 버튼 — active 배경색 제거하여 겹침 방지 */
+    [class*="iconNav"] .${HIGHLIGHT_CLASS} {
+      background: transparent !important;
     }
     @keyframes ytk-highlight-pulse {
       0%, 100% {
-        outline-color: #1db954;
-        box-shadow: 0 0 20px rgba(29, 185, 84, 0.6), 0 0 40px rgba(29, 185, 84, 0.3);
+        box-shadow: inset 0 0 0 2px rgba(0, 212, 170, 0.7) !important;
       }
       50% {
-        outline-color: #1ed760;
-        box-shadow: 0 0 30px rgba(29, 185, 84, 0.8), 0 0 60px rgba(29, 185, 84, 0.4);
+        box-shadow: inset 0 0 0 2px rgba(0, 212, 170, 1), inset 0 0 8px rgba(0, 212, 170, 0.3) !important;
       }
     }
   `;

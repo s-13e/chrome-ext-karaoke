@@ -3,22 +3,31 @@
 
 import ReactDOM from 'react-dom/client';
 import { STORAGE_KEYS } from '@constants/storageKeys';
+import { injectTutorialHighlightStyles, clearAllHighlights } from './tutorialStyles';
 import type { TutorialController } from './tutorialController';
 
 /** 튜토리얼 Step1 표시 (가라오케 모드 활성화 안내) */
 export async function showTutorialStep1IfNeeded(controller: TutorialController): Promise<void> {
   console.log('[Tutorial] showTutorialStep1IfNeeded 호출됨');
 
-  // 이미 완료된 경우 표시하지 않음
-  const result = await chrome.storage.sync.get([STORAGE_KEYS.TUTORIAL_STEP1_COMPLETED]);
-  const completed = (result[STORAGE_KEYS.TUTORIAL_STEP1_COMPLETED] as boolean | undefined) ?? false;
-  controller.setStep1Completed(completed);
+  // DEV_MODE: 튜토리얼 상태 초기화 (항상 미완료로 시작)
+  if (controller.getIsDevMode()) {
+    console.log('[Tutorial] DEV_MODE: Step1/Step2 완료 상태 초기화');
+    chrome.storage.sync.remove([STORAGE_KEYS.TUTORIAL_STEP1_COMPLETED, STORAGE_KEYS.TUTORIAL_STEP2_COMPLETED]);
+    controller.setStep1Completed(false);
+    controller.setStep2Completed(false);
+  } else {
+    // 이미 완료된 경우 표시하지 않음
+    const result = await chrome.storage.sync.get([STORAGE_KEYS.TUTORIAL_STEP1_COMPLETED]);
+    const completed = (result[STORAGE_KEYS.TUTORIAL_STEP1_COMPLETED] as boolean | undefined) ?? false;
+    controller.setStep1Completed(completed);
 
-  console.log('[Tutorial] Step1 완료 상태:', completed);
+    console.log('[Tutorial] Step1 완료 상태:', completed);
 
-  if (completed) {
-    console.log('[Tutorial] Step1 이미 완료됨, 스킵');
-    return;
+    if (completed) {
+      console.log('[Tutorial] Step1 이미 완료됨, 스킵');
+      return;
+    }
   }
 
   console.log('[Tutorial] 버튼 대기 시작...');
@@ -118,6 +127,19 @@ async function renderTutorialStep1(buttonElement: HTMLElement, controller: Tutor
 
   root.render(<TutorialTooltip step="step1" visible={true} />);
 
+  // YouTube 하단 컨트롤 바 고정 표시 (auto-hide 방지)
+  const moviePlayer = document.getElementById('movie_player');
+  if (moviePlayer) {
+    moviePlayer.classList.remove('ytp-autohide');
+  }
+
+  // toolbar 버튼도 하이라이트
+  injectTutorialHighlightStyles();
+  const toolbarBtn = document.querySelector('.ytk-toolbar-karaoke-btn') as HTMLElement | null;
+  if (toolbarBtn) {
+    toolbarBtn.classList.add('ytk-tutorial-highlight');
+  }
+
   // 모드 변경 시 위치 업데이트를 위한 이벤트 리스너 등록
   const handleModeChange = () => {
     setTimeout(updateTutorialTooltipPosition, 300);
@@ -162,6 +184,13 @@ export function completeTutorialStep1(controller: TutorialController): void {
     chrome.storage.sync.set({ [STORAGE_KEYS.TUTORIAL_STEP1_COMPLETED]: true });
   } else {
     console.log('[Tutorial] DEV_MODE: Step1 완료 저장 스킵');
+  }
+
+  // 하이라이트 해제 + YouTube 하단바 복원
+  clearAllHighlights();
+  const moviePlayer = document.getElementById('movie_player');
+  if (moviePlayer) {
+    moviePlayer.classList.remove('ytp-autohide-active');
   }
 
   // 툴팁 제거

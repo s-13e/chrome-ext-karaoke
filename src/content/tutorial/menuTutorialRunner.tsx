@@ -21,6 +21,12 @@ export async function showMenuTutorial(config: MenuTutorialConfig, controller: T
     await new Promise((resolve) => setTimeout(resolve, 150));
   }
 
+  // navigateToTab: 지정된 사이드바 탭으로 자동 전환
+  if (config.navigateToTab) {
+    window.dispatchEvent(new CustomEvent('tutorial-navigate-tab', { detail: { tab: config.navigateToTab } }));
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+
   // 기존 컨테이너 정리
   controller.cleanupMenuTutorial();
 

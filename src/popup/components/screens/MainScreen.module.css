@@ -71,6 +71,13 @@
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
+/* Toggle hint */
+.toggleHint {
+  font-size: 12px;
+  margin: 0;
+  text-align: center;
+}
+
 /* Auto pause box */
 .autoPauseBox {
   padding: 12px 16px;

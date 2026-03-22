@@ -15,6 +15,7 @@ interface KaraokeModeManagerCallbacks {
   onShowToast?: (message: string) => void;
   onModeChanged?: (isVisible: boolean) => void;
   onLyricsChanged?: (lyrics: Line[]) => void;
+  onSongInfoChanged?: (title: string, artist: string) => void;
 }
 
 /**
@@ -24,6 +25,8 @@ interface KaraokeModeManagerCallbacks {
 export class KaraokeModeManager {
   private isKaraokeModeVisible: boolean = false;
   private lyrics: Line[] = [];
+  private songTitle: string = '';
+  private songArtist: string = '';
   private recordingState: RecordingState = 'idle';
   private callbacks: KaraokeModeManagerCallbacks = {};
 
@@ -64,6 +67,27 @@ export class KaraokeModeManager {
     this.lyrics = lyrics;
     this.callbacks.onLyricsChanged?.(lyrics);
     console.log(`[KaraokeModeManager] 가사 데이터 업데이트: ${lyrics.length}줄`);
+  }
+
+  /**
+   * 현재 곡 정보 반환
+   */
+  public getSongTitle(): string {
+    return this.songTitle;
+  }
+
+  public getSongArtist(): string {
+    return this.songArtist;
+  }
+
+  /**
+   * 곡 정보 설정 (사이드바 헤더에 표시)
+   */
+  public setSongInfo(title: string, artist: string): void {
+    this.songTitle = title;
+    this.songArtist = artist;
+    this.callbacks.onSongInfoChanged?.(title, artist);
+    console.log(`[KaraokeModeManager] 곡 정보 업데이트: ${artist} - ${title}`);
   }
 
   /**

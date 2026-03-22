@@ -36,6 +36,7 @@ import { SongInfoOverlay } from './components/song-info/SongInfoOverlay';
 import { overlayManager } from '@lib/utils/infra/overlayManager';
 import { KaraokeModeManager } from '@lib/utils/infra/karaokeModeManager';
 import { MusicNoteButton } from './components/karaoke-mode/MusicNoteButton';
+import { ToolbarKaraokeButton } from './components/karaoke-mode/ToolbarKaraokeButton';
 import { RiMusicAiLine } from 'react-icons/ri';
 import musicNoteStyles from './components/karaoke-mode/musicNoteButton.module.css';
 import ReactDOM from 'react-dom/client';
@@ -193,6 +194,9 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
   // MusicNoteButton 전용 React Root
   let musicNoteButtonRoot: ReactDOM.Root | null = null;
 
+  // ToolbarKaraokeButton 전용 React Root
+  let toolbarButtonRoot: ReactDOM.Root | null = null;
+
   // KaraokeModeContainer 전용 React Root
   let karaokeModeRoot: ReactDOM.Root | null = null;
 
@@ -207,6 +211,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
       // 모드 변경 시 렌더링 및 버튼 상태 업데이트
       renderKaraokeModeContainer();
       updateMusicNoteButtonState(isVisible);
+      updateToolbarButtonState(isVisible);
 
       // 튜토리얼 처리
       if (isVisible && !tutorialController.isStep1Completed()) {
@@ -215,9 +220,20 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
           tutorialController.showTutorialStep2();
         }
       }
+
+      // 가라오케 모드 활성화 시 점프 JIT 튜토리얼 트리거
+      if (isVisible) {
+        window.dispatchEvent(new CustomEvent('karaoke-mode-first-activate'));
+      }
     },
     onLyricsChanged: () => {
       // 가사 변경 시 KaraokeModeContainer 재렌더링
+      if (karaokeModeManager.isVisible()) {
+        renderKaraokeModeContainer();
+      }
+    },
+    onSongInfoChanged: () => {
+      // 곡 정보 변경 시 KaraokeModeContainer 재렌더링 (사이드바 헤더 업데이트)
       if (karaokeModeManager.isVisible()) {
         renderKaraokeModeContainer();
       }
@@ -584,7 +600,12 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
 
     // KaraokeModeContainer 렌더링 (visible 상태에 따라 표시/숨김)
     karaokeModeRoot.render(
-      <KaraokeModeContainer visible={karaokeModeManager.isVisible()} lyrics={karaokeModeManager.getLyrics()} />,
+      <KaraokeModeContainer
+        visible={karaokeModeManager.isVisible()}
+        lyrics={karaokeModeManager.getLyrics()}
+        songTitle={karaokeModeManager.getSongTitle()}
+        songArtist={karaokeModeManager.getSongArtist()}
+      />,
     );
   }
 
@@ -622,6 +643,42 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
 
     // 튜토리얼 Step1 표시 (첫 사용자용)
     tutorialController.showTutorialStep1IfNeeded();
+  }
+
+  // YouTube 상단 툴바에 카라오케 버튼 렌더링
+  function renderToolbarKaraokeButton() {
+    if (toolbarButtonRoot) return;
+
+    let container = document.getElementById('toolbar-karaoke-button-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toolbar-karaoke-button-container';
+      container.style.position = 'fixed';
+      container.style.zIndex = '9999';
+      container.style.pointerEvents = 'none';
+      document.body.appendChild(container);
+    }
+
+    toolbarButtonRoot = ReactDOM.createRoot(container);
+    toolbarButtonRoot.render(
+      <ToolbarKaraokeButton
+        icon={<RiMusicAiLine size={18} color="#ffffff" />}
+        isActive={karaokeModeManager.isVisible()}
+        onClick={() => karaokeModeManager.toggleKaraokeMode()}
+      />,
+    );
+  }
+
+  // ToolbarKaraokeButton 상태 업데이트
+  function updateToolbarButtonState(isVisible: boolean) {
+    if (!toolbarButtonRoot) return;
+    toolbarButtonRoot.render(
+      <ToolbarKaraokeButton
+        icon={<RiMusicAiLine size={18} color="#ffffff" />}
+        isActive={isVisible}
+        onClick={() => karaokeModeManager.toggleKaraokeMode()}
+      />,
+    );
   }
 
   // 재활성화 토스트 표시
@@ -765,6 +822,11 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
     );
   }
 
+  // 사이드바 피드백 이벤트 리스닝
+  window.addEventListener('send-lyrics-feedback', ((e: CustomEvent<{ type: 'wrong_lyrics' | 'sync_mismatch' }>) => {
+    handleFeedback(e.detail.type);
+  }) as EventListener);
+
   // 노래 정보 렌더링
   function renderSongInfo(title: string, artist: string) {
     // 기존 리스너 제거
@@ -773,6 +835,9 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
     // 현재 곡 정보 저장 (handleFeedback에서 사용)
     lastArtist = artist;
     lastTitle = title;
+
+    // 사이드바 곡 정보 헤더 업데이트
+    karaokeModeManager.setSongInfo(title, artist);
 
     overlayManager.renderOverlay(
       'songInfo',
@@ -1032,6 +1097,36 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
 
     // 광고 모니터링 시작: 가사가 렌더링된 후 광고 상태를 지속적으로 체크
     startLyricsAdMonitoringIfNeeded();
+
+    // 자동 인트로 스킵: karaoke 모드 활성화 여부와 무관하게 가사 로드 시 실행
+    tryAutoSkipIntro(newLyrics);
+  }
+
+  /**
+   * 자동 인트로 스킵 — 가사 로드 시 첫 가사 3초 전으로 자동 이동
+   * karaokeAutoSkipEnabled 설정이 활성화되어 있을 때만 실행
+   */
+  function tryAutoSkipIntro(lyrics: Line[]) {
+    chrome.storage.local.get(['karaokeAutoSkipEnabled'], (result) => {
+      if (!result.karaokeAutoSkipEnabled) return;
+      if (lyrics.length === 0) return;
+
+      const videoElement = document.querySelector<HTMLVideoElement>('video.html5-main-video');
+      if (!videoElement) return;
+
+      const firstLyric = lyrics[0];
+      if (!firstLyric || firstLyric.time <= 4) return;
+
+      const targetTime = Math.max(0, firstLyric.time - 3);
+      const currentTime = videoElement.currentTime;
+
+      if (currentTime <= firstLyric.time) {
+        videoElement.currentTime = targetTime;
+        console.log(
+          `[AutoSkip] 인트로 스킵: ${currentTime.toFixed(1)}초 → ${targetTime.toFixed(1)}초 (첫 가사: ${firstLyric.time}초)`,
+        );
+      }
+    });
   }
 
   /**
@@ -1549,44 +1644,82 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
 
       // 5) 저장된 오프셋 확인 및 자동 적용 (서버 오프셋 우선 → 로컬 오프셋 fallback)
       const { getVideoOffset } = await import('@lib/utils/storage/videoOffsetStorage');
-      const { applyOffsetToLyrics } = await import('@lib/utils/lyrics/display/lyricsOffset');
+      const { applyOffsetToLyrics, applyLineAdjustments } = await import('@lib/utils/lyrics/display/lyricsOffset');
 
       let finalParsedLyrics = parsedLyrics;
       let hasUserOffset = false;
 
       // 5-1. 서버 오프셋 조회 (보이지 않는 베이스라인 보정)
-      let serverOffset: number | null = null;
+      interface ServerOffsetResponse {
+        success: boolean;
+        offset: number | null;
+        lineAdjustments: Record<number, number> | null;
+        lyricsLineCount: number | null;
+      }
+      let serverOffsetData: ServerOffsetResponse | null = null;
       if (isExtensionContextValid()) {
         try {
-          const serverOffsetResponse = await new Promise<{ success: boolean; offset: number | null }>((resolve) => {
+          serverOffsetData = await new Promise<ServerOffsetResponse>((resolve) => {
             chrome.runtime.sendMessage({ type: 'FETCH_SERVER_OFFSET', videoId }, (response) => {
               if (chrome.runtime.lastError) {
-                resolve({ success: false, offset: null });
+                resolve({ success: false, offset: null, lineAdjustments: null, lyricsLineCount: null });
               } else {
-                resolve(response ?? { success: false, offset: null });
+                resolve(response ?? { success: false, offset: null, lineAdjustments: null, lyricsLineCount: null });
               }
             });
           });
-          serverOffset = serverOffsetResponse.success ? serverOffsetResponse.offset : null;
         } catch {
-          serverOffset = null;
+          serverOffsetData = null;
         }
       }
 
+      const serverOffset = serverOffsetData?.success ? serverOffsetData.offset : null;
+      const serverLineAdj = serverOffsetData?.success ? serverOffsetData.lineAdjustments : null;
+      const serverLyricsLineCount = serverOffsetData?.success ? serverOffsetData.lyricsLineCount : null;
+
       if (serverOffset !== null && serverOffset !== 0) {
         // 서버 오프셋 존재 → 원본 가사에 적용 (사용자 눈에는 0초로 보임)
-        console.log(`[AutoOffset] 서버 오프셋 발견 (videoId: ${videoId}, offset: ${serverOffset}초) - 자동 적용`);
         finalParsedLyrics = applyOffsetToLyrics(parsedLyrics, serverOffset, 0);
+
+        // 서버 lineAdjustments 적용 (가사 줄 수가 일치할 때만)
+        if (serverLineAdj && Object.keys(serverLineAdj).length > 0) {
+          const lineCountMatch = serverLyricsLineCount === null || serverLyricsLineCount === parsedLyrics.length;
+          if (lineCountMatch) {
+            finalParsedLyrics = applyLineAdjustments(finalParsedLyrics, serverLineAdj);
+          } else {
+            console.warn(
+              `[AutoOffset] 서버 구간 보정 무시 (가사 줄 수 불일치: 서버=${serverLyricsLineCount}, 현재=${parsedLyrics.length})`,
+            );
+          }
+        }
         hasUserOffset = true;
+      } else if (
+        serverOffset !== null &&
+        serverOffset === 0 &&
+        serverLineAdj &&
+        Object.keys(serverLineAdj).length > 0
+      ) {
+        // 서버 오프셋 0이지만 구간 보정 있음
+        const lineCountMatch = serverLyricsLineCount === null || serverLyricsLineCount === parsedLyrics.length;
+        if (lineCountMatch) {
+          finalParsedLyrics = applyLineAdjustments(parsedLyrics, serverLineAdj);
+          hasUserOffset = true;
+        }
       } else {
         // 5-2. 로컬 오프셋 확인 (fallback)
         const savedData = await getVideoOffset(videoId);
-        if (savedData && savedData.offset !== 0) {
-          console.log(`[AutoOffset] 로컬 오프셋 발견 (videoId: ${videoId}, offset: ${savedData.offset}초) - 자동 적용`);
-          finalParsedLyrics = applyOffsetToLyrics(parsedLyrics, savedData.offset, 0);
+        const hasGlobalOffset = savedData && savedData.offset !== 0;
+        const hasLineAdj = savedData?.lineAdjustments && Object.keys(savedData.lineAdjustments).length > 0;
+        if (hasGlobalOffset || hasLineAdj) {
+          if (hasGlobalOffset) {
+            finalParsedLyrics = applyOffsetToLyrics(parsedLyrics, savedData!.offset, 0);
+          }
+          if (hasLineAdj) {
+            finalParsedLyrics = applyLineAdjustments(finalParsedLyrics, savedData!.lineAdjustments!);
+          }
           hasUserOffset = true;
         } else {
-          console.log(`[AutoOffset] 저장된 오프셋 없음 - 원본 가사 사용`);
+          // 저장된 오프셋 없음 - 원본 가사 사용
         }
       }
 
@@ -2140,6 +2273,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
 
           if (playerControls) {
             renderMusicNoteButton();
+            renderToolbarKaraokeButton();
             break;
           }
 

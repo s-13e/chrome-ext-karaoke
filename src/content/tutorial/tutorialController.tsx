@@ -10,6 +10,15 @@ import {
   Tutorial4Config,
   Tutorial5Config,
   Tutorial6Config,
+  TutorialKaraokeModeConfig,
+  TutorialLyricsViewConfig,
+  TutorialLyricsLoopConfig,
+  TutorialLyricsSkipConfig,
+  TutorialLyricsSyncConfig,
+  TutorialSearchConfig,
+  TutorialRecordingConfig,
+  TutorialTuneConfig,
+  TutorialSettingsConfig,
 } from './menuTutorialConfigs';
 import {
   showTutorialStep1IfNeeded as autoFlowStep1,
@@ -17,6 +26,7 @@ import {
   showTutorialStep2 as autoFlowStep2,
 } from './autoFlowTutorial';
 import { showFeatureTutorial, hideFeatureTutorial } from './featureTutorialRunner';
+import { showJitTutorial } from './justInTimeTutorial';
 
 /**
  * 튜토리얼 컨트롤러 클래스
@@ -54,6 +64,15 @@ export class TutorialController {
       const { tutorialId } = customEvent.detail;
       console.log('[Index] start-tutorial 이벤트 수신:', tutorialId);
       this.handleTutorialStart(tutorialId);
+    });
+
+    // JIT 튜토리얼 이벤트 리스너
+    window.addEventListener('sidebar-first-open', () => {
+      this.showSidebarJitIfNeeded();
+    });
+
+    window.addEventListener('karaoke-mode-first-activate', () => {
+      this.showJumpJitIfNeeded();
     });
 
     window.addEventListener('toggle-feature-tutorial', (e) => {
@@ -96,6 +115,18 @@ export class TutorialController {
     return this.step2Completed;
   }
 
+  // ─── Just-In-Time 튜토리얼 ─────────────────────────
+
+  /** 사이드바 첫 진입 시 JIT 튜토리얼 표시 */
+  public showSidebarJitIfNeeded(): void {
+    showJitTutorial('sidebar');
+  }
+
+  /** 간주 구간 감지 시 JIT 튜토리얼 표시 */
+  public showJumpJitIfNeeded(): void {
+    showJitTutorial('jump');
+  }
+
   // ─── 메뉴 튜토리얼 라우팅 ───────────────────────────
 
   /** start-tutorial 이벤트 핸들러 — tutorialId에 따라 적절한 튜토리얼 실행 */
@@ -104,6 +135,7 @@ export class TutorialController {
     injectTutorialHighlightStyles();
 
     switch (tutorialId) {
+      // 레거시 튜토리얼 (호환성 유지)
       case 'tutorial1':
         await showTutorial1FromMenu();
         break;
@@ -121,6 +153,34 @@ export class TutorialController {
         break;
       case 'tutorial6':
         await showMenuTutorial(Tutorial6Config, this);
+        break;
+      // 새 사이드바 기반 튜토리얼
+      case 'tutorialKaraokeMode':
+        await showMenuTutorial(TutorialKaraokeModeConfig, this);
+        break;
+      case 'tutorialLyricsView':
+        await showMenuTutorial(TutorialLyricsViewConfig, this);
+        break;
+      case 'tutorialLyricsLoop':
+        await showMenuTutorial(TutorialLyricsLoopConfig, this);
+        break;
+      case 'tutorialLyricsSkip':
+        await showMenuTutorial(TutorialLyricsSkipConfig, this);
+        break;
+      case 'tutorialLyricsSync':
+        await showMenuTutorial(TutorialLyricsSyncConfig, this);
+        break;
+      case 'tutorialSearch':
+        await showMenuTutorial(TutorialSearchConfig, this);
+        break;
+      case 'tutorialRecording':
+        await showMenuTutorial(TutorialRecordingConfig, this);
+        break;
+      case 'tutorialTune':
+        await showMenuTutorial(TutorialTuneConfig, this);
+        break;
+      case 'tutorialSettings':
+        await showMenuTutorial(TutorialSettingsConfig, this);
         break;
       default:
         console.warn('[Tutorial] 알 수 없는 튜토리얼 ID:', tutorialId);

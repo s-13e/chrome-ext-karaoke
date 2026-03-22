@@ -11,7 +11,8 @@ export interface VideoOffsetData {
   videoId: string; // YouTube video ID (고유 식별자)
   title: string; // 영상 제목 (표시용)
   artist?: string; // 아티스트 (있으면)
-  offset: number; // 오프셋 값 (초)
+  offset: number; // 전체 오프셋 값 (초)
+  lineAdjustments?: Record<number, number>; // 줄별 추가 보정값 (줄 인덱스 → 초)
   thumbnail?: string; // 썸네일 URL (선택)
   lastModified: number; // 마지막 수정 시간 (timestamp)
 }

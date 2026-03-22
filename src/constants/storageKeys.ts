@@ -7,6 +7,7 @@ export const STORAGE_KEYS = {
   LOADED_ROMANIZER_LIBRARIES: 'loadedRomanizerLibraries',
   ACAPELLA_LEGAL_AGREEMENT_ACCEPTED: 'acapellaLegalAgreementAccepted',
   ACAPELLA_RECORDINGS_LIST: 'acapellaRecordingsList',
+  HAS_COMPLETED_WELCOME: 'hasCompletedWelcome',
   TUTORIAL_STEP1_COMPLETED: 'tutorialStep1Completed',
   TUTORIAL_STEP2_COMPLETED: 'tutorialStep2Completed',
   TUTORIAL_SYNC_COMPLETED: 'tutorial_sync_completed',
@@ -14,5 +15,10 @@ export const STORAGE_KEYS = {
   TUTORIAL_CUSTOM_LYRICS_COMPLETED: 'tutorial_custom_lyrics_completed',
   TUTORIAL_SIDEBAR_COMPLETED: 'tutorial_sidebar_completed',
   TUTORIAL_JUMP_COMPLETED: 'tutorial_jump_completed',
+  TUTORIAL_LYRICS_COMPLETED: 'tutorial_lyrics_completed',
+  TUTORIAL_SEARCH_COMPLETED: 'tutorial_search_completed',
+  TUTORIAL_RECORDING_COMPLETED: 'tutorial_recording_completed',
+  TUTORIAL_TUNE_COMPLETED: 'tutorial_tune_completed',
+  TUTORIAL_SETTINGS_COMPLETED: 'tutorial_settings_completed',
   SYNC_TOAST_DISMISSED_PREFIX: 'syncToastDismissed_',
 } as const;

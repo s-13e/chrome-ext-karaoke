@@ -4,7 +4,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #1a1a1a;
+  background: transparent;
   color: #ffffff;
 }
 
@@ -90,7 +90,7 @@
 }
 
 .newSearchButton {
-  background: #1db954;
+  background: #00d4aa;
   color: #ffffff;
   border: none;
   padding: 10px;
@@ -107,7 +107,7 @@
 }
 
 .newSearchButton:hover {
-  background: #1ed760;
+  background: #00b894;
   transform: scale(1.05);
 }
 
@@ -140,7 +140,7 @@
 .input:focus {
   outline: none;
   background: rgba(255, 255, 255, 0.15);
-  border-color: #1db954;
+  border-color: #00d4aa;
 }
 
 .input::placeholder {
@@ -148,7 +148,7 @@
 }
 
 .searchButton {
-  background: #1db954;
+  background: #00d4aa;
   color: #ffffff;
   border: none;
   padding: 12px 16px;
@@ -164,7 +164,7 @@
 }
 
 .searchButton:hover:not(:disabled) {
-  background: #1ed760;
+  background: #00b894;
   transform: translateY(-1px);
 }
 
@@ -290,8 +290,8 @@
 
 .candidateTimestamp {
   font-size: 12px;
-  color: #1db954;
-  background: rgba(29, 185, 84, 0.1);
+  color: #00d4aa;
+  background: rgba(0, 212, 170, 0.1);
   padding: 4px 8px;
   border-radius: 4px;
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
@@ -345,7 +345,7 @@
   position: absolute;
   bottom: 8px;
   right: 8px;
-  background: rgba(29, 185, 84, 0.9);
+  background: rgba(0, 212, 170, 0.9);
   color: #ffffff;
   border: none;
   border-radius: 50%;
@@ -361,7 +361,7 @@
 }
 
 .expandButton:hover {
-  background: rgba(29, 185, 84, 1);
+  background: rgba(0, 212, 170, 1);
   transform: scale(1.1);
 }
 
@@ -370,7 +370,7 @@
 }
 
 .selectButton {
-  background: #1db954;
+  background: #00d4aa;
   color: #ffffff;
   border: none;
   padding: 12px 20px;
@@ -380,18 +380,18 @@
   cursor: pointer;
   transition: all 0.2s;
   align-self: stretch;
-  box-shadow: 0 2px 8px rgba(29, 185, 84, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 212, 170, 0.3);
 }
 
 .selectButton:hover {
-  background: #1ed760;
+  background: #00b894;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(29, 185, 84, 0.4);
+  box-shadow: 0 4px 12px rgba(0, 212, 170, 0.4);
 }
 
 .selectButton:active {
   transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(29, 185, 84, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 212, 170, 0.3);
 }
 
 /* 버튼 그룹 (선택 + 확정) */
@@ -440,12 +440,12 @@
 }
 
 .confirmButton.confirmed {
-  background: #4caf50;
-  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+  background: #00d4aa;
+  box-shadow: 0 2px 8px rgba(0, 212, 170, 0.3);
 }
 
 .confirmButton.confirmed:hover {
-  background: #4caf50;
+  background: #00d4aa;
   transform: none;
-  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 212, 170, 0.3);
 }

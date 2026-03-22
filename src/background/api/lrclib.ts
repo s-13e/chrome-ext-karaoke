@@ -28,7 +28,7 @@ const API_SERVER_URL = process.env.API_SERVER_URL!;
 // API 타임아웃 설정
 const CACHE_TIMEOUT_MS = 3000; // API 서버 캐시 (Redis 전용): 3초
 const LYRICS_PROXY_TIMEOUT_MS = 8000; // API 서버 프록시 (서버→LRCLib 외부 호출 포함): 8초
-const LRCLIB_TIMEOUT_MS = 20000; // LRCLib API 직접 호출: 20초
+const LRCLIB_TIMEOUT_MS = 10000; // LRCLib API 직접 호출: 10초
 
 /**
  * YouTube videoId로 LRCLib ID 캐시 조회 (독립 함수)
@@ -59,12 +59,19 @@ export async function fetchYouTubeLRCLibCache(videoId: string): Promise<{ lrclib
   }
 }
 
+/** 서버 오프셋 캐시 조회 결과 */
+export interface ServerOffsetResult {
+  offset: number;
+  lineAdjustments?: Record<number, number>;
+  lyricsLineCount?: number;
+}
+
 /**
  * 서버 오프셋 캐시 조회
- * - videoId에 대한 서버 저장 오프셋(초)을 반환
+ * - videoId에 대한 서버 저장 오프셋(초) + 구간 보정을 반환
  * - 없으면 null 반환
  */
-export async function fetchServerOffset(videoId: string): Promise<number | null> {
+export async function fetchServerOffset(videoId: string): Promise<ServerOffsetResult | null> {
   try {
     const res = await fetchWithTimeout(
       `${API_SERVER_URL}/api/v1/youtube/offset/${encodeURIComponent(videoId)}`,
@@ -77,7 +84,23 @@ export async function fetchServerOffset(videoId: string): Promise<number | null>
       const offset = data?.offset;
 
       if (typeof offset === 'number') {
-        return offset;
+        const result: ServerOffsetResult = { offset };
+        if (data.lineAdjustments && typeof data.lineAdjustments === 'object') {
+          // 서버에서 string key로 전달됨 → number key로 변환
+          const converted: Record<number, number> = {};
+          for (const [key, val] of Object.entries(data.lineAdjustments)) {
+            if (typeof val === 'number') {
+              converted[Number(key)] = val;
+            }
+          }
+          if (Object.keys(converted).length > 0) {
+            result.lineAdjustments = converted;
+          }
+        }
+        if (typeof data.lyricsLineCount === 'number') {
+          result.lyricsLineCount = data.lyricsLineCount;
+        }
+        return result;
       }
     }
     return null;

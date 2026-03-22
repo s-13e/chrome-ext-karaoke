@@ -1,22 +1,109 @@
 // KaraokeModeContainer.tsx
 // 가라오케 모드의 메인 컨테이너 컴포넌트
 // MusicNoteButton 클릭 시 사이드바, 하단 컨테이너를 표시/숨김 처리
-import React, { useEffect } from 'react';
+import React, { useEffect, useLayoutEffect, useState, useRef, lazy, Suspense } from 'react';
 import { SidebarContainer } from './SidebarContainer';
 import { BottomContainer } from './BottomContainer';
 import { Line } from '@lib/types/lyrics';
 import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
+import styles from './styles.module.css';
+
+// TextEffectsModal lazy loading (KaraokeModeContainer 레벨에서 관리)
+const TextEffectsModal = lazy(() =>
+  import('./TextEffectsModal').then((module) => ({ default: module.TextEffectsModal })),
+);
 
 /**
  * 레이아웃 상수
  * styles.module.css의 값과 일치해야 함
  */
 const YOUTUBE_TOOLBAR = 56; // YouTube 상단 툴바 높이
-const BOTTOM_BAR_HEIGHT = 100; // 동영상 플레이어 하단 여백 (실제 하단바는 100px이지만 겹치도록 설정)
+const PLAYER_VERTICAL_MARGIN = 50; // 동영상 플레이어 상하 여백 (상단·하단 동일)
+const ICON_NAV_WIDTH = 71; // 아이콘 탭 내비게이션 너비 (68px + border 3px)
+
+const KARAOKE_STYLE_ID = 'yt-karaoke-player-overrides';
+
+/**
+ * 플레이어 내부 요소 스타일을 <style> 태그로 주입
+ * stylesheet !important > 일반 inline style (CSS specificity 규칙)
+ * → YouTube JS가 inline style로 left/top/width/height를 재설정해도 이 규칙이 우선
+ */
+const injectPlayerStyles = () => {
+  if (document.getElementById(KARAOKE_STYLE_ID)) return;
+  const style = document.createElement('style');
+  style.id = KARAOKE_STYLE_ID;
+  style.textContent = `
+    #player-container {
+      width: 100% !important;
+      height: 100% !important;
+      max-width: none !important;
+      max-height: none !important;
+      min-height: 100% !important;
+      aspect-ratio: auto !important;
+    }
+    #movie_player {
+      width: 100% !important;
+      height: 100% !important;
+      max-width: none !important;
+      max-height: none !important;
+      min-height: 100% !important;
+      aspect-ratio: auto !important;
+    }
+    .html5-video-container {
+      width: 100% !important;
+      height: 100% !important;
+      max-width: 100% !important;
+      max-height: 100% !important;
+      aspect-ratio: auto !important;
+    }
+    video.html5-main-video {
+      width: 100% !important;
+      height: 100% !important;
+      max-width: 100% !important;
+      max-height: 100% !important;
+      left: 0 !important;
+      top: 0 !important;
+      object-fit: contain !important;
+      object-position: center center !important;
+    }
+    /* 플레이어 하단 컨트롤 바가 사이드바에 의해 잘리지 않도록 */
+    .ytp-chrome-bottom {
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+    /* 카라오케 모드: 플레이어 외 YouTube 콘텐츠 전부 숨김 */
+    #primary-inner > *:not(#player):not(#player-container-outer),
+    #secondary,
+    #below,
+    #columns,
+    #comments,
+    #related,
+    ytd-engagement-panel-section-list-renderer,
+    ytd-popup-container,
+    ytd-mealbar-promo-renderer,
+    ytd-miniplayer,
+    tp-yt-paper-dialog,
+    .ytd-popup-container,
+    .ytp-suggested-action,
+    ytd-shorts,
+    #chat {
+      display: none !important;
+      visibility: hidden !important;
+    }
+  `;
+  document.head.appendChild(style);
+};
+
+/** 주입된 플레이어 스타일 제거 */
+const removePlayerStyles = () => {
+  document.getElementById(KARAOKE_STYLE_ID)?.remove();
+};
 
 interface KaraokeModeContainerProps {
   visible: boolean;
   lyrics: Line[];
+  songTitle?: string;
+  songArtist?: string;
 }
 
 /**
@@ -24,17 +111,37 @@ interface KaraokeModeContainerProps {
  * - SidebarContainer: 동영상 플레이어 오른쪽에 가라오케 서비스 제공
  * - BottomContainer: 하단에 구간 반복, 싱크셋 등 기능 제공
  */
-// 반응형 사이드바 너비 계산 함수
-const getSidebarWidth = () => {
+// 반응형 콘텐츠 패널 너비 계산 함수
+const getContentPanelWidth = () => {
   const width = window.innerWidth;
-  if (width <= 768) return 250; // 모바일: 250px
+  if (width <= 768) return 280; // 모바일: 280px
   if (width <= 1024) return 320; // 태블릿: 320px
-  return 400; // 데스크톱: 400px
+  return 380; // 데스크톱: 380px
 };
 
-export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visible, lyrics }) => {
+// 전체 사이드바 너비 (아이콘 내비 + 콘텐츠 패널)
+const getSidebarWidth = (isPanelExpanded: boolean) => {
+  if (!isPanelExpanded) return ICON_NAV_WIDTH;
+  return ICON_NAV_WIDTH + getContentPanelWidth();
+};
+
+export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({
+  visible,
+  lyrics,
+  songTitle,
+  songArtist,
+}) => {
   const [isFullscreen, setIsFullscreen] = React.useState(false);
-  const [sidebarWidth, setSidebarWidth] = React.useState(getSidebarWidth());
+  const [isPanelExpanded, setIsPanelExpanded] = React.useState(false);
+  const [sidebarWidth, setSidebarWidth] = React.useState(getSidebarWidth(false));
+
+  // visible 변경 시 패널 상태 리셋 (SidebarContainer는 remount되어 activeTab=null이 되므로 동기화)
+  useEffect(() => {
+    if (visible) {
+      setIsPanelExpanded(false);
+      setSidebarWidth(getSidebarWidth(false));
+    }
+  }, [visible]);
 
   // 전체화면 상태 감지 및 처리
   useEffect(() => {
@@ -43,6 +150,12 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
     const handleFullscreenChange = () => {
       const isCurrentlyFullscreen = !!document.fullscreenElement;
       setIsFullscreen(isCurrentlyFullscreen);
+
+      // 전체화면 해제 시 사이드바 패널 접기 (remount 후 빈 패널 방지)
+      if (!isCurrentlyFullscreen) {
+        setIsPanelExpanded(false);
+        setSidebarWidth(getSidebarWidth(false));
+      }
 
       const fullBleedContainer = document.querySelector<HTMLElement>('#full-bleed-container');
       const columns = document.querySelector<HTMLElement>('#columns');
@@ -176,7 +289,7 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
             }
 
             // 사이드바 너비 재계산 (viewport 변경에 대응)
-            const newSidebarWidth = getSidebarWidth();
+            const newSidebarWidth = getSidebarWidth(isPanelExpanded);
             setSidebarWidth(newSidebarWidth);
 
             // 스타일 재적용을 위해 useEffect 재실행 트리거
@@ -199,14 +312,34 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
     };
   }, [visible]);
 
+  // 사이드바 너비 변경 시 플레이어 너비를 paint 전에 동기 업데이트
+  // resize 이벤트는 dispatch하지 않음 — YouTube JS의 resize 핸들러가
+  // 우리 스타일을 잠깐 되돌려 콘텐츠가 비치는 원인이었음
+  // 비디오는 object-fit: contain으로 CSS만으로 자동 조절됨
+  useLayoutEffect(() => {
+    if (!visible) return;
+    const fullBleedContainer = document.querySelector<HTMLElement>('#full-bleed-container');
+    if (fullBleedContainer) {
+      fullBleedContainer.style.setProperty('width', `calc(100vw - ${sidebarWidth}px)`, 'important');
+      fullBleedContainer.style.setProperty('max-width', `calc(100vw - ${sidebarWidth}px)`, 'important');
+    }
+  }, [visible, sidebarWidth]);
+
   useEffect(() => {
     if (!visible) return;
 
-    let styleObserver: MutationObserver | null = null;
+    // 사이드바 패널 토글 이벤트 리스너 (상태만 업데이트, DOM 조작은 useLayoutEffect에서 처리)
+    const handlePanelToggle = (event: Event) => {
+      const customEvent = event as CustomEvent<{ expanded: boolean }>;
+      const expanded = customEvent.detail.expanded;
+      setIsPanelExpanded(expanded);
+      setSidebarWidth(getSidebarWidth(expanded));
+    };
+    window.addEventListener('sidebar-panel-toggle', handlePanelToggle);
 
     // 가라오케 스타일 적용 함수
     const applyKaraokeStyles = () => {
-      const SIDEBAR_WIDTH = getSidebarWidth();
+      const SIDEBAR_WIDTH = getSidebarWidth(isPanelExpanded);
       // YouTube 페이지 메인 컨테이너들
       const fullBleedContainer = document.querySelector<HTMLElement>('#full-bleed-container');
       const columns = document.querySelector<HTMLElement>('#columns');
@@ -223,13 +356,22 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
         return;
       }
 
-      // ytd-app 하단 여백 제거 (overflow 숨김 + 높이 제한)
+      // ytd-app 하단 여백 제거 + 배경색 YouTube 다크 테마와 일치
       if (ytdApp) {
         ytdApp.style.setProperty('margin', '0', 'important');
         ytdApp.style.setProperty('padding', '0', 'important');
         ytdApp.style.setProperty('overflow', 'hidden', 'important');
         ytdApp.style.setProperty('max-height', '100vh', 'important');
         ytdApp.style.setProperty('height', '100vh', 'important');
+        ytdApp.style.setProperty('background-color', '#0f0f0f', 'important');
+      }
+
+      // YouTube Ambient mode(영화 조명) 효과를 하단 영역까지 확장
+      const cinematics = document.querySelector<HTMLElement>('#cinematics-container, #cinematics');
+      if (cinematics) {
+        cinematics.style.setProperty('height', '100vh', 'important');
+        cinematics.style.setProperty('max-height', '100vh', 'important');
+        cinematics.style.setProperty('overflow', 'visible', 'important');
       }
 
       // #columns 숨기기 (영상 설명, 추천/댓글 영역 모두 포함)
@@ -237,12 +379,12 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
 
       // 플레이어를 전체화면처럼 확장 (영화관 모드의 #full-bleed-container 조작)
       fullBleedContainer.style.setProperty('position', 'fixed', 'important');
-      fullBleedContainer.style.setProperty('top', `${YOUTUBE_TOOLBAR}px`, 'important');
+      fullBleedContainer.style.setProperty('top', `${YOUTUBE_TOOLBAR + PLAYER_VERTICAL_MARGIN}px`, 'important');
       fullBleedContainer.style.setProperty('left', '0', 'important');
       fullBleedContainer.style.setProperty('width', `calc(100vw - ${SIDEBAR_WIDTH}px)`, 'important');
       fullBleedContainer.style.setProperty(
         'height',
-        `calc(100vh - ${YOUTUBE_TOOLBAR + BOTTOM_BAR_HEIGHT}px)`,
+        `calc(100vh - ${YOUTUBE_TOOLBAR + PLAYER_VERTICAL_MARGIN * 2}px)`,
         'important',
       );
       fullBleedContainer.style.setProperty('z-index', '2000', 'important');
@@ -251,52 +393,12 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
       fullBleedContainer.style.setProperty('max-width', `calc(100vw - ${SIDEBAR_WIDTH}px)`, 'important');
       fullBleedContainer.style.setProperty(
         'max-height',
-        `calc(100vh - ${YOUTUBE_TOOLBAR + BOTTOM_BAR_HEIGHT}px)`,
+        `calc(100vh - ${YOUTUBE_TOOLBAR + PLAYER_VERTICAL_MARGIN * 2}px)`,
         'important',
       );
-      // 내부 플레이어 컨테이너도 함께 조정
-      const playerContainer = fullBleedContainer.querySelector<HTMLElement>('#player-container');
-      if (playerContainer) {
-        playerContainer.style.setProperty('width', '100%', 'important');
-        playerContainer.style.setProperty('height', '100%', 'important');
-        playerContainer.style.setProperty('max-width', 'none', 'important');
-        playerContainer.style.setProperty('max-height', 'none', 'important');
-        playerContainer.style.setProperty('min-height', '100%', 'important');
-        // aspect-ratio 제거 시도
-        playerContainer.style.setProperty('aspect-ratio', 'auto', 'important');
-      }
-
-      const moviePlayer = fullBleedContainer.querySelector<HTMLElement>('#movie_player');
-      if (moviePlayer) {
-        moviePlayer.style.setProperty('width', '100%', 'important');
-        moviePlayer.style.setProperty('height', '100%', 'important');
-        moviePlayer.style.setProperty('max-width', 'none', 'important');
-        moviePlayer.style.setProperty('max-height', 'none', 'important');
-        moviePlayer.style.setProperty('min-height', '100%', 'important');
-        // aspect-ratio 제거 시도
-        moviePlayer.style.setProperty('aspect-ratio', 'auto', 'important');
-      }
-
-      // YouTube 플레이어 내부의 비디오 컨테이너도 조정
-      const videoContainer = fullBleedContainer.querySelector<HTMLElement>('.html5-video-container');
-      if (videoContainer) {
-        videoContainer.style.setProperty('width', '100%', 'important');
-        videoContainer.style.setProperty('height', '100%', 'important');
-        videoContainer.style.setProperty('max-width', '100%', 'important');
-        videoContainer.style.setProperty('max-height', '100%', 'important');
-        // aspect-ratio 제거 시도
-        videoContainer.style.setProperty('aspect-ratio', 'auto', 'important');
-      }
-
-      // 실제 비디오 요소도 조정
-      const videoElement = fullBleedContainer.querySelector<HTMLVideoElement>('video.html5-main-video');
-      if (videoElement) {
-        videoElement.style.setProperty('width', '100%', 'important');
-        videoElement.style.setProperty('height', '100%', 'important');
-        videoElement.style.setProperty('max-width', '100%', 'important');
-        videoElement.style.setProperty('max-height', '100%', 'important');
-        videoElement.style.setProperty('object-fit', 'contain', 'important');
-      }
+      // 플레이어 내부 요소 스타일은 <style> 태그로 주입 (YouTube의 inline style 재설정에 강건함)
+      // stylesheet !important > 일반 inline style 이므로 YouTube JS가 덮어쓸 수 없음
+      injectPlayerStyles();
 
       // 강제 리플로우 트리거 (스타일 적용 강제)
       void fullBleedContainer.offsetHeight;
@@ -309,26 +411,6 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
       requestAnimationFrame(() => {
         window.dispatchEvent(new Event('resize'));
       });
-
-      // MutationObserver로 YouTube의 동적 스타일 변경 감지 및 재적용
-      if (styleObserver) {
-        styleObserver.disconnect();
-      }
-
-      if (playerContainer) {
-        styleObserver = new MutationObserver(() => {
-          // YouTube가 높이를 변경하면 다시 100%로 강제
-          if (playerContainer.style.height !== '100%') {
-            playerContainer.style.setProperty('height', '100%', 'important');
-            playerContainer.style.setProperty('aspect-ratio', 'auto', 'important');
-          }
-        });
-
-        styleObserver.observe(playerContainer, {
-          attributes: true,
-          attributeFilter: ['style'],
-        });
-      }
     };
 
     // 초기 스타일 적용 (영화관 모드 전환 대기)
@@ -356,7 +438,7 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
 
     // 윈도우 리사이즈 시 플레이어 크기 및 사이드바 너비 재조정
     const handleResize = () => {
-      const newSidebarWidth = getSidebarWidth();
+      const newSidebarWidth = getSidebarWidth(isPanelExpanded);
 
       // 사이드바 너비가 실제로 변경된 경우에만 상태 업데이트
       setSidebarWidth((prevWidth) => {
@@ -376,12 +458,12 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
         // 높이 재조정 (창 높이 변경 시 대응)
         fullBleedContainer.style.setProperty(
           'height',
-          `calc(100vh - ${YOUTUBE_TOOLBAR + BOTTOM_BAR_HEIGHT}px)`,
+          `calc(100vh - ${YOUTUBE_TOOLBAR + PLAYER_VERTICAL_MARGIN * 2}px)`,
           'important',
         );
         fullBleedContainer.style.setProperty(
           'max-height',
-          `calc(100vh - ${YOUTUBE_TOOLBAR + BOTTOM_BAR_HEIGHT}px)`,
+          `calc(100vh - ${YOUTUBE_TOOLBAR + PLAYER_VERTICAL_MARGIN * 2}px)`,
           'important',
         );
       }
@@ -392,6 +474,7 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
     // 클린업: 원래 상태로 복원
     return () => {
       clearTimeout(timeoutId);
+      removePlayerStyles();
 
       const fullBleedContainer = document.querySelector<HTMLElement>('#full-bleed-container');
       const columns = document.querySelector<HTMLElement>('#columns');
@@ -418,6 +501,14 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
         ytdApp.style.removeProperty('max-height');
         ytdApp.style.removeProperty('height');
         ytdApp.style.removeProperty('overflow');
+        ytdApp.style.removeProperty('background-color');
+      }
+      // Ambient mode 복원
+      const cinematicsRestore = document.querySelector<HTMLElement>('#cinematics-container, #cinematics');
+      if (cinematicsRestore) {
+        cinematicsRestore.style.removeProperty('height');
+        cinematicsRestore.style.removeProperty('max-height');
+        cinematicsRestore.style.removeProperty('overflow');
       }
       // body/documentElement overflow 복원
       document.body.style.overflow = '';
@@ -426,11 +517,58 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
       // 이벤트 리스너 제거
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('karaoke-restore-styles', handleRestoreStyles);
+      window.removeEventListener('sidebar-panel-toggle', handlePanelToggle);
       if (theaterModeButton) {
         theaterModeButton.removeEventListener('click', handleTheaterModeButtonClick);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isPanelExpanded 제거: 사이드바 토글 시 클린업→재적용 사이 300ms 동안 YouTube 원래 레이아웃이 노출되는 문제 방지. 너비 변경은 useLayoutEffect에서 처리.
   }, [visible]);
+
+  // TextEffectsModal 상태 (KaraokeModeContainer 레벨에서 관리)
+  const [showTextEffectsModal, setShowTextEffectsModal] = useState(false);
+  const textEffectsModalRef = useRef<HTMLDivElement | null>(null);
+  const textEffectsCancelRef = useRef<(() => void) | null>(null);
+
+  // 커스텀 이벤트로 TextEffectsModal 열기/닫기 (사이드바, 하단바 모두 사용 가능)
+  useEffect(() => {
+    const handleOpen = () => setShowTextEffectsModal(true);
+    const handleClose = () => {
+      if (textEffectsCancelRef.current) {
+        textEffectsCancelRef.current();
+        textEffectsCancelRef.current = null;
+      }
+      setShowTextEffectsModal(false);
+    };
+    window.addEventListener('open-text-effects-modal', handleOpen);
+    window.addEventListener('close-text-effects-modal', handleClose);
+    return () => {
+      window.removeEventListener('open-text-effects-modal', handleOpen);
+      window.removeEventListener('close-text-effects-modal', handleClose);
+    };
+  }, []);
+
+  // TextEffectsModal 외부 클릭 감지
+  useEffect(() => {
+    if (!showTextEffectsModal) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (textEffectsModalRef.current && !textEffectsModalRef.current.contains(target)) {
+        if (textEffectsCancelRef.current) {
+          textEffectsCancelRef.current();
+          textEffectsCancelRef.current = null;
+        }
+        setShowTextEffectsModal(false);
+      }
+    };
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+    }, 100);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showTextEffectsModal]);
 
   if (!visible) return null;
 
@@ -439,8 +577,22 @@ export const KaraokeModeContainer: React.FC<KaraokeModeContainerProps> = ({ visi
 
   return (
     <CurrentTimeProvider>
-      <SidebarContainer lyrics={lyrics} width={sidebarWidth} />
-      <BottomContainer lyrics={lyrics} />
+      <SidebarContainer lyrics={lyrics} width={sidebarWidth} songTitle={songTitle} songArtist={songArtist} />
+      <BottomContainer lyrics={lyrics} sidebarWidth={sidebarWidth} />
+
+      {/* TextEffectsModal — KaraokeModeContainer 레벨에서 렌더링 */}
+      {showTextEffectsModal && (
+        <div className={styles.textEffectsModalContainer} ref={textEffectsModalRef}>
+          <Suspense fallback={<div style={{ padding: '20px', color: '#fff' }}>Loading...</div>}>
+            <TextEffectsModal
+              onClose={() => setShowTextEffectsModal(false)}
+              registerCancel={(fn) => {
+                textEffectsCancelRef.current = fn || null;
+              }}
+            />
+          </Suspense>
+        </div>
+      )}
     </CurrentTimeProvider>
   );
 };
