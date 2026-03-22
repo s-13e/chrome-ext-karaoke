@@ -6,6 +6,11 @@
  * 2. Finding keys used in code but missing from translation files
  * 3. Finding keys in translation files but not used in code
  *
+ * Detects both direct t('key') calls and dynamic key usage patterns:
+ * - Config objects with labelKey/titleKey/descKey properties
+ * - Switch/case return statements with key literals
+ * - manifest.json __MSG_key__ references
+ *
  * Usage:
  *   node scripts/validate-i18n.js
  *   npm run validate:i18n
@@ -14,8 +19,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const LOCALES_DIR = path.join(__dirname, '..', 'src', 'locales');
-const SRC_DIR = path.join(__dirname, '..', 'src');
+const ROOT_DIR = path.join(__dirname, '..');
+const LOCALES_DIR = path.join(ROOT_DIR, 'src', 'locales');
+const SRC_DIR = path.join(ROOT_DIR, 'src');
 const SOURCE_LANG = 'en';
 
 /**
@@ -90,28 +96,81 @@ function getSourceFiles(dir, extensions = ['.ts', '.tsx']) {
 
 /**
  * Extracts translation keys used in source code
+ * Detects both direct t() calls and dynamic key usage patterns
  * @returns {Set<string>} Set of used keys
  */
 function extractUsedKeys() {
   const usedKeys = new Set();
   const sourceFiles = getSourceFiles(SRC_DIR);
 
-  // Patterns to match:
-  // t('key'), t("key"), t(`key`)
-  // i18n.t('key'), i18nInstance.t('key')
-  const patterns = [/\.t\(\s*['"`]([a-zA-Z0-9_]+)['"`]/g, /\Wt\(\s*['"`]([a-zA-Z0-9_]+)['"`]/g];
+  // Pattern 1: Direct t() calls
+  // t('key'), t("key"), t(`key`), i18n.t('key')
+  const directPatterns = [/\.t\(\s*['"`]([a-zA-Z0-9_]+)['"`]/g, /\Wt\(\s*['"`]([a-zA-Z0-9_]+)['"`]/g];
+
+  // Pattern 2: Config object properties containing i18n keys
+  // labelKey: 'extSomething', titleKey: "extSomething", descKey: `extSomething`
+  // shortLabelKey: 'extSomething'
+  const configPropertyPattern =
+    /(?:labelKey|titleKey|descKey|shortLabelKey|storageKey)\s*:\s*['"`](ext[A-Za-z0-9_]+)['"`]/g;
+
+  // Pattern 3: Switch/case or ternary return values with i18n key literals
+  // return 'extSomething'; or ? 'extSomething' : 'extSomething';
+  const returnKeyPattern = /(?:return|[?:])\s*['"`](ext[A-Za-z0-9_]+)['"`]\s*[;,):]/g;
+
+  // Pattern 4: String literals assigned to variables (key mapping objects)
+  // value: 'extSomething' or icon: 'extSomething'
+  const objectValuePattern = /:\s*['"`](ext[A-Za-z0-9_]+)['"`]\s*[,}]/g;
+
+  // Pattern 5: Array literals containing i18n key strings
+  // ['extKey1', 'extKey2', ...].map(...)
+  const arrayLiteralPattern = /['"`](ext[A-Z][A-Za-z0-9_]+)['"`]\s*[,\]]/g;
 
   for (const file of sourceFiles) {
     const content = fs.readFileSync(file, 'utf-8');
 
-    for (const pattern of patterns) {
+    // Direct t() calls
+    for (const pattern of directPatterns) {
       let match;
-      // Reset regex lastIndex for each file
       pattern.lastIndex = 0;
-
       while ((match = pattern.exec(content)) !== null) {
         usedKeys.add(match[1]);
       }
+    }
+
+    // Config property keys (labelKey, titleKey, descKey, shortLabelKey)
+    configPropertyPattern.lastIndex = 0;
+    let match;
+    while ((match = configPropertyPattern.exec(content)) !== null) {
+      usedKeys.add(match[1]);
+    }
+
+    // Return/ternary key literals
+    returnKeyPattern.lastIndex = 0;
+    while ((match = returnKeyPattern.exec(content)) !== null) {
+      usedKeys.add(match[1]);
+    }
+
+    // Object value literals (catches remaining config patterns)
+    objectValuePattern.lastIndex = 0;
+    while ((match = objectValuePattern.exec(content)) !== null) {
+      usedKeys.add(match[1]);
+    }
+
+    // Array literal keys
+    arrayLiteralPattern.lastIndex = 0;
+    while ((match = arrayLiteralPattern.exec(content)) !== null) {
+      usedKeys.add(match[1]);
+    }
+  }
+
+  // Pattern 5: manifest.json __MSG_key__ references
+  const manifestPath = path.join(ROOT_DIR, 'manifest.json');
+  if (fs.existsSync(manifestPath)) {
+    const manifestContent = fs.readFileSync(manifestPath, 'utf-8');
+    const manifestPattern = /__MSG_([a-zA-Z0-9_]+)__/g;
+    let match;
+    while ((match = manifestPattern.exec(manifestContent)) !== null) {
+      usedKeys.add(match[1]);
     }
   }
 
@@ -171,7 +230,8 @@ function main() {
   const unusedKeys = [...sourceKeys].filter((key) => !usedKeys.has(key));
 
   // Find missing keys (in code but not in translation)
-  const missingInTranslation = [...usedKeys].filter((key) => !sourceKeys.has(key));
+  // Filter to ext* keys only to exclude false positives from non-i18n string matches
+  const missingInTranslation = [...usedKeys].filter((key) => !sourceKeys.has(key) && /^ext[A-Z]/.test(key));
 
   if (missingInTranslation.length > 0) {
     console.log(`\nKeys used in code but missing from ${SOURCE_LANG}.json:`);
@@ -180,11 +240,7 @@ function main() {
 
   if (unusedKeys.length > 0) {
     console.log(`\nKeys in ${SOURCE_LANG}.json but not found in code:`);
-    console.log('(May be dynamically generated or false positives)');
-    unusedKeys.slice(0, 20).forEach((key) => console.log(`  - ${key}`));
-    if (unusedKeys.length > 20) {
-      console.log(`  ... and ${unusedKeys.length - 20} more`);
-    }
+    unusedKeys.forEach((key) => console.log(`  - ${key}`));
   }
 
   // Summary
