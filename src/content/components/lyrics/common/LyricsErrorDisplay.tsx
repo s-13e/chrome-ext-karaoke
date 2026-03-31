@@ -35,6 +35,8 @@ export const LyricsErrorDisplay: React.FC<LyricsErrorDisplayProps> = ({
 
   // 3001 에러에서 artist/title이 메시지에 포함되는지 여부
   const hasInfoInMessage = error.code === 3001 && contextArtist !== null && contextTitle !== null;
+  // 3001 에러에서 보조 힌트 표시 여부
+  const showNotFoundHint = error.code === 3001 && hasInfoInMessage;
 
   // 에러 코드를 번역 키로 매핑
   const getErrorMessageKey = (code: number): string => {
@@ -130,33 +132,11 @@ export const LyricsErrorDisplay: React.FC<LyricsErrorDisplayProps> = ({
     <div className={`lyrics-error-display ${className}`}>
       <div className="error-header">
         <span className="error-icon">{getErrorIcon()}</span>
-        <span className="error-message">{t(getErrorMessageKey(error.code), interpolationValues)}</span>
-      </div>
-
-      {error.context && (
-        <div className="error-details">
-          <details>
-            <summary>{t('extLyricsDetailsToggle')}</summary>
-            <div className="error-context">
-              <div>
-                {t('extLyricsErrorCode')}: {error.code}
-              </div>
-              {/* 3001에서 메시지에 이미 표시된 경우 중복 제거 */}
-              {!hasInfoInMessage && contextArtist && (
-                <div>
-                  {t('extArtist')}: {contextArtist}
-                </div>
-              )}
-              {!hasInfoInMessage && contextTitle && (
-                <div>
-                  {t('extSongs')}: {contextTitle}
-                </div>
-              )}
-              {getContextValue('endpoint') && <div>API Endpoint: {getContextValue('endpoint')}</div>}
-            </div>
-          </details>
+        <div className="error-message-wrap">
+          <span className="error-message">{t(getErrorMessageKey(error.code), interpolationValues)}</span>
+          {showNotFoundHint && <span className="error-hint">{t('extLyricsErrorLrclibNotFoundHint')}</span>}
         </div>
-      )}
+      </div>
 
       {actions.length > 0 && (
         <div className="error-actions">
@@ -165,6 +145,26 @@ export const LyricsErrorDisplay: React.FC<LyricsErrorDisplayProps> = ({
               {t(getActionKey(action.type))}
             </button>
           ))}
+        </div>
+      )}
+
+      {error.context && !hasInfoInMessage && (contextArtist || contextTitle) && (
+        <div className="error-details">
+          <details>
+            <summary>{t('extLyricsDetailsToggle')}</summary>
+            <div className="error-context">
+              {contextArtist && (
+                <div>
+                  {t('extArtist')}: {contextArtist}
+                </div>
+              )}
+              {contextTitle && (
+                <div>
+                  {t('extSongs')}: {contextTitle}
+                </div>
+              )}
+            </div>
+          </details>
         </div>
       )}
 
@@ -183,18 +183,32 @@ export const LyricsErrorDisplay: React.FC<LyricsErrorDisplayProps> = ({
 
         .error-header {
           display: flex;
-          align-items: center;
+          align-items: flex-start;
           gap: 8px;
-          margin-bottom: 12px;
+          margin-bottom: 16px;
         }
 
         .error-icon {
           font-size: 20px;
+          flex-shrink: 0;
+          margin-top: 1px;
+        }
+
+        .error-message-wrap {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
         }
 
         .error-message {
           font-weight: 500;
           font-size: 14px;
+          line-height: 1.4;
+        }
+
+        .error-hint {
+          font-size: 12px;
+          color: rgba(255, 255, 255, 0.5);
           line-height: 1.4;
         }
 
@@ -225,45 +239,47 @@ export const LyricsErrorDisplay: React.FC<LyricsErrorDisplayProps> = ({
         .error-actions {
           display: flex;
           gap: 8px;
-          flex-wrap: wrap;
+          margin-bottom: 8px;
         }
 
         .error-action-btn {
-          padding: 6px 12px;
+          flex: 1;
+          padding: 8px 12px;
           border: none;
-          border-radius: 4px;
-          font-size: 12px;
+          border-radius: 6px;
+          font-size: 13px;
           font-weight: 500;
           cursor: pointer;
           transition: all 0.2s ease;
+          text-align: center;
         }
 
         .error-action-btn.retry {
-          background: #4dabf7;
-          color: white;
+          background: #00d4aa;
+          color: #0f0f0f;
         }
 
         .error-action-btn.retry:hover {
-          background: #339af0;
+          background: #00bfa5;
         }
 
         .error-action-btn.manual_search {
-          background: #69db7c;
-          color: white;
+          background: #00d4aa;
+          color: #0f0f0f;
         }
 
         .error-action-btn.manual_search:hover {
-          background: #51cf66;
+          background: #00bfa5;
         }
 
         .error-action-btn.ignore {
-          background: rgba(255, 255, 255, 0.1);
-          color: rgba(255, 255, 255, 0.8);
-          border: 1px solid rgba(255, 255, 255, 0.2);
+          background: rgba(255, 255, 255, 0.08);
+          color: rgba(255, 255, 255, 0.7);
+          border: 1px solid rgba(255, 255, 255, 0.15);
         }
 
         .error-action-btn.ignore:hover {
-          background: rgba(255, 255, 255, 0.2);
+          background: rgba(255, 255, 255, 0.15);
         }
       `}</style>
     </div>
