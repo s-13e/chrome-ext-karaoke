@@ -6,7 +6,7 @@ const FEEDBACK_TIMEOUT_MS = 5000; // 5초 타임아웃
 
 interface FeedbackPayload {
   videoId: string;
-  type: 'wrong_lyrics' | 'sync_mismatch' | 'other';
+  type: 'wrong_lyrics' | 'sync_mismatch' | 'no_lyrics' | 'other';
   artist: string;
   title: string;
   details?: string;

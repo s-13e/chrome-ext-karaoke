@@ -6,7 +6,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import styles from './LyricsFeedbackButton.module.css';
 
-type FeedbackType = 'wrong_lyrics' | 'sync_mismatch';
+type FeedbackType = 'wrong_lyrics' | 'sync_mismatch' | 'no_lyrics';
 
 interface LyricsFeedbackButtonProps {
   onFeedback: (type: FeedbackType) => void;
@@ -69,6 +69,9 @@ export const LyricsFeedbackButton: React.FC<LyricsFeedbackButtonProps> = ({ onFe
           </button>
           <button className={styles.pill} type="button" onClick={() => handleFeedbackClick('sync_mismatch')}>
             {t('extFeedbackSyncMismatch')}
+          </button>
+          <button className={styles.pill} type="button" onClick={() => handleFeedbackClick('no_lyrics')}>
+            {t('extFeedbackNoLyrics')}
           </button>
         </div>
       )}

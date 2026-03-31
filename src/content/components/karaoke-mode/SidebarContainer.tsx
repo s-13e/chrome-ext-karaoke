@@ -343,7 +343,7 @@ const FeedbackReportButton: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
-  const handleReport = (type: 'wrong_lyrics' | 'sync_mismatch') => {
+  const handleReport = (type: 'wrong_lyrics' | 'sync_mismatch' | 'no_lyrics') => {
     // content/index.tsx의 handleFeedback과 동일한 메시지 전달
     window.dispatchEvent(new CustomEvent('send-lyrics-feedback', { detail: { type } }));
     setIsOpen(false);
@@ -442,6 +442,30 @@ const FeedbackReportButton: React.FC = () => {
             }}
           >
             {t('extFeedbackSyncMismatch')}
+          </span>
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={() => handleReport('no_lyrics')}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleReport('no_lyrics');
+            }}
+            style={{
+              padding: '6px 10px',
+              fontSize: '11px',
+              color: 'rgba(255,255,255,0.8)',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              userSelect: 'none',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent';
+            }}
+          >
+            {t('extFeedbackNoLyrics')}
           </span>
         </div>
       )}
@@ -758,6 +782,8 @@ const feedbackSubTypes: Record<string, { value: string; labelKey: string }[]> = 
   bug: [
     { value: 'lyrics_display', labelKey: 'extFeedbackSubBugLyricsDisplay' },
     { value: 'sync', labelKey: 'extFeedbackSubBugSync' },
+    { value: 'romanization', labelKey: 'extFeedbackSubBugRomanization' },
+    { value: 'performance', labelKey: 'extFeedbackSubBugPerformance' },
     { value: 'extension_error', labelKey: 'extFeedbackSubBugExtensionError' },
     { value: 'ui', labelKey: 'extFeedbackSubBugUi' },
     { value: 'other', labelKey: 'extGeneralFeedbackOther' },
@@ -765,6 +791,7 @@ const feedbackSubTypes: Record<string, { value: string; labelKey: string }[]> = 
   feature: [
     { value: 'new_feature', labelKey: 'extFeedbackSubFeatureNew' },
     { value: 'improve_existing', labelKey: 'extFeedbackSubFeatureImprove' },
+    { value: 'customization', labelKey: 'extFeedbackSubFeatureCustomization' },
     { value: 'ui_design', labelKey: 'extFeedbackSubFeatureUiDesign' },
     { value: 'other', labelKey: 'extGeneralFeedbackOther' },
   ],
