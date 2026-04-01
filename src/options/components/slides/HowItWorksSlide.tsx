@@ -76,51 +76,6 @@ export const HowItWorksSlide: React.FC<HowItWorksSlideProps> = ({ onNext, onBack
         </div>
       </div>
 
-      {/* Step C: 두 가지 모드 */}
-      <div style={styles.stepCard}>
-        <div style={styles.stepBadge}>3</div>
-        <div style={styles.stepContent}>
-          <h3 style={styles.stepTitle}>{t('extWelcomeHowStep2Title')}</h3>
-
-          {/* 심플 모드 */}
-          <div style={styles.modeCard}>
-            <div style={styles.modeHeader}>
-              <span style={styles.modeIcon}>📝</span>
-              <span style={styles.modeName}>{t('extWelcomeSimpleMode')}</span>
-              <span style={styles.modeDefault}>{t('extWelcomeDefault')}</span>
-            </div>
-            <p style={styles.modeDesc}>{t('extWelcomeSimpleModeDesc')}</p>
-            <div style={styles.featureChips}>
-              <span style={styles.chipDefault}>{t('extWelcomeChipSyncLyrics')}</span>
-            </div>
-          </div>
-
-          {/* 가라오케 모드 */}
-          <div style={{ ...styles.modeCard, ...styles.modeCardHighlight }}>
-            <div style={styles.modeHeader}>
-              <span style={styles.modeIcon}>🎤</span>
-              <span style={styles.modeName}>{t('extWelcomeKaraokeMode')}</span>
-            </div>
-            <p style={styles.modeDesc}>{t('extWelcomeKaraokeModeDesc')}</p>
-            <div style={styles.featureChips}>
-              {['extWelcomeChipSync', 'extWelcomeChipLoop', 'extWelcomeChipCustom', 'extWelcomeChipSidebar'].map(
-                (key) => (
-                  <span key={key} style={styles.chip}>
-                    {t(key)}
-                  </span>
-                ),
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Step C: 음표 버튼 안내 */}
-      <div style={styles.tipBox}>
-        <span style={styles.tipIcon}>💡</span>
-        <p style={styles.tipText}>{t('extWelcomeHowTip')}</p>
-      </div>
-
       <div style={styles.navRow}>
         <button type="button" onClick={onBack} style={styles.backBtn}>
           {t('extWelcomeBack')}
@@ -227,65 +182,6 @@ const styles: Record<string, React.CSSProperties> = {
     margin: 0,
     lineHeight: '1.5',
   },
-  modeCard: {
-    padding: '12px',
-    background: 'rgba(255,255,255,0.03)',
-    borderRadius: '8px',
-    border: '1px solid rgba(255,255,255,0.06)',
-  },
-  modeCardHighlight: {
-    border: '1px solid rgba(0, 212, 170, 0.25)',
-    background: 'rgba(0, 212, 170, 0.04)',
-  },
-  modeHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    marginBottom: '6px',
-  },
-  modeIcon: {
-    fontSize: '16px',
-  },
-  modeName: {
-    fontSize: '14px',
-    fontWeight: 600,
-    color: '#fff',
-  },
-  modeDefault: {
-    fontSize: '11px',
-    color: 'rgba(255,255,255,0.4)',
-    padding: '2px 6px',
-    background: 'rgba(255,255,255,0.06)',
-    borderRadius: '4px',
-  },
-  modeDesc: {
-    fontSize: '12px',
-    color: 'rgba(255,255,255,0.55)',
-    margin: 0,
-    lineHeight: '1.5',
-  },
-  featureChips: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '4px',
-    marginTop: '8px',
-  },
-  chip: {
-    fontSize: '11px',
-    padding: '3px 8px',
-    borderRadius: '10px',
-    background: 'rgba(0, 212, 170, 0.1)',
-    color: '#00d4aa',
-    whiteSpace: 'nowrap',
-  },
-  chipDefault: {
-    fontSize: '11px',
-    padding: '3px 8px',
-    borderRadius: '10px',
-    background: 'rgba(255,255,255,0.06)',
-    color: 'rgba(255,255,255,0.5)',
-    whiteSpace: 'nowrap',
-  },
   imageRow: {
     display: 'flex',
     alignItems: 'center',
@@ -315,26 +211,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '18px',
     color: 'rgba(255,255,255,0.25)',
     flexShrink: 0,
-  },
-  tipBox: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: '10px',
-    padding: '12px 14px',
-    background: 'rgba(0, 212, 170, 0.06)',
-    border: '1px solid rgba(0, 212, 170, 0.15)',
-    borderRadius: '10px',
-  },
-  tipIcon: {
-    fontSize: '16px',
-    flexShrink: 0,
-    marginTop: '1px',
-  },
-  tipText: {
-    fontSize: '13px',
-    color: 'rgba(255,255,255,0.65)',
-    margin: 0,
-    lineHeight: '1.5',
   },
   navRow: {
     display: 'flex',

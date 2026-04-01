@@ -10,6 +10,13 @@ import type { TutorialController } from './tutorialController';
 export async function showTutorialStep1IfNeeded(controller: TutorialController): Promise<void> {
   console.log('[Tutorial] showTutorialStep1IfNeeded 호출됨');
 
+  // "가사만 볼래요" 유저는 노래방 모드 안내 스킵
+  const modeResult = await chrome.storage.sync.get([STORAGE_KEYS.USER_MODE]);
+  if (modeResult[STORAGE_KEYS.USER_MODE] === 'simple') {
+    console.log('[Tutorial] Simple 모드 유저, Step1 스킵');
+    return;
+  }
+
   // DEV_MODE: 튜토리얼 상태 초기화 (항상 미완료로 시작)
   if (controller.getIsDevMode()) {
     console.log('[Tutorial] DEV_MODE: Step1/Step2 완료 상태 초기화');

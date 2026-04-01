@@ -7,6 +7,8 @@ export const STORAGE_KEYS = {
   LOADED_ROMANIZER_LIBRARIES: 'loadedRomanizerLibraries',
   ACAPELLA_LEGAL_AGREEMENT_ACCEPTED: 'acapellaLegalAgreementAccepted',
   ACAPELLA_RECORDINGS_LIST: 'acapellaRecordingsList',
+  HAS_COMPLETED_MODE_ONBOARDING: 'hasCompletedModeOnboarding',
+  USER_MODE: 'userMode',
   HAS_COMPLETED_WELCOME: 'hasCompletedWelcome',
   TUTORIAL_STEP1_COMPLETED: 'tutorialStep1Completed',
   TUTORIAL_STEP2_COMPLETED: 'tutorialStep2Completed',
