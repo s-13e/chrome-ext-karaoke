@@ -3,10 +3,11 @@ body,
 #root {
   width: 350px;
   height: 450px;
-  max-width: 360px;
+  max-width: 350px;
   margin: 0 auto;
   box-sizing: border-box;
   padding: 0;
+  overflow: hidden;
 }
 
 body {

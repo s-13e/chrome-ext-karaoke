@@ -11,6 +11,7 @@ import './popup.css';
 import { getAutoDisableState } from '@lib/utils/storage/autoDisableStorage';
 import { AutoDisableState } from '@lib/types/autoDisable';
 import { MainScreen } from './components/screens/MainScreen';
+import { ModeOnboarding } from './components/onboarding/ModeOnboarding';
 
 interface LanguageChangeMessage {
   type: typeof MESSAGE_TYPES.LANGUAGE_CHANGED;
@@ -22,6 +23,14 @@ export function App() {
   const { phase } = useLangLoader();
 
   const [showSettings, setShowSettings] = useState(false);
+  const [showModeOnboarding, setShowModeOnboarding] = useState<boolean | null>(null);
+
+  // 온보딩 완료 여부를 storage에서 확인
+  useEffect(() => {
+    chrome.storage.sync.get([STORAGE_KEYS.HAS_COMPLETED_MODE_ONBOARDING], (result) => {
+      setShowModeOnboarding(!result[STORAGE_KEYS.HAS_COMPLETED_MODE_ONBOARDING]);
+    });
+  }, []);
   const [autoDisableState, setAutoDisableState] = useState<AutoDisableState | null>(null);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const [isDarkModeLoaded, setIsDarkModeLoaded] = useState<boolean>(false);
@@ -114,11 +123,21 @@ export function App() {
     );
   }
 
-  if (phase !== 'ready' || !isDarkModeLoaded) return <LoadingOverlay />;
+  if (phase !== 'ready' || !isDarkModeLoaded || showModeOnboarding === null) return <LoadingOverlay />;
+
+  if (showModeOnboarding) {
+    return (
+      <div className="popup-wrapper">
+        <ModeOnboarding onComplete={() => setShowModeOnboarding(false)} />
+      </div>
+    );
+  }
 
   if (showSettings) {
     return <PopupSettingsPanel onBack={() => setShowSettings(false)} isDarkMode={isDarkMode} />;
   }
+
+  const IS_DEV = process.env.DEV_MODE === 'true';
 
   return (
     <div className="popup-wrapper">
@@ -127,6 +146,28 @@ export function App() {
         onOpenSettings={() => setShowSettings(true)}
         isDarkMode={isDarkMode}
       />
+      {IS_DEV && (
+        <button
+          type="button"
+          onClick={() => setShowModeOnboarding(true)}
+          style={{
+            position: 'fixed',
+            bottom: '4px',
+            right: '4px',
+            fontSize: '10px',
+            padding: '2px 6px',
+            background: '#ff6b6b',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            opacity: 0.7,
+            zIndex: 9999,
+          }}
+        >
+          DEV: 온보딩
+        </button>
+      )}
     </div>
   );
 }
