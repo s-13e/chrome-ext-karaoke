@@ -8,6 +8,7 @@ import { CurrentTimeProvider } from '@hooks/CurrentTimeContext';
 import { DualHighlightLyrics } from './SyncLyrics/DualHighlightLyrics';
 import { SingleLineLyrics } from './SingleLineLyrics/SingleLineLyrics';
 import { FullLyrics } from './FullLyrics/FullLyrics';
+import { MicroFeedback } from './MicroFeedback';
 import { Line } from '@lib/types/lyrics';
 import {
   DualHighlightLyricsStyleConfig,
@@ -85,7 +86,7 @@ const LyricsOverlayWrapperComponent: React.FC<LyricsOverlayWrapperProps> = ({
           generalSettings={generalSettings}
         />
       )}
-      {/* 피드백 버튼은 사이드바 곡 정보 헤더로 이동됨 */}
+      <MicroFeedback />
     </CurrentTimeProvider>
   );
 };

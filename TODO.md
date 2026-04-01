@@ -4,8 +4,8 @@
 
 ## Features
 
-- **가사 표시 후 마이크로 피드백** — 가사 표시 후 👍👎 한 번 클릭으로 정확도 피드백 수집
-- **조건부 Chrome Web Store 리뷰 유도** — 만족 사용자만 스토어 리뷰로 유도, 불만족 시 내부 피드백
+- ~~**가사 표시 후 마이크로 피드백** — 가사 표시 후 👍👎 한 번 클릭으로 정확도 피드백 수집~~ ✅
+- ~~**조건부 Chrome Web Store 리뷰 유도** — 만족 사용자만 스토어 리뷰로 유도, 불만족 시 내부 피드백~~ ✅
 
 ## Improvements
 
@@ -33,7 +33,7 @@
   - ~~simple 유저 노래방 모드 tooltip 스킵~~ ✅
 - ~~.gitattributes 바이너리 파일 설정 + PNG 복구~~ ✅
 - ~~ko.json "가라오케 모드" → "노래방 모드" 용어 통일~~ ✅
-- 온보딩 관련 나머지 locale 번역 추가 (en, es, ja, pt, zh-CN, zh-TW)
+- ~~온보딩 관련 나머지 locale 번역 추가 (en, es, ja, pt, zh-CN, zh-TW)~~ ✅
 
 ## 📋 Backlog
 
