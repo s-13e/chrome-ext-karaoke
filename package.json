@@ -89,6 +89,6 @@
     "styled-normalize": "^8.1.1"
   },
   "overrides": {
-    "serialize-javascript": "^7.0.4"
+    "serialize-javascript": "^7.0.5"
   }
 }
