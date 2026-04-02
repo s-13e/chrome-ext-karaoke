@@ -16,6 +16,17 @@ export const MicroFeedback: React.FC = () => {
   const [status, setStatus] = useState<'idle' | 'sent' | 'review' | 'hidden'>('idle');
   const [alreadyVoted, setAlreadyVoted] = useState(false);
   const [videoId, setVideoId] = useState<string | null>(null);
+  const [isMusicDetected, setIsMusicDetected] = useState(true);
+
+  // 음악 영상 감지 이벤트 수신
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ isMusic: boolean }>).detail;
+      setIsMusicDetected(detail.isMusic);
+    };
+    window.addEventListener('yt-karaoke-music-detection', handler);
+    return () => window.removeEventListener('yt-karaoke-music-detection', handler);
+  }, []);
 
   // URL에서 videoId 추출 + 변경 감지
   useEffect(() => {
@@ -105,7 +116,7 @@ export const MicroFeedback: React.FC = () => {
     setStatus('hidden');
   };
 
-  if (!videoId || alreadyVoted || status === 'hidden') return null;
+  if (!videoId || alreadyVoted || status === 'hidden' || !isMusicDetected) return null;
 
   return (
     <div className={styles.container}>

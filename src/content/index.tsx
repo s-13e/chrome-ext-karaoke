@@ -1428,6 +1428,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
         throw new Error('메타 정보 없음');
       }
       const isMusic = isMusicVideo(meta);
+      window.dispatchEvent(new CustomEvent('yt-karaoke-music-detection', { detail: { isMusic } }));
       contentLogger.debug('Music video detection result', { videoId, isMusic });
 
       // 음악 영상이 아니면 오버레이 제거
