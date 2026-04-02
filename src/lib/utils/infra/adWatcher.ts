@@ -29,15 +29,11 @@ export function startAdWatcher(onAdEndCallback: () => void) {
  * @returns cleanup 함수
  */
 export function startLyricsAdMonitoring(onAdStart: () => void, onAdEnd: () => void) {
-  let lastAdState = isAdPlaying();
+  // 초기 상태를 비광고로 설정: SPA 전환 직후 ad-showing 클래스가
+  // 잠시 잔류할 수 있어, 초기 판정을 건너뛰고 interval에서 상태 변화만 감지
+  let lastAdState = false;
 
   console.log('[LyricsAdMonitoring] 가사 오버레이 광고 모니터링 시작');
-
-  // 초기 상태가 광고 중이면 즉시 콜백 실행
-  if (lastAdState) {
-    console.log('[LyricsAdMonitoring] 초기 광고 상태 감지 → onAdStart 실행');
-    onAdStart();
-  }
 
   const intervalId = setInterval(() => {
     const currentAdState = isAdPlaying();

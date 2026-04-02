@@ -1297,21 +1297,20 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
     const startTime = performance.now();
     console.log(`[collectMetadataAndLyrics] 시도 ${attempt}/${API_RETRY_MAX_ATTEMPTS + 1} - videoId: ${videoId}`);
 
-    // 🎵 "가사 준비 중..." 오버레이 표시
     const player =
       (document.querySelector('video') as HTMLVideoElement)?.closest('ytd-watch-flexy')?.querySelector('video') ||
       document.querySelector('video');
 
     let loadingOverlay: HTMLElement | null = null;
 
-    if (player) {
+    // 음악 영상 판별 후 로딩 오버레이를 표시하는 헬퍼
+    function createLoadingOverlay(): HTMLElement {
       console.log('[AutoRewind] 가사 로딩 오버레이 표시');
 
-      // "가사 준비 중..." 오버레이 생성
-      loadingOverlay = document.createElement('div');
-      loadingOverlay.id = 'lyrics-loading-overlay';
+      const overlay = document.createElement('div');
+      overlay.id = 'lyrics-loading-overlay';
 
-      loadingOverlay.style.cssText = `
+      overlay.style.cssText = `
         position: absolute;
         top: 50%;
         left: 50%;
@@ -1325,14 +1324,15 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
         z-index: 9999;
         pointer-events: none;
       `;
-      loadingOverlay.textContent = `🎵 ${i18nInstance.t('extLyricsLoading')}`;
+      overlay.textContent = `🎵 ${i18nInstance.t('extLyricsLoading')}`;
 
-      // YouTube 플레이어 컨테이너 (#movie_player)에 직접 추가
       const playerContainer = document.getElementById('movie_player');
       if (playerContainer) {
         playerContainer.style.position = 'relative';
-        playerContainer.appendChild(loadingOverlay);
+        playerContainer.appendChild(overlay);
       }
+
+      return overlay;
     }
 
     try {
@@ -1433,15 +1433,11 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
 
       // 음악 영상이 아니면 오버레이 제거
       if (!isMusic) {
-        console.log('[AutoRewind] 음악 영상 아님, 오버레이 제거');
+        console.log('[AutoRewind] 음악 영상 아님, 가사 로딩 스킵');
         contentLogger.info('Not a music video, skipping lyrics and cleaning up UI', { videoId });
-        console.log('[NOT_MUSIC_VIDEO] Tracking: about to remove loading overlay');
-
-        if (loadingOverlay && loadingOverlay.parentElement) {
-          loadingOverlay.remove();
-        }
-
-        console.log('[NOT_MUSIC_VIDEO] Tracking: cleanup complete, about to throw LyricsError');
+      } else {
+        // 음악 영상 확인 후 로딩 오버레이 표시
+        loadingOverlay = createLoadingOverlay();
       }
 
       // 자동 비활성화 로직: 음악 여부에 따라 카운트 업데이트

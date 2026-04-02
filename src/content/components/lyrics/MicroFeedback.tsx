@@ -16,7 +16,7 @@ export const MicroFeedback: React.FC = () => {
   const [status, setStatus] = useState<'idle' | 'sent' | 'review' | 'hidden'>('idle');
   const [alreadyVoted, setAlreadyVoted] = useState(false);
   const [videoId, setVideoId] = useState<string | null>(null);
-  const [isMusicDetected, setIsMusicDetected] = useState(true);
+  const [isMusicDetected, setIsMusicDetected] = useState(false);
 
   // 음악 영상 감지 이벤트 수신
   useEffect(() => {
@@ -51,7 +51,7 @@ export const MicroFeedback: React.FC = () => {
     return () => observer.disconnect();
   }, []);
 
-  // 이미 투표했는지 확인 (DEV에서는 항상 표시)
+  // 이미 투표했는지 확인
   useEffect(() => {
     if (!videoId) return;
     const key = `micro_feedback_${videoId}`;
