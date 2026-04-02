@@ -26,9 +26,17 @@ export function App() {
   const [showModeOnboarding, setShowModeOnboarding] = useState<boolean | null>(null);
 
   // 온보딩 완료 여부를 storage에서 확인
+  // CONTENT_ENABLED가 이미 설정된 기존 유저는 온보딩 스킵
   useEffect(() => {
-    chrome.storage.sync.get([STORAGE_KEYS.HAS_COMPLETED_MODE_ONBOARDING], (result) => {
-      setShowModeOnboarding(!result[STORAGE_KEYS.HAS_COMPLETED_MODE_ONBOARDING]);
+    chrome.storage.sync.get([STORAGE_KEYS.HAS_COMPLETED_MODE_ONBOARDING, STORAGE_KEYS.CONTENT_ENABLED], (result) => {
+      const onboardingCompleted = result[STORAGE_KEYS.HAS_COMPLETED_MODE_ONBOARDING] === true;
+      const isExistingUser = result[STORAGE_KEYS.CONTENT_ENABLED] !== undefined;
+
+      if (!onboardingCompleted && isExistingUser) {
+        chrome.storage.sync.set({ [STORAGE_KEYS.HAS_COMPLETED_MODE_ONBOARDING]: true });
+      }
+
+      setShowModeOnboarding(!onboardingCompleted && !isExistingUser);
     });
   }, []);
   const [autoDisableState, setAutoDisableState] = useState<AutoDisableState | null>(null);

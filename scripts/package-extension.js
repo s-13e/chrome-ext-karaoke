@@ -68,7 +68,14 @@ function createZip(zipFileName) {
   if (isWindows) {
     // Use relative paths to avoid issues with non-ASCII characters in path
     const command = `powershell -Command "Compress-Archive -Path 'dist\\*' -DestinationPath '${zipFileName}' -Force"`;
-    execSync(command, { stdio: 'inherit', cwd: ROOT_DIR });
+    try {
+      execSync(command, { cwd: ROOT_DIR, encoding: 'utf-8' });
+    } catch (e) {
+      console.error('PowerShell Compress-Archive failed:');
+      console.error('stdout:', e.stdout);
+      console.error('stderr:', e.stderr);
+      throw e;
+    }
   } else {
     // Use zip command on Unix-like systems
     const command = `cd dist && zip -r "../${zipFileName}" .`;
