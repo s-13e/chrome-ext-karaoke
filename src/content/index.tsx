@@ -42,13 +42,7 @@ import musicNoteStyles from './components/karaoke-mode/musicNoteButton.module.cs
 import ReactDOM from 'react-dom/client';
 import { KaraokeModeContainer } from './components/karaoke-mode';
 import { loadFontFromFamilyString } from '@lib/utils/fonts/googleFontsLoader';
-import {
-  incrementNonMusicCount,
-  resetNonMusicCount,
-  enableAutoDisable,
-  disableAutoDisable,
-  shouldAutoDisable,
-} from '@lib/utils/storage/autoDisableStorage';
+import { processMusicDetectionResult } from '@lib/utils/storage/autoDisableStorage';
 import { ActionableToast } from './components/common/ActionableToast';
 import { TutorialController } from './tutorial/tutorialController';
 
@@ -1431,40 +1425,30 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
       window.dispatchEvent(new CustomEvent('yt-karaoke-music-detection', { detail: { isMusic } }));
       contentLogger.debug('Music video detection result', { videoId, isMusic });
 
-      // 음악 영상이 아니면 오버레이 제거
+      // 자동 비활성화 상태 머신 진행 (카운트·임계값 전이 처리)
+      const autoDisableOutcome = await processMusicDetectionResult(isMusic);
+
       if (!isMusic) {
         console.log('[AutoRewind] 음악 영상 아님, 가사 로딩 스킵');
         contentLogger.info('Not a music video, skipping lyrics and cleaning up UI', { videoId });
-      } else {
-        // 음악 영상 확인 후 로딩 오버레이 표시
-        loadingOverlay = createLoadingOverlay();
-      }
 
-      // 자동 비활성화 로직: 음악 여부에 따라 카운트 업데이트
-      if (isMusic) {
-        console.log('[AutoDisable] 음악 영상 감지 - 카운트 리셋');
-        const state = await resetNonMusicCount();
-
-        // 자동 비활성화 상태였다면 재활성화 처리
-        if (state.autoDisabled && state.autoDisabledReason === 'consecutive_non_music') {
-          console.log('[AutoDisable] 자동 비활성화 상태였으나 음악 영상 감지 → 재활성화');
-          await disableAutoDisable();
-          showReactivationToast();
-        }
-      } else {
-        console.log('[AutoDisable] 비음악 영상 감지 - 카운트 증가');
-        const state = await incrementNonMusicCount();
-        console.log(`[AutoDisable] 연속 비음악 카운트: ${state.consecutiveNonMusicCount}/${state.threshold}`);
-
-        // 임계값 도달 시 자동 비활성화
-        if (await shouldAutoDisable()) {
+        if (autoDisableOutcome.kind === 'non_music_auto_disabled') {
           console.log('[AutoDisable] 임계값 도달 - 자동 비활성화 활성화');
-          await enableAutoDisable('consecutive_non_music');
-          showAutoDisableNotification(state.threshold);
+          showAutoDisableNotification(autoDisableOutcome.threshold);
+        } else if (autoDisableOutcome.kind === 'non_music_counted') {
+          console.log(`[AutoDisable] 연속 비음악 카운트: ${autoDisableOutcome.count}/${autoDisableOutcome.threshold}`);
         }
 
         // 비음악 비디오는 LyricsError로 처리 (정상적인 스킵 상황)
         throw new LyricsError(LyricsErrorCode.NOT_MUSIC_VIDEO, 'Not a music video');
+      }
+
+      // 음악 영상 확인 후 로딩 오버레이 표시
+      loadingOverlay = createLoadingOverlay();
+
+      if (autoDisableOutcome.kind === 'music_reactivated') {
+        console.log('[AutoDisable] 자동 비활성화 상태였으나 음악 영상 감지 → 재활성화');
+        showReactivationToast();
       }
 
       const videoDurationSec = meta.durationSec ?? 0;
