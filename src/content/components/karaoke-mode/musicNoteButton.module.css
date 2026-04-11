@@ -66,6 +66,24 @@
   /* hover 시 애니메이션 속도 증가 */
   animation-duration: 4s;
 }
+
+/* 비음악 영상에서는 시각 효과(레인보우 글로우·hover 가속)를 제거한다 */
+.musicNoteButton.nonMusic {
+  opacity: 0.5;
+}
+
+.musicNoteButton.nonMusic:hover {
+  opacity: 0.7;
+}
+
+.musicNoteButton.nonMusic .icon {
+  animation: none;
+  filter: brightness(0) invert(1);
+}
+
+.musicNoteButton.nonMusic:hover .icon {
+  animation: none;
+}
 #my-custom-music-menu {
   position: absolute;
   background: #222;

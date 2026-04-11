@@ -6,24 +6,34 @@ import { STORAGE_KEYS } from '@constants/storageKeys';
 import { injectTutorialHighlightStyles, clearAllHighlights } from './tutorialStyles';
 import type { TutorialController } from './tutorialController';
 
-/** 튜토리얼 Step1 표시 (가라오케 모드 활성화 안내) */
+/**
+ * 튜토리얼 Step1 표시 가능 여부를 판정하고, 가능한 경우 음악 감지 이벤트 구독을 시작한다.
+ *
+ * 표시 정책:
+ * - DEV 모드: 완료 상태를 매번 리셋 → 다른 모든 스킵 조건을 무시하고 항상 구독 활성화
+ * - Simple 모드(가사만 볼래요): 노래방 모드 안내 자체가 불필요하므로 스킵
+ * - Step1 이미 완료: 스킵
+ *
+ * 실제 툴팁 렌더는 `yt-karaoke-music-detection` 이벤트가 isMusic=true를 보낼 때만 일어난다.
+ * 비음악 영상에서는 툴팁이 렌더되지 않고, 이미 렌더된 상태에서 비음악이 감지되면 숨겨진다.
+ */
 export async function showTutorialStep1IfNeeded(controller: TutorialController): Promise<void> {
   console.log('[Tutorial] showTutorialStep1IfNeeded 호출됨');
 
-  // "가사만 볼래요" 유저는 노래방 모드 안내 스킵
-  const modeResult = await chrome.storage.sync.get([STORAGE_KEYS.USER_MODE]);
-  if (modeResult[STORAGE_KEYS.USER_MODE] === 'simple') {
-    console.log('[Tutorial] Simple 모드 유저, Step1 스킵');
-    return;
-  }
-
-  // DEV_MODE: 튜토리얼 상태 초기화 (항상 미완료로 시작)
+  // DEV_MODE: 모든 스킵 조건을 무시하고 완료 상태 초기화 (테스트 편의)
   if (controller.getIsDevMode()) {
     console.log('[Tutorial] DEV_MODE: Step1/Step2 완료 상태 초기화');
     chrome.storage.sync.remove([STORAGE_KEYS.TUTORIAL_STEP1_COMPLETED, STORAGE_KEYS.TUTORIAL_STEP2_COMPLETED]);
     controller.setStep1Completed(false);
     controller.setStep2Completed(false);
   } else {
+    // "가사만 볼래요" 유저는 노래방 모드 안내 스킵
+    const modeResult = await chrome.storage.sync.get([STORAGE_KEYS.USER_MODE]);
+    if (modeResult[STORAGE_KEYS.USER_MODE] === 'simple') {
+      console.log('[Tutorial] Simple 모드 유저, Step1 스킵');
+      return;
+    }
+
     // 이미 완료된 경우 표시하지 않음
     const result = await chrome.storage.sync.get([STORAGE_KEYS.TUTORIAL_STEP1_COMPLETED]);
     const completed = (result[STORAGE_KEYS.TUTORIAL_STEP1_COMPLETED] as boolean | undefined) ?? false;
@@ -37,10 +47,48 @@ export async function showTutorialStep1IfNeeded(controller: TutorialController):
     }
   }
 
+  subscribeStep1ToMusicDetection(controller);
+}
+
+/**
+ * 음악 감지 이벤트를 구독해 Step1 툴팁의 표시/숨김을 제어한다.
+ * 중복 등록을 방지하기 위해 controller에 handler 참조를 저장한다.
+ */
+function subscribeStep1ToMusicDetection(controller: TutorialController): void {
+  if (controller.getStep1MusicDetectionHandler()) {
+    console.log('[Tutorial] Step1 음악 감지 리스너 이미 등록됨');
+    return;
+  }
+
+  const handler = (e: Event) => {
+    // 완료된 이후 잔여 이벤트는 무시 (completeTutorialStep1에서 정식 제거됨)
+    if (controller.isStep1Completed()) return;
+
+    const detail = (e as CustomEvent<{ isMusic: boolean }>).detail;
+    if (detail.isMusic) {
+      waitForButtonAndRenderStep1(controller);
+    } else {
+      hideTutorialStep1Tooltip(controller);
+    }
+  };
+
+  window.addEventListener('yt-karaoke-music-detection', handler);
+  controller.setStep1MusicDetectionHandler(handler);
+  console.log('[Tutorial] Step1 음악 감지 리스너 등록');
+}
+
+/**
+ * MusicNoteButton이 DOM에 삽입되기를 기다린 뒤 Step1 툴팁을 렌더한다.
+ * 이미 툴팁이 렌더된 상태라면 중복 호출을 무시한다.
+ */
+function waitForButtonAndRenderStep1(controller: TutorialController): void {
+  if (document.getElementById('tutorial-tooltip-container')) {
+    return;
+  }
+
   console.log('[Tutorial] 버튼 대기 시작...');
   let attempts = 0;
 
-  // 버튼이 DOM에 렌더링될 때까지 대기
   const waitForButton = setInterval(() => {
     attempts++;
     const musicNoteBtn = document.querySelector('.ytp-music-note-button');
@@ -53,11 +101,31 @@ export async function showTutorialStep1IfNeeded(controller: TutorialController):
     }
   }, 200);
 
-  // 10초 후에도 버튼이 없으면 취소
   setTimeout(() => {
     clearInterval(waitForButton);
     console.log('[Tutorial] 버튼 대기 타임아웃 (10초)');
   }, 10000);
+}
+
+/**
+ * Step1 툴팁 DOM/React root를 정리한다 (비음악 영상 전환 시 호출).
+ * 완료 처리(setStep1Completed)는 하지 않으므로 이후 음악 영상으로 돌아오면 다시 표시된다.
+ */
+function hideTutorialStep1Tooltip(controller: TutorialController): void {
+  const root = controller.getTutorialTooltipRoot();
+  if (!root) return;
+
+  root.unmount();
+  controller.setTutorialTooltipRoot(null);
+
+  const container = document.getElementById('tutorial-tooltip-container') as
+    | (HTMLElement & { _cleanup?: () => void })
+    | null;
+  if (container) {
+    container._cleanup?.();
+    container.remove();
+  }
+  console.log('[Tutorial] 비음악 영상 감지 - Step1 툴팁 숨김');
 }
 
 /** 튜토리얼 툴팁 위치 업데이트 함수 */
@@ -191,6 +259,13 @@ export function completeTutorialStep1(controller: TutorialController): void {
     chrome.storage.sync.set({ [STORAGE_KEYS.TUTORIAL_STEP1_COMPLETED]: true });
   } else {
     console.log('[Tutorial] DEV_MODE: Step1 완료 저장 스킵');
+  }
+
+  // 음악 감지 이벤트 구독 해제 (완료 이후 불필요)
+  const musicHandler = controller.getStep1MusicDetectionHandler();
+  if (musicHandler) {
+    window.removeEventListener('yt-karaoke-music-detection', musicHandler);
+    controller.setStep1MusicDetectionHandler(null);
   }
 
   // 하이라이트 해제 + YouTube 하단바 복원

@@ -24,6 +24,31 @@ export const MusicNoteButton: React.FC<Props> = ({ icon, contentEnabled, menuVis
   const insertionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tooltipCleanupRef = useRef<(() => void) | null>(null);
   const [isFullscreen, setIsFullscreen] = React.useState(false);
+  // 음악 영상 감지 여부 (null = 아직 판별 전, 기본 스타일 유지)
+  // 버튼이 DOM 재삽입될 때도 최신 값을 읽을 수 있도록 ref로 관리한다
+  const isMusicDetectedRef = useRef<boolean | null>(null);
+
+  /**
+   * 현재 감지 상태를 버튼 DOM에 반영 (nonMusic 클래스 토글)
+   */
+  const applyMusicStateClass = useCallback(() => {
+    const btn = btnRef.current;
+    if (!btn) return;
+    btn.classList.toggle(styles.nonMusic ?? '', isMusicDetectedRef.current === false);
+  }, []);
+
+  /**
+   * 음악 영상 감지 이벤트 구독 — 비음악 시 버튼 시각 효과 비활성화
+   */
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ isMusic: boolean }>).detail;
+      isMusicDetectedRef.current = detail.isMusic;
+      applyMusicStateClass();
+    };
+    window.addEventListener('yt-karaoke-music-detection', handler);
+    return () => window.removeEventListener('yt-karaoke-music-detection', handler);
+  }, [applyMusicStateClass]);
 
   /**
    * 전체화면 상태 감지
@@ -94,6 +119,10 @@ export const MusicNoteButton: React.FC<Props> = ({ icon, contentEnabled, menuVis
     btnRef.current = btn;
 
     btn.className = `${styles.musicNoteButton} ytp-button ytp-music-note-button`;
+    // DOM 재삽입 시점에도 직전 감지 상태를 복원
+    if (isMusicDetectedRef.current === false) {
+      btn.classList.add(styles.nonMusic ?? '');
+    }
     const tooltipText = t('extTooltipMusicNote');
     btn.setAttribute('aria-label', tooltipText);
     btn.setAttribute('data-tooltip', tooltipText);

@@ -121,3 +121,57 @@ export async function shouldAutoDisable(): Promise<boolean> {
   const state = await getAutoDisableState();
   return state.consecutiveNonMusicCount >= state.threshold;
 }
+
+/**
+ * 음악/비음악 감지 결과를 한 번의 호출로 요약한 결과 타입.
+ * 호출부는 이 결과만 보고 UI 반응(토스트·알림)을 결정하면 된다.
+ *
+ * - music_continue           : 음악 영상이 정상 감지됨 (별도 UI 없음)
+ * - music_reactivated        : 자동 비활성화 상태에서 음악 영상 감지 → 재활성화됨
+ * - non_music_counted        : 비음악 카운트 증가 중 (임계값 미만 또는 이미 자동 비활성화 상태)
+ * - non_music_auto_disabled  : 비음악 카운트가 **처음으로** 임계값에 도달하여 자동 비활성화로 전이됨
+ */
+export type MusicDetectionOutcome =
+  | { kind: 'music_continue' }
+  | { kind: 'music_reactivated' }
+  | { kind: 'non_music_counted'; count: number; threshold: number }
+  | { kind: 'non_music_auto_disabled'; threshold: number };
+
+/**
+ * 음악 감지 결과를 받아 자동 비활성화 상태 머신을 진행시킨다.
+ *
+ * 핵심 불변식: `non_music_auto_disabled`는 **autoDisabled=false → true로 전이되는 순간에만**
+ * 반환된다. 이미 자동 비활성화된 상태에서 비음악 비디오가 추가로 감지되면 `non_music_counted`로
+ * 처리되어 임계값 도달 알림이 재노출되지 않는다.
+ */
+export async function processMusicDetectionResult(isMusic: boolean): Promise<MusicDetectionOutcome> {
+  if (isMusic) {
+    const stateBefore = await getAutoDisableState();
+    await resetNonMusicCount();
+
+    const wasAutoDisabledByNonMusic =
+      stateBefore.autoDisabled && stateBefore.autoDisabledReason === 'consecutive_non_music';
+
+    if (wasAutoDisabledByNonMusic) {
+      await disableAutoDisable();
+      return { kind: 'music_reactivated' };
+    }
+    return { kind: 'music_continue' };
+  }
+
+  const stateBefore = await getAutoDisableState();
+  const state = await incrementNonMusicCount();
+
+  const justCrossedThreshold = !stateBefore.autoDisabled && state.consecutiveNonMusicCount >= state.threshold;
+
+  if (justCrossedThreshold) {
+    await enableAutoDisable('consecutive_non_music');
+    return { kind: 'non_music_auto_disabled', threshold: state.threshold };
+  }
+
+  return {
+    kind: 'non_music_counted',
+    count: state.consecutiveNonMusicCount,
+    threshold: state.threshold,
+  };
+}
