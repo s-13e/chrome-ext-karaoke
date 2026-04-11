@@ -37,6 +37,9 @@ export class TutorialController {
   private tutorialTooltipRoot: ReactDOM.Root | null = null;
   private step1Completed = false;
   private step2Completed = false;
+  // Step1 툴팁은 음악 영상 감지 이벤트(yt-karaoke-music-detection)를 구독해 표시되므로,
+  // 완료 시 정확히 해당 리스너를 제거하기 위해 참조를 보관한다
+  private step1MusicDetectionHandler: ((e: Event) => void) | null = null;
 
   // ─── Feature 튜토리얼 상태 ───────────────────────────
   private featureActive = false;
@@ -237,6 +240,14 @@ export class TutorialController {
 
   public setStep2Completed(completed: boolean): void {
     this.step2Completed = completed;
+  }
+
+  public getStep1MusicDetectionHandler(): ((e: Event) => void) | null {
+    return this.step1MusicDetectionHandler;
+  }
+
+  public setStep1MusicDetectionHandler(handler: ((e: Event) => void) | null): void {
+    this.step1MusicDetectionHandler = handler;
   }
 
   public getIsDevMode(): boolean {
