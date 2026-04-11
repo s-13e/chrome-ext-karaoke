@@ -277,6 +277,8 @@
   "extManualSearchRateLimitError": "Demasiadas solicitudes. Inténtelo de nuevo en {{seconds}} segundos.",
   "extManualSearchInputError": "Por favor ingrese el artista y el título.",
   "extManualSearchNoResults": "No se encontraron resultados. Verifica que el nombre del artista y el título sean correctos.",
+  "extManualSearchEnglishHintBody": "La base de datos de letras de LRCLib está indexada principalmente con nombres en inglés, por lo que los nombres en otros idiomas (coreano, japonés, chino, etc.) a menudo no coinciden. Usa el enlace de abajo para encontrar el nombre en inglés del artista y la canción, y vuelve a intentarlo.",
+  "extManualSearchEnglishHintAction": "Buscar el nombre en inglés en Google",
   "extManualSearchNoSyncedLyrics": "Las letras existen pero no hay letras sincronizadas disponibles. Intenta con otros términos de búsqueda.",
   "extManualSearchApiError": "Ocurrió un error durante la búsqueda. Por favor intente de nuevo.",
   "extManualSearchParseError": "Error al analizar las letras.",

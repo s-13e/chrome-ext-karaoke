@@ -192,6 +192,83 @@
   color: #f44336;
 }
 
+/*
+  영문 힌트 카드 — 에러 박스와 시각적으로 분리하기 위해 "카드" 형태로 디자인한다.
+  에러 상태(검색 결과 없음)를 흡수한 통합 카드이므로 상단에 경고 톤의 헤딩(에러 메시지)을
+  두고, 하단에 안내 본문 + 액션 버튼이 오는 3단 레이아웃.
+  배경에 blue 그라데이션 + 좌측 accent bar로 info 성격을 강화해 error 박스와 구분.
+*/
+.englishHint {
+  position: relative;
+  padding: 16px 16px 16px 20px;
+  background: linear-gradient(135deg, rgba(33, 150, 243, 0.12) 0%, rgba(33, 150, 243, 0.04) 100%);
+  border: 1px solid rgba(33, 150, 243, 0.35);
+  border-radius: 8px;
+  margin: 8px 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.englishHint::before {
+  /* 좌측 accent bar — 카드 성격(정보성 가이드)을 시각적으로 강화 */
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  background: #64b5f6;
+  border-radius: 0 2px 2px 0;
+}
+
+.englishHintHeading {
+  /* 에러 메시지 흡수 헤딩 — 좌측에 검색/경고 아이콘, 글자는 warning amber 톤 */
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffb74d;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.englishHintHeading::before {
+  content: '🔍';
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.englishHintBody {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #b0bec5;
+}
+
+.englishHintAction {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 14px;
+  background: rgba(33, 150, 243, 0.2);
+  border: 1px solid rgba(33, 150, 243, 0.55);
+  border-radius: 4px;
+  color: #90caf9;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.englishHintAction:hover {
+  background: rgba(33, 150, 243, 0.32);
+  border-color: rgba(33, 150, 243, 0.8);
+}
+
 .results {
   flex: 1;
   overflow-y: auto;

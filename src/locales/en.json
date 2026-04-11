@@ -296,6 +296,8 @@
   "extManualSearchRateLimitError": "Too many requests. Please try again in {{seconds}} seconds.",
   "extManualSearchInputError": "Please enter both artist and title.",
   "extManualSearchNoResults": "No results found. Please check if the artist name and song title are correct.",
+  "extManualSearchEnglishHintBody": "The LRCLib lyrics database is mostly indexed under English names, so non-English names (Korean, Japanese, Chinese, etc.) often don't match. Use the link below to find the English spelling of the artist and song, then try again.",
+  "extManualSearchEnglishHintAction": "Find the English name on Google",
   "extManualSearchNoSyncedLyrics": "Lyrics exist but no synced (timestamped) lyrics are available. Try different search terms.",
   "extManualSearchApiError": "An error occurred during search. Please try again.",
   "extManualSearchParseError": "Failed to parse lyrics.",

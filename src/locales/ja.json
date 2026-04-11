@@ -288,6 +288,8 @@
   "extManualSearchRateLimitError": "リクエストが多すぎます。{{seconds}}秒後に再試行してください。",
   "extManualSearchInputError": "アーティストと曲名を入力してください。",
   "extManualSearchNoResults": "検索結果がありません。アーティスト名と曲名が正確か確認してください。",
+  "extManualSearchEnglishHintBody": "LRCLibの歌詞データベースは英語表記で登録されている曲が多く、韓国語・日本語・中国語など英語以外の名前では見つからないことがよくあります。下のリンクからアーティスト・曲の英語名を確認して、もう一度検索してください。",
+  "extManualSearchEnglishHintAction": "Googleで英語名を検索",
   "extManualSearchNoSyncedLyrics": "歌詞はありますが、同期（タイムスタンプ付き）歌詞がありません。別の検索語で試してください。",
   "extManualSearchApiError": "検索中にエラーが発生しました。もう一度お試しください。",
   "extManualSearchParseError": "歌詞の解析に失敗しました。",

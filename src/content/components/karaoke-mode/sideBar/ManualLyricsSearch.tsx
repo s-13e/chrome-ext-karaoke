@@ -35,6 +35,15 @@ interface LyricsCandidate {
 const rateLimiter = new RateLimiter(1000);
 
 /**
+ * 문자열이 ASCII(영숫자·기본 기호) 범위 밖의 문자를 포함하는지 판정.
+ * 한자·가나·한글·키릴 등 non-Latin 스크립트를 LRCLib 0건 hint 발동 조건으로 사용.
+ * Unicode property escape 사용 — ESLint no-control-regex 대응.
+ */
+function containsNonAscii(text: string): boolean {
+  return /\P{ASCII}/u.test(text);
+}
+
+/**
  * 수동 가사 검색 컴포넌트
  * - 사용자가 직접 Artist, Title 입력
  * - LRCLib API 검색
@@ -55,9 +64,19 @@ export const ManualLyricsSearch: React.FC<ManualLyricsSearchProps> = ({
   // 검색 상태
   const [loading, setLoading] = useState(false);
   const [candidates, setCandidates] = useState<LyricsCandidate[]>([]);
-  const [error, setError] = useState<string>('');
+  // 에러는 번역 키+파라미터 또는 raw 문자열 형태로 저장한다.
+  // setError(t(...))로 번역된 문자열을 state에 저장하면 호출 시점의 locale이 동결되어,
+  // 이후 언어 변경(i18n LanguageDetector 재실행 등)에도 갱신되지 않는 버그가 생긴다.
+  // 키와 파라미터만 보관하고 렌더 시점에 t()를 호출해 현재 locale을 반영한다.
+  type ErrorState =
+    | { kind: 'i18n'; key: string; params?: Record<string, unknown> }
+    | { kind: 'raw'; text: string }
+    | null;
+  const [errorState, setErrorState] = useState<ErrorState>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [isFormCollapsed, setIsFormCollapsed] = useState(false);
+  // 0건 결과 + artist/title에 non-ASCII 포함 시 영문 검색 권장 hint 표시 여부
+  const [showEnglishHint, setShowEnglishHint] = useState(false);
 
   // DEV_MODE 전용: 확정 버튼 상태
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
@@ -70,7 +89,7 @@ export const ManualLyricsSearch: React.FC<ManualLyricsSearchProps> = ({
     // Rate Limiting 체크
     if (!rateLimiter.canCall()) {
       const waitTime = Math.ceil(rateLimiter.getTimeUntilNextCall() / 1000);
-      setError(t('extManualSearchRateLimitError', { seconds: waitTime }));
+      setErrorState({ kind: 'i18n', key: 'extManualSearchRateLimitError', params: { seconds: waitTime } });
       return;
     }
 
@@ -79,13 +98,14 @@ export const ManualLyricsSearch: React.FC<ManualLyricsSearchProps> = ({
     const cleanTitle = sanitizeInput(title, 100);
 
     if (!cleanArtist || !cleanTitle) {
-      setError(t('extManualSearchInputError'));
+      setErrorState({ kind: 'i18n', key: 'extManualSearchInputError' });
       return;
     }
 
     setLoading(true);
-    setError('');
+    setErrorState(null);
     setCandidates([]);
+    setShowEnglishHint(false);
 
     try {
       console.log('[ManualLyricsSearch] 가사 검색:', { artist: cleanArtist, title: cleanTitle });
@@ -102,7 +122,11 @@ export const ManualLyricsSearch: React.FC<ManualLyricsSearchProps> = ({
       const data = await response.json();
 
       if (!Array.isArray(data) || data.length === 0) {
-        setError(t('extManualSearchNoResults'));
+        setErrorState({ kind: 'i18n', key: 'extManualSearchNoResults' });
+        // non-ASCII(한·일·중 등) 포함이면 영문 검색 권장 hint 노출
+        if (containsNonAscii(cleanArtist) || containsNonAscii(cleanTitle)) {
+          setShowEnglishHint(true);
+        }
         return;
       }
 
@@ -136,7 +160,7 @@ export const ManualLyricsSearch: React.FC<ManualLyricsSearchProps> = ({
         });
 
       if (results.length === 0) {
-        setError(t('extManualSearchNoSyncedLyrics'));
+        setErrorState({ kind: 'i18n', key: 'extManualSearchNoSyncedLyrics' });
         return;
       }
 
@@ -145,7 +169,7 @@ export const ManualLyricsSearch: React.FC<ManualLyricsSearchProps> = ({
       setIsFormCollapsed(true); // 검색 결과가 있으면 폼 축약
     } catch (err) {
       console.error('[ManualLyricsSearch] 검색 오류:', err);
-      setError(t('extManualSearchApiError'));
+      setErrorState({ kind: 'i18n', key: 'extManualSearchApiError' });
     } finally {
       setLoading(false);
     }
@@ -238,8 +262,9 @@ export const ManualLyricsSearch: React.FC<ManualLyricsSearchProps> = ({
   const handleNewSearch = () => {
     setIsFormCollapsed(false);
     setCandidates([]);
-    setError('');
+    setErrorState(null);
     setExpandedIds(new Set());
+    setShowEnglishHint(false);
   };
 
   /**
@@ -267,7 +292,7 @@ export const ManualLyricsSearch: React.FC<ManualLyricsSearchProps> = ({
       }
 
       if (lines.length === 0) {
-        setError(t('extManualSearchParseError'));
+        setErrorState({ kind: 'i18n', key: 'extManualSearchParseError' });
         return;
       }
 
@@ -279,7 +304,7 @@ export const ManualLyricsSearch: React.FC<ManualLyricsSearchProps> = ({
       onLyricsSelected(lines);
     } catch (err) {
       console.error('[ManualLyricsSearch] 파싱 오류:', err);
-      setError(t('extManualSearchParseError'));
+      setErrorState({ kind: 'i18n', key: 'extManualSearchParseError' });
     }
   };
 
@@ -289,7 +314,7 @@ export const ManualLyricsSearch: React.FC<ManualLyricsSearchProps> = ({
   const handleConfirmMapping = async (candidate: LyricsCandidate) => {
     const videoId = extractVideoIdFromUrl(window.location.href);
     if (!videoId) {
-      setError('현재 YouTube 영상 ID를 찾을 수 없습니다.');
+      setErrorState({ kind: 'raw', text: '현재 YouTube 영상 ID를 찾을 수 없습니다.' });
       return;
     }
 
@@ -325,7 +350,7 @@ export const ManualLyricsSearch: React.FC<ManualLyricsSearchProps> = ({
       setConfirmedIds((prev) => new Set(prev).add(candidate.id));
     } catch (err) {
       console.error('[ManualLyricsSearch] 매핑 확정 실패:', err);
-      setError(`매핑 저장 실패: ${err instanceof Error ? err.message : '알 수 없는 오류'}`);
+      setErrorState({ kind: 'raw', text: `매핑 저장 실패: ${err instanceof Error ? err.message : '알 수 없는 오류'}` });
     } finally {
       setConfirmingId(null);
     }
@@ -401,10 +426,51 @@ export const ManualLyricsSearch: React.FC<ManualLyricsSearchProps> = ({
         )}
       </div>
 
-      {/* 에러 메시지 */}
-      {error && (
+      {/* 에러 메시지 — 힌트가 함께 뜰 때는 힌트 카드가 에러를 흡수해 렌더하므로 여기서는 제외 */}
+      {errorState && !showEnglishHint && (
         <div className={styles.error}>
-          <p>{error}</p>
+          <p>{errorState.kind === 'i18n' ? t(errorState.key, errorState.params) : errorState.text}</p>
+        </div>
+      )}
+
+      {/*
+        영문 검색 권장 힌트: 0건 결과 + non-ASCII 검색어일 때만 노출.
+        에러 박스와 시각적으로 중복되지 않도록, 에러 메시지를 이 카드의 헤딩으로 흡수한다.
+      */}
+      {showEnglishHint && (
+        <div className={styles.englishHint}>
+          <p className={styles.englishHintHeading}>
+            {errorState?.kind === 'i18n'
+              ? t(errorState.key, errorState.params)
+              : errorState?.kind === 'raw'
+                ? errorState.text
+                : t('extManualSearchNoResults')}
+          </p>
+          <p className={styles.englishHintBody}>{t('extManualSearchEnglishHintBody')}</p>
+          <a
+            className={styles.englishHintAction}
+            href={(() => {
+              // URL을 쿼리에 넣으면 Google이 phrase match 모드로 들어가 결과가 안 나옴.
+              // 대신 YouTube 영상의 raw title(document.title)을 쿼리 주재료로 사용한다.
+              // YouTube 영상 제목은 대부분 원어+영문이 병기되어 있어 AI가 영문명을 추출하기 쉬움.
+              //
+              // 접두사 "(알림 개수)"와 접미사 " - YouTube"를 제거한 뒤 질문형으로 포장.
+              const rawTitle = document.title
+                .replace(/^\(\d+\)\s*/, '')
+                .replace(/\s*-\s*YouTube$/, '')
+                .trim();
+
+              // 폴백: document.title에서 의미 있는 제목을 못 뽑았을 때 사용자 입력 사용
+              const subject = rawTitle && rawTitle.toLowerCase() !== 'youtube' ? rawTitle : `${artist} - ${title}`;
+
+              const query = `what is the english artist and title for: ${subject}? Answer in format "Artist: ..., Title: ...".`;
+              return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+            })()}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {t('extManualSearchEnglishHintAction')}
+          </a>
         </div>
       )}
 
