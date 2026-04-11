@@ -1130,13 +1130,20 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
     }
 
     stopLyricsAdMonitoring = startLyricsAdMonitoring(
-      // 광고 시작 시: 가사 오버레이 숨김
+      // 광고 시작 시: 가사 + songInfo 오버레이 숨김
       () => {
         overlayManager.setVisibility('lyrics', false);
+        if (overlayManager.getContainer('songInfo')) {
+          overlayManager.setVisibility('songInfo', false);
+        }
       },
-      // 광고 종료 시: 가사 오버레이 표시
+      // 광고 종료 시: 가사 복원. songInfo는 아직 8초 auto-hide가 안 된 경우에만 복원
+      // (songInfoVideoTimeListener가 살아있으면 auto-hide 전이라는 신호)
       () => {
         overlayManager.setVisibility('lyrics', true);
+        if (songInfoVideoTimeListener && overlayManager.getContainer('songInfo')) {
+          overlayManager.setVisibility('songInfo', true);
+        }
       },
     );
   }
