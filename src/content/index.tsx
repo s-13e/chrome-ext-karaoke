@@ -262,6 +262,20 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
   const API_RETRY_MAX_ATTEMPTS = 2; // API 타임아웃 시 최대 재시도 횟수
   const isMiniToFullTransitioning = false;
 
+  /**
+   * 세션 동안 videoId별 가사 데이터를 캐싱해두는 in-memory cache.
+   *
+   * 용도: 가라오케 모드에서 미니 버튼·로고 클릭 등으로 watch 페이지를 벗어났다가 돌아왔을 때,
+   * 같은 영상이면 LRCLib API 재호출 없이 캐시에서 즉시 복원하고 AutoRewind(0초 되감기)도
+   * 건너뛰어, 사용자가 본 시점부터 그대로 재생을 이어갈 수 있게 한다.
+   */
+  interface CachedLyricsEntry {
+    lyrics: Line[];
+    title: string;
+    artist: string;
+  }
+  const sessionLyricsCache = new Map<string, CachedLyricsEntry>();
+
   function delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
@@ -373,6 +387,8 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
    * 화면에 표시된 가사 렌더링을 초기 상태로 재실행하는 함수
    */
   function resetLyricsData() {
+    const stackTrace = new Error().stack?.split('\n').slice(2, 5).join(' ← ') || 'no-stack';
+    console.log(`[resetLyricsData] 호출 caller=${stackTrace}`);
     // 이전 가사 수집 무효화: 세대 카운터 증가
     collectGeneration++;
     // 이전 수집/감지 작업이 진행 중이더라도 새 감지를 허용하기 위해 플래그 리셋
@@ -830,6 +846,16 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
     // 사이드바 곡 정보 헤더 업데이트
     karaokeModeManager.setSongInfo(title, artist);
 
+    // 영상 재생 시간이 이미 auto-hide 임계값을 넘겼다면 overlay 렌더를 건너뛴다.
+    // 예: 세션 캐시 복원(미니→복귀), 수동 가사 선택 등의 시나리오에서 사용자는 이미 영상을
+    // 한참 보고 있던 상태라 이 시점에 song 정보를 띄우면 timeupdate가 곧바로 숨김 처리를
+    // 실행해 "잠깐 떴다가 사라지는" 깜빡임이 발생한다.
+    const videoElem = document.querySelector('video');
+    if (videoElem && videoElem.currentTime >= SONG_INFO_HIDE_AT_VIDEO_TIME) {
+      console.log('[renderSongInfo] 재생 시간이 auto-hide 임계값 초과 - overlay 렌더 스킵 (깜빡임 방지)');
+      return;
+    }
+
     overlayManager.renderOverlay(
       'songInfo',
       <SongInfoOverlay title={title} artist={artist} lyricsSource="LRCLIB" lyricsMode={lyricsMode} />,
@@ -837,7 +863,6 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
     overlayManager.setVisibility('songInfo', true);
 
     // 영상 재생 시간 기준으로 자동 숨김 (광고 시간 제외)
-    const videoElem = document.querySelector('video');
     if (videoElem) {
       songInfoVideoTimeListener = () => {
         // 광고 중이 아니고, 영상 재생 시간이 8초 이상일 때만 숨김
@@ -978,8 +1003,13 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
         case 'SPA_NAVIGATION_DETECTED': {
           // background.ts가 { url, isWatchPage } 객체로 전송하므로 URL 문자열 추출
           const navUrl = typeof message.payload === 'string' ? message.payload : message.payload?.url;
-          if (navUrl) {
+          // 중복 방지: yt-navigate-finish / debounced SPA observer와 같은 URL에 대해 이미 처리됐으면 스킵.
+          // 안 하면 동일 URL에 대해 handleSpaUrlChange가 2회 이상 호출되어,
+          // 두 번째 호출에서 `url === lastUrl` 조건이 handleUrlChange의 "URL 동일, 새로고침" 브랜치를
+          // 발화시키고 그 안에서 lastVideoId=null + resetLyricsData가 실행돼 state가 파괴된다.
+          if (navUrl && navUrl !== lastUrl) {
             handleSpaUrlChange(navUrl);
+            lastUrl = navUrl;
           }
           sendResponse({ status: 'ok' });
           break;
@@ -1158,10 +1188,6 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
     }
   }
 
-  function isLyricsOverlayMounted(): boolean {
-    return overlayManager.isOverlayMounted('lyrics');
-  }
-
   // ✅ URL 변경 핸들러 개선, 변화에 따른 상세 후처리(UI 초기화, 중복 방지 등)**를 담당하는 하위 레벨 함수
   const handleUrlChange = (url: string) => {
     console.log('handleUrlChange가 실행됨.');
@@ -1289,6 +1315,24 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
       console.log('[Lyrics] 수집 중복 방지 중...');
       return null;
     }
+
+    // 세션 캐시 확인: 같은 videoId를 이번 세션에 이미 처리한 적 있으면 API 재호출 없이 즉시 복원.
+    // 가라오케 모드에서 미니 버튼·YouTube 로고 클릭 등으로 watch 페이지를 잠깐 벗어났다가
+    // 돌아온 경우를 주 타겟으로 함. AutoRewind(0초 되감기)도 완전히 건너뛰어 사용자가 보던
+    // 재생 시점 그대로 이어서 본다.
+    const cached = sessionLyricsCache.get(videoId);
+    if (cached) {
+      console.log(`[Lyrics] 세션 캐시 히트 - videoId: ${videoId}, API 재호출·AutoRewind 스킵`);
+      isCollecting = true;
+      try {
+        renderSongInfo(cached.title, cached.artist);
+        onLyricsUpdated(cached.lyrics);
+      } finally {
+        isCollecting = false;
+      }
+      return true;
+    }
+
     isCollecting = true;
     const myGeneration = collectGeneration;
 
@@ -1766,6 +1810,13 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
         return null;
       }
 
+      // 세션 캐시에 저장 — 같은 videoId로 복귀 시 API 재호출·AutoRewind 스킵용
+      sessionLyricsCache.set(videoId, {
+        lyrics: finalParsedLyrics,
+        title: finalLyricsResult.title || 'Unknown',
+        artist: finalLyricsResult.artist || 'Unknown',
+      });
+
       // 광고 종료 후 즉시 가사 렌더링 (오프셋 적용된 가사)
       onLyricsUpdated(finalParsedLyrics);
       await analyzeAudioAndRender(videoElem, meta, effectiveLyricsDuration, finalParsedLyrics);
@@ -1858,7 +1909,10 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
 
   // 영상 감지 핸들러 (순수 로직)
   const handleVideoDetection = async () => {
-    console.log('handleVideoDetection 실행');
+    const stackTrace = new Error().stack?.split('\n').slice(2, 6).join(' ← ') || 'no-stack';
+    console.log(
+      `[handleVideoDetection] 실행 lastVideoId=${lastVideoId} latestLyrics.length=${latestLyrics.length} isDetecting=${isDetecting} isCollecting=${isCollecting} caller=${stackTrace}`,
+    );
     if (isDetecting) {
       console.log('[handleVideoDetection] 이미 실행되고 있음');
       return;
@@ -1881,7 +1935,13 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
         return;
       }
 
-      if (videoData.videoId === lastVideoId && isLyricsOverlayMounted()) {
+      // 같은 영상이고 이미 가사 데이터를 확보했으면 재수집 스킵.
+      // 이전엔 isLyricsOverlayMounted()(document.body.contains 체크)를 썼는데,
+      // 미니 플레이어 전환 중 YouTube가 #movie_player를 일시 detach할 때
+      // 오버레이 container가 detached 상태가 되어 false를 반환 → 불필요한 재수집과
+      // auto-rewind(0초 리셋)를 유발했다. 데이터 보유 여부(latestLyrics)로 판단하는 게
+      // DOM 상태 변동에 강건하다.
+      if (videoData.videoId === lastVideoId && latestLyrics.length > 0) {
         contentLogger.debug('Video already processed, skipping', { videoId: videoData.videoId });
         return;
       }
@@ -1927,32 +1987,31 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
 
     const currentVideoId = getCurrentVideoId();
     const currentIsWatchPage = checkIsWatchPage(url);
-    const previousIsWatchPage = checkIsWatchPage(lastUrl);
 
-    // 미니플레이어 전환 race 대응 + 스크롤 미니 커버.
-    //
-    // YouTube 미니 진입 시 (1) URL 변화와 (2) .html5-video-player class 추가 사이에 수 ms 갭이
-    // 있고, yt-navigate-finish는 debounce 없이 즉시 발화하므로, class 기반 감지만으로는
-    // race를 피할 수 없다. 또한 스크롤 미니는 URL을 바꾸지 않으면서 ytd-miniplayer에만 영향을
-    // 준다. 따라서 (A) detectMiniMode()로 모든 경로 검사 OR (B) "watch → non-watch 이탈"
-    // 휴리스틱 둘 중 하나라도 참이면 상태를 보존한다.
-    const isMiniNow = detectMiniMode();
-    const leavingWatchPage = !currentIsWatchPage && previousIsWatchPage;
-    console.log(
-      `[SPA Guard] url=${url} isMiniNow=${isMiniNow} leavingWatchPage=${leavingWatchPage} lastUrl=${lastUrl}`,
-    );
-    if (isMiniNow || leavingWatchPage) {
-      console.log('[SPA] 미니플레이어 활성/watch 이탈 - 가사 오버레이 숨김, 영상 상태 유지');
-      if (overlayManager.getContainer('lyrics')) {
-        overlayManager.setVisibility('lyrics', false);
+    // watch 페이지 + videoId가 있는 경우의 빠른 경로 처리
+    if (currentIsWatchPage && currentVideoId) {
+      // (1) 같은 영상 + 이미 latestLyrics가 로드된 상태면 URL 쿼리 변동 등이므로 no-op
+      if (currentVideoId === lastVideoId && latestLyrics.length > 0) {
+        lastUrl = url;
+        return;
       }
-      lastUrl = url;
-      return;
-    }
 
-    // guard를 지나 정상 플로우로 들어온 경우 = "미니 아니고 watch 페이지 내 이동/복귀".
-    // Observer가 놓친 mini 해제도 이 경로를 통해 visibility를 복원할 수 있도록 sync 호출.
-    syncLyricsVisibilityWithMiniState('handleSpaUrlChange-fallthrough');
+      // (2) 세션 캐시 shortcut: 이미 이번 세션에 처리한 영상이면 API 재호출·AutoRewind 없이
+      // 즉시 복원. 가라오케 모드에서 미니 버튼·로고 클릭으로 watch 페이지를 잠깐 이탈했다가
+      // 돌아오는 경우의 핵심 타겟. handleUrlChange가 미니 상태에서 early return해서 재수집이
+      // 아예 트리거되지 않는 문제를 이 지점에서 우회한다.
+      const cached = sessionLyricsCache.get(currentVideoId);
+      if (cached) {
+        console.log(`[SPA] 세션 캐시 히트 - videoId: ${currentVideoId}, 복원 (API+AutoRewind 스킵)`);
+        renderSongInfo(cached.title, cached.artist);
+        onLyricsUpdated(cached.lyrics);
+        lastVideoId = currentVideoId;
+        lastArtist = cached.artist;
+        lastTitle = cached.title;
+        lastUrl = url;
+        return;
+      }
+    }
 
     const videoIdChanged = currentVideoId !== lastVideoId;
     const urlChanged = hasUrlChanged(url, lastUrl);
@@ -2103,7 +2162,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
 
   /**
    * 현재 미니 상태를 읽어 가사 오버레이 visibility에 반영.
-   * 가사 container가 없으면 no-op. 호출부는 언제 호출되든 안전하다.
+   * 가사 container가 없으면 no-op.
    */
   function syncLyricsVisibilityWithMiniState(trigger: string): void {
     if (!overlayManager.getContainer('lyrics')) return;
@@ -2116,15 +2175,17 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
    * 미니 플레이어 전환 감지용 통합 observer.
    * .html5-video-player의 class 변화와 ytd-miniplayer의 active 속성 변화를 모두 감지한다.
    */
+  // MutationObserver dedup — YouTube는 .html5-video-player의 class를 매우 자주 변경한다
+  // (autohide, transparent, hover 등). 대부분은 mini 상태와 무관해서 매번 sync 실행하면
+  // 로그 폭주 + 낭비가 발생하므로, 마지막 mini 상태를 기억해 변화 시에만 동기화한다.
+  let lastMiniObserverMiniState: boolean | null = null;
+
   function setupMiniPlayerObserver() {
-    const observer = new MutationObserver((mutations) => {
-      // 디버그: 어떤 요소의 어떤 속성이 바뀌었는지 한 줄로 기록
-      for (const m of mutations) {
-        const target = m.target as Element;
-        console.log(
-          `[MiniObserver] mutation: ${target.tagName}.${target.className?.toString().slice(0, 40)} attr=${m.attributeName}`,
-        );
-      }
+    const observer = new MutationObserver(() => {
+      const isMini = detectMiniMode();
+      if (isMini === lastMiniObserverMiniState) return; // 상태 변화 없음 → 스킵
+      lastMiniObserverMiniState = isMini;
+
       syncLyricsVisibilityWithMiniState('MutationObserver');
     });
 
