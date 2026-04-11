@@ -147,7 +147,6 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
 
   let spaObserverShouldTriggerDetection = true;
   let isRetryingDetection = false; // 재시도 중복 제어 플래그
-  let isFirstMutation = true;
 
   // font
   let lyricsFontColorCurrent = '#FFFFFF';
@@ -327,15 +326,14 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
     spaObserver: MutationObserver | null;
     lyricsObserver: MutationObserver | null;
     videoElementObserver: MutationObserver | null;
-    miniToBasicObserver: MutationObserver | null;
-    basicToMiniObserver: MutationObserver | null;
+    /** 미니 플레이어 전환(네이티브 class + 스크롤-미니 ytd-miniplayer) 통합 감지 observer */
+    miniPlayerObserver: MutationObserver | null;
   }
   const detectionObserverManager: DetectionObserverManager = {
     spaObserver: null,
     lyricsObserver: null,
     videoElementObserver: null,
-    miniToBasicObserver: null,
-    basicToMiniObserver: null,
+    miniPlayerObserver: null,
   };
 
   //
@@ -367,8 +365,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
     detectionObserverManager.spaObserver = null;
     detectionObserverManager.lyricsObserver = null;
     detectionObserverManager.videoElementObserver = null;
-    detectionObserverManager.miniToBasicObserver = null;
-    detectionObserverManager.basicToMiniObserver = null;
+    detectionObserverManager.miniPlayerObserver = null;
   };
 
   /**
@@ -1920,8 +1917,35 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
   // SPA URL 변화 처리 공통 함수, URL 변화의 감지와 상태 판단을 담당하는 상위 레벨 함수
   function handleSpaUrlChange(url: string) {
     if (!contentEnabled) return;
+
     const currentVideoId = getCurrentVideoId();
     const currentIsWatchPage = checkIsWatchPage(url);
+    const previousIsWatchPage = checkIsWatchPage(lastUrl);
+
+    // 미니플레이어 전환 race 대응 + 스크롤 미니 커버.
+    //
+    // YouTube 미니 진입 시 (1) URL 변화와 (2) .html5-video-player class 추가 사이에 수 ms 갭이
+    // 있고, yt-navigate-finish는 debounce 없이 즉시 발화하므로, class 기반 감지만으로는
+    // race를 피할 수 없다. 또한 스크롤 미니는 URL을 바꾸지 않으면서 ytd-miniplayer에만 영향을
+    // 준다. 따라서 (A) detectMiniMode()로 모든 경로 검사 OR (B) "watch → non-watch 이탈"
+    // 휴리스틱 둘 중 하나라도 참이면 상태를 보존한다.
+    const isMiniNow = detectMiniMode();
+    const leavingWatchPage = !currentIsWatchPage && previousIsWatchPage;
+    console.log(
+      `[SPA Guard] url=${url} isMiniNow=${isMiniNow} leavingWatchPage=${leavingWatchPage} lastUrl=${lastUrl}`,
+    );
+    if (isMiniNow || leavingWatchPage) {
+      console.log('[SPA] 미니플레이어 활성/watch 이탈 - 가사 오버레이 숨김, 영상 상태 유지');
+      if (overlayManager.getContainer('lyrics')) {
+        overlayManager.setVisibility('lyrics', false);
+      }
+      lastUrl = url;
+      return;
+    }
+
+    // guard를 지나 정상 플로우로 들어온 경우 = "미니 아니고 watch 페이지 내 이동/복귀".
+    // Observer가 놓친 mini 해제도 이 경로를 통해 visibility를 복원할 수 있도록 sync 호출.
+    syncLyricsVisibilityWithMiniState('handleSpaUrlChange-fallthrough');
 
     const videoIdChanged = currentVideoId !== lastVideoId;
     const urlChanged = hasUrlChanged(url, lastUrl);
@@ -2035,50 +2059,85 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
     return observer;
   }
 
-  // 미니 -> 기본 감지
-  function setupMiniToBasicTransitionObserver() {
-    const player = document.querySelector(YOUTUBE_MINI_PLAYER_CONTAINER_SELECTOR);
-    if (!player) return null;
+  // ─── 미니 플레이어 통합 감지 ─────────────────────────────────────────────────
+  //
+  // YouTube 미니 플레이어는 두 가지 다른 메커니즘으로 동작한다:
+  //   1) 네이티브 미니 버튼 (플레이어 컨트롤의 미니 아이콘 클릭):
+  //      .html5-video-player 요소에 ytp-miniplayer/ytp-small-mode class 추가
+  //   2) 스크롤 미니 (watch 페이지에서 아래로 스크롤):
+  //      별도의 <ytd-miniplayer> 요소에 active 속성 토글, .html5-video-player 영향 없음
+  //
+  // 기존 코드는 (1)만 감지하여 (2)가 전혀 작동하지 않았다. detectMiniMode()에서 두 경로를
+  // 모두 검사하고, 단일 observer가 양쪽 요소 변화를 감지해 가사 오버레이 visibility를
+  // 동기화한다.
 
-    let lastIsMini = YOUTUBE_MINI_PLAYER_CLASSES.some((c) => player.classList.contains(c));
-    const observer = new MutationObserver(() => {
-      if (isFirstMutation) {
-        isFirstMutation = false;
-        lastIsMini = YOUTUBE_MINI_PLAYER_CLASSES.some((c) => player.classList.contains(c));
-        return;
-      }
-      const isMini = YOUTUBE_MINI_PLAYER_CLASSES.some((c) => player.classList.contains(c));
-      if (lastIsMini && !isMini) {
-        console.log('[Transition] 미니 -> 기본 유지');
-        renderLyricsOverlay(latestLyrics);
-      }
-      lastIsMini = isMini;
-    });
-    observer.observe(player, { attributes: true, attributeFilter: ['class'] });
-    detectionObserverManager.miniToBasicObserver = observer;
-    return observer;
+  /** 현재 DOM 상태에서 미니 플레이어가 활성인지 판정 */
+  function detectMiniMode(): boolean {
+    // (1) 네이티브 미니: .html5-video-player의 class
+    const player = document.querySelector(YOUTUBE_MINI_PLAYER_CONTAINER_SELECTOR) as HTMLElement | null;
+    if (player && YOUTUBE_MINI_PLAYER_CLASSES.some((c) => player.classList.contains(c))) {
+      return true;
+    }
+
+    // (2) 스크롤 미니: ytd-miniplayer[active]
+    const ytMiniplayer = document.querySelector('ytd-miniplayer');
+    if (ytMiniplayer && ytMiniplayer.hasAttribute('active')) {
+      return true;
+    }
+
+    // (3) 폴백: ytp-miniplayer-ui가 실제로 표시되어 있는지
+    const miniUI = document.querySelector('.ytp-miniplayer-ui');
+    if (miniUI instanceof HTMLElement && miniUI.offsetParent !== null) {
+      return true;
+    }
+
+    return false;
   }
-  // 기본 -> 미니 감지
-  function setupBasicToMiniTransitionObserver() {
-    const player = document.querySelector(YOUTUBE_MINI_PLAYER_CONTAINER_SELECTOR);
-    if (!player) return null;
 
-    let lastIsMini = YOUTUBE_MINI_PLAYER_CLASSES.some((c) => player.classList.contains(c));
+  /**
+   * 현재 미니 상태를 읽어 가사 오버레이 visibility에 반영.
+   * 가사 container가 없으면 no-op. 호출부는 언제 호출되든 안전하다.
+   */
+  function syncLyricsVisibilityWithMiniState(trigger: string): void {
+    if (!overlayManager.getContainer('lyrics')) return;
+    const isMini = detectMiniMode();
+    console.log(`[MiniSync] (${trigger}) isMini=${isMini} → visibility=${!isMini}`);
+    overlayManager.setVisibility('lyrics', !isMini);
+  }
 
-    const observer = new MutationObserver(() => {
-      const isMini = YOUTUBE_MINI_PLAYER_CLASSES.some((c) => player.classList.contains(c));
-
-      if (!lastIsMini && isMini) {
-        console.log('[Transition] 기본 → 미니 플레이어 전환 감지');
-        // 미니플레이어 전환 시 UI 유지 또는 재렌더링 처리
-        renderLyricsOverlay(latestLyrics); // 필요 시 상태 동기화 및 감지 조작 수행
+  /**
+   * 미니 플레이어 전환 감지용 통합 observer.
+   * .html5-video-player의 class 변화와 ytd-miniplayer의 active 속성 변화를 모두 감지한다.
+   */
+  function setupMiniPlayerObserver() {
+    const observer = new MutationObserver((mutations) => {
+      // 디버그: 어떤 요소의 어떤 속성이 바뀌었는지 한 줄로 기록
+      for (const m of mutations) {
+        const target = m.target as Element;
+        console.log(
+          `[MiniObserver] mutation: ${target.tagName}.${target.className?.toString().slice(0, 40)} attr=${m.attributeName}`,
+        );
       }
-
-      lastIsMini = isMini;
+      syncLyricsVisibilityWithMiniState('MutationObserver');
     });
 
-    observer.observe(player, { attributes: true, attributeFilter: ['class'] });
-    detectionObserverManager.basicToMiniObserver = observer;
+    // (1) .html5-video-player의 class 변화
+    const player = document.querySelector(YOUTUBE_MINI_PLAYER_CONTAINER_SELECTOR);
+    if (player) {
+      observer.observe(player, { attributes: true, attributeFilter: ['class'] });
+      console.log('[MiniObserver] .html5-video-player 관찰 시작');
+    } else {
+      console.warn('[MiniObserver] .html5-video-player 미발견');
+    }
+
+    // (2) ytd-miniplayer의 active 속성 변화 (스크롤 미니 커버)
+    const ytMiniplayer = document.querySelector('ytd-miniplayer');
+    if (ytMiniplayer) {
+      observer.observe(ytMiniplayer, { attributes: true, attributeFilter: ['active'] });
+      console.log('[MiniObserver] ytd-miniplayer 관찰 시작');
+    } else {
+      console.warn('[MiniObserver] ytd-miniplayer 미발견 (스크롤-미니 감지 불가)');
+    }
 
     return observer;
   }
@@ -2133,14 +2192,9 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
       detectionObserverManager.videoElementObserver = null;
     }
 
-    if (detectionObserverManager.miniToBasicObserver) {
-      detectionObserverManager.miniToBasicObserver.disconnect();
-      detectionObserverManager.miniToBasicObserver = null;
-    }
-
-    if (detectionObserverManager.basicToMiniObserver) {
-      detectionObserverManager.basicToMiniObserver.disconnect();
-      detectionObserverManager.basicToMiniObserver = null;
+    if (detectionObserverManager.miniPlayerObserver) {
+      detectionObserverManager.miniPlayerObserver.disconnect();
+      detectionObserverManager.miniPlayerObserver = null;
     }
 
     if (!isDetectionActive) {
@@ -2207,12 +2261,9 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
   function startDetectionWorkflow() {
     initListenersAndState(); // Storage 초기값 및 이벤트 등록
 
-    // MutationObserver 등록 및 manager에 저장
-    if (!detectionObserverManager.miniToBasicObserver) {
-      detectionObserverManager.miniToBasicObserver = setupMiniToBasicTransitionObserver();
-    }
-    if (!detectionObserverManager.basicToMiniObserver) {
-      detectionObserverManager.basicToMiniObserver = setupBasicToMiniTransitionObserver();
+    // 미니 플레이어 전환 감지(네이티브 + 스크롤 미니 통합)
+    if (!detectionObserverManager.miniPlayerObserver) {
+      detectionObserverManager.miniPlayerObserver = setupMiniPlayerObserver();
     }
 
     enableDetection(); // 감지 시스템 활성화 및 옵저버 등록
