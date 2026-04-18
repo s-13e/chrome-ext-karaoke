@@ -9,10 +9,17 @@
 //   10: source → pitchNode → destination                  (피치만, 기존)
 //   11: source → vocalChain → pitchNode → destination     (둘 다)
 //
-// 보컬 체인(Tier 1, L−R 센터 캔슬 + 가벼운 EQ):
+// 보컬 체인(Tier 1, L−R 센터 캔슬 + 3-밴드 EQ):
 //   splitter[0] (L) ─Gain(+1)─┐
-//                              ├─→ sumNode ─→ stereoMerger (mono→stereo) ─→ biquad(peaking) ─→ out
-//   splitter[1] (R) ─Gain(−1)─┘
+//                              ├─→ sumNode ─→ stereoMerger (mono→stereo)
+//   splitter[1] (R) ─Gain(−1)─┘                    │
+//                                                  ▼
+//                            lowShelf ─→ midPeak ─→ highPeak ─→ out
+//
+// 분석 탭(입력 분석용, 메인 오디오에 영향 없음):
+//   source ─→ spectrumAnalyser (mono FFT)
+//   source ─→ analyzerSplitter ─→ lAnalyser (L 채널, 시간영역)
+//                                └→ rAnalyser (R 채널, 시간영역)
 //
 // Tier 2(HD, ML 기반)는 추후 동일한 vocalChain 자리에 AudioWorkletNode 로 대체 예정.
 
@@ -21,14 +28,54 @@ import { STORAGE_KEYS } from '@constants/storageKeys';
 
 export type VocalMode = 'off' | 'basic' | 'hd';
 
+/** 3-band EQ 파라미터 (보컬 체인 후반부) */
+export interface VocalEqParams {
+  lowShelf: { freq: number; gain: number };
+  midPeak: { freq: number; Q: number; gain: number };
+  highPeak: { freq: number; Q: number; gain: number };
+}
+
+/** 디버그 스냅샷 — Dev 튜닝 UI에서 복사 버튼 누를 때 생성 */
+export interface VocalDebugSnapshot {
+  timestamp: string;
+  audio: {
+    sampleRate: number;
+    stereoCorrelation: number; // -1~1, 1에 가까울수록 L/R 유사 (센터 보컬일수록 L-R 효과 ↑)
+    frequencyBands_dB: {
+      bass_20_150: number;
+      lowMid_150_500: number;
+      mid_500_2000: number;
+      highMid_2000_5000: number;
+      high_5000_20000: number;
+    };
+    topPeaks_Hz: number[];
+  };
+  eq: VocalEqParams;
+}
+
+export const DEFAULT_VOCAL_EQ: VocalEqParams = {
+  lowShelf: { freq: 80, gain: -4 },
+  midPeak: { freq: 2500, Q: 1.5, gain: -6 },
+  highPeak: { freq: 3500, Q: 2.0, gain: -4 },
+};
+
 interface VocalChain {
   splitter: ChannelSplitterNode;
   gainL: GainNode;
   gainRNeg: GainNode;
   sumNode: GainNode; // mono 믹스 버스 (L + (-R))
   stereoMerger: ChannelMergerNode; // mono → stereo 로 복제
-  filter: BiquadFilterNode; // 가벼운 EQ (잔여 보컬 대역 감쇠)
-  // 입구: splitter / 출구: filter
+  lowShelf: BiquadFilterNode;
+  midPeak: BiquadFilterNode;
+  highPeak: BiquadFilterNode; // 체인 출구
+  // 입구: splitter / 출구: highPeak
+}
+
+interface SourceAnalyzers {
+  spectrumAnalyser: AnalyserNode;
+  analyzerSplitter: ChannelSplitterNode;
+  lAnalyser: AnalyserNode;
+  rAnalyser: AnalyserNode;
 }
 
 interface TunePipeline {
@@ -37,6 +84,7 @@ interface TunePipeline {
   scriptNode: ScriptProcessorNode;
   soundtouch: SoundTouch;
   vocal: VocalChain | null; // lazy: basic 활성화 시에 생성
+  analyzers: SourceAnalyzers; // 항상 생성 (디버그/분석 용도)
 }
 
 /** 싱글톤 상태 */
@@ -44,6 +92,7 @@ let pipeline: TunePipeline | null = null;
 let currentPitch = 0; // 반음 단위
 let currentTempo = 1.0;
 let currentVocalMode: VocalMode = 'off';
+let currentEq: VocalEqParams = { ...DEFAULT_VOCAL_EQ };
 let listeners: Array<() => void> = [];
 
 /** 상태 변경 리스너 등록 */
@@ -139,7 +188,29 @@ function ensurePipeline(): TunePipeline | null {
       }
     };
 
-    pipeline = { audioCtx, source, scriptNode, soundtouch: st, vocal: null };
+    // 분석 탭 (항상 활성, 메인 오디오에는 영향 없음 — 병렬 탭)
+    const spectrumAnalyser = audioCtx.createAnalyser();
+    spectrumAnalyser.fftSize = 4096;
+    spectrumAnalyser.smoothingTimeConstant = 0.2;
+    source.connect(spectrumAnalyser);
+
+    const analyzerSplitter = audioCtx.createChannelSplitter(2);
+    source.connect(analyzerSplitter);
+    const lAnalyser = audioCtx.createAnalyser();
+    const rAnalyser = audioCtx.createAnalyser();
+    lAnalyser.fftSize = 2048;
+    rAnalyser.fftSize = 2048;
+    analyzerSplitter.connect(lAnalyser, 0);
+    analyzerSplitter.connect(rAnalyser, 1);
+
+    pipeline = {
+      audioCtx,
+      source,
+      scriptNode,
+      soundtouch: st,
+      vocal: null,
+      analyzers: { spectrumAnalyser, analyzerSplitter, lAnalyser, rAnalyser },
+    };
 
     // 초기 연결: bypass 상태 (pitch=0, vocal=off)
     applyChain();
@@ -162,27 +233,42 @@ function ensureVocalChain(p: TunePipeline): VocalChain {
   const gainRNeg = new GainNode(ctx, { gain: -1 });
   const sumNode = new GainNode(ctx, { gain: 1 }); // mono 합산 버스
   const stereoMerger = ctx.createChannelMerger(2);
-  const filter = ctx.createBiquadFilter();
 
-  // EQ: 중고역 보컬 대역을 가볍게 감쇠 (L-R 잔여 성분 정리)
-  filter.type = 'peaking';
-  filter.frequency.value = 2500; // 상위 포만트 영역
-  filter.Q.value = 1.5;
-  filter.gain.value = -3; // dB
+  // 3-밴드 EQ: 저역 쉘프 → 중역 피킹 → 고역 피킹 (Dev UI 에서 실시간 조정 가능)
+  const lowShelf = ctx.createBiquadFilter();
+  lowShelf.type = 'lowshelf';
+  lowShelf.frequency.value = currentEq.lowShelf.freq;
+  lowShelf.gain.value = currentEq.lowShelf.gain;
 
-  // 내부 고정 연결(한 번 연결하고 바꾸지 않음 — 체인 켜고 끄는 건 입구(splitter 앞)만 재연결):
+  const midPeak = ctx.createBiquadFilter();
+  midPeak.type = 'peaking';
+  midPeak.frequency.value = currentEq.midPeak.freq;
+  midPeak.Q.value = currentEq.midPeak.Q;
+  midPeak.gain.value = currentEq.midPeak.gain;
+
+  const highPeak = ctx.createBiquadFilter();
+  highPeak.type = 'peaking';
+  highPeak.frequency.value = currentEq.highPeak.freq;
+  highPeak.Q.value = currentEq.highPeak.Q;
+  highPeak.gain.value = currentEq.highPeak.gain;
+
+  // 내부 고정 연결(체인 켜고 끄는 건 입구(splitter 앞)만 재연결):
   // splitter[L]  → gainL (+1)  ─┐
-  //                              ├─→ sumNode(mono) → stereoMerger[0] and [1] → filter
-  // splitter[R]  → gainRNeg(-1)─┘
+  //                              ├─→ sumNode(mono) → stereoMerger[0]+[1]
+  // splitter[R]  → gainRNeg(-1)─┘                    │
+  //                                                  ▼
+  //                            lowShelf → midPeak → highPeak (출구)
   splitter.connect(gainL, 0);
   splitter.connect(gainRNeg, 1);
   gainL.connect(sumNode);
   gainRNeg.connect(sumNode);
   sumNode.connect(stereoMerger, 0, 0);
   sumNode.connect(stereoMerger, 0, 1);
-  stereoMerger.connect(filter);
+  stereoMerger.connect(lowShelf);
+  lowShelf.connect(midPeak);
+  midPeak.connect(highPeak);
 
-  p.vocal = { splitter, gainL, gainRNeg, sumNode, stereoMerger, filter };
+  p.vocal = { splitter, gainL, gainRNeg, sumNode, stereoMerger, lowShelf, midPeak, highPeak };
   return p.vocal;
 }
 
@@ -190,8 +276,9 @@ function ensureVocalChain(p: TunePipeline): VocalChain {
  * 현재 상태(pitch + vocalMode)에 맞게 체인을 재배선한다.
  * 4가지 조합을 모두 처리하는 단일 함수.
  *
- * 주의: 외부 노드(source, scriptNode, vocal.filter)의 output 연결만 끊고 재연결.
- * vocal 체인의 내부 배선(splitter→gainL/R→sum→merger→filter)은 고정이므로 건드리지 않음.
+ * 주의: 외부 노드(source, scriptNode, vocal.highPeak)의 output 연결만 끊고 재연결.
+ * vocal 체인의 내부 배선(splitter→...→highPeak)은 고정이므로 건드리지 않음.
+ * 분석 탭(analyzers)은 source에 항상 연결되어 있고 메인 체인과 분리되어 있으므로 영향 없음.
  */
 function applyChain(): void {
   if (!pipeline) return;
@@ -201,8 +288,10 @@ function applyChain(): void {
   const vocalActive = currentVocalMode === 'basic';
   // 'hd'는 아직 미구현 → 'off'와 동일하게 취급 (UI에서도 disabled)
 
-  // 1) 외부 엣지 전부 해제 (내부 고정 배선은 유지)
+  // 1) 외부 엣지 전부 해제 (내부 고정 배선 + 분석 탭은 유지)
   try {
+    // source의 destination 방향 연결만 끊고 싶지만 disconnect()는 모두 끊음.
+    // 분석 탭은 아래에서 다시 연결한다.
     p.source.disconnect();
   } catch {
     // ignore
@@ -214,20 +303,24 @@ function applyChain(): void {
   }
   if (p.vocal) {
     try {
-      p.vocal.filter.disconnect();
+      p.vocal.highPeak.disconnect();
     } catch {
       // ignore
     }
   }
 
-  // 2) vocal 체인 필요 시 lazy 생성
+  // 2) 분석 탭 재연결 (source.disconnect()로 같이 끊겼으므로)
+  p.source.connect(p.analyzers.spectrumAnalyser);
+  p.source.connect(p.analyzers.analyzerSplitter);
+
+  // 3) vocal 체인 필요 시 lazy 생성
   if (vocalActive) ensureVocalChain(p);
 
-  // 3) 순서대로 배선: source → [vocal] → [pitch] → destination
+  // 4) 메인 체인 배선: source → [vocal] → [pitch] → destination
   let tail: AudioNode = p.source;
   if (vocalActive && p.vocal) {
     tail.connect(p.vocal.splitter);
-    tail = p.vocal.filter;
+    tail = p.vocal.highPeak;
   }
   if (pitchActive) {
     tail.connect(p.scriptNode);
@@ -368,13 +461,19 @@ export function destroyPipeline(): void {
     pipeline.source.disconnect();
     pipeline.scriptNode.disconnect();
     if (pipeline.vocal) {
-      pipeline.vocal.filter.disconnect();
       pipeline.vocal.splitter.disconnect();
       pipeline.vocal.gainL.disconnect();
       pipeline.vocal.gainRNeg.disconnect();
       pipeline.vocal.sumNode.disconnect();
       pipeline.vocal.stereoMerger.disconnect();
+      pipeline.vocal.lowShelf.disconnect();
+      pipeline.vocal.midPeak.disconnect();
+      pipeline.vocal.highPeak.disconnect();
     }
+    pipeline.analyzers.analyzerSplitter.disconnect();
+    pipeline.analyzers.spectrumAnalyser.disconnect();
+    pipeline.analyzers.lAnalyser.disconnect();
+    pipeline.analyzers.rAnalyser.disconnect();
     // 마지막 bypass 배선 (video 재생 유지를 위해)
     pipeline.source.connect(pipeline.audioCtx.destination);
   } catch {
@@ -384,4 +483,143 @@ export function destroyPipeline(): void {
   currentPitch = 0;
   currentTempo = 1.0;
   currentVocalMode = 'off';
+  currentEq = { ...DEFAULT_VOCAL_EQ };
+}
+
+// ─────────────────────────────────────────────────────────────
+//  Dev 모드 전용: EQ 실시간 조정 + 디버그 스냅샷
+// ─────────────────────────────────────────────────────────────
+
+/** 현재 EQ 파라미터 조회 (UI 초기값용) */
+export function getVocalEqParams(): VocalEqParams {
+  return {
+    lowShelf: { ...currentEq.lowShelf },
+    midPeak: { ...currentEq.midPeak },
+    highPeak: { ...currentEq.highPeak },
+  };
+}
+
+/**
+ * EQ 파라미터 실시간 반영.
+ * BiquadFilterNode의 AudioParam(frequency/Q/gain)은 실시간 변경 허용 — 체인 재배선 불필요.
+ */
+export function setVocalEqParams(params: VocalEqParams): void {
+  currentEq = {
+    lowShelf: { ...params.lowShelf },
+    midPeak: { ...params.midPeak },
+    highPeak: { ...params.highPeak },
+  };
+
+  const v = pipeline?.vocal;
+  if (!v) return; // 파이프라인 아직 없으면 저장만 하고 반환 (다음 ensureVocalChain 때 적용)
+
+  v.lowShelf.frequency.value = currentEq.lowShelf.freq;
+  v.lowShelf.gain.value = currentEq.lowShelf.gain;
+  v.midPeak.frequency.value = currentEq.midPeak.freq;
+  v.midPeak.Q.value = currentEq.midPeak.Q;
+  v.midPeak.gain.value = currentEq.midPeak.gain;
+  v.highPeak.frequency.value = currentEq.highPeak.freq;
+  v.highPeak.Q.value = currentEq.highPeak.Q;
+  v.highPeak.gain.value = currentEq.highPeak.gain;
+}
+
+/**
+ * 디버그 스냅샷 — Dev UI의 "복사" 버튼에서 호출.
+ * 현재 재생 중인 오디오의 L/R 상관, 주파수 대역별 평균 에너지, 상위 피크를 계산.
+ * 보컬 제거 효과 예측 지표 + 튜닝 근거 데이터로 활용.
+ */
+export function captureVocalDebugSnapshot(): VocalDebugSnapshot | null {
+  if (!pipeline) return null;
+  const { analyzers, audioCtx } = pipeline;
+  const sampleRate = audioCtx.sampleRate;
+
+  // 시간영역: L/R 상관 계산
+  const lBuf = new Float32Array(analyzers.lAnalyser.fftSize);
+  const rBuf = new Float32Array(analyzers.rAnalyser.fftSize);
+  analyzers.lAnalyser.getFloatTimeDomainData(lBuf);
+  analyzers.rAnalyser.getFloatTimeDomainData(rBuf);
+  const stereoCorrelation = pearsonCorrelation(lBuf, rBuf);
+
+  // 주파수영역: 대역별 평균 에너지 + 피크
+  const specBins = new Float32Array(analyzers.spectrumAnalyser.frequencyBinCount);
+  analyzers.spectrumAnalyser.getFloatFrequencyData(specBins);
+  const nyquist = sampleRate / 2;
+  const binFreq = (i: number): number => (i / specBins.length) * nyquist;
+
+  const avgDb = (fMin: number, fMax: number): number => {
+    let sum = 0;
+    let count = 0;
+    for (let i = 0; i < specBins.length; i++) {
+      const f = binFreq(i);
+      if (f >= fMin && f < fMax) {
+        const v = specBins[i];
+        if (v !== undefined && Number.isFinite(v)) {
+          sum += v;
+          count++;
+        }
+      }
+    }
+    return count > 0 ? sum / count : -Infinity;
+  };
+
+  const bands = {
+    bass_20_150: round(avgDb(20, 150), 1),
+    lowMid_150_500: round(avgDb(150, 500), 1),
+    mid_500_2000: round(avgDb(500, 2000), 1),
+    highMid_2000_5000: round(avgDb(2000, 5000), 1),
+    high_5000_20000: round(avgDb(5000, 20000), 1),
+  };
+
+  // 로컬 피크 상위 5개
+  const peaks: Array<{ freq: number; mag: number }> = [];
+  for (let i = 2; i < specBins.length - 2; i++) {
+    const v = specBins[i];
+    const vm1 = specBins[i - 1];
+    const vp1 = specBins[i + 1];
+    if (v !== undefined && vm1 !== undefined && vp1 !== undefined && v > vm1 && v > vp1 && Number.isFinite(v)) {
+      peaks.push({ freq: binFreq(i), mag: v });
+    }
+  }
+  peaks.sort((a, b) => b.mag - a.mag);
+  const topPeaksHz = peaks.slice(0, 5).map((p) => Math.round(p.freq));
+
+  return {
+    timestamp: new Date().toISOString(),
+    audio: {
+      sampleRate,
+      stereoCorrelation: round(stereoCorrelation, 3),
+      frequencyBands_dB: bands,
+      topPeaks_Hz: topPeaksHz,
+    },
+    eq: getVocalEqParams(),
+  };
+}
+
+/** Pearson 상관계수 — 두 같은 길이 배열 간 선형 유사도 (-1~1) */
+function pearsonCorrelation(a: Float32Array, b: Float32Array): number {
+  const n = Math.min(a.length, b.length);
+  if (n === 0) return 0;
+  let sumA = 0;
+  let sumB = 0;
+  let sumAB = 0;
+  let sumA2 = 0;
+  let sumB2 = 0;
+  for (let i = 0; i < n; i++) {
+    const ai = a[i] ?? 0;
+    const bi = b[i] ?? 0;
+    sumA += ai;
+    sumB += bi;
+    sumAB += ai * bi;
+    sumA2 += ai * ai;
+    sumB2 += bi * bi;
+  }
+  const num = n * sumAB - sumA * sumB;
+  const den = Math.sqrt((n * sumA2 - sumA * sumA) * (n * sumB2 - sumB * sumB));
+  return den === 0 ? 0 : num / den;
+}
+
+function round(n: number, digits: number): number {
+  if (!Number.isFinite(n)) return n;
+  const m = 10 ** digits;
+  return Math.round(n * m) / m;
 }

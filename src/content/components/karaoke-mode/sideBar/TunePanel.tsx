@@ -14,7 +14,65 @@ import {
   resetAll as resetPipeline,
   subscribe,
   type VocalMode,
+  type VocalEqParams,
+  DEFAULT_VOCAL_EQ,
+  getVocalEqParams,
+  setVocalEqParams as setPipelineVocalEqParams,
+  captureVocalDebugSnapshot,
 } from './tunePipelineManager';
+
+const IS_DEV_MODE = process.env.DEV_MODE === 'true';
+
+/** Dev UI 전용 — 1 밴드 (freq/Q/gain 묶음) 슬라이더 행 */
+interface EqBandParam<K extends string> {
+  key: K;
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  unit: string;
+}
+interface EqBandProps<K extends string> {
+  title: string;
+  params: ReadonlyArray<EqBandParam<K>>;
+  onChange: (key: K, value: number) => void;
+}
+const EqBand = <K extends string>({ title, params, onChange }: EqBandProps<K>): React.ReactElement => (
+  <div>
+    <div style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.7)', marginBottom: '4px' }}>
+      {title}
+    </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      {params.map((p) => (
+        <div key={p.key} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10px' }}>
+          <span style={{ width: '34px', color: 'rgba(255,255,255,0.45)' }}>{p.label}</span>
+          <input
+            type="range"
+            min={p.min}
+            max={p.max}
+            step={p.step}
+            value={p.value}
+            onChange={(e) => onChange(p.key, parseFloat(e.target.value))}
+            style={{ flex: 1, cursor: 'pointer' }}
+          />
+          <span
+            style={{
+              width: '58px',
+              textAlign: 'right',
+              fontFamily: 'monospace',
+              color: '#ff9f43',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {p.value.toFixed(p.label === 'Freq' ? 0 : 1)}
+            {p.unit}
+          </span>
+        </div>
+      ))}
+    </div>
+  </div>
+);
 
 /** 슬라이더 컨트롤 공통 Props */
 interface TuneSliderProps {
@@ -213,6 +271,9 @@ export const TunePanel: React.FC = () => {
   const userInteractedRef = useRef(false);
   // 보컬 제거 "NEW" 배지 — 초기값은 true(배지 숨김)로 시작해서 깜빡임 방지
   const [vocalRemovalBadgeSeen, setVocalRemovalBadgeSeen] = useState(true);
+  // Dev 튜닝 UI (DEV_MODE에서만 렌더) — 3밴드 EQ 실시간 조정 + 스냅샷 복사
+  const [eqParams, setEqParams] = useState<VocalEqParams>(getVocalEqParams);
+  const [copiedHint, setCopiedHint] = useState(false);
 
   // NEW 배지 상태 로드 (처음 본 사용자에게만 배지 표시)
   useEffect(() => {
@@ -301,6 +362,66 @@ export const TunePanel: React.FC = () => {
       [STORAGE_KEYS.VOCAL_MODE]: mode,
       [STORAGE_KEYS.VOCAL_REMOVAL_BADGE_SEEN]: true,
     });
+  }, []);
+
+  // ─── Dev 튜닝 UI 핸들러 ───────────────────────────────────────
+  const handleEqChange = useCallback((next: VocalEqParams) => {
+    setEqParams(next);
+    setPipelineVocalEqParams(next);
+  }, []);
+
+  const handleEqReset = useCallback(() => {
+    const defaults = {
+      lowShelf: { ...DEFAULT_VOCAL_EQ.lowShelf },
+      midPeak: { ...DEFAULT_VOCAL_EQ.midPeak },
+      highPeak: { ...DEFAULT_VOCAL_EQ.highPeak },
+    };
+    setEqParams(defaults);
+    setPipelineVocalEqParams(defaults);
+  }, []);
+
+  const handleCopyDebugSnapshot = useCallback(async () => {
+    const snapshot = captureVocalDebugSnapshot();
+    if (!snapshot) {
+      setCopiedHint(false);
+      console.warn('[TunePanel] 스냅샷 생성 실패 — 파이프라인이 아직 초기화되지 않음 (보컬 제거를 먼저 켜주세요)');
+      return;
+    }
+
+    // YouTube DOM에서 영상 메타 추출
+    const titleEl = document.querySelector(
+      'h1.ytd-watch-metadata, ytd-watch-metadata h1, h1.title yt-formatted-string, ytd-video-primary-info-renderer h1',
+    );
+    const channelEl = document.querySelector(
+      '#channel-name yt-formatted-string a, ytd-channel-name a, ytd-video-owner-renderer a',
+    );
+    const videoEl = document.querySelector<HTMLVideoElement>('video.html5-main-video');
+    const urlParams = new URL(window.location.href).searchParams;
+
+    const payload = {
+      timestamp: snapshot.timestamp,
+      video: {
+        title: titleEl?.textContent?.trim() ?? '',
+        channel: channelEl?.textContent?.trim() ?? '',
+        videoId: urlParams.get('v') ?? '',
+        duration: videoEl ? Math.round(videoEl.duration) : 0,
+        url: window.location.href,
+      },
+      audio: snapshot.audio,
+      eq: snapshot.eq,
+      note: '', // 사용자가 수동 추가 가능 (예: "보컬 너무 남음", "드럼 깎임")
+    };
+
+    const json = JSON.stringify(payload, null, 2);
+    try {
+      await navigator.clipboard.writeText(json);
+      setCopiedHint(true);
+      window.setTimeout(() => setCopiedHint(false), 1500);
+      console.log('[TunePanel] 스냅샷 복사 완료:', payload);
+    } catch (err) {
+      console.error('[TunePanel] 클립보드 쓰기 실패:', err);
+      console.log('[TunePanel] 아래 JSON을 수동 복사하세요:\n', json);
+    }
   }, []);
 
   const handleResetAll = useCallback(() => {
@@ -499,6 +620,150 @@ export const TunePanel: React.FC = () => {
           <div style={{ marginTop: '8px', fontSize: '10px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.4 }}>
             {t('extTuneVocalHint')}
           </div>
+        )}
+
+        {/* ───── Dev 튜닝 UI (프로덕션 빌드에서는 데드코드로 제거됨) ───── */}
+        {IS_DEV_MODE && (
+          <details style={{ marginTop: '12px' }}>
+            <summary
+              style={{
+                cursor: 'pointer',
+                fontSize: '10px',
+                color: 'rgba(255,255,255,0.5)',
+                padding: '4px 0',
+                userSelect: 'none',
+              }}
+            >
+              ▶ Debug EQ (DEV only)
+            </summary>
+            <div
+              style={{
+                marginTop: '8px',
+                padding: '10px',
+                background: 'rgba(255,255,255,0.03)',
+                borderRadius: '6px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px',
+              }}
+            >
+              <EqBand
+                title="Low Shelf"
+                params={[
+                  {
+                    key: 'freq',
+                    label: 'Freq',
+                    value: eqParams.lowShelf.freq,
+                    min: 40,
+                    max: 300,
+                    step: 10,
+                    unit: 'Hz',
+                  },
+                  {
+                    key: 'gain',
+                    label: 'Gain',
+                    value: eqParams.lowShelf.gain,
+                    min: -12,
+                    max: 0,
+                    step: 0.5,
+                    unit: 'dB',
+                  },
+                ]}
+                onChange={(key, v) => handleEqChange({ ...eqParams, lowShelf: { ...eqParams.lowShelf, [key]: v } })}
+              />
+              <EqBand
+                title="Mid Peak"
+                params={[
+                  {
+                    key: 'freq',
+                    label: 'Freq',
+                    value: eqParams.midPeak.freq,
+                    min: 500,
+                    max: 5000,
+                    step: 50,
+                    unit: 'Hz',
+                  },
+                  { key: 'Q', label: 'Q', value: eqParams.midPeak.Q, min: 0.3, max: 5, step: 0.1, unit: '' },
+                  {
+                    key: 'gain',
+                    label: 'Gain',
+                    value: eqParams.midPeak.gain,
+                    min: -12,
+                    max: 0,
+                    step: 0.5,
+                    unit: 'dB',
+                  },
+                ]}
+                onChange={(key, v) => handleEqChange({ ...eqParams, midPeak: { ...eqParams.midPeak, [key]: v } })}
+              />
+              <EqBand
+                title="High Peak"
+                params={[
+                  {
+                    key: 'freq',
+                    label: 'Freq',
+                    value: eqParams.highPeak.freq,
+                    min: 1500,
+                    max: 8000,
+                    step: 100,
+                    unit: 'Hz',
+                  },
+                  { key: 'Q', label: 'Q', value: eqParams.highPeak.Q, min: 0.3, max: 5, step: 0.1, unit: '' },
+                  {
+                    key: 'gain',
+                    label: 'Gain',
+                    value: eqParams.highPeak.gain,
+                    min: -12,
+                    max: 0,
+                    step: 0.5,
+                    unit: 'dB',
+                  },
+                ]}
+                onChange={(key, v) => handleEqChange({ ...eqParams, highPeak: { ...eqParams.highPeak, [key]: v } })}
+              />
+
+              <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                <button
+                  type="button"
+                  onClick={handleCopyDebugSnapshot}
+                  style={{
+                    flex: 1,
+                    padding: '6px 10px',
+                    background: copiedHint ? 'rgba(0, 212, 170, 0.2)' : 'rgba(255, 159, 67, 0.15)',
+                    color: copiedHint ? '#00d4aa' : '#ff9f43',
+                    border: `1px solid ${copiedHint ? 'rgba(0, 212, 170, 0.4)' : 'rgba(255, 159, 67, 0.3)'}`,
+                    borderRadius: '6px',
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {copiedHint ? '✓ Copied' : '📋 Copy snapshot (video + audio + EQ)'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleEqReset}
+                  style={{
+                    padding: '6px 10px',
+                    background: 'rgba(255,255,255,0.05)',
+                    color: 'rgba(255,255,255,0.6)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '6px',
+                    fontSize: '10px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Reset
+                </button>
+              </div>
+              <div style={{ fontSize: '9px', color: 'rgba(255,255,255,0.35)', lineHeight: 1.4 }}>
+                {
+                  'Adjust sliders while playing audio. Click Copy to capture the current snapshot (YouTube metadata + L/R correlation + frequency bands + EQ) to clipboard. Send it back to refine default EQ values.'
+                }
+              </div>
+            </div>
+          </details>
         )}
       </div>
 
