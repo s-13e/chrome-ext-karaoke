@@ -74,14 +74,15 @@ interface VocalChain {
 }
 
 interface SourceAnalyzers {
+  // AnalyserNode는 pass-through (input=output). Chrome의 dead-end 최적화로 parallel tap이
+  // 실제 처리되지 않는 이슈를 피하기 위해 메인 오디오 체인 내부에 직접 삽입한다.
+  //   source → spectrumAnalyser → analyzerSplitter → lAna → analyzerMerger(ch0)
+  //                                                └→ rAna → analyzerMerger(ch1) → [vocal | direct] → destination
   spectrumAnalyser: AnalyserNode;
   analyzerSplitter: ChannelSplitterNode;
   lAnalyser: AnalyserNode;
   rAnalyser: AnalyserNode;
-  // Chrome이 dead-end analyzer 브랜치를 최적화로 처리 스킵하는 이슈 우회:
-  // analyzer 출력을 gain=0 sink로 destination에 연결 → 브랜치를 "audible path의
-  // 일부"로 인식시켜 실제 FFT 처리가 일어나게 함. 소리는 0으로 나가므로 무영향.
-  silentSink: GainNode;
+  analyzerMerger: ChannelMergerNode; // 체인 출구 (다음 단의 입력으로 사용)
 }
 
 interface TunePipeline {
@@ -194,28 +195,29 @@ function ensurePipeline(): TunePipeline | null {
       }
     };
 
-    // 분석 탭 (항상 활성, 메인 오디오에는 영향 없음 — 병렬 탭)
+    // 분석 노드를 메인 오디오 체인 내부에 pass-through로 삽입.
+    // AnalyserNode는 input==output이라 삽입해도 음질/볼륨 변화 없음.
+    // 장점: Chrome이 audible path로 인식 → FFT 처리 보장 (dead-end 최적화 회피).
     const spectrumAnalyser = audioCtx.createAnalyser();
     spectrumAnalyser.fftSize = 4096;
     spectrumAnalyser.smoothingTimeConstant = 0.2;
-    source.connect(spectrumAnalyser);
 
     const analyzerSplitter = audioCtx.createChannelSplitter(2);
-    source.connect(analyzerSplitter);
     const lAnalyser = audioCtx.createAnalyser();
     const rAnalyser = audioCtx.createAnalyser();
     lAnalyser.fftSize = 2048;
     rAnalyser.fftSize = 2048;
+    const analyzerMerger = audioCtx.createChannelMerger(2);
+
+    // 고정 내부 배선 (한 번 연결하고 유지):
+    // spectrumAnalyser → analyzerSplitter → lAna → merger[0]
+    //                                   └→ rAna → merger[1]
+    spectrumAnalyser.connect(analyzerSplitter);
     analyzerSplitter.connect(lAnalyser, 0);
     analyzerSplitter.connect(rAnalyser, 1);
-
-    // gain=0 sink — analyzer 출력을 destination까지 연결하되 소리는 0.
-    // Chrome의 dead-end 브랜치 최적화 우회용.
-    const silentSink = new GainNode(audioCtx, { gain: 0 });
-    silentSink.connect(audioCtx.destination);
-    spectrumAnalyser.connect(silentSink);
-    lAnalyser.connect(silentSink);
-    rAnalyser.connect(silentSink);
+    lAnalyser.connect(analyzerMerger, 0, 0);
+    rAnalyser.connect(analyzerMerger, 0, 1);
+    // 체인 입구: spectrumAnalyser / 출구: analyzerMerger (applyChain에서 연결)
 
     pipeline = {
       audioCtx,
@@ -223,7 +225,7 @@ function ensurePipeline(): TunePipeline | null {
       scriptNode,
       soundtouch: st,
       vocal: null,
-      analyzers: { spectrumAnalyser, analyzerSplitter, lAnalyser, rAnalyser, silentSink },
+      analyzers: { spectrumAnalyser, analyzerSplitter, lAnalyser, rAnalyser, analyzerMerger },
     };
 
     // AudioContext가 Chrome 정책으로 'suspended' 상태일 수 있음 — 즉시 재개 시도
@@ -296,9 +298,11 @@ function ensureVocalChain(p: TunePipeline): VocalChain {
  * 현재 상태(pitch + vocalMode)에 맞게 체인을 재배선한다.
  * 4가지 조합을 모두 처리하는 단일 함수.
  *
- * 주의: 외부 노드(source, scriptNode, vocal.highPeak)의 output 연결만 끊고 재연결.
- * vocal 체인의 내부 배선(splitter→...→highPeak)은 고정이므로 건드리지 않음.
- * 분석 탭(analyzers)은 source에 항상 연결되어 있고 메인 체인과 분리되어 있으므로 영향 없음.
+ * 주의: 외부 노드(source, scriptNode, vocal.highPeak, analyzer 체인 입출구)의 output
+ * 연결만 끊고 재연결. 내부 고정 배선(vocal 체인 내부, analyzer 체인 내부)은 유지.
+ *
+ * 체인 구성: source → spectrumAnalyser → ... → analyzerMerger → [vocal] → [pitch] → destination
+ * AnalyserNode는 pass-through라 음질/볼륨 영향 없음.
  */
 function applyChain(): void {
   if (!pipeline) return;
@@ -308,11 +312,14 @@ function applyChain(): void {
   const vocalActive = currentVocalMode === 'basic';
   // 'hd'는 아직 미구현 → 'off'와 동일하게 취급 (UI에서도 disabled)
 
-  // 1) 외부 엣지 전부 해제 (내부 고정 배선 + 분석 탭은 유지)
+  // 1) 외부 엣지 전부 해제 (내부 고정 배선은 유지)
   try {
-    // source의 destination 방향 연결만 끊고 싶지만 disconnect()는 모두 끊음.
-    // 분석 탭은 아래에서 다시 연결한다.
     p.source.disconnect();
+  } catch {
+    // ignore
+  }
+  try {
+    p.analyzers.analyzerMerger.disconnect();
   } catch {
     // ignore
   }
@@ -329,15 +336,12 @@ function applyChain(): void {
     }
   }
 
-  // 2) 분석 탭 재연결 (source.disconnect()로 같이 끊겼으므로)
-  p.source.connect(p.analyzers.spectrumAnalyser);
-  p.source.connect(p.analyzers.analyzerSplitter);
-
-  // 3) vocal 체인 필요 시 lazy 생성
+  // 2) vocal 체인 필요 시 lazy 생성
   if (vocalActive) ensureVocalChain(p);
 
-  // 4) 메인 체인 배선: source → [vocal] → [pitch] → destination
-  let tail: AudioNode = p.source;
+  // 3) 체인 배선: source → analyzer 체인 → [vocal] → [pitch] → destination
+  p.source.connect(p.analyzers.spectrumAnalyser);
+  let tail: AudioNode = p.analyzers.analyzerMerger;
   if (vocalActive && p.vocal) {
     tail.connect(p.vocal.splitter);
     tail = p.vocal.highPeak;
@@ -490,11 +494,11 @@ export function destroyPipeline(): void {
       pipeline.vocal.midPeak.disconnect();
       pipeline.vocal.highPeak.disconnect();
     }
-    pipeline.analyzers.analyzerSplitter.disconnect();
     pipeline.analyzers.spectrumAnalyser.disconnect();
+    pipeline.analyzers.analyzerSplitter.disconnect();
     pipeline.analyzers.lAnalyser.disconnect();
     pipeline.analyzers.rAnalyser.disconnect();
-    pipeline.analyzers.silentSink.disconnect();
+    pipeline.analyzers.analyzerMerger.disconnect();
     // 마지막 bypass 배선 (video 재생 유지를 위해)
     pipeline.source.connect(pipeline.audioCtx.destination);
   } catch {
