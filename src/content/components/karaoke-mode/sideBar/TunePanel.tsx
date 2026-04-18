@@ -2,7 +2,7 @@
 // Tune 탭 — 피치(Key) 및 템포(Speed) 조절 UI
 // 오디오 처리는 tunePipelineManager 싱글톤에 위임 (탭 전환에도 유지)
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MdMusicNote, MdSpeed, MdRefresh, MdMicOff } from 'react-icons/md';
 import { STORAGE_KEYS } from '@constants/storageKeys';
@@ -209,18 +209,53 @@ export const TunePanel: React.FC = () => {
   const [pitch, setPitch] = useState(initial.pitch);
   const [tempo, setTempo] = useState(initial.tempo);
   const [vocalMode, setVocalMode] = useState<VocalMode>(initial.vocalMode);
+  // 복원 중 사용자가 라디오를 직접 건드렸으면 지연 활성화를 스킵하기 위한 플래그
+  const userInteractedRef = useRef(false);
 
   // 저장된 vocalMode 복원 (chrome.storage.sync)
+  // 파이프라인 활성화는 영상 재생 시점으로 지연 — 초기 로드 중 AudioContext/
+  // MediaElementSource 생성이 YouTube 오디오를 끊어 렉을 유발하는 걸 방지.
   useEffect(() => {
+    let cancelled = false;
+    let cleanup: (() => void) | undefined;
+
     chrome.storage.sync.get([STORAGE_KEYS.VOCAL_MODE], (result) => {
+      if (cancelled) return;
+
       const stored = result[STORAGE_KEYS.VOCAL_MODE] as VocalMode | undefined;
       // 'hd'는 아직 미구현이므로 복원 시 'off'로 강등
       const safe: VocalMode = stored === 'basic' ? 'basic' : 'off';
-      if (safe !== 'off') {
-        setVocalMode(safe);
+      if (safe === 'off') return;
+
+      // UI 상태는 즉시 반영 (사용자 시각 피드백)
+      setVocalMode(safe);
+
+      const video = document.querySelector<HTMLVideoElement>('video.html5-main-video');
+      if (!video) return;
+
+      const activate = () => {
+        if (cancelled || userInteractedRef.current) return;
         setPipelineVocalMode(safe);
+      };
+
+      if (!video.paused && video.currentTime > 0) {
+        // 이미 재생 중이면 짧은 지연 후 활성화 (초기 로드가 안정화될 시간 확보)
+        const timeoutId = window.setTimeout(activate, 400);
+        cleanup = () => window.clearTimeout(timeoutId);
+      } else {
+        const onPlaying = () => {
+          activate();
+          video.removeEventListener('playing', onPlaying);
+        };
+        video.addEventListener('playing', onPlaying);
+        cleanup = () => video.removeEventListener('playing', onPlaying);
       }
     });
+
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
   }, []);
 
   // 싱글톤 상태 변경 구독 (다른 곳에서 변경 시 UI 동기화)
@@ -248,6 +283,7 @@ export const TunePanel: React.FC = () => {
   const handleVocalModeChange = useCallback((mode: VocalMode) => {
     // 'hd'는 현재 비활성 (Tier 2 준비 중) — UI 레벨에서 한 번 더 가드
     if (mode === 'hd') return;
+    userInteractedRef.current = true; // 지연 복원이 사용자 의도를 덮어쓰지 않도록
     setVocalMode(mode);
     setPipelineVocalMode(mode);
     chrome.storage.sync.set({ [STORAGE_KEYS.VOCAL_MODE]: mode });
