@@ -17,6 +17,7 @@
 // Tier 2(HD, ML 기반)는 추후 동일한 vocalChain 자리에 AudioWorkletNode 로 대체 예정.
 
 import { SoundTouch } from 'soundtouchjs';
+import { STORAGE_KEYS } from '@constants/storageKeys';
 
 export type VocalMode = 'off' | 'basic' | 'hd';
 
@@ -281,8 +282,11 @@ export function setTempo(tempoValue: number): void {
 /**
  * 보컬 제거 모드 설정 (Tier 1: 'basic' = L−R 센터 캔슬).
  * 'hd'는 v2.3.0 UI에 자리만 예약, 실제 동작은 추후 Tier 2에서.
+ *
+ * Idempotent: 동일 모드로 재호출 시 no-op (오디오 재배선 글리치 방지).
  */
 export function setVocalMode(mode: VocalMode): void {
+  if (mode === currentVocalMode) return;
   currentVocalMode = mode;
 
   // basic 활성화인데 파이프라인 아직 없으면 초기화
@@ -312,6 +316,48 @@ export function resetAll(): void {
     video.preservesPitch = true;
   }
   notifyListeners();
+}
+
+/**
+ * 저장된 vocalMode를 페이지 로드 시점에 복원.
+ * TunePanel(카라오케 사이드바) mount 전에 콘텐츠 스크립트 레벨에서 호출되어
+ * 카라오케 모드 on 여부와 무관하게 적용된다.
+ *
+ * 초기 로드 중 AudioContext/MediaElementSource 생성이 YouTube 오디오 경로를
+ * 끊어 렉을 유발하는 걸 방지하기 위해 video 'playing' 이벤트 후로 지연.
+ *
+ * 이미 vocalMode가 설정된 상태면 no-op (중복 적용 방지).
+ */
+export function initVocalModeFromStorage(): void {
+  if (currentVocalMode !== 'off') return; // 이미 설정됨 → 스킵
+
+  chrome.storage.sync.get([STORAGE_KEYS.VOCAL_MODE], (result) => {
+    const stored = result[STORAGE_KEYS.VOCAL_MODE] as VocalMode | undefined;
+    // 'hd'는 아직 미구현이므로 복원 시 'off'로 강등
+    const safe: VocalMode = stored === 'basic' ? 'basic' : 'off';
+    if (safe === 'off') return;
+    // 대기 중 사이 사용자가 이미 다른 모드로 바꿨으면 덮어쓰지 않음
+    if (currentVocalMode !== 'off') return;
+
+    const video = document.querySelector<HTMLVideoElement>('video.html5-main-video');
+    if (!video) return;
+
+    const activate = () => {
+      if (currentVocalMode !== 'off') return; // 대기 중 바뀌었으면 덮어쓰지 않음
+      setVocalMode(safe);
+    };
+
+    if (!video.paused && video.currentTime > 0) {
+      // 이미 재생 중: 초기 로드 안정화 시간 확보 후 활성화
+      window.setTimeout(activate, 400);
+    } else {
+      const onPlaying = () => {
+        video.removeEventListener('playing', onPlaying);
+        activate();
+      };
+      video.addEventListener('playing', onPlaying);
+    }
+  });
 }
 
 /** 파이프라인 완전 파괴 (페이지 전환 시) */

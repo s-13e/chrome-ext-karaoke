@@ -45,6 +45,7 @@ import { loadFontFromFamilyString } from '@lib/utils/fonts/googleFontsLoader';
 import { processMusicDetectionResult } from '@lib/utils/storage/autoDisableStorage';
 import { ActionableToast } from './components/common/ActionableToast';
 import { TutorialController } from './tutorial/tutorialController';
+import { initVocalModeFromStorage } from './components/karaoke-mode/sideBar/tunePipelineManager';
 
 // DEV_MODE: 개발 중 튜토리얼 완료 상태 저장 스킵
 const IS_DEV_MODE = process.env.DEV_MODE === 'true';
@@ -1105,6 +1106,9 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
     await initStorageState();
     setupStorageChangeListener();
     setupOtherListeners();
+    // 저장된 보컬 감쇠 모드를 카라오케 모드 on 여부와 무관하게 즉시 복원.
+    // 내부적으로 video 'playing' 이벤트 후로 지연 활성화하여 초기 렉 방지.
+    initVocalModeFromStorage();
   }
 
   function onLyricsUpdated(newLyrics: Line[]) {
