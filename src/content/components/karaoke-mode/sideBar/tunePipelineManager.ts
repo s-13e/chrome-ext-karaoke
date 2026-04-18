@@ -40,6 +40,7 @@ export interface VocalDebugSnapshot {
   timestamp: string;
   audio: {
     sampleRate: number;
+    audioCtxState: AudioContextState; // 'running' 이어야 분석 유효
     stereoCorrelation: number; // -1~1, 1에 가까울수록 L/R 유사 (센터 보컬일수록 L-R 효과 ↑)
     frequencyBands_dB: {
       bass_20_150: number;
@@ -49,6 +50,7 @@ export interface VocalDebugSnapshot {
       high_5000_20000: number;
     };
     topPeaks_Hz: number[];
+    isSilent: boolean; // 분석 결과가 사실상 무음이면 true (context suspended 등 진단)
   };
   eq: VocalEqParams;
 }
@@ -211,6 +213,12 @@ function ensurePipeline(): TunePipeline | null {
       vocal: null,
       analyzers: { spectrumAnalyser, analyzerSplitter, lAnalyser, rAnalyser },
     };
+
+    // AudioContext가 Chrome 정책으로 'suspended' 상태일 수 있음 — 즉시 재개 시도
+    // (분석 애널라이저가 실제 데이터를 받으려면 running 상태 필요)
+    audioCtx.resume().catch((err) => {
+      console.warn('[TunePipeline] AudioContext resume 실패:', err);
+    });
 
     // 초기 연결: bypass 상태 (pitch=0, vocal=off)
     applyChain();
@@ -490,6 +498,24 @@ export function destroyPipeline(): void {
 //  Dev 모드 전용: EQ 실시간 조정 + 디버그 스냅샷
 // ─────────────────────────────────────────────────────────────
 
+/**
+ * AudioContext가 running 상태가 되도록 보장.
+ * Chrome 정책으로 user-gesture 없이 생성된 context는 suspended일 수 있어
+ * 분석 애널라이저 / 오디오 체인이 무음을 반환함.
+ */
+export async function ensurePipelineRunning(): Promise<boolean> {
+  if (!pipeline) return false;
+  if (pipeline.audioCtx.state !== 'running') {
+    try {
+      await pipeline.audioCtx.resume();
+    } catch (err) {
+      console.error('[TunePipeline] AudioContext resume 실패:', err);
+      return false;
+    }
+  }
+  return pipeline.audioCtx.state === 'running';
+}
+
 /** 현재 EQ 파라미터 조회 (UI 초기값용) */
 export function getVocalEqParams(): VocalEqParams {
   return {
@@ -583,13 +609,18 @@ export function captureVocalDebugSnapshot(): VocalDebugSnapshot | null {
   peaks.sort((a, b) => b.mag - a.mag);
   const topPeaksHz = peaks.slice(0, 5).map((p) => Math.round(p.freq));
 
+  // 무음 진단: 대역 평균이 전부 -Infinity거나 피크 없음 → analyzer 데이터 없음
+  const isSilent = topPeaksHz.length === 0 && Object.values(bands).every((v) => !Number.isFinite(v));
+
   return {
     timestamp: new Date().toISOString(),
     audio: {
       sampleRate,
+      audioCtxState: audioCtx.state,
       stereoCorrelation: round(stereoCorrelation, 3),
       frequencyBands_dB: bands,
       topPeaks_Hz: topPeaksHz,
+      isSilent,
     },
     eq: getVocalEqParams(),
   };

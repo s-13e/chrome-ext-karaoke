@@ -19,6 +19,7 @@ import {
   getVocalEqParams,
   setVocalEqParams as setPipelineVocalEqParams,
   captureVocalDebugSnapshot,
+  ensurePipelineRunning,
 } from './tunePipelineManager';
 
 const IS_DEV_MODE = process.env.DEV_MODE === 'true';
@@ -381,11 +382,29 @@ export const TunePanel: React.FC = () => {
   }, []);
 
   const handleCopyDebugSnapshot = useCallback(async () => {
+    // 1) AudioContext가 suspended면 먼저 재개 (Chrome 정책 우회)
+    const running = await ensurePipelineRunning();
+    if (!running) {
+      console.warn(
+        '[TunePanel] AudioContext를 running 상태로 만들지 못했습니다. 보컬 제거 "기본" 라디오를 한 번 클릭해주세요.',
+      );
+    }
+    // 2) 재개 직후 analyzer가 실제 데이터를 받을 때까지 한 FFT 주기 대기 (~50ms)
+    await new Promise((resolve) => window.setTimeout(resolve, 80));
+
     const snapshot = captureVocalDebugSnapshot();
     if (!snapshot) {
       setCopiedHint(false);
       console.warn('[TunePanel] 스냅샷 생성 실패 — 파이프라인이 아직 초기화되지 않음 (보컬 제거를 먼저 켜주세요)');
       return;
+    }
+
+    if (snapshot.audio.isSilent) {
+      console.warn(
+        '[TunePanel] analyzer가 무음 상태. AudioContext state:',
+        snapshot.audio.audioCtxState,
+        '— 보컬 제거를 "기본"으로 켠 뒤 영상을 재생 중인 상태에서 다시 시도해주세요.',
+      );
     }
 
     // YouTube DOM에서 영상 메타 추출
