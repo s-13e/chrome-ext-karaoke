@@ -5,13 +5,13 @@
 ## Features
 
 - **보컬 제거 (Beta)** — Tune 탭에 배치. Tier 1(L−R 센터 제거 + EQ)을 필수로, Tier 2(ML 기반 HD)는 여유 시 포함·아니면 v2.4.0 베타로 이월. 라디오: 끔 / 기본 / HD(예정). 이탈 피드백 기반 우선순위 반영.
-- **아티스트 영문 별칭 로컬 캐시** — 수동 검색에서 검증된 영문 표기를 `chrome.storage.local`에 저장해 다음 영상 감지 때 자동 치환. MusicBrainz가 주는 다중 alias 중 LRCLib에서 실제 히트한 "승자"만 저장하는 구조.
-- **영문 alias 다중 후보 순차 시도** — 현재 `extractEnglishAliasFromArtists`가 첫 후보만 반환하는데, 배열로 확장해 LRCLib에 순차 시도. 첫 성공에서 중단. 위 로컬 캐시와 함께 구현.
 
 ## Improvements
 
 ## 📋 Backlog
 
+- **아티스트 영문 별칭 로컬 캐시** — 수동 검색에서 검증된 영문 표기를 `chrome.storage.local`에 저장해 다음 영상 감지 때 자동 치환. MusicBrainz가 주는 다중 alias 중 LRCLib에서 실제 히트한 "승자"만 저장하는 구조.
+- **영문 alias 다중 후보 순차 시도** — 현재 `extractEnglishAliasFromArtists`가 첫 후보만 반환하는데, 배열로 확장해 LRCLib에 순차 시도. 첫 성공에서 중단. 위 로컬 캐시와 함께 구현.
 - **팝업 디자인 수정**
 - **다음 곡 예약/자동재생** — 재생 큐 기능으로 다음 곡 자동 전환. YouTube DOM 제어 및 상태 관리 복잡도가 높아 별도 버전 검토
 - **기본 사용 지표 수집** — 어떤 기능을 얼마나 사용하는지 파악 (익명, 옵트인 방식). 정책/권한 이슈로 보류
