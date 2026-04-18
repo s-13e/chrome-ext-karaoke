@@ -78,6 +78,10 @@ interface SourceAnalyzers {
   analyzerSplitter: ChannelSplitterNode;
   lAnalyser: AnalyserNode;
   rAnalyser: AnalyserNode;
+  // Chrome이 dead-end analyzer 브랜치를 최적화로 처리 스킵하는 이슈 우회:
+  // analyzer 출력을 gain=0 sink로 destination에 연결 → 브랜치를 "audible path의
+  // 일부"로 인식시켜 실제 FFT 처리가 일어나게 함. 소리는 0으로 나가므로 무영향.
+  silentSink: GainNode;
 }
 
 interface TunePipeline {
@@ -205,13 +209,21 @@ function ensurePipeline(): TunePipeline | null {
     analyzerSplitter.connect(lAnalyser, 0);
     analyzerSplitter.connect(rAnalyser, 1);
 
+    // gain=0 sink — analyzer 출력을 destination까지 연결하되 소리는 0.
+    // Chrome의 dead-end 브랜치 최적화 우회용.
+    const silentSink = new GainNode(audioCtx, { gain: 0 });
+    silentSink.connect(audioCtx.destination);
+    spectrumAnalyser.connect(silentSink);
+    lAnalyser.connect(silentSink);
+    rAnalyser.connect(silentSink);
+
     pipeline = {
       audioCtx,
       source,
       scriptNode,
       soundtouch: st,
       vocal: null,
-      analyzers: { spectrumAnalyser, analyzerSplitter, lAnalyser, rAnalyser },
+      analyzers: { spectrumAnalyser, analyzerSplitter, lAnalyser, rAnalyser, silentSink },
     };
 
     // AudioContext가 Chrome 정책으로 'suspended' 상태일 수 있음 — 즉시 재개 시도
@@ -482,6 +494,7 @@ export function destroyPipeline(): void {
     pipeline.analyzers.spectrumAnalyser.disconnect();
     pipeline.analyzers.lAnalyser.disconnect();
     pipeline.analyzers.rAnalyser.disconnect();
+    pipeline.analyzers.silentSink.disconnect();
     // 마지막 bypass 배선 (video 재생 유지를 위해)
     pipeline.source.connect(pipeline.audioCtx.destination);
   } catch {
