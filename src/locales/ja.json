@@ -517,7 +517,7 @@
   "extTuneVocalBasic": "標準",
   "extTuneVocalHd": "HD",
   "extTuneVocalHdComingSoon": "近日公開",
-  "extTuneVocalHint": "曲によって効果が限定的な場合があります。ボーカルがセンターに配置されている曲で最もよく機能します。",
+  "extTuneVocalHint": "曲によって効果が異なる場合があります。スタジオ録音のポピュラー音楽で最もよく機能します。",
   "extPause": "一時停止",
   "extRecord": "録音",
   "extMute": "ミュート",

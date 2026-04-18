@@ -517,7 +517,7 @@
   "extTuneVocalBasic": "기본",
   "extTuneVocalHd": "HD",
   "extTuneVocalHdComingSoon": "곧 출시 예정",
-  "extTuneVocalHint": "곡에 따라 효과가 제한적일 수 있어요. 보컬이 가운데 채널에 있는 경우 가장 잘 작동합니다.",
+  "extTuneVocalHint": "곡에 따라 효과가 다를 수 있어요. 스튜디오에서 녹음된 대중음악에서 가장 잘 작동합니다.",
   "extPause": "일시정지",
   "extRecord": "녹음",
   "extMute": "음소거",
