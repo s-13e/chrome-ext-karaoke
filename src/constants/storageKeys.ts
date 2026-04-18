@@ -26,4 +26,5 @@ export const STORAGE_KEYS = {
   TUTORIAL_SETTINGS_COMPLETED: 'tutorial_settings_completed',
   SYNC_TOAST_DISMISSED_PREFIX: 'syncToastDismissed_',
   VOCAL_MODE: 'vocalMode',
+  VOCAL_REMOVAL_BADGE_SEEN: 'vocalRemovalBadgeSeen',
 } as const;

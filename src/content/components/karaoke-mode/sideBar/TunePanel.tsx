@@ -211,6 +211,15 @@ export const TunePanel: React.FC = () => {
   const [vocalMode, setVocalMode] = useState<VocalMode>(initial.vocalMode);
   // 복원 중 사용자가 라디오를 직접 건드렸으면 지연 활성화를 스킵하기 위한 플래그
   const userInteractedRef = useRef(false);
+  // 보컬 제거 "NEW" 배지 — 초기값은 true(배지 숨김)로 시작해서 깜빡임 방지
+  const [vocalRemovalBadgeSeen, setVocalRemovalBadgeSeen] = useState(true);
+
+  // NEW 배지 상태 로드 (처음 본 사용자에게만 배지 표시)
+  useEffect(() => {
+    chrome.storage.sync.get([STORAGE_KEYS.VOCAL_REMOVAL_BADGE_SEEN], (result) => {
+      setVocalRemovalBadgeSeen(result[STORAGE_KEYS.VOCAL_REMOVAL_BADGE_SEEN] === true);
+    });
+  }, []);
 
   // 저장된 vocalMode 복원 (chrome.storage.sync)
   // 파이프라인 활성화는 영상 재생 시점으로 지연 — 초기 로드 중 AudioContext/
@@ -286,7 +295,12 @@ export const TunePanel: React.FC = () => {
     userInteractedRef.current = true; // 지연 복원이 사용자 의도를 덮어쓰지 않도록
     setVocalMode(mode);
     setPipelineVocalMode(mode);
-    chrome.storage.sync.set({ [STORAGE_KEYS.VOCAL_MODE]: mode });
+    // 라디오 클릭 = 기능 발견으로 간주 → NEW 배지 해제 (사이드바 아이콘 배지도 storage 구독으로 자동 사라짐)
+    setVocalRemovalBadgeSeen(true);
+    chrome.storage.sync.set({
+      [STORAGE_KEYS.VOCAL_MODE]: mode,
+      [STORAGE_KEYS.VOCAL_REMOVAL_BADGE_SEEN]: true,
+    });
   }, []);
 
   const handleResetAll = useCallback(() => {
@@ -410,6 +424,22 @@ export const TunePanel: React.FC = () => {
               {t('extTuneVocalBeta')}
             </span>
           </div>
+          {/* NEW 배지 — 라디오 한 번이라도 클릭하면 해제 */}
+          {!vocalRemovalBadgeSeen && (
+            <span
+              aria-hidden="true"
+              style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                background: '#ff4444',
+                boxShadow: '0 0 4px rgba(255, 68, 68, 0.7)',
+                flexShrink: 0,
+                alignSelf: 'flex-start',
+                marginTop: '3px',
+              }}
+            />
+          )}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
           {(

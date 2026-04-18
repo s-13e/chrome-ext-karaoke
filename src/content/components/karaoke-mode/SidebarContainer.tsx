@@ -22,6 +22,7 @@ import {
   MdSend,
 } from 'react-icons/md';
 import styles from './styles.module.css';
+import { STORAGE_KEYS } from '@constants/storageKeys';
 
 // Sidebar 컴포넌트들을 lazy loading으로 변경 (메모리 최적화)
 const RecordingsList = lazy(() =>
@@ -84,6 +85,25 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, widt
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<SidebarTabId | null>(null);
   const [librarySubTab, setLibrarySubTab] = useState<LibrarySubTab>('recordings');
+  // 보컬 제거 NEW 배지 — 사용자가 Tune 탭 내 라디오를 한 번이라도 클릭하면 true로 바뀜
+  const [vocalRemovalBadgeSeen, setVocalRemovalBadgeSeen] = useState(true);
+
+  // 초기 로드 + storage 변경 구독 (TunePanel이 dismiss하면 여기서도 반영)
+  useEffect(() => {
+    chrome.storage.sync.get([STORAGE_KEYS.VOCAL_REMOVAL_BADGE_SEEN], (result) => {
+      setVocalRemovalBadgeSeen(result[STORAGE_KEYS.VOCAL_REMOVAL_BADGE_SEEN] === true);
+    });
+
+    const onChanged = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: chrome.storage.AreaName) => {
+      if (areaName !== 'sync') return;
+      const badgeChange = changes[STORAGE_KEYS.VOCAL_REMOVAL_BADGE_SEEN];
+      if (badgeChange) {
+        setVocalRemovalBadgeSeen(badgeChange.newValue === true);
+      }
+    };
+    chrome.storage.onChanged.addListener(onChanged);
+    return () => chrome.storage.onChanged.removeListener(onChanged);
+  }, []);
 
   const isPanelOpen = activeTab !== null;
 
@@ -196,6 +216,7 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, widt
         {TAB_CONFIG.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
+          const showNewBadge = tab.id === 'tune' && !vocalRemovalBadgeSeen;
           return (
             <button
               key={tab.id}
@@ -203,9 +224,26 @@ export const SidebarContainer: React.FC<SidebarContainerProps> = ({ lyrics, widt
               onClick={() => handleTabClick(tab.id)}
               aria-label={t(tab.labelKey)}
               title={t(tab.labelKey)}
+              style={{ position: 'relative' }}
             >
               <Icon size={16} />
               <span className={styles.iconNavLabel}>{t(tab.labelKey)}</span>
+              {showNewBadge && (
+                <span
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute',
+                    top: '8px',
+                    right: '10px',
+                    width: '7px',
+                    height: '7px',
+                    borderRadius: '50%',
+                    background: '#ff4444',
+                    boxShadow: '0 0 4px rgba(255, 68, 68, 0.7)',
+                    pointerEvents: 'none',
+                  }}
+                />
+              )}
             </button>
           );
         })}

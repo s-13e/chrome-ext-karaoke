@@ -10,6 +10,7 @@
 
 ## 📋 Backlog
 
+- 로컬 단어 현지화 적용
 - **아티스트 영문 별칭 로컬 캐시** — 수동 검색에서 검증된 영문 표기를 `chrome.storage.local`에 저장해 다음 영상 감지 때 자동 치환. MusicBrainz가 주는 다중 alias 중 LRCLib에서 실제 히트한 "승자"만 저장하는 구조.
 - **영문 alias 다중 후보 순차 시도** — 현재 `extractEnglishAliasFromArtists`가 첫 후보만 반환하는데, 배열로 확장해 LRCLib에 순차 시도. 첫 성공에서 중단. 위 로컬 캐시와 함께 구현.
 - **팝업 디자인 수정**
@@ -19,4 +20,5 @@
 - **접근성(a11y) 개선** — 주요 인터랙티브 요소에 ARIA 라벨·키보드 내비게이션 추가
 - **외부 API 레이트 리미팅** — 빠른 영상 전환 시 LRCLib/MusicBrainz 호출 제한
 - **에러 리포팅 인프라** — `hidden-source-map` + Sentry(또는 유사 서비스) 연동. 패키징 스크립트에서 `.map` 제외 설정 포함. 소스맵만 켜는 게 아니라 리포팅 서비스까지 함께 구성해야 의미 있으므로 별도 사이클 권장.
+- **Tune 파이프라인 AudioWorklet 마이그레이션** — 현재 SoundTouch(피치)가 deprecated `ScriptProcessorNode`를 사용해 UI 스레드에서 돌아감 → Chrome 콘솔 경고 + 스크롤/UI 조작 시 오디오 글리치 가능. AudioWorklet 기반 SoundTouch 대체 필요. Tier 2(ML HD) 착수 시 AudioWorklet 인프라가 필요하므로 그때 같이 처리하면 효율적.
 - **아티스트 별칭 캐시 관리 UI** — 옵션 페이지에서 자동 저장된 영문 별칭 목록 확인·수정·삭제. 위 로컬 캐시가 쌓인 뒤 구현. (v2.4.0+ 검토)

@@ -510,7 +510,7 @@
   "extTunePresetPractice": "연습 (느리게)",
   "extTunePresetHigher": "키 올림 +2",
   "extTunePresetLower": "키 내림 -2",
-  "extTuneVocalTitle": "보컬 감쇠",
+  "extTuneVocalTitle": "보컬 제거",
   "extTuneVocalSub": "Vocal",
   "extTuneVocalBeta": "BETA",
   "extTuneVocalOff": "끔",
