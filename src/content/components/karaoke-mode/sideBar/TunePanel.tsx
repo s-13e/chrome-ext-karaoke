@@ -4,13 +4,16 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MdMusicNote, MdSpeed, MdRefresh } from 'react-icons/md';
+import { MdMusicNote, MdSpeed, MdRefresh, MdMicOff } from 'react-icons/md';
+import { STORAGE_KEYS } from '@constants/storageKeys';
 import {
   getTuneState,
   setPitch as setPipelinePitch,
   setTempo as setPipelineTempo,
+  setVocalMode as setPipelineVocalMode,
   resetAll as resetPipeline,
   subscribe,
+  type VocalMode,
 } from './tunePipelineManager';
 
 /** 슬라이더 컨트롤 공통 Props */
@@ -205,6 +208,20 @@ export const TunePanel: React.FC = () => {
   const initial = getTuneState();
   const [pitch, setPitch] = useState(initial.pitch);
   const [tempo, setTempo] = useState(initial.tempo);
+  const [vocalMode, setVocalMode] = useState<VocalMode>(initial.vocalMode);
+
+  // 저장된 vocalMode 복원 (chrome.storage.sync)
+  useEffect(() => {
+    chrome.storage.sync.get([STORAGE_KEYS.VOCAL_MODE], (result) => {
+      const stored = result[STORAGE_KEYS.VOCAL_MODE] as VocalMode | undefined;
+      // 'hd'는 아직 미구현이므로 복원 시 'off'로 강등
+      const safe: VocalMode = stored === 'basic' ? 'basic' : 'off';
+      if (safe !== 'off') {
+        setVocalMode(safe);
+        setPipelineVocalMode(safe);
+      }
+    });
+  }, []);
 
   // 싱글톤 상태 변경 구독 (다른 곳에서 변경 시 UI 동기화)
   useEffect(() => {
@@ -212,6 +229,7 @@ export const TunePanel: React.FC = () => {
       const state = getTuneState();
       setPitch(state.pitch);
       setTempo(state.tempo);
+      setVocalMode(state.vocalMode);
     });
   }, []);
 
@@ -227,13 +245,23 @@ export const TunePanel: React.FC = () => {
     setPipelineTempo(rounded);
   }, []);
 
+  const handleVocalModeChange = useCallback((mode: VocalMode) => {
+    // 'hd'는 현재 비활성 (Tier 2 준비 중) — UI 레벨에서 한 번 더 가드
+    if (mode === 'hd') return;
+    setVocalMode(mode);
+    setPipelineVocalMode(mode);
+    chrome.storage.sync.set({ [STORAGE_KEYS.VOCAL_MODE]: mode });
+  }, []);
+
   const handleResetAll = useCallback(() => {
     setPitch(0);
     setTempo(1.0);
+    setVocalMode('off');
+    chrome.storage.sync.set({ [STORAGE_KEYS.VOCAL_MODE]: 'off' });
     resetPipeline();
   }, []);
 
-  const isModified = pitch !== 0 || Math.abs(tempo - 1.0) > 0.01;
+  const isModified = pitch !== 0 || Math.abs(tempo - 1.0) > 0.01 || vocalMode !== 'off';
 
   const presets = [
     { labelKey: 'extTunePresetOriginal', pitch: 0, tempo: 1.0 },
@@ -315,6 +343,98 @@ export const TunePanel: React.FC = () => {
         onChange={handleTempoChange}
         color="#ff6b9d"
       />
+
+      {/* 보컬 감쇠 (Vocal Reduction, Beta) */}
+      <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span
+              style={{ color: vocalMode !== 'off' ? '#ff9f43' : 'rgba(255,255,255,0.4)', transition: 'color 0.15s' }}
+            >
+              <MdMicOff size={16} />
+            </span>
+            <div>
+              <span style={{ fontSize: '13px', fontWeight: 500, color: '#fff' }}>{t('extTuneVocalTitle')}</span>
+              <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginLeft: '6px' }}>
+                {t('extTuneVocalSub')}
+              </span>
+            </div>
+            <span
+              style={{
+                padding: '2px 6px',
+                borderRadius: '4px',
+                fontSize: '9px',
+                fontWeight: 700,
+                letterSpacing: '0.5px',
+                color: '#ff9f43',
+                background: 'rgba(255, 159, 67, 0.12)',
+                border: '1px solid rgba(255, 159, 67, 0.3)',
+              }}
+            >
+              {t('extTuneVocalBeta')}
+            </span>
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
+          {(
+            [
+              { mode: 'off', labelKey: 'extTuneVocalOff', disabled: false },
+              { mode: 'basic', labelKey: 'extTuneVocalBasic', disabled: false },
+              { mode: 'hd', labelKey: 'extTuneVocalHd', disabled: true },
+            ] as const
+          ).map(({ mode, labelKey, disabled }) => {
+            const isActive = vocalMode === mode;
+            return (
+              <span
+                key={mode}
+                role="button"
+                tabIndex={disabled ? -1 : 0}
+                aria-disabled={disabled}
+                onClick={() => {
+                  if (!disabled) handleVocalModeChange(mode as VocalMode);
+                }}
+                onKeyDown={(e) => {
+                  if (!disabled && e.key === 'Enter') handleVocalModeChange(mode as VocalMode);
+                }}
+                title={disabled ? t('extTuneVocalHdComingSoon') : undefined}
+                style={{
+                  padding: '8px 10px',
+                  borderRadius: '8px',
+                  fontSize: '11px',
+                  fontWeight: 500,
+                  cursor: disabled ? 'not-allowed' : 'pointer',
+                  textAlign: 'center',
+                  transition: 'all 0.15s',
+                  userSelect: 'none',
+                  opacity: disabled ? 0.4 : 1,
+                  background: isActive ? 'rgba(255, 159, 67, 0.12)' : 'rgba(255,255,255,0.04)',
+                  color: isActive ? '#ff9f43' : 'rgba(255,255,255,0.7)',
+                  border: isActive ? '1px solid rgba(255, 159, 67, 0.3)' : '1px solid transparent',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive && !disabled) {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+                    e.currentTarget.style.color = '#fff';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive && !disabled) {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+                    e.currentTarget.style.color = 'rgba(255,255,255,0.7)';
+                  }
+                }}
+              >
+                {t(labelKey)}
+              </span>
+            );
+          })}
+        </div>
+        {vocalMode === 'basic' && (
+          <div style={{ marginTop: '8px', fontSize: '10px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.4 }}>
+            {t('extTuneVocalHint')}
+          </div>
+        )}
+      </div>
 
       {/* 퀵 프리셋 */}
       <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '16px' }}>
