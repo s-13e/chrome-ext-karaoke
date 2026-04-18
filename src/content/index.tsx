@@ -1115,6 +1115,12 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
     latestLyrics = newLyrics;
     console.log('[Lyrics] 가사 상태 업데이트 완료');
 
+    // 이전 영상의 광고/미니 경로에서 걸어 둔 display:none 이 SPA 전환 중 해제되지 않고
+    // 남아있는 회귀를 방지. 새 가사를 내보내는 시점에는 overlay 가 반드시 보여야 한다.
+    if (newLyrics.length > 0 && overlayManager.getContainer('lyrics') && !detectMiniMode()) {
+      overlayManager.setVisibility('lyrics', true);
+    }
+
     renderLyricsOverlay(latestLyrics);
 
     // 카라오케 모드 매니저에 가사 업데이트 (자동으로 KaraokeModeContainer 재렌더링됨)
