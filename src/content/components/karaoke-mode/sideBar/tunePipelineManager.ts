@@ -26,7 +26,7 @@
 import { SoundTouch } from 'soundtouchjs';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 
-export type VocalMode = 'off' | 'basic' | 'multiband' | 'hd';
+export type VocalMode = 'off' | 'basic' | 'hd';
 
 /** EQ 파라미터 (보컬 체인 후반부) + 멀티밴드 crossover 주파수 */
 export interface VocalEqParams {
@@ -71,27 +71,18 @@ export const DEFAULT_VOCAL_EQ: VocalEqParams = {
 };
 
 /**
- * 보컬 제거 체인은 두 종류로 분리:
- * - basic: 전 대역에 L−R 적용 (현재 방식)
- * - multiband: 중역만 L−R, 저역/고역은 스테레오 유지
+ * 보컬 제거 체인 (Tier 1, 멀티밴드 L−R):
+ * 저역(<crossover.lowHz)과 고역(>crossover.highHz)은 스테레오 유지,
+ * 중역만 L−R 캔슬 → 베이스/심벌 보존하면서 보컬 처리.
  *
- * 출구 노드는 둘 다 highPeak (3-밴드 EQ 마지막).
+ *   inputBus ─┬─ bassLP ──────────────────────────────────────┐
+ *             ├─ midHP → midLP → splitter → L(+1)/R(-1) ────┤── bandSum
+ *             │                              → sum → stereoMerger
+ *             └─ trebleHP ────────────────────────────────────┘
+ *                                                              ↓
+ *                                          lowShelf → midPeak → highPeak (출구)
  */
-interface BasicVocalChain {
-  kind: 'basic';
-  splitter: ChannelSplitterNode;
-  gainL: GainNode;
-  gainRNeg: GainNode;
-  sumNode: GainNode; // mono 믹스 버스 (L + (-R))
-  stereoMerger: ChannelMergerNode; // mono → stereo 로 복제
-  lowShelf: BiquadFilterNode;
-  midPeak: BiquadFilterNode;
-  highPeak: BiquadFilterNode; // 체인 출구
-  // 입구: splitter / 출구: highPeak
-}
-
-interface MultibandVocalChain {
-  kind: 'multiband';
+interface VocalChain {
   // 입력 분기 버스 (3개 병렬 path)
   inputBus: GainNode;
   // 저역 path (lowpass, 스테레오 유지)
@@ -108,14 +99,12 @@ interface MultibandVocalChain {
   trebleHP: BiquadFilterNode;
   // 3밴드 합산
   bandSum: GainNode;
-  // 후처리 EQ (basic과 동일 구조 재사용)
+  // 후처리 3-밴드 EQ
   lowShelf: BiquadFilterNode;
   midPeak: BiquadFilterNode;
   highPeak: BiquadFilterNode; // 체인 출구
   // 입구: inputBus / 출구: highPeak
 }
-
-type VocalChain = BasicVocalChain | MultibandVocalChain;
 
 interface SourceAnalyzers {
   // AnalyserNode는 pass-through (input=output). Chrome의 dead-end 최적화로 parallel tap이
@@ -315,54 +304,9 @@ function createPostEq(ctx: AudioContext): {
   return { lowShelf, midPeak, highPeak };
 }
 
-/** Basic L-R 체인(lazy 생성) — 'basic' 모드 첫 활성화 시 호출 */
-function ensureBasicVocalChain(p: TunePipeline): BasicVocalChain {
-  if (p.vocal && p.vocal.kind === 'basic') return p.vocal;
-
-  // 기존 체인이 multiband였다면 정리 (모드 전환 시)
-  disposeVocalChain(p);
-
-  const ctx = p.audioCtx;
-  const splitter = ctx.createChannelSplitter(2);
-  const gainL = new GainNode(ctx, { gain: 1 });
-  const gainRNeg = new GainNode(ctx, { gain: -1 });
-  const sumNode = new GainNode(ctx, { gain: 1 });
-  const stereoMerger = ctx.createChannelMerger(2);
-  const { lowShelf, midPeak, highPeak } = createPostEq(ctx);
-
-  // splitter[L] → gainL(+1) ─┐
-  //                          ├─→ sumNode → stereoMerger[0]+[1] → lowShelf → midPeak → highPeak
-  // splitter[R] → gainRNeg(-1)┘
-  splitter.connect(gainL, 0);
-  splitter.connect(gainRNeg, 1);
-  gainL.connect(sumNode);
-  gainRNeg.connect(sumNode);
-  sumNode.connect(stereoMerger, 0, 0);
-  sumNode.connect(stereoMerger, 0, 1);
-  stereoMerger.connect(lowShelf);
-  lowShelf.connect(midPeak);
-  midPeak.connect(highPeak);
-
-  const chain: BasicVocalChain = {
-    kind: 'basic',
-    splitter,
-    gainL,
-    gainRNeg,
-    sumNode,
-    stereoMerger,
-    lowShelf,
-    midPeak,
-    highPeak,
-  };
-  p.vocal = chain;
-  return chain;
-}
-
-/** Multiband 체인(lazy 생성) — 'multiband' 모드 첫 활성화 시 호출 */
-function ensureMultibandVocalChain(p: TunePipeline): MultibandVocalChain {
-  if (p.vocal && p.vocal.kind === 'multiband') return p.vocal;
-
-  disposeVocalChain(p);
+/** 보컬 제거 체인(lazy 생성) — 'basic' 모드 첫 활성화 시 호출 */
+function ensureVocalChain(p: TunePipeline): VocalChain {
+  if (p.vocal) return p.vocal;
 
   const ctx = p.audioCtx;
   const inputBus = new GainNode(ctx, { gain: 1 });
@@ -431,8 +375,7 @@ function ensureMultibandVocalChain(p: TunePipeline): MultibandVocalChain {
   lowShelf.connect(midPeak);
   midPeak.connect(highPeak);
 
-  const chain: MultibandVocalChain = {
-    kind: 'multiband',
+  const chain: VocalChain = {
     inputBus,
     bassLP,
     midHP,
@@ -452,30 +395,22 @@ function ensureMultibandVocalChain(p: TunePipeline): MultibandVocalChain {
   return chain;
 }
 
-/** 기존 vocal 체인의 외부 + 내부 연결 모두 해제 (모드 전환 시 호출) */
+/** vocal 체인 모든 연결 해제 (off 전환 또는 destroy 시) */
 function disposeVocalChain(p: TunePipeline): void {
   if (!p.vocal) return;
   const v = p.vocal;
   try {
-    if (v.kind === 'basic') {
-      v.splitter.disconnect();
-      v.gainL.disconnect();
-      v.gainRNeg.disconnect();
-      v.sumNode.disconnect();
-      v.stereoMerger.disconnect();
-    } else {
-      v.inputBus.disconnect();
-      v.bassLP.disconnect();
-      v.midHP.disconnect();
-      v.midLP.disconnect();
-      v.midSplitter.disconnect();
-      v.midGainL.disconnect();
-      v.midGainRNeg.disconnect();
-      v.midSumNode.disconnect();
-      v.midStereoMerger.disconnect();
-      v.trebleHP.disconnect();
-      v.bandSum.disconnect();
-    }
+    v.inputBus.disconnect();
+    v.bassLP.disconnect();
+    v.midHP.disconnect();
+    v.midLP.disconnect();
+    v.midSplitter.disconnect();
+    v.midGainL.disconnect();
+    v.midGainRNeg.disconnect();
+    v.midSumNode.disconnect();
+    v.midStereoMerger.disconnect();
+    v.trebleHP.disconnect();
+    v.bandSum.disconnect();
     v.lowShelf.disconnect();
     v.midPeak.disconnect();
     v.highPeak.disconnect();
@@ -483,11 +418,6 @@ function disposeVocalChain(p: TunePipeline): void {
     // ignore
   }
   p.vocal = null;
-}
-
-/** 입구 노드 반환 (체인 종류별로 진입점 다름) */
-function vocalChainInput(v: VocalChain): AudioNode {
-  return v.kind === 'basic' ? v.splitter : v.inputBus;
 }
 
 /**
@@ -505,7 +435,7 @@ function applyChain(): void {
   const p = pipeline;
 
   const pitchActive = currentPitch !== 0;
-  const vocalActive = currentVocalMode === 'basic' || currentVocalMode === 'multiband';
+  const vocalActive = currentVocalMode === 'basic';
   // 'hd'는 아직 미구현 → 'off'와 동일하게 취급 (UI에서도 disabled)
 
   // 1) 외부 엣지 전부 해제 (내부 고정 배선은 유지)
@@ -532,13 +462,10 @@ function applyChain(): void {
     }
   }
 
-  // 2) vocal 체인 필요 시 모드별 lazy 생성 (다른 종류였으면 dispose 후 재생성)
-  if (currentVocalMode === 'basic') {
-    ensureBasicVocalChain(p);
-  } else if (currentVocalMode === 'multiband') {
-    ensureMultibandVocalChain(p);
+  // 2) vocal 체인 필요 시 lazy 생성 (off 전환 시 dispose로 메모리 회수)
+  if (vocalActive) {
+    ensureVocalChain(p);
   } else if (p.vocal) {
-    // off로 전환 시 메모리 회수 위해 dispose
     disposeVocalChain(p);
   }
 
@@ -546,7 +473,7 @@ function applyChain(): void {
   p.source.connect(p.analyzers.spectrumAnalyser);
   let tail: AudioNode = p.analyzers.analyzerMerger;
   if (vocalActive && p.vocal) {
-    tail.connect(vocalChainInput(p.vocal));
+    tail.connect(p.vocal.inputBus);
     tail = p.vocal.highPeak;
   }
   if (pitchActive) {
@@ -609,8 +536,8 @@ export function setVocalMode(mode: VocalMode): void {
   if (mode === currentVocalMode) return;
   currentVocalMode = mode;
 
-  // basic/multiband 활성화인데 파이프라인 아직 없으면 초기화
-  if ((mode === 'basic' || mode === 'multiband') && !pipeline) {
+  // basic 활성화인데 파이프라인 아직 없으면 초기화
+  if (mode === 'basic' && !pipeline) {
     ensurePipeline();
   }
 
@@ -652,9 +579,9 @@ export function initVocalModeFromStorage(): void {
   if (currentVocalMode !== 'off') return; // 이미 설정됨 → 스킵
 
   chrome.storage.sync.get([STORAGE_KEYS.VOCAL_MODE], (result) => {
-    const stored = result[STORAGE_KEYS.VOCAL_MODE] as VocalMode | undefined;
-    // 'hd'는 아직 미구현이므로 복원 시 'off'로 강등. basic/multiband는 통과.
-    const safe: VocalMode = stored === 'basic' || stored === 'multiband' ? stored : 'off';
+    const stored = result[STORAGE_KEYS.VOCAL_MODE] as string | undefined;
+    // 'hd'는 미구현 → 'off' 강등. 구버전 'multiband'는 'basic'으로 마이그레이션.
+    const safe: VocalMode = stored === 'basic' || stored === 'multiband' ? 'basic' : 'off';
     if (safe === 'off') return;
     // 대기 중 사이 사용자가 이미 다른 모드로 바꿨으면 덮어쓰지 않음
     if (currentVocalMode !== 'off') return;
@@ -766,13 +693,11 @@ export function setVocalEqParams(params: VocalEqParams): void {
   v.highPeak.Q.value = currentEq.highPeak.Q;
   v.highPeak.gain.value = currentEq.highPeak.gain;
 
-  // multiband 체인이면 crossover 필터 주파수도 동기화
-  if (v.kind === 'multiband') {
-    v.bassLP.frequency.value = currentEq.crossover.lowHz;
-    v.midHP.frequency.value = currentEq.crossover.lowHz;
-    v.midLP.frequency.value = currentEq.crossover.highHz;
-    v.trebleHP.frequency.value = currentEq.crossover.highHz;
-  }
+  // crossover 필터 주파수 동기화
+  v.bassLP.frequency.value = currentEq.crossover.lowHz;
+  v.midHP.frequency.value = currentEq.crossover.lowHz;
+  v.midLP.frequency.value = currentEq.crossover.highHz;
+  v.trebleHP.frequency.value = currentEq.crossover.highHz;
 }
 
 /**
