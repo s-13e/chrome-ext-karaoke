@@ -61,19 +61,18 @@ export interface VocalDebugSnapshot {
 export const DEFAULT_VOCAL_EQ: VocalEqParams = {
   // 저역 능동 부스트 — 킥/베이스 존재감 강화 + 크로스오버 phase dip 보상
   lowShelf: { freq: 100, gain: 3 },
-  // 후처리 EQ — 부분 캔슬과 함께 보컬 본체 살짝만 추가 감쇠
+  // 후처리 EQ — 부분 캔슬(cancelStrength) 도입으로 추가 깎기 완화
   midPeak: { freq: 3000, Q: 1.5, gain: -4 },
   highPeak: { freq: 6000, Q: 1.2, gain: -5 },
   // 멀티밴드 crossover:
-  // - <350Hz: 킥 body + 베이스 + 남성 보컬 펀더멘털 스테레오 유지
-  // - 350~6000Hz: L-R 부분 캔슬 (보컬 본체 + 포먼트)
-  // - >6000Hz: 스네어 snap + 치찰음 + 심벌 등 고역 전부 스테레오 유지
-  crossover: { lowHz: 350, highHz: 6000 },
-  // L-R 부분 캔슬 강도 — 0.55는 센터 약 -5dB.
-  // 강도가 약해 보컬 인식은 살짝만 감소하지만 비트·악기 거의 그대로 보존.
-  // Jersey Club 등 비트 헤비 곡(킥 click·리듬 보컬 샘플) 음악성 우선 기본값.
-  // 보컬만 센터인 발라드는 Dev UI에서 0.85~1.0으로 올려야 효과적.
-  cancelStrength: 0.55,
+  // - <350Hz: 킥 body(60~300Hz) + 베이스 라인 + 남성 보컬 펀더멘털 스테레오 유지
+  // - 350~8000Hz: L-R 부분 캔슬 (보컬 본체 + 포먼트)
+  // - >8000Hz: 스네어 snap(4~8kHz는 8kHz 위 일부) + 심벌·치찰음 스테레오 유지
+  crossover: { lowHz: 350, highHz: 8000 },
+  // L-R 부분 캔슬 강도 — 0.85는 센터 약 -16dB.
+  // 비트 헤비 곡(Jersey Club 등 리듬 보컬 샘플 활용)에서 음악 무너짐 방지.
+  // 1.0(완전 캔슬)은 클래식 발라드처럼 보컬만 센터에 있는 곡에 적합.
+  cancelStrength: 0.85,
 };
 
 /**
