@@ -58,17 +58,18 @@ export interface VocalDebugSnapshot {
 }
 
 export const DEFAULT_VOCAL_EQ: VocalEqParams = {
-  // 저역 후처리 — 베이스/킥 보존 위해 약하게 (-2dB)
-  lowShelf: { freq: 80, gain: -2 },
+  // 저역 능동 부스트 — 킥/베이스 존재감 강화 + 크로스오버 phase dip 보상
+  lowShelf: { freq: 100, gain: 3 },
   // 후처리 EQ: midPeak(보컬 본체) + highPeak(고음 보컬 잔여 — 더 넓고 강하게)
   midPeak: { freq: 3000, Q: 1.5, gain: -6 },
   highPeak: { freq: 6000, Q: 1.2, gain: -8 },
   // 멀티밴드 crossover:
-  // - <180Hz: 킥(60~120Hz) + 베이스 펀더멘털(80~180Hz) 스테레오 유지 ← 음악 본체 보존
-  // - 180~13000Hz: L-R 캔슬 (보컬 본체 + 포먼트 + 치찰음)
-  // - >13000Hz: 공기감·심벌 영역만 스테레오 유지
-  // 남성 보컬 펀더멘털(85~180Hz) 일부 보존되지만 보컬 본체는 여전히 처리되어 인식 확실히 감소.
-  crossover: { lowHz: 180, highHz: 13000 },
+  // - <250Hz: 킥 body(60~300Hz) + 베이스 라인 거의 전부 스테레오 유지
+  // - 250~13000Hz: L-R 캔슬 (보컬 본체 + 포먼트 + 치찰음)
+  // - >13000Hz: 공기감·심벌만 스테레오 유지
+  // 남성 보컬 펀더멘털(85~250Hz) 보존 영역에 들어가지만 보컬 본체(500~3000Hz 포먼트)는
+  // 여전히 처리되어 인식 감소. 킥/베이스 그루브 보존이 청취 경험에 더 중요.
+  crossover: { lowHz: 250, highHz: 13000 },
 };
 
 /**
