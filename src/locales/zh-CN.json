@@ -518,6 +518,8 @@
   "extTuneVocalHd": "HD",
   "extTuneVocalHdComingSoon": "即将推出",
   "extTuneVocalHint": "效果因曲目而异。在录音室录制的流行音乐中效果最佳。",
+  "extTuneVocalFeedback": "反馈",
+  "extTuneVocalFeedbackTooltip": "发送关于人声削减的反馈",
   "extPause": "暂停",
   "extRecord": "录音",
   "extMute": "静音",

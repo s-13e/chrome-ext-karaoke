@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MdMusicNote, MdSpeed, MdRefresh, MdMicOff } from 'react-icons/md';
+import { MdMusicNote, MdSpeed, MdRefresh, MdMicOff, MdSend } from 'react-icons/md';
 import { STORAGE_KEYS } from '@constants/storageKeys';
 import {
   getTuneState,
@@ -567,6 +567,47 @@ export const TunePanel: React.FC = () => {
               }}
             >
               {t('extTuneVocalBeta')}
+            </span>
+            {/* 피드백 버튼 — 클릭 시 Settings 탭으로 이동 (피드백 폼이 거기 있음) */}
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('tutorial-navigate-tab', { detail: { tab: 'settings' } }));
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  window.dispatchEvent(new CustomEvent('tutorial-navigate-tab', { detail: { tab: 'settings' } }));
+                }
+              }}
+              title={t('extTuneVocalFeedbackTooltip')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px',
+                padding: '2px 6px',
+                borderRadius: '4px',
+                fontSize: '10px',
+                fontWeight: 500,
+                color: 'rgba(255,255,255,0.55)',
+                cursor: 'pointer',
+                border: '1px solid rgba(255,255,255,0.12)',
+                transition: 'all 0.15s',
+                userSelect: 'none',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = '#fff';
+                e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.25)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'rgba(255,255,255,0.55)';
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)';
+              }}
+            >
+              <MdSend size={10} />
+              {t('extTuneVocalFeedback')}
             </span>
           </div>
           {/* NEW 배지 — 라디오 한 번이라도 클릭하면 해제 */}

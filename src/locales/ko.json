@@ -518,6 +518,8 @@
   "extTuneVocalHd": "HD",
   "extTuneVocalHdComingSoon": "곧 출시 예정",
   "extTuneVocalHint": "곡에 따라 효과가 다를 수 있어요. 스튜디오에서 녹음된 대중음악에서 가장 잘 작동합니다.",
+  "extTuneVocalFeedback": "피드백",
+  "extTuneVocalFeedbackTooltip": "보컬 제거에 대한 의견 보내기",
   "extPause": "일시정지",
   "extRecord": "녹음",
   "extMute": "음소거",

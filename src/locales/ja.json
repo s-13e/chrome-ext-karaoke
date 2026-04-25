@@ -518,6 +518,8 @@
   "extTuneVocalHd": "HD",
   "extTuneVocalHdComingSoon": "近日公開",
   "extTuneVocalHint": "曲によって効果が異なる場合があります。スタジオ録音のポピュラー音楽で最もよく機能します。",
+  "extTuneVocalFeedback": "フィードバック",
+  "extTuneVocalFeedbackTooltip": "ボーカル低減に関するフィードバックを送る",
   "extPause": "一時停止",
   "extRecord": "録音",
   "extMute": "ミュート",

@@ -518,6 +518,8 @@
   "extTuneVocalHd": "HD",
   "extTuneVocalHdComingSoon": "Em breve",
   "extTuneVocalHint": "O efeito varia conforme a música. Funciona melhor em música popular gravada em estúdio.",
+  "extTuneVocalFeedback": "Feedback",
+  "extTuneVocalFeedbackTooltip": "Enviar feedback sobre a redução de vocal",
   "extPause": "Pausar",
   "extRecord": "Gravar",
   "extMute": "Silenciar",
