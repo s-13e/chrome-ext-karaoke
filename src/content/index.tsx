@@ -45,6 +45,7 @@ import { loadFontFromFamilyString } from '@lib/utils/fonts/googleFontsLoader';
 import { processMusicDetectionResult } from '@lib/utils/storage/autoDisableStorage';
 import { ActionableToast } from './components/common/ActionableToast';
 import { TutorialController } from './tutorial/tutorialController';
+import { initVocalModeFromStorage } from './components/karaoke-mode/sideBar/tunePipelineManager';
 
 // DEV_MODE: 개발 중 튜토리얼 완료 상태 저장 스킵
 const IS_DEV_MODE = process.env.DEV_MODE === 'true';
@@ -1105,11 +1106,20 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
     await initStorageState();
     setupStorageChangeListener();
     setupOtherListeners();
+    // 저장된 보컬 감쇠 모드를 카라오케 모드 on 여부와 무관하게 즉시 복원.
+    // 내부적으로 video 'playing' 이벤트 후로 지연 활성화하여 초기 렉 방지.
+    initVocalModeFromStorage();
   }
 
   function onLyricsUpdated(newLyrics: Line[]) {
     latestLyrics = newLyrics;
     console.log('[Lyrics] 가사 상태 업데이트 완료');
+
+    // 이전 영상의 광고/미니 경로에서 걸어 둔 display:none 이 SPA 전환 중 해제되지 않고
+    // 남아있는 회귀를 방지. 새 가사를 내보내는 시점에는 overlay 가 반드시 보여야 한다.
+    if (newLyrics.length > 0 && overlayManager.getContainer('lyrics') && !detectMiniMode()) {
+      overlayManager.setVisibility('lyrics', true);
+    }
 
     renderLyricsOverlay(latestLyrics);
 
