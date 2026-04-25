@@ -59,19 +59,20 @@ export interface VocalDebugSnapshot {
 }
 
 export const DEFAULT_VOCAL_EQ: VocalEqParams = {
-  // 저역 능동 부스트 — 킥/베이스 존재감 강화 + 크로스오버 phase dip 보상
-  lowShelf: { freq: 100, gain: 3 },
-  // 후처리 EQ — 부분 캔슬(cancelStrength) 도입으로 추가 깎기 완화
+  // 저역 강한 부스트 — Jersey Club 등 킥 click(1~3kHz)이 L-R로 캔슬되는 청각적 손실을
+  // 킥 펀더멘털(60~150Hz)의 임팩트로 보상. 비트감 회복용.
+  lowShelf: { freq: 150, gain: 7 },
+  // 후처리 EQ — 부분 캔슬(cancelStrength)과 함께 추가 보컬 잔여 깎기
   midPeak: { freq: 3000, Q: 1.5, gain: -4 },
   highPeak: { freq: 6000, Q: 1.2, gain: -5 },
   // 멀티밴드 crossover:
-  // - <350Hz: 킥 body(60~300Hz) + 베이스 라인 + 남성 보컬 펀더멘털 스테레오 유지
+  // - <350Hz: 킥 body + 베이스 + 남성 보컬 펀더멘털 스테레오 유지 (lowShelf로 추가 부스트)
   // - 350~8000Hz: L-R 부분 캔슬 (보컬 본체 + 포먼트)
-  // - >8000Hz: 스네어 snap(4~8kHz는 8kHz 위 일부) + 심벌·치찰음 스테레오 유지
+  // - >8000Hz: 스네어 snap·치찰음·심벌 스테레오 유지
   crossover: { lowHz: 350, highHz: 8000 },
   // L-R 부분 캔슬 강도 — 0.85는 센터 약 -16dB.
-  // 비트 헤비 곡(Jersey Club 등 리듬 보컬 샘플 활용)에서 음악 무너짐 방지.
-  // 1.0(완전 캔슬)은 클래식 발라드처럼 보컬만 센터에 있는 곡에 적합.
+  // Tier 1 L-R 한계: 킥 click(1~3kHz)과 보컬 포먼트(1~3kHz)가 같은 대역+센터라 분리 불가.
+  // 강하게 캔슬→둘 다 사라짐, 약하게→둘 다 남음. 그래서 lowShelf 부스트로 보상.
   cancelStrength: 0.85,
 };
 
