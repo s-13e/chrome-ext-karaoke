@@ -381,6 +381,7 @@ export const TunePanel: React.FC = () => {
       midPeak: { ...DEFAULT_VOCAL_EQ.midPeak },
       highPeak: { ...DEFAULT_VOCAL_EQ.highPeak },
       crossover: { ...DEFAULT_VOCAL_EQ.crossover },
+      cancelStrength: DEFAULT_VOCAL_EQ.cancelStrength,
     };
     setEqParams(defaults);
     setPipelineVocalEqParams(defaults);
@@ -789,30 +790,49 @@ export const TunePanel: React.FC = () => {
 
               {/* 'basic' 모드는 내부적으로 멀티밴드 구조라 crossover 슬라이더 의미 있음 */}
               {vocalMode === 'basic' && (
-                <EqBand
-                  title="Crossover (multiband)"
-                  params={[
-                    {
-                      key: 'lowHz',
-                      label: 'Low',
-                      value: eqParams.crossover.lowHz,
-                      min: 50,
-                      max: 500,
-                      step: 10,
-                      unit: 'Hz',
-                    },
-                    {
-                      key: 'highHz',
-                      label: 'High',
-                      value: eqParams.crossover.highHz,
-                      min: 2000,
-                      max: 10000,
-                      step: 100,
-                      unit: 'Hz',
-                    },
-                  ]}
-                  onChange={(key, v) => handleEqChange({ ...eqParams, crossover: { ...eqParams.crossover, [key]: v } })}
-                />
+                <>
+                  <EqBand
+                    title="Crossover (multiband)"
+                    params={[
+                      {
+                        key: 'lowHz',
+                        label: 'Low',
+                        value: eqParams.crossover.lowHz,
+                        min: 50,
+                        max: 500,
+                        step: 10,
+                        unit: 'Hz',
+                      },
+                      {
+                        key: 'highHz',
+                        label: 'High',
+                        value: eqParams.crossover.highHz,
+                        min: 2000,
+                        max: 14000,
+                        step: 100,
+                        unit: 'Hz',
+                      },
+                    ]}
+                    onChange={(key, v) =>
+                      handleEqChange({ ...eqParams, crossover: { ...eqParams.crossover, [key]: v } })
+                    }
+                  />
+                  <EqBand
+                    title="Cancel Strength"
+                    params={[
+                      {
+                        key: 'value',
+                        label: 'L-R',
+                        value: eqParams.cancelStrength,
+                        min: 0.5,
+                        max: 1.0,
+                        step: 0.05,
+                        unit: '',
+                      },
+                    ]}
+                    onChange={(_key, v) => handleEqChange({ ...eqParams, cancelStrength: v })}
+                  />
+                </>
               )}
 
               <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>

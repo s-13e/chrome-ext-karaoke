@@ -28,13 +28,14 @@ import { STORAGE_KEYS } from '@constants/storageKeys';
 
 export type VocalMode = 'off' | 'basic' | 'hd';
 
-/** EQ 파라미터 (보컬 체인 후반부) + 멀티밴드 crossover 주파수 */
+/** EQ 파라미터 (보컬 체인 후반부) + 멀티밴드 crossover 주파수 + L−R 캔슬 강도 */
 export interface VocalEqParams {
   lowShelf: { freq: number; gain: number };
   midPeak: { freq: number; Q: number; gain: number };
   highPeak: { freq: number; Q: number; gain: number };
-  // 멀티밴드 모드 전용 — 'basic' 모드에서는 무시됨
   crossover: { lowHz: number; highHz: number };
+  // 0.5~1.0: 1=완전 캔슬, 0.85=부분 캔슬(센터 약 -16dB). 비트 헤비/리듬 보컬 샘플 곡에서 낮춰 사용
+  cancelStrength: number;
 }
 
 /** 디버그 스냅샷 — Dev 튜닝 UI에서 복사 버튼 누를 때 생성 */
@@ -60,16 +61,18 @@ export interface VocalDebugSnapshot {
 export const DEFAULT_VOCAL_EQ: VocalEqParams = {
   // 저역 능동 부스트 — 킥/베이스 존재감 강화 + 크로스오버 phase dip 보상
   lowShelf: { freq: 100, gain: 3 },
-  // 후처리 EQ: midPeak(보컬 본체) + highPeak(고음 보컬 잔여 — 더 넓고 강하게)
-  midPeak: { freq: 3000, Q: 1.5, gain: -6 },
-  highPeak: { freq: 6000, Q: 1.2, gain: -8 },
+  // 후처리 EQ — 부분 캔슬(cancelStrength) 도입으로 추가 깎기 완화
+  midPeak: { freq: 3000, Q: 1.5, gain: -4 },
+  highPeak: { freq: 6000, Q: 1.2, gain: -5 },
   // 멀티밴드 crossover:
-  // - <250Hz: 킥 body(60~300Hz) + 베이스 라인 거의 전부 스테레오 유지
-  // - 250~13000Hz: L-R 캔슬 (보컬 본체 + 포먼트 + 치찰음)
-  // - >13000Hz: 공기감·심벌만 스테레오 유지
-  // 남성 보컬 펀더멘털(85~250Hz) 보존 영역에 들어가지만 보컬 본체(500~3000Hz 포먼트)는
-  // 여전히 처리되어 인식 감소. 킥/베이스 그루브 보존이 청취 경험에 더 중요.
-  crossover: { lowHz: 250, highHz: 13000 },
+  // - <350Hz: 킥 body(60~300Hz) + 베이스 라인 + 남성 보컬 펀더멘털 스테레오 유지
+  // - 350~8000Hz: L-R 부분 캔슬 (보컬 본체 + 포먼트)
+  // - >8000Hz: 스네어 snap(4~8kHz는 8kHz 위 일부) + 심벌·치찰음 스테레오 유지
+  crossover: { lowHz: 350, highHz: 8000 },
+  // L-R 부분 캔슬 강도 — 0.85는 센터 약 -16dB.
+  // 비트 헤비 곡(Jersey Club 등 리듬 보컬 샘플 활용)에서 음악 무너짐 방지.
+  // 1.0(완전 캔슬)은 클래식 발라드처럼 보컬만 센터에 있는 곡에 적합.
+  cancelStrength: 0.85,
 };
 
 /**
@@ -332,7 +335,8 @@ function ensureVocalChain(p: TunePipeline): VocalChain {
 
   const midSplitter = ctx.createChannelSplitter(2);
   const midGainL = new GainNode(ctx, { gain: 1 });
-  const midGainRNeg = new GainNode(ctx, { gain: -1 });
+  // -strength: 0.85면 센터 약 -16dB 부분 캔슬, 1.0이면 완전 캔슬
+  const midGainRNeg = new GainNode(ctx, { gain: -currentEq.cancelStrength });
   const midSumNode = new GainNode(ctx, { gain: 1 });
   const midStereoMerger = ctx.createChannelMerger(2);
 
@@ -635,6 +639,7 @@ export function destroyPipeline(): void {
     midPeak: { ...DEFAULT_VOCAL_EQ.midPeak },
     highPeak: { ...DEFAULT_VOCAL_EQ.highPeak },
     crossover: { ...DEFAULT_VOCAL_EQ.crossover },
+    cancelStrength: DEFAULT_VOCAL_EQ.cancelStrength,
   };
 }
 
@@ -667,6 +672,7 @@ export function getVocalEqParams(): VocalEqParams {
     midPeak: { ...currentEq.midPeak },
     highPeak: { ...currentEq.highPeak },
     crossover: { ...currentEq.crossover },
+    cancelStrength: currentEq.cancelStrength,
   };
 }
 
@@ -681,6 +687,7 @@ export function setVocalEqParams(params: VocalEqParams): void {
     midPeak: { ...params.midPeak },
     highPeak: { ...params.highPeak },
     crossover: { ...params.crossover },
+    cancelStrength: params.cancelStrength,
   };
 
   const v = pipeline?.vocal;
@@ -695,11 +702,12 @@ export function setVocalEqParams(params: VocalEqParams): void {
   v.highPeak.Q.value = currentEq.highPeak.Q;
   v.highPeak.gain.value = currentEq.highPeak.gain;
 
-  // crossover 필터 주파수 동기화
+  // crossover 필터 주파수 + L-R 캔슬 강도 동기화
   v.bassLP.frequency.value = currentEq.crossover.lowHz;
   v.midHP.frequency.value = currentEq.crossover.lowHz;
   v.midLP.frequency.value = currentEq.crossover.highHz;
   v.trebleHP.frequency.value = currentEq.crossover.highHz;
+  v.midGainRNeg.gain.value = -currentEq.cancelStrength;
 }
 
 /**
