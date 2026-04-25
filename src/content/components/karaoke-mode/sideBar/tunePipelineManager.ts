@@ -61,7 +61,10 @@ export const DEFAULT_VOCAL_EQ: VocalEqParams = {
   lowShelf: { freq: 80, gain: -4 },
   midPeak: { freq: 2500, Q: 1.5, gain: -6 },
   highPeak: { freq: 3500, Q: 2.0, gain: -4 },
-  crossover: { lowHz: 150, highHz: 5000 },
+  // 멀티밴드 crossover: L−R 캔슬 영역을 80~8000Hz로 넓혀 보컬 fundamental(80~250Hz)
+  // + 포먼트(500~3500Hz) + 치찰음(5000~8000Hz)을 모두 처리. 저역 80Hz↓는 킥 펀치만,
+  // 고역 8kHz↑는 심벌·공기감만 스테레오 유지.
+  crossover: { lowHz: 80, highHz: 8000 },
 };
 
 /**
