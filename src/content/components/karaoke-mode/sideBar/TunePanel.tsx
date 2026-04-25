@@ -294,8 +294,8 @@ export const TunePanel: React.FC = () => {
       if (cancelled) return;
 
       const stored = result[STORAGE_KEYS.VOCAL_MODE] as VocalMode | undefined;
-      // 'hd'는 아직 미구현이므로 복원 시 'off'로 강등
-      const safe: VocalMode = stored === 'basic' ? 'basic' : 'off';
+      // 'hd'는 아직 미구현이므로 복원 시 'off'로 강등. basic/multiband는 통과.
+      const safe: VocalMode = stored === 'basic' || stored === 'multiband' ? stored : 'off';
       if (safe === 'off') return;
 
       // UI 상태는 즉시 반영 (사용자 시각 피드백)
@@ -376,6 +376,7 @@ export const TunePanel: React.FC = () => {
       lowShelf: { ...DEFAULT_VOCAL_EQ.lowShelf },
       midPeak: { ...DEFAULT_VOCAL_EQ.midPeak },
       highPeak: { ...DEFAULT_VOCAL_EQ.highPeak },
+      crossover: { ...DEFAULT_VOCAL_EQ.crossover },
     };
     setEqParams(defaults);
     setPipelineVocalEqParams(defaults);
@@ -581,11 +582,12 @@ export const TunePanel: React.FC = () => {
             />
           )}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '6px' }}>
           {(
             [
               { mode: 'off', labelKey: 'extTuneVocalOff', disabled: false },
               { mode: 'basic', labelKey: 'extTuneVocalBasic', disabled: false },
+              { mode: 'multiband', labelKey: 'extTuneVocalMultiband', disabled: false },
               { mode: 'hd', labelKey: 'extTuneVocalHd', disabled: true },
             ] as const
           ).map(({ mode, labelKey, disabled }) => {
@@ -635,7 +637,7 @@ export const TunePanel: React.FC = () => {
             );
           })}
         </div>
-        {vocalMode === 'basic' && (
+        {(vocalMode === 'basic' || vocalMode === 'multiband') && (
           <div style={{ marginTop: '8px', fontSize: '10px', color: 'rgba(255,255,255,0.4)', lineHeight: 1.4 }}>
             {t('extTuneVocalHint')}
           </div>
@@ -740,6 +742,34 @@ export const TunePanel: React.FC = () => {
                 ]}
                 onChange={(key, v) => handleEqChange({ ...eqParams, highPeak: { ...eqParams.highPeak, [key]: v } })}
               />
+
+              {/* 멀티밴드 모드일 때만 crossover 슬라이더 노출 */}
+              {vocalMode === 'multiband' && (
+                <EqBand
+                  title="Crossover (multiband)"
+                  params={[
+                    {
+                      key: 'lowHz',
+                      label: 'Low',
+                      value: eqParams.crossover.lowHz,
+                      min: 50,
+                      max: 500,
+                      step: 10,
+                      unit: 'Hz',
+                    },
+                    {
+                      key: 'highHz',
+                      label: 'High',
+                      value: eqParams.crossover.highHz,
+                      min: 2000,
+                      max: 10000,
+                      step: 100,
+                      unit: 'Hz',
+                    },
+                  ]}
+                  onChange={(key, v) => handleEqChange({ ...eqParams, crossover: { ...eqParams.crossover, [key]: v } })}
+                />
+              )}
 
               <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
                 <button
