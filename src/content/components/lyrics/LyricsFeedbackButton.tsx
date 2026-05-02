@@ -16,6 +16,8 @@ export const LyricsFeedbackButton: React.FC<LyricsFeedbackButtonProps> = ({ onFe
   const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState(false);
+  // 어떤 신고 종류로 토스트가 떴는지 — wrong_lyrics는 "되돌리기" 분기 토스트를 노출한다.
+  const [sentType, setSentType] = useState<FeedbackType | null>(null);
   const feedbackSentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // unmount 시 타이머 정리
@@ -42,17 +44,47 @@ export const LyricsFeedbackButton: React.FC<LyricsFeedbackButtonProps> = ({ onFe
       onFeedback(type);
       setIsExpanded(false);
       setFeedbackSent(true);
+      setSentType(type);
 
       if (feedbackSentTimerRef.current) {
         clearTimeout(feedbackSentTimerRef.current);
       }
+      // 되돌리기를 누를 시간을 확보하기 위해 wrong_lyrics는 5초, 그 외는 기존 2초.
+      const duration = type === 'wrong_lyrics' ? 5000 : 2000;
       feedbackSentTimerRef.current = setTimeout(() => {
         setFeedbackSent(false);
+        setSentType(null);
         feedbackSentTimerRef.current = null;
-      }, 2000);
+      }, duration);
     },
     [onFeedback],
   );
+
+  const handleUndo = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    // content/index.tsx의 handleUndoHide가 이 이벤트를 받아 가사를 메모리 스냅샷으로 즉시 복원한다.
+    window.dispatchEvent(new CustomEvent('undo-lyrics-hide'));
+    if (feedbackSentTimerRef.current) {
+      clearTimeout(feedbackSentTimerRef.current);
+      feedbackSentTimerRef.current = null;
+    }
+    setFeedbackSent(false);
+    setSentType(null);
+  }, []);
+
+  const renderToast = () => {
+    if (sentType === 'wrong_lyrics') {
+      return (
+        <div className={styles.hideToast}>
+          <span className={styles.hideToastMessage}>{t('extLyricsHiddenToast')}</span>
+          <button className={styles.hideToastUndo} type="button" onClick={handleUndo}>
+            {t('extLyricsHiddenUndo')}
+          </button>
+        </div>
+      );
+    }
+    return <span className={styles.successMessage}>{t('extFeedbackSentMessage')}</span>;
+  };
 
   return (
     <div className={styles.container} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
@@ -61,7 +93,7 @@ export const LyricsFeedbackButton: React.FC<LyricsFeedbackButtonProps> = ({ onFe
       </button>
 
       {feedbackSent ? (
-        <span className={styles.successMessage}>{t('extFeedbackSentMessage')}</span>
+        renderToast()
       ) : (
         <div className={`${styles.panel} ${isExpanded ? styles.panelVisible : ''}`}>
           <button className={styles.pill} type="button" onClick={() => handleFeedbackClick('wrong_lyrics')}>

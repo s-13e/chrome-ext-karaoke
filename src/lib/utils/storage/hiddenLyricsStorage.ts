@@ -1,21 +1,19 @@
 /**
  * 영상별 가사 숨김 상태 관리 유틸리티
  *
- * 사용자가 잘못된 가사를 신고하거나 수동 검색에서 가사를 못 찾았을 때,
- * 해당 영상의 가사 표시를 일시 차단한다.
+ * 사용자가 잘못된 가사를 신고했을 때 해당 영상의 그 LRCLib ID를 영구 차단한다.
  *
- * 데이터 정책:
- * - hiddenAt: 24시간 TTL — 만료되면 자동 매칭이 다시 시도된다.
- * - rejectedLrclibIds: 영구 보관 — 한 번 잘못이라 본 가사 ID는 다시 매칭돼도 차단한다.
- *   (24시간 후 재시도에서 같은 ID가 또 잡혔을 때 무한 루프를 방지하기 위함)
+ * 정책: rejectedLrclibIds만 사용 (영구 보관).
+ * - 24시간 TTL 같은 시한부 차단은 두지 않는다.
+ * - LRCLib에 새 가사가 등록되면 새 ID로 매칭되고, 거절 목록에 없으니 자동으로 표시된다.
+ *   → 이게 "dev가 가사 추가하기 전까지만 차단"의 자연스러운 회복 트리거.
+ * - 사용자가 명시적으로 회복하고 싶을 땐 unhideVideoLyrics(videoId) 호출로 거절 목록 비우고
+ *   페이지 새로고침으로 재매칭 트리거.
  */
 
 const STORAGE_KEY = 'hiddenLyrics';
-const HIDDEN_TTL_MS = 24 * 60 * 60 * 1000; // 24시간
 
 export interface HiddenLyricsEntry {
-  /** 가사 숨김이 시작된 시각 (ms epoch). 없으면 hidden 상태 아님. */
-  hiddenAt?: number;
   /** 사용자가 거절한 LRCLib ID 목록 (영구 보관). */
   rejectedLrclibIds: number[];
 }
@@ -49,23 +47,7 @@ async function setHiddenLyricsMap(map: HiddenLyricsMap): Promise<void> {
 }
 
 /**
- * 영상의 hiddenAt이 24시간 TTL 안에 있는지 판정
- */
-function isHiddenWithinTtl(entry: HiddenLyricsEntry | undefined): boolean {
-  if (!entry?.hiddenAt) return false;
-  return Date.now() - entry.hiddenAt < HIDDEN_TTL_MS;
-}
-
-/**
- * 영상이 현재 가사 숨김 상태인지 (24h TTL 적용)
- */
-export async function isVideoLyricsHidden(videoId: string): Promise<boolean> {
-  const map = await getHiddenLyricsMap();
-  return isHiddenWithinTtl(map[videoId]);
-}
-
-/**
- * 특정 LRCLib ID가 이 영상에서 사용자에 의해 거절된 적 있는지 (영구 체크, TTL 무관)
+ * 특정 LRCLib ID가 이 영상에서 사용자에 의해 거절된 적 있는지
  */
 export async function isLrclibIdRejected(videoId: string, lrclibId: number): Promise<boolean> {
   if (!Number.isFinite(lrclibId) || lrclibId <= 0) return false;
@@ -75,9 +57,7 @@ export async function isLrclibIdRejected(videoId: string, lrclibId: number): Pro
 }
 
 /**
- * 영상의 가사를 숨김 처리
- * - hiddenAt을 현재 시각으로 갱신해 24h TTL 시작
- * - lrclibId가 주어지면 영구 거절 목록에도 추가 (중복 방지)
+ * 영상의 가사를 숨김 처리 — 주어진 lrclibId를 거절 목록에 추가한다 (중복 방지).
  *
  * @returns 새로 추가된 거절 ID (이미 있던 ID거나 lrclibId가 없으면 undefined). 호출부의 "되돌리기" 처리에 사용.
  */
@@ -85,29 +65,30 @@ export async function hideVideoLyrics(
   videoId: string,
   lrclibId?: number,
 ): Promise<{ addedLrclibId: number | undefined }> {
+  if (lrclibId === undefined || !Number.isFinite(lrclibId) || lrclibId <= 0) {
+    return { addedLrclibId: undefined };
+  }
+
   const map = await getHiddenLyricsMap();
   const existing = map[videoId];
   const rejectedLrclibIds = existing?.rejectedLrclibIds ? [...existing.rejectedLrclibIds] : [];
 
   let addedLrclibId: number | undefined;
-  if (lrclibId !== undefined && Number.isFinite(lrclibId) && lrclibId > 0 && !rejectedLrclibIds.includes(lrclibId)) {
+  if (!rejectedLrclibIds.includes(lrclibId)) {
     rejectedLrclibIds.push(lrclibId);
     addedLrclibId = lrclibId;
   }
 
-  map[videoId] = {
-    hiddenAt: Date.now(),
-    rejectedLrclibIds,
-  };
+  map[videoId] = { rejectedLrclibIds };
   await setHiddenLyricsMap(map);
   return { addedLrclibId };
 }
 
 /**
  * 영상의 가사 숨김을 해제
- * - hiddenAt을 제거 (다시 보기)
- * - removeLrclibId가 주어지면 그 ID도 거절 목록에서 제거 (토스트 "되돌리기"에서 방금 추가한 ID 회수용)
- * - 거절 목록이 비고 hiddenAt도 없으면 entry 자체를 정리
+ * - removeLrclibId가 주어지면 그 ID만 제거 (토스트 "되돌리기"용 — 방금 추가한 ID 회수)
+ * - 주어지지 않으면 영상의 거절 목록 전체를 비움 ("숨긴 가사 다시 표시" 액션용)
+ * - 거절 목록이 비면 entry 자체를 정리
  */
 export async function unhideVideoLyrics(videoId: string, removeLrclibId?: number): Promise<void> {
   const map = await getHiddenLyricsMap();
@@ -115,9 +96,7 @@ export async function unhideVideoLyrics(videoId: string, removeLrclibId?: number
   if (!existing) return;
 
   const rejectedLrclibIds =
-    removeLrclibId !== undefined
-      ? existing.rejectedLrclibIds.filter((id) => id !== removeLrclibId)
-      : existing.rejectedLrclibIds;
+    removeLrclibId !== undefined ? existing.rejectedLrclibIds.filter((id) => id !== removeLrclibId) : [];
 
   if (rejectedLrclibIds.length === 0) {
     delete map[videoId];
@@ -128,26 +107,11 @@ export async function unhideVideoLyrics(videoId: string, removeLrclibId?: number
 }
 
 /**
- * 만료된 hiddenAt을 정리 (영상 진입 시점 등에서 호출).
- * - hiddenAt이 24h를 넘으면 hiddenAt만 삭제 (rejectedLrclibIds는 유지 — 재매칭 시 같은 잘못된 가사 재차단)
- * - 정리 후 entry가 빈 상태(거절 ID도 없음)면 entry 자체 삭제
+ * 영상에 거절된 LRCLib ID가 하나라도 있는지 — UI에서 "이 영상은 한 번이라도 사용자가 신고했음"
+ * 표시 같은 데 사용. 다만 차단 자체의 정확한 판정은 isLrclibIdRejected(videoId, currentLrclibId)
+ * 호출이 정확하다 (LRCLib가 새 ID로 갱신된 경우 false가 나와야 정확).
  */
-export async function cleanupExpiredHidden(): Promise<void> {
+export async function hasAnyRejection(videoId: string): Promise<boolean> {
   const map = await getHiddenLyricsMap();
-  let mutated = false;
-
-  for (const [videoId, entry] of Object.entries(map)) {
-    if (entry.hiddenAt && Date.now() - entry.hiddenAt >= HIDDEN_TTL_MS) {
-      mutated = true;
-      if (entry.rejectedLrclibIds.length === 0) {
-        delete map[videoId];
-      } else {
-        map[videoId] = { rejectedLrclibIds: entry.rejectedLrclibIds };
-      }
-    }
-  }
-
-  if (mutated) {
-    await setHiddenLyricsMap(map);
-  }
+  return !!map[videoId]?.rejectedLrclibIds.length;
 }

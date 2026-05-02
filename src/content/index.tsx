@@ -142,6 +142,17 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
   let lastArtist: string | null = null;
   let lastTitle: string | null = null;
   let lastUrl = window.location.href;
+  // 자동 매칭이 성공한 마지막 가사의 LRCLib ID (handleFeedback의 거절 등록용).
+  let lastLrclibId: number | null = null;
+  // 잘못된 가사 신고 직후 메모리에 보관하는 스냅샷. 토스트의 "되돌리기" 클릭 시 즉시 복원하기 위함.
+  // 1회용 — 되돌리기 또는 다음 신고가 발생하면 무효화된다.
+  let lastHiddenSnapshot: {
+    videoId: string;
+    lrclibId: number | null;
+    lyrics: Line[];
+    title: string;
+    artist: string;
+  } | null = null;
 
   let latestLyrics: Line[] = [];
   let contentEnabled = false;
@@ -809,7 +820,7 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
   }
 
   // 피드백 전송 콜백: lastVideoId, lastArtist, lastTitle 클로저 변수 사용
-  function handleFeedback(type: 'wrong_lyrics' | 'sync_mismatch') {
+  async function handleFeedback(type: 'wrong_lyrics' | 'sync_mismatch') {
     const videoId = lastVideoId;
     const artist = lastArtist;
     const title = lastTitle;
@@ -828,12 +839,67 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
         console.log('[Feedback] 전송 완료:', response);
       },
     );
+
+    // wrong_lyrics 신고는 서버 신고 외에 즉시 가사 숨김까지 수행한다.
+    // 이렇게 하지 않으면 사용자가 잘못된 가사를 안 보려고 가라오케 모드 자체를 끄는 우회를 하게 됨.
+    if (type === 'wrong_lyrics') {
+      // "되돌리기"로 즉시 복원할 수 있도록 신고 직전 상태를 메모리에 보관.
+      lastHiddenSnapshot = {
+        videoId,
+        lrclibId: lastLrclibId,
+        lyrics: latestLyrics,
+        title: title ?? '',
+        artist: artist ?? '',
+      };
+
+      const { hideVideoLyrics } = await import('@lib/utils/storage/hiddenLyricsStorage');
+      const lrclibId = lastLrclibId ?? undefined;
+      await hideVideoLyrics(videoId, lrclibId);
+
+      // SPA 세션 캐시에 남아 있으면 다음 진입 시 잘못된 가사가 즉시 복원돼 차단 로직을 우회한다.
+      // 메모리 캐시를 비워 메인 매칭 경로로 떨어지게 만든다.
+      sessionLyricsCache.delete(videoId);
+
+      // 가사 영역 즉시 비움 — 가라오케 모드의 다른 기능은 유지된다.
+      onLyricsUpdated([]);
+      // 차단 상태 신호 — MicroFeedback 위젯이 일반 👍👎에서 [숨긴 가사 다시 표시] UI로 전환됨.
+      // 5초 토스트가 사라진 후에도 회복 진입점이 위젯 자리에 남는다.
+      window.dispatchEvent(new CustomEvent('lyrics-hidden-state', { detail: { videoId, hidden: true } }));
+      console.log(`[HiddenLyrics] 잘못된 가사 신고로 자동 숨김: videoId=${videoId}, lrclibId=${lrclibId ?? 'unknown'}`);
+    }
   }
 
-  // 사이드바 피드백 이벤트 리스닝
+  // 토스트의 "되돌리기" 클릭 시 호출 — 신고 직전 가사를 즉시 복원한다.
+  async function handleUndoHide() {
+    const snap = lastHiddenSnapshot;
+    if (!snap) return;
+    lastHiddenSnapshot = null;
+
+    const { unhideVideoLyrics } = await import('@lib/utils/storage/hiddenLyricsStorage');
+    await unhideVideoLyrics(snap.videoId, snap.lrclibId ?? undefined);
+
+    // 메모리 캐시도 복원해 SPA 재진입 시 다시 빈 화면으로 떨어지지 않도록 한다.
+    sessionLyricsCache.set(snap.videoId, {
+      lyrics: snap.lyrics,
+      title: snap.title,
+      artist: snap.artist,
+    });
+
+    onLyricsUpdated(snap.lyrics);
+    // 일반 상태로 복귀 신호 — MicroFeedback 위젯이 [숨긴 가사 다시 표시]에서 일반 👍👎로 돌아감.
+    window.dispatchEvent(new CustomEvent('lyrics-hidden-state', { detail: { videoId: snap.videoId, hidden: false } }));
+    console.log(`[HiddenLyrics] 잘못된 가사 신고 되돌리기 완료: videoId=${snap.videoId}`);
+  }
+
+  // 사이드바 피드백 이벤트 리스닝 — 사이드바의 "잘못된 가사" 버튼도 동일한 자동 숨김 흐름을 탄다.
   window.addEventListener('send-lyrics-feedback', ((e: CustomEvent<{ type: 'wrong_lyrics' | 'sync_mismatch' }>) => {
-    handleFeedback(e.detail.type);
+    void handleFeedback(e.detail.type);
   }) as EventListener);
+
+  // 토스트 "되돌리기" 이벤트 리스닝 (LyricsFeedbackButton에서 발생).
+  window.addEventListener('undo-lyrics-hide', () => {
+    void handleUndoHide();
+  });
 
   // 노래 정보 렌더링
   function renderSongInfo(title: string, artist: string) {
@@ -1638,33 +1704,34 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
       // 4) 가사 준비 완료, 상태 업데이트 및 UI 렌더링
       const { lyricsResult: finalLyricsResult, parsedLyrics, effectiveLyricsDuration } = lyricsData;
 
-      // 🔒 사용자 차단 체크 — 두 신호 중 하나라도 걸리면 가사를 표시하지 않는다.
-      //   1. isVideoLyricsHidden: 24h TTL 안에 사용자가 이 영상의 가사를 숨김 처리함 (재진입 차단)
-      //   2. isLrclibIdRejected: 사용자가 이 LRCLib ID를 거절한 적 있음 (영구) — 24h 후 재매칭에서 같은 ID가 또 잡혔을 때 무한 루프 방지
-      {
-        const idRaw = finalLyricsResult.id;
-        const idNum = typeof idRaw === 'string' ? parseInt(idRaw, 10) : idRaw;
-        const numericLrclibId = typeof idNum === 'number' && idNum > 0 && !isNaN(idNum) ? idNum : undefined;
+      // LRCLib ID 정규화 — 아래 차단 체크와 클로저 보관(lastLrclibId)에 공용으로 쓴다.
+      const idRaw = finalLyricsResult.id;
+      const idNum = typeof idRaw === 'string' ? parseInt(idRaw, 10) : idRaw;
+      const numericLrclibId = typeof idNum === 'number' && idNum > 0 && !isNaN(idNum) ? idNum : undefined;
 
-        const { isVideoLyricsHidden, isLrclibIdRejected } = await import('@lib/utils/storage/hiddenLyricsStorage');
-        const [hidden, rejected] = await Promise.all([
-          isVideoLyricsHidden(videoId),
-          numericLrclibId ? isLrclibIdRejected(videoId, numericLrclibId) : Promise.resolve(false),
-        ]);
+      // 🔒 사용자 차단 체크 — 매칭된 LRCLib ID가 사용자 거절 목록에 있으면 가사를 표시하지 않는다.
+      // 영구 차단 정책: hiddenAt/TTL 같은 시한부 차단은 두지 않고, LRCLib에 새 ID로 가사가 갱신되면
+      // 자연스럽게 자동 표시된다 (새 ID는 거절 목록에 없으므로).
+      const { isLrclibIdRejected } = await import('@lib/utils/storage/hiddenLyricsStorage');
+      const rejected = numericLrclibId ? await isLrclibIdRejected(videoId, numericLrclibId) : false;
 
-        if (hidden || rejected) {
-          console.log(
-            `[HiddenLyrics] 가사 차단됨: videoId=${videoId}, lrclibId=${numericLrclibId ?? 'unknown'}, hidden=${hidden}, rejected=${rejected}`,
-          );
-          // 가사 영역을 빈 상태로 만들고 후속 처리(AutoRewind / 오프셋 / 광고 모니터링) 스킵.
-          onLyricsUpdated([]);
-          if (loadingOverlay && loadingOverlay.parentElement) {
-            loadingOverlay.remove();
-            loadingOverlay = null;
-          }
-          return true;
+      if (rejected) {
+        console.log(`[HiddenLyrics] 가사 차단됨: videoId=${videoId}, lrclibId=${numericLrclibId ?? 'unknown'}`);
+        // 가사 영역을 빈 상태로 만들고 후속 처리(AutoRewind / 오프셋 / 광고 모니터링) 스킵.
+        onLyricsUpdated([]);
+        // 차단 상태 신호 — MicroFeedback 위젯이 "숨긴 가사 다시 표시" UI로 분기하기 위함.
+        window.dispatchEvent(new CustomEvent('lyrics-hidden-state', { detail: { videoId, hidden: true } }));
+        if (loadingOverlay && loadingOverlay.parentElement) {
+          loadingOverlay.remove();
+          loadingOverlay = null;
         }
+        return true;
       }
+
+      // 차단 통과 — handleFeedback에서 거절 ID 등록에 쓰도록 클로저에 보관.
+      lastLrclibId = numericLrclibId ?? null;
+      // 정상 매칭 신호 — MicroFeedback 위젯이 일반 상태로 돌아가기 위함.
+      window.dispatchEvent(new CustomEvent('lyrics-hidden-state', { detail: { videoId, hidden: false } }));
 
       chrome.runtime.sendMessage({ type: 'LYRICS_READY', length: parsedLyrics.length }, () => {
         if (chrome.runtime.lastError) {

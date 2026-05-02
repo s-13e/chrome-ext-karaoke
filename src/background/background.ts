@@ -114,7 +114,7 @@ interface SendFeedbackMessage {
   type: 'SEND_FEEDBACK';
   payload: {
     videoId: string;
-    type: 'wrong_lyrics' | 'sync_mismatch' | 'other';
+    type: 'wrong_lyrics' | 'sync_mismatch' | 'no_lyrics' | 'thumbs_up' | 'thumbs_down' | 'other';
     artist: string;
     title: string;
     details?: string;

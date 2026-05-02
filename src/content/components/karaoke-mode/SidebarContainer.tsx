@@ -367,7 +367,18 @@ const FeedbackReportButton: React.FC = () => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [sent, setSent] = useState(false);
+  // wrong_lyrics 신고 직후 5초간 노출되는 "되돌리기" 토스트.
+  // 일반 신고(sync_mismatch / no_lyrics)는 깃발이 ✓로 잠깐 바뀌는 sent 상태만 사용.
+  const [hideToastVisible, setHideToastVisible] = useState(false);
+  const hideToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // unmount 시 타이머 정리
+  useEffect(() => {
+    return () => {
+      if (hideToastTimerRef.current) clearTimeout(hideToastTimerRef.current);
+    };
+  }, []);
 
   // 외부 클릭 시 닫기
   useEffect(() => {
@@ -385,8 +396,30 @@ const FeedbackReportButton: React.FC = () => {
     // content/index.tsx의 handleFeedback과 동일한 메시지 전달
     window.dispatchEvent(new CustomEvent('send-lyrics-feedback', { detail: { type } }));
     setIsOpen(false);
-    setSent(true);
-    setTimeout(() => setSent(false), 2000);
+
+    if (type === 'wrong_lyrics') {
+      // 자동 가사 숨김이 일어났으니 되돌리기 토스트 노출. 5초 안에 클릭하면 즉시 복원된다.
+      setHideToastVisible(true);
+      if (hideToastTimerRef.current) clearTimeout(hideToastTimerRef.current);
+      hideToastTimerRef.current = setTimeout(() => {
+        setHideToastVisible(false);
+        hideToastTimerRef.current = null;
+      }, 5000);
+    } else {
+      setSent(true);
+      setTimeout(() => setSent(false), 2000);
+    }
+  };
+
+  const handleUndo = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    // content/index.tsx의 handleUndoHide가 메모리 스냅샷에서 가사를 즉시 복원한다.
+    window.dispatchEvent(new CustomEvent('undo-lyrics-hide'));
+    setHideToastVisible(false);
+    if (hideToastTimerRef.current) {
+      clearTimeout(hideToastTimerRef.current);
+      hideToastTimerRef.current = null;
+    }
   };
 
   return (
@@ -505,6 +538,50 @@ const FeedbackReportButton: React.FC = () => {
           >
             {t('extFeedbackNoLyrics')}
           </span>
+        </div>
+      )}
+      {hideToastVisible && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '100%',
+            right: 0,
+            marginTop: '4px',
+            background: 'rgba(30, 30, 45, 0.95)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            borderRadius: '6px',
+            padding: '6px 8px 6px 10px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            zIndex: 100,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.85)' }}>{t('extLyricsHiddenToast')}</span>
+          <button
+            type="button"
+            onClick={handleUndo}
+            style={{
+              background: 'rgba(33, 150, 243, 0.25)',
+              border: '1px solid rgba(33, 150, 243, 0.55)',
+              borderRadius: '12px',
+              color: '#90caf9',
+              cursor: 'pointer',
+              fontSize: '11px',
+              fontWeight: 500,
+              padding: '3px 10px',
+              fontFamily: 'inherit',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(33, 150, 243, 0.4)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(33, 150, 243, 0.25)';
+            }}
+          >
+            {t('extLyricsHiddenUndo')}
+          </button>
         </div>
       )}
     </div>
