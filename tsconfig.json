@@ -31,7 +31,8 @@
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,
     "noUnusedLocals": true, // 사용하지 않은 변수 에러 처리
-    "noUnusedParameters": true // 사용하지 않은 파라미터 에러 처리
+    "noUnusedParameters": true, // 사용하지 않은 파라미터 에러 처리
+    "ignoreDeprecations": "6.0" // TS v6 deprecation(baseUrl, moduleResolution=node10 fallback) 일시 silence — v7 진입 전 별도 PR로 마이그레이션 예정
   },
   "include": [
     "src/**/*",
