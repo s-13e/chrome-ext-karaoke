@@ -299,6 +299,8 @@
   "extManualSearchEnglishHintBody": "The LRCLib lyrics database is mostly indexed under English names, so non-English names (Korean, Japanese, Chinese, etc.) often don't match. Use the link below to find the English spelling of the artist and song, then try again.",
   "extManualSearchEnglishHintAction": "Find the English name on Google",
   "extManualSearchNonAsciiHint": "Don't know the English title?",
+  "extManualSearchGiveUpMessage": "If your searches turned up nothing, the auto-matched lyrics are likely wrong for this video.",
+  "extManualSearchHideLyricsAction": "Hide lyrics for this video",
   "extManualSearchNoSyncedLyrics": "Lyrics exist but no synced (timestamped) lyrics are available. Try different search terms.",
   "extManualSearchApiError": "An error occurred during search. Please try again.",
   "extManualSearchParseError": "Failed to parse lyrics.",

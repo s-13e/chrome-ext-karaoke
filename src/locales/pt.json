@@ -280,6 +280,8 @@
   "extManualSearchEnglishHintBody": "O banco de dados de letras do LRCLib é indexado principalmente com nomes em inglês, então nomes em outros idiomas (coreano, japonês, chinês, etc.) muitas vezes não correspondem. Use o link abaixo para encontrar o nome em inglês do artista e da música, e tente novamente.",
   "extManualSearchEnglishHintAction": "Procurar o nome em inglês no Google",
   "extManualSearchNonAsciiHint": "Não sabe o título em inglês?",
+  "extManualSearchGiveUpMessage": "Se suas buscas não encontraram nada, a letra correspondida automaticamente provavelmente está errada para este vídeo.",
+  "extManualSearchHideLyricsAction": "Ocultar letra deste vídeo",
   "extManualSearchNoSyncedLyrics": "As letras existem, mas não há letras sincronizadas disponíveis. Tente outros termos de busca.",
   "extManualSearchApiError": "Ocorreu um erro durante a pesquisa. Por favor, tente novamente.",
   "extManualSearchParseError": "Falha ao analisar as letras.",

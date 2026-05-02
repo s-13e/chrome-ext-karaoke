@@ -494,6 +494,29 @@ export const ManualLyricsSearch: React.FC<ManualLyricsSearchProps> = ({
         </div>
       )}
 
+      {/*
+        0건 결과 시 "이 영상에서 가사 숨기기" 액션 — 사용자가 수동 검색해도 못 찾았다는 건
+        현재 자동 매칭 결과가 잘못됐다는 강한 신호. 잘못된 가사를 계속 보지 않도록 영구 차단
+        진입점을 빈 상태에 둔다. wrong_lyrics 신고와 동일한 흐름을 타기 위해 send-lyrics-feedback
+        이벤트를 dispatch한다.
+      */}
+      {errorState?.kind === 'i18n' &&
+        (errorState.key === 'extManualSearchNoResults' || errorState.key === 'extManualSearchNoSyncedLyrics') && (
+          <div className={styles.giveUpCard}>
+            <p className={styles.giveUpMessage}>{t('extManualSearchGiveUpMessage')}</p>
+            <button
+              type="button"
+              className={styles.giveUpButton}
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('send-lyrics-feedback', { detail: { type: 'wrong_lyrics' } }));
+                onBack();
+              }}
+            >
+              {t('extManualSearchHideLyricsAction')}
+            </button>
+          </div>
+        )}
+
       {/* 검색 결과 */}
       <div className={styles.results}>
         {candidates.length > 0 && (

@@ -291,6 +291,8 @@
   "extManualSearchEnglishHintBody": "LRCLib 歌词数据库大多以英文名称登录，因此使用韩语·日语·中文等非英文名称经常无法找到。请通过下方链接查找歌手和歌曲的英文名，然后重新搜索。",
   "extManualSearchEnglishHintAction": "在 Google 上查找英文名",
   "extManualSearchNonAsciiHint": "不知道英文歌名？",
+  "extManualSearchGiveUpMessage": "如果您的搜索没有找到结果，自动匹配的歌词可能与此视频不符。",
+  "extManualSearchHideLyricsAction": "为此视频隐藏歌词",
   "extManualSearchNoSyncedLyrics": "歌词存在但没有同步（带时间戳的）歌词。请尝试其他搜索词。",
   "extManualSearchApiError": "搜索时发生错误。请重试。",
   "extManualSearchParseError": "歌词解析失败。",
