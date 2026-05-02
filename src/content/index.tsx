@@ -1638,6 +1638,34 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
       // 4) 가사 준비 완료, 상태 업데이트 및 UI 렌더링
       const { lyricsResult: finalLyricsResult, parsedLyrics, effectiveLyricsDuration } = lyricsData;
 
+      // 🔒 사용자 차단 체크 — 두 신호 중 하나라도 걸리면 가사를 표시하지 않는다.
+      //   1. isVideoLyricsHidden: 24h TTL 안에 사용자가 이 영상의 가사를 숨김 처리함 (재진입 차단)
+      //   2. isLrclibIdRejected: 사용자가 이 LRCLib ID를 거절한 적 있음 (영구) — 24h 후 재매칭에서 같은 ID가 또 잡혔을 때 무한 루프 방지
+      {
+        const idRaw = finalLyricsResult.id;
+        const idNum = typeof idRaw === 'string' ? parseInt(idRaw, 10) : idRaw;
+        const numericLrclibId = typeof idNum === 'number' && idNum > 0 && !isNaN(idNum) ? idNum : undefined;
+
+        const { isVideoLyricsHidden, isLrclibIdRejected } = await import('@lib/utils/storage/hiddenLyricsStorage');
+        const [hidden, rejected] = await Promise.all([
+          isVideoLyricsHidden(videoId),
+          numericLrclibId ? isLrclibIdRejected(videoId, numericLrclibId) : Promise.resolve(false),
+        ]);
+
+        if (hidden || rejected) {
+          console.log(
+            `[HiddenLyrics] 가사 차단됨: videoId=${videoId}, lrclibId=${numericLrclibId ?? 'unknown'}, hidden=${hidden}, rejected=${rejected}`,
+          );
+          // 가사 영역을 빈 상태로 만들고 후속 처리(AutoRewind / 오프셋 / 광고 모니터링) 스킵.
+          onLyricsUpdated([]);
+          if (loadingOverlay && loadingOverlay.parentElement) {
+            loadingOverlay.remove();
+            loadingOverlay = null;
+          }
+          return true;
+        }
+      }
+
       chrome.runtime.sendMessage({ type: 'LYRICS_READY', length: parsedLyrics.length }, () => {
         if (chrome.runtime.lastError) {
           // 에러 무시 - 수신자가 없을 수 있음
