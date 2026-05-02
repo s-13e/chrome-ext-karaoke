@@ -49,7 +49,9 @@ export interface TutorialTooltipProps {
   step: TutorialStep;
   visible: boolean;
   onDismiss?: () => void;
-  autoHideDelay?: number; // step2용 자동 숨김 딜레이 (ms)
+  autoHideDelay?: number; // step1(subtle)/step2 자동 숨김 딜레이 (ms)
+  // step1 표현 강도: 'default'는 강조 CTA, 'subtle'은 정보 전달용(close 버튼 + 자동 닫힘)
+  variant?: 'default' | 'subtle';
   // Feature 튜토리얼 전용 props
   featureStepIndex?: number; // 현재 Feature Step (0=step2, 1=step3, 2=step4)
   featureSubstepIndex?: number; // 현재 서브스텝
@@ -60,7 +62,8 @@ export interface TutorialTooltipProps {
 
 /**
  * 튜토리얼 툴팁 컴포넌트
- * - step1: 가라오케 모드 활성화 안내 (버튼 위에 표시, 클릭 시 사라짐)
+ * - step1 (default): 가라오케 모드 활성화 강조 안내 (버튼 위에 표시, 클릭 시 사라짐)
+ * - step1 (subtle): simple 모드 유저용 약화 안내 (close 버튼 + 자동 닫힘, dismiss 시 step1 완료 처리)
  * - step2: 원래 화면으로 돌아가기 안내 (10초 후 자동 사라짐)
  * - feature: 기능 튜토리얼 (Step 2-4, 각 Step마다 서브스텝 네비게이션)
  */
@@ -69,6 +72,7 @@ export const TutorialTooltip: React.FC<TutorialTooltipProps> = ({
   visible,
   onDismiss,
   autoHideDelay = 10000,
+  variant = 'default',
   featureStepIndex = 0,
   featureSubstepIndex = 0,
   onFeatureStepChange,
@@ -83,16 +87,17 @@ export const TutorialTooltip: React.FC<TutorialTooltipProps> = ({
     setIsAnimatingOut(false);
   }, [visible]);
 
-  // step2: 자동 숨김 타이머
+  // step2 또는 step1(subtle): 자동 숨김 타이머
   useEffect(() => {
-    if (step === 'step2' && isVisible && autoHideDelay > 0) {
+    const shouldAutoHide = step === 'step2' || (step === 'step1' && variant === 'subtle');
+    if (shouldAutoHide && isVisible && autoHideDelay > 0) {
       const timer = setTimeout(() => {
         handleDismiss();
       }, autoHideDelay);
 
       return () => clearTimeout(timer);
     }
-  }, [step, isVisible, autoHideDelay]);
+  }, [step, variant, isVisible, autoHideDelay]);
 
   const handleDismiss = () => {
     setIsAnimatingOut(true);
@@ -144,18 +149,34 @@ export const TutorialTooltip: React.FC<TutorialTooltipProps> = ({
 
   if (!isVisible) return null;
 
+  const isStep1Subtle = step === 'step1' && variant === 'subtle';
+
   return (
-    <div className={`${styles.tooltipContainer} ${styles[step]} ${isAnimatingOut ? styles.fadeOut : styles.fadeIn}`}>
+    <div
+      className={`${styles.tooltipContainer} ${styles[step]} ${isStep1Subtle ? styles.subtle : ''} ${isAnimatingOut ? styles.fadeOut : styles.fadeIn}`}
+    >
       <div className={styles.tooltipContent}>
         {step === 'step1' ? (
-          <>
-            <div className={styles.step1Text}>
-              <span className={styles.title}>{t('extTutorialStep1Title')}</span>
-              <span className={styles.desc}>{t('extTutorialStep1Desc')}</span>
-              {t('extTutorialStep1Extra') && <span className={styles.step1Extra}>{t('extTutorialStep1Extra')}</span>}
-            </div>
-            {t('extTutorialStep1Action') && <span className={styles.action}>{t('extTutorialStep1Action')}</span>}
-          </>
+          isStep1Subtle ? (
+            <>
+              <button className={styles.subtleCloseButton} onClick={handleDismiss} aria-label={t('extClose')}>
+                <MdClose size={14} />
+              </button>
+              <div className={styles.step1Text}>
+                <span className={styles.title}>{t('extTutorialStep1Title')}</span>
+                <span className={styles.desc}>{t('extTutorialStep1DescSubtle')}</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className={styles.step1Text}>
+                <span className={styles.title}>{t('extTutorialStep1Title')}</span>
+                <span className={styles.desc}>{t('extTutorialStep1Desc')}</span>
+                {t('extTutorialStep1Extra') && <span className={styles.step1Extra}>{t('extTutorialStep1Extra')}</span>}
+              </div>
+              {t('extTutorialStep1Action') && <span className={styles.action}>{t('extTutorialStep1Action')}</span>}
+            </>
+          )
         ) : step === 'step2' ? (
           <span className={styles.step2Text}>{t('extTutorialStep2')}</span>
         ) : (

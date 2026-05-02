@@ -124,6 +124,55 @@
   padding: 14px 20px;
 }
 
+/* step1 subtle variant — simple 모드 유저용 약화 안내 */
+.subtle .tooltipContent {
+  background: rgba(28, 32, 36, 0.92);
+  padding: 8px 28px 8px 12px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  font-size: 12px;
+  pointer-events: auto;
+  position: relative;
+}
+
+.subtle .title {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.95;
+}
+
+.subtle .desc {
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.8;
+  white-space: normal;
+  max-width: 220px;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.subtleCloseButton {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.6);
+  padding: 0;
+  transition: color 0.15s;
+}
+
+.subtleCloseButton:hover {
+  color: rgba(255, 255, 255, 1);
+}
+
 /* Feature 튜토리얼 스타일 */
 .feature {
   /* 위치는 JavaScript에서 동적 설정 */
