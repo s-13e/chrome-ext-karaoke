@@ -57,8 +57,8 @@ export const HowItWorksSlide: React.FC<HowItWorksSlideProps> = ({ onNext, onBack
           {/* 팝업 가이드 이미지 2장 */}
           <div style={styles.imageRow}>
             {[
-              { file: 'welcome-step1-popup.png', captionKey: 'extWelcomeImgPopup1' },
-              { file: 'welcome-step1-popup2.png', captionKey: 'extWelcomeImgPopup2' },
+              { file: 'welcome-step2-popup1.png', captionKey: 'extWelcomeImgPopup1' },
+              { file: 'welcome-step2-popup2.png', captionKey: 'extWelcomeImgPopup2' },
             ].map((img, i) => (
               <React.Fragment key={img.file}>
                 {i > 0 && <span style={styles.imageArrow}>→</span>}
@@ -73,6 +73,34 @@ export const HowItWorksSlide: React.FC<HowItWorksSlideProps> = ({ onNext, onBack
               </React.Fragment>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* Step C: 영상에서 노래방 모드 켜기 — 두 위치 모두 동일 기능, step1처럼 세로 큰 이미지 */}
+      <div style={styles.step1Card}>
+        <div style={styles.step1Header}>
+          <div style={styles.stepBadge}>3</div>
+          <div>
+            <h3 style={styles.stepTitle}>{t('extWelcomeHowStep3Title')}</h3>
+            <p style={styles.stepDesc}>{t('extWelcomeHowStep3Desc')}</p>
+          </div>
+        </div>
+
+        {/* 노래방 모드 버튼 위치 2장 — 위→아래 큰 사이즈 */}
+        <div style={styles.step1ImageRow}>
+          {[
+            { file: 'welcome-step3-1.png', captionKey: 'extWelcomeImgKaraoke1' },
+            { file: 'welcome-step3-2.png', captionKey: 'extWelcomeImgKaraoke2' },
+          ].map((img) => (
+            <div key={img.file} style={styles.step1ImageStep}>
+              <img
+                src={chrome.runtime.getURL(`assets/images/${img.file}`)}
+                alt={t(img.captionKey)}
+                style={styles.step1Image}
+              />
+              <span style={styles.step1Caption}>{t(img.captionKey)}</span>
+            </div>
+          ))}
         </div>
       </div>
 

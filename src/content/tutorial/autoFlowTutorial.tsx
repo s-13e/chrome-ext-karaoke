@@ -11,7 +11,8 @@ import type { TutorialController } from './tutorialController';
  *
  * 표시 정책:
  * - DEV 모드: 완료 상태를 매번 리셋 → 다른 모든 스킵 조건을 무시하고 항상 구독 활성화
- * - Simple 모드(가사만 볼래요): 노래방 모드 안내 자체가 불필요하므로 스킵
+ * - Simple 모드(빠르게 시작): 약화된 안내(subtle) — 하이라이트/CTA 없이 정보 전달용 툴팁만 1회 노출
+ * - Karaoke 모드(차근차근 안내): 기존 강조 안내(default)
  * - Step1 이미 완료: 스킵
  *
  * 실제 툴팁 렌더는 `yt-karaoke-music-detection` 이벤트가 isMusic=true를 보낼 때만 일어난다.
@@ -27,13 +28,6 @@ export async function showTutorialStep1IfNeeded(controller: TutorialController):
     controller.setStep1Completed(false);
     controller.setStep2Completed(false);
   } else {
-    // "가사만 볼래요" 유저는 노래방 모드 안내 스킵
-    const modeResult = await chrome.storage.sync.get([STORAGE_KEYS.USER_MODE]);
-    if (modeResult[STORAGE_KEYS.USER_MODE] === 'simple') {
-      console.log('[Tutorial] Simple 모드 유저, Step1 스킵');
-      return;
-    }
-
     // 이미 완료된 경우 표시하지 않음
     const result = await chrome.storage.sync.get([STORAGE_KEYS.TUTORIAL_STEP1_COMPLETED]);
     const completed = (result[STORAGE_KEYS.TUTORIAL_STEP1_COMPLETED] as boolean | undefined) ?? false;
@@ -47,14 +41,19 @@ export async function showTutorialStep1IfNeeded(controller: TutorialController):
     }
   }
 
-  subscribeStep1ToMusicDetection(controller);
+  // userMode 조회 — 'simple'이면 약화 variant, 그 외(기본 또는 'karaoke')는 강조 variant
+  const modeResult = await chrome.storage.sync.get([STORAGE_KEYS.USER_MODE]);
+  const isSimpleMode = modeResult[STORAGE_KEYS.USER_MODE] === 'simple';
+  console.log('[Tutorial] Step1 variant:', isSimpleMode ? 'subtle' : 'default');
+
+  subscribeStep1ToMusicDetection(controller, isSimpleMode);
 }
 
 /**
  * 음악 감지 이벤트를 구독해 Step1 툴팁의 표시/숨김을 제어한다.
  * 중복 등록을 방지하기 위해 controller에 handler 참조를 저장한다.
  */
-function subscribeStep1ToMusicDetection(controller: TutorialController): void {
+function subscribeStep1ToMusicDetection(controller: TutorialController, isSimpleMode: boolean): void {
   if (controller.getStep1MusicDetectionHandler()) {
     console.log('[Tutorial] Step1 음악 감지 리스너 이미 등록됨');
     return;
@@ -66,7 +65,7 @@ function subscribeStep1ToMusicDetection(controller: TutorialController): void {
 
     const detail = (e as CustomEvent<{ isMusic: boolean }>).detail;
     if (detail.isMusic) {
-      waitForButtonAndRenderStep1(controller);
+      waitForButtonAndRenderStep1(controller, isSimpleMode);
     } else {
       hideTutorialStep1Tooltip(controller);
     }
@@ -81,7 +80,7 @@ function subscribeStep1ToMusicDetection(controller: TutorialController): void {
  * MusicNoteButton이 DOM에 삽입되기를 기다린 뒤 Step1 툴팁을 렌더한다.
  * 이미 툴팁이 렌더된 상태라면 중복 호출을 무시한다.
  */
-function waitForButtonAndRenderStep1(controller: TutorialController): void {
+function waitForButtonAndRenderStep1(controller: TutorialController, isSimpleMode: boolean): void {
   if (document.getElementById('tutorial-tooltip-container')) {
     return;
   }
@@ -97,7 +96,7 @@ function waitForButtonAndRenderStep1(controller: TutorialController): void {
     if (musicNoteBtn) {
       clearInterval(waitForButton);
       console.log('[Tutorial] 버튼 발견, 툴팁 렌더링 시작');
-      renderTutorialStep1(musicNoteBtn as HTMLElement, controller);
+      renderTutorialStep1(musicNoteBtn as HTMLElement, controller, isSimpleMode);
     }
   }, 200);
 
@@ -156,8 +155,12 @@ function updateTutorialTooltipPosition(): void {
 }
 
 /** 튜토리얼 Step1 렌더링 */
-async function renderTutorialStep1(buttonElement: HTMLElement, controller: TutorialController): Promise<void> {
-  console.log('[Tutorial] renderTutorialStep1 시작');
+async function renderTutorialStep1(
+  buttonElement: HTMLElement,
+  controller: TutorialController,
+  isSimpleMode: boolean,
+): Promise<void> {
+  console.log('[Tutorial] renderTutorialStep1 시작 (variant:', isSimpleMode ? 'subtle' : 'default', ')');
 
   const { TutorialTooltip } = await import('../components/karaoke-mode/TutorialTooltip');
   console.log('[Tutorial] TutorialTooltip 컴포넌트 로드됨');
@@ -188,10 +191,11 @@ async function renderTutorialStep1(buttonElement: HTMLElement, controller: Tutor
 
   console.log('[Tutorial] 계산된 위치 - bottom:', bottomDistance, 'right:', rightDistance);
 
+  // subtle variant는 dismissable이라 close 버튼 클릭이 가능해야 함
   tooltipContainer.style.cssText = `
     position: fixed;
     z-index: 2147483647;
-    pointer-events: none;
+    pointer-events: ${isSimpleMode ? 'auto' : 'none'};
     bottom: ${bottomDistance}px;
     right: ${rightDistance}px;
   `;
@@ -200,19 +204,32 @@ async function renderTutorialStep1(buttonElement: HTMLElement, controller: Tutor
   const root = ReactDOM.createRoot(tooltipContainer);
   controller.setTutorialTooltipRoot(root);
 
-  root.render(<TutorialTooltip step="step1" visible={true} />);
+  if (isSimpleMode) {
+    // Simple 모드: 약화 안내 — 자동 닫힘 8초, 닫힘 시 step1 완료 처리하여 재노출 방지
+    root.render(
+      <TutorialTooltip
+        step="step1"
+        variant="subtle"
+        visible={true}
+        autoHideDelay={8000}
+        onDismiss={() => completeTutorialStep1(controller)}
+      />,
+    );
+  } else {
+    root.render(<TutorialTooltip step="step1" visible={true} />);
 
-  // YouTube 하단 컨트롤 바 고정 표시 (auto-hide 방지)
-  const moviePlayer = document.getElementById('movie_player');
-  if (moviePlayer) {
-    moviePlayer.classList.remove('ytp-autohide');
-  }
+    // YouTube 하단 컨트롤 바 고정 표시 (auto-hide 방지) — 강조 안내일 때만
+    const moviePlayer = document.getElementById('movie_player');
+    if (moviePlayer) {
+      moviePlayer.classList.remove('ytp-autohide');
+    }
 
-  // toolbar 버튼도 하이라이트
-  injectTutorialHighlightStyles();
-  const toolbarBtn = document.querySelector('.ytk-toolbar-karaoke-btn') as HTMLElement | null;
-  if (toolbarBtn) {
-    toolbarBtn.classList.add('ytk-tutorial-highlight');
+    // toolbar 버튼도 하이라이트 — 강조 안내일 때만
+    injectTutorialHighlightStyles();
+    const toolbarBtn = document.querySelector('.ytk-toolbar-karaoke-btn') as HTMLElement | null;
+    if (toolbarBtn) {
+      toolbarBtn.classList.add('ytk-tutorial-highlight');
+    }
   }
 
   // 모드 변경 시 위치 업데이트를 위한 이벤트 리스너 등록

@@ -107,3 +107,56 @@
 :-webkit-full-screen .successMessage {
   font-size: 14px;
 }
+
+/*
+  잘못된 가사 신고 후의 토스트 — 메시지 + 되돌리기 버튼.
+  successMessage보다 강조되도록 배경 카드와 액션 버튼을 둔다.
+*/
+.hideToast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px 6px 12px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+  white-space: nowrap;
+  font-family: 'Noto Sans KR', sans-serif;
+}
+
+.hideToastMessage {
+  color: #e8eaed;
+  font-size: 12px;
+}
+
+.hideToastUndo {
+  background: rgba(33, 150, 243, 0.25);
+  border: 1px solid rgba(33, 150, 243, 0.55);
+  border-radius: 12px;
+  color: #90caf9;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  font-family: 'Noto Sans KR', sans-serif;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.hideToastUndo:hover {
+  background: rgba(33, 150, 243, 0.4);
+  border-color: rgba(33, 150, 243, 0.8);
+}
+
+:fullscreen .hideToast,
+:-webkit-full-screen .hideToast {
+  padding: 8px 12px 8px 16px;
+}
+
+:fullscreen .hideToastMessage,
+:-webkit-full-screen .hideToastMessage,
+:fullscreen .hideToastUndo,
+:-webkit-full-screen .hideToastUndo {
+  font-size: 14px;
+}

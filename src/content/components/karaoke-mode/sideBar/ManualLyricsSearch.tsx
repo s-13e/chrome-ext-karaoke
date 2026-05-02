@@ -309,6 +309,24 @@ export const ManualLyricsSearch: React.FC<ManualLyricsSearchProps> = ({
   };
 
   /**
+   * 영문 검색 URL 생성 — 인라인 hint와 0건 hint 카드에서 공용으로 사용.
+   * URL을 쿼리에 넣으면 Google이 phrase match 모드로 들어가 결과가 안 나오므로,
+   * YouTube 영상의 raw title(document.title)을 쿼리 주재료로 사용한다.
+   * YouTube 영상 제목은 대부분 원어+영문이 병기되어 있어 AI가 영문명을 추출하기 쉬움.
+   */
+  const buildEnglishLookupUrl = (): string => {
+    // 접두사 "(알림 개수)"와 접미사 " - YouTube"를 제거한 뒤 질문형으로 포장.
+    const rawTitle = document.title
+      .replace(/^\(\d+\)\s*/, '')
+      .replace(/\s*-\s*YouTube$/, '')
+      .trim();
+    // 폴백: document.title에서 의미 있는 제목을 못 뽑았을 때 사용자 입력 사용
+    const subject = rawTitle && rawTitle.toLowerCase() !== 'youtube' ? rawTitle : `${artist} - ${title}`;
+    const query = `what is the english artist and title for: ${subject}? Answer in format "Artist: ..., Title: ...".`;
+    return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+  };
+
+  /**
    * [DEV_MODE 전용] videoId → lrclibId 매핑을 서버에 확정 저장
    */
   const handleConfirmMapping = async (candidate: LyricsCandidate) => {
@@ -414,6 +432,24 @@ export const ManualLyricsSearch: React.FC<ManualLyricsSearchProps> = ({
               />
             </div>
 
+            {/*
+              영문 곡명 조회 인라인 안내 — non-ASCII(한글/일본어/중국어 등) 입력 감지 시 노출.
+              0건 결과를 기다리지 않고 진입점에서 바로 영문명을 알아낼 수 있게 함.
+            */}
+            {(containsNonAscii(artist) || containsNonAscii(title)) && (
+              <div className={styles.inlineEnglishHint}>
+                <span className={styles.inlineEnglishHintText}>{t('extManualSearchNonAsciiHint')}</span>
+                <a
+                  className={styles.inlineEnglishHintAction}
+                  href={buildEnglishLookupUrl()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {t('extManualSearchEnglishHintAction')}
+                </a>
+              </div>
+            )}
+
             <button
               className={styles.searchButton}
               onClick={handleSearch}
@@ -449,23 +485,7 @@ export const ManualLyricsSearch: React.FC<ManualLyricsSearchProps> = ({
           <p className={styles.englishHintBody}>{t('extManualSearchEnglishHintBody')}</p>
           <a
             className={styles.englishHintAction}
-            href={(() => {
-              // URL을 쿼리에 넣으면 Google이 phrase match 모드로 들어가 결과가 안 나옴.
-              // 대신 YouTube 영상의 raw title(document.title)을 쿼리 주재료로 사용한다.
-              // YouTube 영상 제목은 대부분 원어+영문이 병기되어 있어 AI가 영문명을 추출하기 쉬움.
-              //
-              // 접두사 "(알림 개수)"와 접미사 " - YouTube"를 제거한 뒤 질문형으로 포장.
-              const rawTitle = document.title
-                .replace(/^\(\d+\)\s*/, '')
-                .replace(/\s*-\s*YouTube$/, '')
-                .trim();
-
-              // 폴백: document.title에서 의미 있는 제목을 못 뽑았을 때 사용자 입력 사용
-              const subject = rawTitle && rawTitle.toLowerCase() !== 'youtube' ? rawTitle : `${artist} - ${title}`;
-
-              const query = `what is the english artist and title for: ${subject}? Answer in format "Artist: ..., Title: ...".`;
-              return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
-            })()}
+            href={buildEnglishLookupUrl()}
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -473,6 +493,29 @@ export const ManualLyricsSearch: React.FC<ManualLyricsSearchProps> = ({
           </a>
         </div>
       )}
+
+      {/*
+        0건 결과 시 "이 영상에서 가사 숨기기" 액션 — 사용자가 수동 검색해도 못 찾았다는 건
+        현재 자동 매칭 결과가 잘못됐다는 강한 신호. 잘못된 가사를 계속 보지 않도록 영구 차단
+        진입점을 빈 상태에 둔다. wrong_lyrics 신고와 동일한 흐름을 타기 위해 send-lyrics-feedback
+        이벤트를 dispatch한다.
+      */}
+      {errorState?.kind === 'i18n' &&
+        (errorState.key === 'extManualSearchNoResults' || errorState.key === 'extManualSearchNoSyncedLyrics') && (
+          <div className={styles.giveUpCard}>
+            <p className={styles.giveUpMessage}>{t('extManualSearchGiveUpMessage')}</p>
+            <button
+              type="button"
+              className={styles.giveUpButton}
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('send-lyrics-feedback', { detail: { type: 'wrong_lyrics' } }));
+                onBack();
+              }}
+            >
+              {t('extManualSearchHideLyricsAction')}
+            </button>
+          </div>
+        )}
 
       {/* 검색 결과 */}
       <div className={styles.results}>

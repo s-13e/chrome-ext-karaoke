@@ -122,6 +122,144 @@
   color: rgba(255, 255, 255, 0.6);
 }
 
+/*
+  Sub-menu — thumbs_down 클릭 후 정확한 의도(곡과 다른 가사 / 타이밍 / 가사 없음)를 받기 위한 분기 카드
+*/
+.subMenu {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.75);
+  border-radius: 12px;
+  padding: 8px 12px;
+  animation: fadeIn 0.2s ease;
+  max-width: 240px;
+}
+
+.subMenuLabel {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.subMenuOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.subMenuBtn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 6px 10px;
+  text-align: left;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.subMenuBtn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/*
+  Wrong-lyrics 신고 직후의 토스트 — 메시지 + 되돌리기 버튼 (5초 노출)
+*/
+.undoRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.75);
+  border-radius: 20px;
+  padding: 4px 6px 4px 14px;
+  animation: fadeIn 0.2s ease;
+}
+
+.undoBtn {
+  background: rgba(33, 150, 243, 0.25);
+  border: 1px solid rgba(33, 150, 243, 0.55);
+  border-radius: 14px;
+  color: #90caf9;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 10px;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.undoBtn:hover {
+  background: rgba(33, 150, 243, 0.4);
+  border-color: rgba(33, 150, 243, 0.8);
+}
+
+/*
+  영상이 차단 상태일 때 — 위젯이 "숨긴 가사 다시 표시" 회복 진입점으로 변환됨.
+  가라오케 모드 OFF 상태에서도 사용자가 회복할 수 있는 단일 진입점.
+*/
+/*
+  buttonRow와 동일 패턴 — 평소 opacity 0.5, hover 시 1.
+  label은 평소 max-width 0으로 압축되고 hover 시 좌측으로 펼쳐진다.
+*/
+.hiddenStateRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 16px;
+  padding: 4px 6px;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.hiddenStateRow:hover {
+  opacity: 1;
+}
+
+.hiddenStateLabel {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.75);
+  padding: 0 4px;
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 0;
+  transition:
+    max-width 0.4s ease,
+    opacity 0.3s ease,
+    padding 0.4s ease;
+}
+
+.hiddenStateRow:hover .hiddenStateLabel {
+  max-width: 240px;
+  opacity: 1;
+}
+
+.unhideBtn {
+  background: rgba(33, 150, 243, 0.25);
+  border: 1px solid rgba(33, 150, 243, 0.55);
+  border-radius: 14px;
+  color: #90caf9;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 10px;
+  white-space: nowrap;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.unhideBtn:hover {
+  background: rgba(33, 150, 243, 0.4);
+  border-color: rgba(33, 150, 243, 0.8);
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;

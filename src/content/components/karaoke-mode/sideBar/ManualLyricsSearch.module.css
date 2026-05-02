@@ -147,6 +147,41 @@
   color: #757575;
 }
 
+/*
+  인라인 영문 안내 — 폼 안 검색 버튼 위에 위치. non-ASCII 입력 감지 시 상시 노출.
+  0건 후의 .englishHint 카드보다 가벼운 한 줄 톤으로 디자인해 폼 흐름을 깨지 않음.
+*/
+.inlineEnglishHint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: rgba(33, 150, 243, 0.08);
+  border: 1px solid rgba(33, 150, 243, 0.25);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.inlineEnglishHintText {
+  color: #b0bec5;
+  flex: 1;
+}
+
+.inlineEnglishHintAction {
+  color: #90caf9;
+  text-decoration: none;
+  font-weight: 500;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.inlineEnglishHintAction:hover {
+  background: rgba(33, 150, 243, 0.18);
+}
+
 .searchButton {
   background: #00d4aa;
   color: #ffffff;
@@ -267,6 +302,48 @@
 .englishHintAction:hover {
   background: rgba(33, 150, 243, 0.32);
   border-color: rgba(33, 150, 243, 0.8);
+}
+
+/*
+  검색 결과 0건일 때 마지막 출구 — "이 영상에서 가사 숨기기" 액션 카드.
+  englishHint 카드와 시각적으로 구분되도록 amber/warning 톤으로 정보 제공보다 확정 액션
+  카드의 성격을 강화한다.
+*/
+.giveUpCard {
+  margin: 8px 16px 0;
+  padding: 12px 14px;
+  background: rgba(255, 152, 0, 0.08);
+  border: 1px solid rgba(255, 152, 0, 0.3);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.giveUpMessage {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #b0bec5;
+}
+
+.giveUpButton {
+  background: rgba(255, 152, 0, 0.2);
+  border: 1px solid rgba(255, 152, 0, 0.55);
+  border-radius: 4px;
+  color: #ffb74d;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.giveUpButton:hover {
+  background: rgba(255, 152, 0, 0.32);
+  border-color: rgba(255, 152, 0, 0.8);
 }
 
 .results {
