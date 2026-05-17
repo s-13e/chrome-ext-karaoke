@@ -101,3 +101,4 @@ _없음_
 - **Tune 파이프라인 AudioWorklet 마이그레이션** — 현재 SoundTouch(피치)가 deprecated `ScriptProcessorNode`를 사용해 UI 스레드에서 돌아감 → Chrome 콘솔 경고 + 스크롤/UI 조작 시 오디오 글리치 가능. AudioWorklet 기반 SoundTouch 대체 필요. Tier 2(ML HD) 착수 시 AudioWorklet 인프라가 필요하므로 그때 같이 처리하면 효율적. v2.4.0 vocal removal과 묶어서 처리 가능
 - **아티스트 별칭 캐시 관리 UI** — 옵션 페이지에서 자동 저장된 영문 별칭 목록 확인·수정·삭제. 위 로컬 캐시가 쌓인 뒤 구현. (v2.4.0+ 검토)
 - **tsconfig deprecation 마이그레이션** — v2.3.1 deps bump에서 임시로 `ignoreDeprecations: "6.0"` silence 적용. TypeScript v7 진입 전 `baseUrl` 제거 + `paths`만 사용 + `moduleResolution` 정리 필요. ts-jest config의 node10 fallback 추적 포함.
+- **setupUIResources cleanup→skip race** — v2.3.2 검증 중 발견. 새로고침 직후 영상 진입 시 가사 오버레이가 안 뜨는 케이스. 로그상 `cleanupAllResources` 직후 `Overlays already initialized, skipping mount`로 분기되어 React root는 unmount됐는데 mount는 skip됨. DOM element 존재 체크로 mount 여부를 판정하는 게 cleanup 후 inconsistent. 한 번 더 새로고침하면 회복. 재현 빈도/조건 추가 수집 후 root cause 진단.

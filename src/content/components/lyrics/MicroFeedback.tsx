@@ -2,7 +2,9 @@
 // 가사 오버레이 하단의 👍👎 품질 피드백 위젯.
 // - thumbs_up: 만족도 통계 + 5회 누적 시 Chrome Web Store 리뷰 유도
 // - thumbs_down: sub-menu로 분기 (곡과 다른 가사 / 타이밍 어긋남 / 가사 안 나옴)
-//   → "곡과 다른 가사" 선택 시 자동 가사 숨김 + 되돌리기 토스트 (5초)
+//   → "곡과 다른 가사" 또는 "타이밍 어긋남" 선택 시 자동 가사 숨김 + 되돌리기 토스트 (5초)
+//     사이드바를 안 켜는 simple 유저도 가라오케 모드 없이 회복 경로에 접근 가능
+//   → "가사 안 나옴"은 표시할 가사 자체가 없는 케이스라 숨김 없이 일반 sent 토스트
 // - 영상이 차단 상태(rejectedLrclibIds로 매칭 차단됨)면 위젯이 "숨긴 가사 다시 표시" UI로 변경
 //   → 가라오케 모드 OFF 상태에서도 회복 진입점이 됨
 
@@ -148,12 +150,15 @@ export const MicroFeedback: React.FC = () => {
     (subType: FeedbackSubType) => {
       if (!videoId) return;
 
-      // content/index.tsx의 handleFeedback이 받아 SEND_FEEDBACK 전송 + wrong_lyrics면 자동 숨김 처리.
+      // content/index.tsx의 handleFeedback이 받아 SEND_FEEDBACK 전송 + 가사 신뢰성 문제(wrong_lyrics, sync_mismatch)면 자동 숨김 처리.
       window.dispatchEvent(new CustomEvent('send-lyrics-feedback', { detail: { type: subType } }));
       // alreadyVoted는 의도적으로 트리거하지 않는다 — LRCLib에 새 ID로 가사가 갱신되면 위젯이 다시
       // 떠서 사용자가 새 매칭의 정확성을 평가할 수 있어야 한다. thumbs_up만 alreadyVoted 트리거.
 
-      if (subType === 'wrong_lyrics') {
+      // wrong_lyrics + sync_mismatch는 "가사가 도움이 안 됨"이라는 명시적 신호이므로 자동 숨김 + 되돌리기 토스트.
+      // 사이드바가 없는 simple 유저도 가라오케 모드 켜지 않고 회복 경로에 접근할 수 있도록.
+      // no_lyrics는 표시할 가사 자체가 없는 케이스라 숨김 의미 없음 → 일반 sent 토스트.
+      if (subType === 'wrong_lyrics' || subType === 'sync_mismatch') {
         // 5초간 되돌리기 가능한 토스트 노출. 5초 지나도 차단 자체는 영구 — 이후엔 숨김 상태 UI로 회복.
         setStatus('sent_with_undo');
         if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
@@ -181,13 +186,20 @@ export const MicroFeedback: React.FC = () => {
     setStatus('hidden');
   }, [videoId]);
 
-  // 숨김 상태에서 "숨긴 가사 다시 표시" 클릭 — 거절 목록을 비우고 페이지 새로고침으로 재매칭 트리거.
-  const handleUnhide = useCallback(async () => {
+  // 숨김 상태에서 "숨긴 가사 다시 표시" 클릭 — 사이드바 [되돌리기]와 동일 이벤트 사용.
+  // content/index.tsx의 handleUndoHide가:
+  //   - 메모리 스냅샷 살아있으면 → 즉시 복원 (API 호출 없이 빠름, 5초 토스트 [되돌리기]와 동일 경로)
+  //   - 없으면(영상 전환 후 등) → unhideVideoLyrics + force-rematch fallback
+  // 이전 구현은 스냅샷 가능 여부와 무관하게 항상 API 재검색을 했는데, 같은 영상에서는 메모리 복원이 더 빠르고 일관적.
+  const handleUnhide = useCallback(() => {
     if (!videoId) return;
-    const { unhideVideoLyrics } = await import('@lib/utils/storage/hiddenLyricsStorage');
-    await unhideVideoLyrics(videoId);
     chrome.storage.local.remove(`micro_feedback_${videoId}`);
-    window.location.reload();
+    // 위젯 자체도 즉시 일반 상태로 — 복원 성공 시 lyrics-hidden-state(hidden:false)가 dispatch되어 동기화됨
+    setIsLyricsHidden(false);
+    setStatus('idle');
+    setAlreadyVoted(false);
+    // fallback 경로용 videoId는 detail로 전달 — 스냅샷 있으면 무시되고 메모리 복원 사용
+    window.dispatchEvent(new CustomEvent('undo-lyrics-hide', { detail: { videoId } }));
   }, [videoId]);
 
   const handleReviewClick = () => {
