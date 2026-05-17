@@ -16,7 +16,7 @@ export const LyricsFeedbackButton: React.FC<LyricsFeedbackButtonProps> = ({ onFe
   const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState(false);
-  // 어떤 신고 종류로 토스트가 떴는지 — wrong_lyrics는 "되돌리기" 분기 토스트를 노출한다.
+  // 어떤 신고 종류로 토스트가 떴는지 — wrong_lyrics/sync_mismatch는 자동 숨김 + "되돌리기" 분기 토스트를 노출한다.
   const [sentType, setSentType] = useState<FeedbackType | null>(null);
   const feedbackSentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -49,8 +49,8 @@ export const LyricsFeedbackButton: React.FC<LyricsFeedbackButtonProps> = ({ onFe
       if (feedbackSentTimerRef.current) {
         clearTimeout(feedbackSentTimerRef.current);
       }
-      // 되돌리기를 누를 시간을 확보하기 위해 wrong_lyrics는 5초, 그 외는 기존 2초.
-      const duration = type === 'wrong_lyrics' ? 5000 : 2000;
+      // 자동 숨김 동반 신고(wrong_lyrics/sync_mismatch)는 되돌리기 시간 확보 위해 5초, 그 외(no_lyrics)는 2초.
+      const duration = type === 'wrong_lyrics' || type === 'sync_mismatch' ? 5000 : 2000;
       feedbackSentTimerRef.current = setTimeout(() => {
         setFeedbackSent(false);
         setSentType(null);
@@ -73,7 +73,7 @@ export const LyricsFeedbackButton: React.FC<LyricsFeedbackButtonProps> = ({ onFe
   }, []);
 
   const renderToast = () => {
-    if (sentType === 'wrong_lyrics') {
+    if (sentType === 'wrong_lyrics' || sentType === 'sync_mismatch') {
       return (
         <div className={styles.hideToast}>
           <span className={styles.hideToastMessage}>{t('extLyricsHiddenToast')}</span>

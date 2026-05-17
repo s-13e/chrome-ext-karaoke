@@ -840,9 +840,11 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
       },
     );
 
-    // wrong_lyrics 신고는 서버 신고 외에 즉시 가사 숨김까지 수행한다.
-    // 이렇게 하지 않으면 사용자가 잘못된 가사를 안 보려고 가라오케 모드 자체를 끄는 우회를 하게 됨.
-    if (type === 'wrong_lyrics') {
+    // 가사 신뢰성 문제(wrong_lyrics, sync_mismatch) 신고는 서버 신고 외에 즉시 가사 숨김까지 수행한다.
+    // 이렇게 하지 않으면 사용자가 잘못된/싱크 안 맞는 가사를 안 보려고 가라오케 모드 자체를 끄는 우회를 하게 됨.
+    // 특히 사이드바 진입을 안 하는 simple 유저는 가사 숨김 외에 회복 경로가 없음.
+    // sync_mismatch도 LRC의 timing 문제이므로 동일 lrclibId가 다시 매칭되면 같은 문제 발생 → 차단 등록 합리적.
+    if (type === 'wrong_lyrics' || type === 'sync_mismatch') {
       // "되돌리기"로 즉시 복원할 수 있도록 신고 직전 상태를 메모리에 보관.
       lastHiddenSnapshot = {
         videoId,
@@ -865,30 +867,46 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
       // 차단 상태 신호 — MicroFeedback 위젯이 일반 👍👎에서 [숨긴 가사 다시 표시] UI로 전환됨.
       // 5초 토스트가 사라진 후에도 회복 진입점이 위젯 자리에 남는다.
       window.dispatchEvent(new CustomEvent('lyrics-hidden-state', { detail: { videoId, hidden: true } }));
-      console.log(`[HiddenLyrics] 잘못된 가사 신고로 자동 숨김: videoId=${videoId}, lrclibId=${lrclibId ?? 'unknown'}`);
+      console.log(`[HiddenLyrics] ${type} 신고로 자동 숨김: videoId=${videoId}, lrclibId=${lrclibId ?? 'unknown'}`);
     }
   }
 
-  // 토스트의 "되돌리기" 클릭 시 호출 — 신고 직전 가사를 즉시 복원한다.
-  async function handleUndoHide() {
+  // 가사 복원 — 두 경로:
+  // 1) 5초 토스트 [되돌리기] 또는 영상 전환 전 메모리 스냅샷 살아있는 동안: 메모리 즉시 복원 (API 호출 없음, 빠름)
+  // 2) 스냅샷 없음 (영상 전환 후 등): unhideVideoLyrics + force-rematch fallback (API 재검색)
+  async function handleUndoHide(fallbackVideoId?: string) {
     const snap = lastHiddenSnapshot;
-    if (!snap) return;
-    lastHiddenSnapshot = null;
+    if (snap) {
+      lastHiddenSnapshot = null;
 
+      const { unhideVideoLyrics } = await import('@lib/utils/storage/hiddenLyricsStorage');
+      await unhideVideoLyrics(snap.videoId, snap.lrclibId ?? undefined);
+
+      // 메모리 캐시도 복원해 SPA 재진입 시 다시 빈 화면으로 떨어지지 않도록 한다.
+      sessionLyricsCache.set(snap.videoId, {
+        lyrics: snap.lyrics,
+        title: snap.title,
+        artist: snap.artist,
+      });
+
+      onLyricsUpdated(snap.lyrics);
+      // 일반 상태로 복귀 신호 — MicroFeedback 위젯이 [숨긴 가사 다시 표시]에서 일반 👍👎로 돌아감.
+      window.dispatchEvent(
+        new CustomEvent('lyrics-hidden-state', { detail: { videoId: snap.videoId, hidden: false } }),
+      );
+      console.log(`[HiddenLyrics] 메모리 스냅샷 복원 완료: videoId=${snap.videoId}`);
+      return;
+    }
+
+    // Fallback: 스냅샷 없음 — 예: 영상 전환 후 다시 진입하여 [숨긴 가사 다시 표시] 클릭한 경우
+    if (!fallbackVideoId) {
+      console.log('[HiddenLyrics] 스냅샷도 없고 videoId도 없어 복원 스킵');
+      return;
+    }
     const { unhideVideoLyrics } = await import('@lib/utils/storage/hiddenLyricsStorage');
-    await unhideVideoLyrics(snap.videoId, snap.lrclibId ?? undefined);
-
-    // 메모리 캐시도 복원해 SPA 재진입 시 다시 빈 화면으로 떨어지지 않도록 한다.
-    sessionLyricsCache.set(snap.videoId, {
-      lyrics: snap.lyrics,
-      title: snap.title,
-      artist: snap.artist,
-    });
-
-    onLyricsUpdated(snap.lyrics);
-    // 일반 상태로 복귀 신호 — MicroFeedback 위젯이 [숨긴 가사 다시 표시]에서 일반 👍👎로 돌아감.
-    window.dispatchEvent(new CustomEvent('lyrics-hidden-state', { detail: { videoId: snap.videoId, hidden: false } }));
-    console.log(`[HiddenLyrics] 잘못된 가사 신고 되돌리기 완료: videoId=${snap.videoId}`);
+    await unhideVideoLyrics(fallbackVideoId);
+    window.dispatchEvent(new CustomEvent('force-rematch-lyrics'));
+    console.log(`[HiddenLyrics] 스냅샷 없음, force-rematch fallback: videoId=${fallbackVideoId}`);
   }
 
   // 사이드바 피드백 이벤트 리스닝 — 사이드바의 "잘못된 가사" 버튼도 동일한 자동 숨김 흐름을 탄다.
@@ -896,10 +914,11 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
     void handleFeedback(e.detail.type);
   }) as EventListener);
 
-  // 토스트 "되돌리기" 이벤트 리스닝 (LyricsFeedbackButton에서 발생).
-  window.addEventListener('undo-lyrics-hide', () => {
-    void handleUndoHide();
-  });
+  // 토스트 "되돌리기" / "숨긴 가사 다시 표시" 이벤트 리스닝.
+  // detail.videoId는 스냅샷 없을 때(영상 전환 후 등) fallback 재매칭용. 토스트 안의 즉시 [되돌리기]에서는 생략 가능.
+  window.addEventListener('undo-lyrics-hide', ((e: CustomEvent<{ videoId?: string }>) => {
+    void handleUndoHide(e.detail?.videoId);
+  }) as EventListener);
 
   // 노래 정보 렌더링
   function renderSongInfo(title: string, artist: string) {
@@ -2084,6 +2103,14 @@ const IS_DEV_MODE = process.env.DEV_MODE === 'true';
   // --- wrapper ---
   const handleVideoDetectionGuarded = withContentEnabled(getContentEnabled, handleVideoDetection);
   const debouncedDetection = debounce(handleVideoDetectionGuarded, RETRY_DELAY);
+
+  // 가사 차단 해제 후 즉시 재매칭 trigger — 새로고침 없이 회복.
+  // MicroFeedback.handleUnhide에서 unhideVideoLyrics 호출 직후 발송.
+  // handleVideoDetection의 skip 조건은 (lastVideoId 동일 && latestLyrics.length > 0)인데,
+  // 차단 시 onLyricsUpdated([])로 비워둔 상태라 skip 통과해서 매칭 재시작된다.
+  window.addEventListener('force-rematch-lyrics', () => {
+    void handleVideoDetectionGuarded();
+  });
 
   // --- 스토리지, UI, SPA 이벤트, visibility 이벤트 일괄 관리 ---
   // SPA URL 변화 처리 공통 함수, URL 변화의 감지와 상태 판단을 담당하는 상위 레벨 함수
