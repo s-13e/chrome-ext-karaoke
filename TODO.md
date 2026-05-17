@@ -1,7 +1,7 @@
-# TODO (v2.3.2)
+# TODO (v2.3.2 — 완료)
 
 > **사이클 성격**: patch — v2.3.1 배포 후 churn(설치/삭제 2:1.2) 후속 대응.
-> 글로벌 시장 UX 개선 + 한국어/일본어 사용자 만족도 증대 + 피드백 사전 차단 인프라.
+> 사용자 직접 체험으로 짚어진 마찰점 셋(가설 D + Simple 회복 경로 부재) 해소.
 >
 > Vocal removal(반주)는 다음 사이클(v2.4.0)에서 minor의 메인 feature로 다룰 예정.
 
@@ -11,94 +11,61 @@ _없음_
 
 ## Features
 
-### 🎤 외국어 곡 발음 음차 표기 (한국어/일본어 한정 출시)
+_없음 (음차 표기는 라이브러리 리서치 필요해서 Backlog 이월)_
 
-- [ ] **라틴 알파벳 곡 → 한글/카타카나 음차 표기** — 영어 등 라틴 알파벳 가사를 사용자 모국어 표기로 음차해서 표시. 노래방 책에서 영어 곡 위에 한글 발음 적어주는 그 경험을 디지털로
-  - UI 언어 ko: 한글 음차 ("Hello World" → "헬로 월드")
-  - UI 언어 ja: 카타카나 음차 ("Hello World" → "ハロー ワールド")
-  - 그 외 언어 사용자: 옵션 미노출 (다음 사이클에서 확장 검토)
-  - 기술: 클라이언트 사이드 라이브러리 (npm `eng-to-kor`, `english-to-katakana` 류 선행 리서치). 번역 API 불필요, 비용 0
-  - 캐시 정책: `chrome.storage.local`에 라인 단위 음차 결과 캐시 → 재계산 방지
-- [ ] **기존 "로마자 변환" 토글과 통합 → "외국어 표기" 단일 토글** — 곡 언어와 UI 언어 보고 방향 자동 결정. 같은 언어면 토글 UI 자체 안 보임
-  - 한자권 곡(ko/ja/zh) + 비한자권 UI → 라틴 로마자 (기존 동작 유지)
-  - 라틴 곡(en/es/pt 등) + UI 언어 ko → 한글 음차 (신규)
-  - 라틴 곡 + UI 언어 ja → 카타카나 음차 (신규)
-  - 곡 언어 = UI 언어 → 토글 UI 숨김 (글로벌 시장 UX 미니멀화 자연 해결)
-  - 근거: 한국어 피드백 0건(만족도 높음) + 일본 설치 2위 시장 + 노래방 본질 경험 + 차별화. 또한 es/en 사용자에게 노이즈로 작용하던 로마자 UI가 자동 정리됨
-
-## Improvements
-
-> **메인 발견 셋**: 5/16 사용자 직접 체험으로 짚은 마찰점들. 가설 C(ModeOnboarding이 무겁게 느껴짐) + D(빠져나오기 어려움) + 신규 발견(Simple 회복 경로 부재)이 진짜 원인으로 드러남.
+## Improvements (완료)
 
 ### 🚪 Simple 유저용 회복 경로 신설 (가장 큰 발견, High impact)
 
-- [ ] **microFeedback에 "이 영상 가사 숨기기" 옵션 추가** — Simple 유저가 가라오케 모드를 켜지 않고도 잘못된 가사/싱크 안 맞는 가사를 회복할 수 있도록. v2.3.1의 `hiddenLyricsStorage` 인프라 재활용
-  - 현재: thumbs down → "가사 잘못됨" 분류일 때만 가사 숨김 진입
-  - 변경: "싱크 안 맞음" 분류 등 다른 경로에서도 "가사 숨기기" 출구 추가
-  - 근거: Simple 유저는 사이드바를 안 켜서 수동 검색/싱크 조절 진입점이 없음 → 가사 잘못 보이면 회복 못 하고 삭제. 5-11 "가사만 간단히" 피드백의 진짜 본질일 가능성
+- [x] **microFeedback 분기 확장** — thumbs_down → "타이밍 어긋남"(sync_mismatch)도 wrong_lyrics와 동일하게 자동 가사 숨김 + 5초 되돌리기 토스트. content/index.tsx handleFeedback + LyricsFeedbackButton 토스트 분기/duration까지 일관화. 가라오케 모드 진입 없이도 회복 가능
+- [x] **가사 회복을 메모리 스냅샷 경로로 통일** — "숨긴 가사 다시 표시"가 force-rematch로 API 재검색하던 것을 사이드바 [되돌리기]와 동일한 `undo-lyrics-hide` 이벤트로 통일. handleUndoHide에 fallback(스냅샷 없을 때 force-rematch) 보강. 같은 영상에서 5초 후 회복도 API 호출 0회로 빠르게
 
-### 🎓 Welcome 가이드 카피·진입 수정 (직접 체험 발견)
+### 🎓 Welcome 가이드 카피·진입 수정
 
-- [ ] **step3 카피를 "선택적" 톤으로** — "Turn on karaoke mode in the video"가 필수처럼 들림. "필요할 때 노래방 모드도 켤 수 있어요" 같은 옵션 톤으로 7개 로케일 수정
-- [ ] **사이드바 "가이드" 메뉴 존재 안내** — Welcome 가이드 step3 또는 별도 슬라이드에 "노래방 모드 안의 가이드 메뉴에서 자세한 사용법을 다시 볼 수 있어요" 한 줄 추가. 사용자들이 사이드바 가이드 메뉴의 존재를 모르는 문제 해소
+- [x] **step3 카피를 "선택적" 톤으로** — "노래방 모드 (선택사항)" + 옵션 톤 desc (7개 로케일)
+- [x] **사이드바 "가이드" 메뉴 존재 안내** — Welcome step3에 hint 박스 + welcome-step-guide.png 이미지 추가
+- [x] **step 재구성** — 팝업 첫 화면(모드 온보딩) 안내를 step2로 분리, 기존 step2/3는 step3/4로 이동. popup 첫 진입이 ModeOnboarding이라는 사실 반영
 
-### 🔌 "Try on YouTube" 버튼과 확장 활성화 상태 일치 (UX 정확성)
+### 🔌 "Try on YouTube" 버튼과 확장 활성화 상태 일치
 
-- [ ] **welcome 가이드 마지막 화면에 확장 상태 가시화** — 현재는 버튼 누르면 가사가 자동으로 뜰 것처럼 보이지만 실제로 popup 토글이 OFF면 안 됨
-  - **권장 방식**: 버튼 옆/위에 현재 확장 상태(ON/OFF) 표시. OFF면 버튼 비활성 + "팝업에서 확장을 먼저 켜주세요" 안내. ON이면 그대로 클릭 가능
-  - 대안 검토 가능: 버튼 클릭 시 확장 OFF면 알림 표시 / 버튼 자체 제거하고 텍스트 안내로 대체
-  - 근거: 직접 체험에서 발견된 "버튼 약속 vs 실제 동작" 불일치. 이게 신규 사용자의 첫 churn 트리거일 가능성
-
-### 📚 Options 페이지 FAQ 추가 (피드백 사전 차단, Stretch goal)
-
-- [ ] **자주 받은 피드백 + 답변 섹션 추가** — Options 페이지에 "자주 묻는 질문" 슬라이드 추가. 사이드바 메뉴에서도 재접근 가능
-  - "가사가 안 맞아요" → microFeedback의 가사 숨김 (위에서 강화된 옵션) + 수동 검색 안내
-  - "노래방 모드 어떻게 켜나요?" → 음표 버튼 위치 (welcome-step3 사진 재활용)
-  - "영어 노래 가사가 안 나와요" → 수동 검색에서 영문 입력 안내
-  - "반주/MR(가라오케 음원) 기능 있나요?" → **현재 미지원, v2.4.0 계획 중**임을 정직하게 명시 → vocal removal 기대로 인한 churn 일부 사전 차단
-  - 한글/카타카나 음차 기능 사용법 (위 Feature 출시 후 추가)
-  - 근거: 피드백 16건 중 "기타 + 디테일 없음" 5건 = 사용자가 어디서 막혔는지 모름. FAQ는 referencable해서 onboarding보다 도달률 높음
-  - **위 직접 발견 셋이 일부 광범위 신호를 흡수**하므로 stretch로 강등. 시간 남으면 진행
-
-> **참고**: 로마자 UI 노이즈는 위 Features의 "외국어 표기 통합 토글"이 자동 해결 (별도 작업 불필요)
-
----
-
-## 📌 추천 구현 순서 (코스트·효과 균형)
-
-1. **Welcome 가이드 카피 수정 (step3 톤 + 사이드바 가이드 안내)** — 가장 작음. i18n 7개 로케일만 손대면 끝. 빠른 win
-2. **microFeedback 가사 숨김 옵션 확장** — Simple 회복 경로 신설. 영향 큼. 컴포넌트 + i18n
-3. **Welcome 가이드 확장 상태 가시화** — Try on YouTube 버튼 흐름 개선. 컴포넌트 + storage 상태 읽기
-4. **(Stretch) Options FAQ** — 1~3이 광범위 신호를 일부 흡수하므로 stretch. 시간 남으면
-5. **음차 표기 라이브러리 선행 리서치** — 사용자 결정 보류 중. 결정되면 진행
-6. **음차 + 통합 토글 구현** — 리서치 결과에 따라 사이클 후반 또는 v2.3.3로 이월
-
-**Stretch goal**: 1~3까지만 끝내도 v2.3.2 patch로 의미 있음 — 사용자가 직접 체험으로 짚은 마찰점 셋 정확히 해소.
-
-**우선순위 재조정 메모**:
-
-- "Simple 모드 미니멀화"는 사용자 직접 체험 결과 가설 D + 신규 발견(회복 경로 부재)로 좁혀짐. 진입 버튼 숨기기보다 **microFeedback 회복 경로 신설**이 본질 해결이라고 판단 → 항목 폐기, 위 1~3으로 대체
-- "영문 alias 다중 후보"는 직접 신호 5-14 1건뿐이라 Backlog로 이월. 다음 정기 사이클에서 "아티스트 영문 별칭 로컬 캐시"와 묶어서 처리
+- [x] **welcome 가이드 마지막 화면에 확장 상태 가시화** — title 자체가 상태 표현(🎉 준비 완료! / ⚠️ 확장이 꺼져 있어요). subtitle 조건부. Primary CTA 한 개만. OFF에선 "✨ 확장 켜기" → `chrome.action.openPopup()` 호출, 실패 시 storage 직접 fallback. useChromeStorage hook에 onChanged listener 추가로 popup 토글 실시간 반영
 
 ---
 
 ## 📋 Backlog
 
-- **Vocal Removal (반주 모드)** — v2.4.0 minor 메인 feature 후보. `_notes_a.md`에 기술 리서치. found_alternative 피드백 대응
-- **음차 표기 다국어 확장** — v2.3.2의 한글/카타카나 ko/ja 출시 이후 다른 방향 확장 검토. 예: 중국어 사용자에게 영어 곡을 병음/한자 음차, 스페인어 사용자 음차 등. 라이브러리 가용성 따라 우선순위 결정
+### v2.4.0 / 다음 minor 후보
+
+- **Vocal Removal (반주 모드)** — minor 메인 feature 후보. `_notes_a.md`에 기술 리서치. found_alternative 피드백 대응. AudioWorklet 마이그레이션과 묶어서 처리 가능
+- **외국어 곡 발음 음차 표기 (ko/ja 한정)** — 라틴 알파벳 곡 → 한글/카타카나 음차 (영어 곡 위에 한글 발음 적어주는 노래방 경험). 기존 로마자 변환 토글과 통합하면 곡 언어=UI 언어 시 토글 자체 숨김으로 글로벌 UX 미니멀화 자연 해결. **선행 리서치**: npm 라이브러리(영→한, 영→카타카나) quality·라이선스 평가 필요
+- **커버 곡 미스 매치 완화** — 피드백 다수. 원곡/커버 구분 로직 또는 수동 매핑 유도 UX 검토 (선행 리서치 필요)
+
+### 피드백 사전 차단 / UX
+
+- **Options 페이지 FAQ 추가** — 자주 받은 피드백 + 답변 섹션. v2.3.2에서 stretch로 넣었으나 메인 발견 셋이 광범위 신호를 흡수해 우선순위 낮음
+  - "가사가 안 맞아요" → microFeedback의 가사 숨김 + 수동 검색
+  - "노래방 모드 어떻게 켜나요?" → welcome-step3 사진 재활용
+  - "영어 노래 가사가 안 나와요" → 수동 검색 영문 입력
+  - "반주/MR 기능 있나요?" → v2.4.0 계획임을 정직하게 명시 (vocal removal 기대 churn 차단)
+- **피드백 반영 알림** — 사용자가 보낸 피드백이 반영됐을 때 알림. 식별/저장/전송 인프라 필요
 - **popup, Song-info 디자인 수정**
-- **커버 곡 미스 매치 완화** — 피드백 다수. 원곡/커버 구분 로직 또는 수동 매핑 유도 UX 검토 (선행 리서치 필요). v2.4.0 사이클 후보.
-- **피드백 반영 알림** — 사용자가 보낸 피드백이 반영됐을 때 알림. 식별/저장/전송 인프라 필요 → 별도 사이클에서 검토.
-- 로컬 단어 현지화 적용
-- **영문 alias 다중 후보 순차 시도** — `extractEnglishAliasFromArtists`를 배열 반환으로 확장, LRCLib에 순차 시도. 첫 hit에서 중단. v2.3.2에서 검토했으나 직접 피드백 신호 약해(5-14 1건) Backlog로 이월. 아래 로컬 캐시 항목과 함께 처리하면 효율적
-- **아티스트 영문 별칭 로컬 캐시** — 수동 검색에서 검증된 영문 표기를 `chrome.storage.local`에 저장해 다음 영상 감지 때 자동 치환. MusicBrainz가 주는 다중 alias 중 LRCLib에서 실제 히트한 "승자"만 저장하는 구조. 위 다중 후보 항목과 함께 검토 가능
-- **다음 곡 예약/자동재생** — 재생 큐 기능으로 다음 곡 자동 전환. YouTube DOM 제어 및 상태 관리 복잡도가 높아 별도 버전 검토
-- **기본 사용 지표 수집** — 어떤 기능을 얼마나 사용하는지 파악 (익명, 옵트인 방식). 정책/권한 이슈로 보류
-- **일본어 로마자 가독성 향상** — 띄어쓰기 도입으로 읽기 쉽게 개선
-- **접근성(a11y) 개선** — 주요 인터랙티브 요소에 ARIA 라벨·키보드 내비게이션 추가
+- **다음 곡 예약/자동재생** — 재생 큐. YouTube DOM 제어 복잡도 높아 별도 사이클
+- **기본 사용 지표 수집** — 익명·옵트인 방식. 정책/권한 이슈로 보류
+
+### 매칭 / 가사 신뢰성
+
+- **영문 alias 다중 후보 순차 시도** — `extractEnglishAliasFromArtists`를 배열 반환으로 확장, LRCLib에 순차 시도. 아래 로컬 캐시와 묶어서 처리하면 효율적
+- **아티스트 영문 별칭 로컬 캐시** — 수동 검색에서 검증된 영문 표기를 `chrome.storage.local`에 저장해 다음 감지 때 자동 치환. LRCLib hit한 "승자"만 저장
+- **아티스트 별칭 캐시 관리 UI** — 옵션 페이지에서 자동 저장된 영문 별칭 확인·수정·삭제 (v2.4.0+ 검토)
+- **음차 표기 다국어 확장** — ko/ja 출시 이후 zh/es/pt 등 확장 검토. 라이브러리 가용성에 따라
+- **로컬 단어 현지화 적용**
+- **일본어 로마자 가독성 향상** — 띄어쓰기 도입
+
+### 인프라 / 품질
+
 - **외부 API 레이트 리미팅** — 빠른 영상 전환 시 LRCLib/MusicBrainz 호출 제한
-- **에러 리포팅 인프라** — `hidden-source-map` + Sentry(또는 유사 서비스) 연동. 패키징 스크립트에서 `.map` 제외 설정 포함. 소스맵만 켜는 게 아니라 리포팅 서비스까지 함께 구성해야 의미 있으므로 별도 사이클 권장.
-- **Tune 파이프라인 AudioWorklet 마이그레이션** — 현재 SoundTouch(피치)가 deprecated `ScriptProcessorNode`를 사용해 UI 스레드에서 돌아감 → Chrome 콘솔 경고 + 스크롤/UI 조작 시 오디오 글리치 가능. AudioWorklet 기반 SoundTouch 대체 필요. Tier 2(ML HD) 착수 시 AudioWorklet 인프라가 필요하므로 그때 같이 처리하면 효율적. v2.4.0 vocal removal과 묶어서 처리 가능
-- **아티스트 별칭 캐시 관리 UI** — 옵션 페이지에서 자동 저장된 영문 별칭 목록 확인·수정·삭제. 위 로컬 캐시가 쌓인 뒤 구현. (v2.4.0+ 검토)
-- **tsconfig deprecation 마이그레이션** — v2.3.1 deps bump에서 임시로 `ignoreDeprecations: "6.0"` silence 적용. TypeScript v7 진입 전 `baseUrl` 제거 + `paths`만 사용 + `moduleResolution` 정리 필요. ts-jest config의 node10 fallback 추적 포함.
-- **setupUIResources cleanup→skip race** — v2.3.2 검증 중 발견. 새로고침 직후 영상 진입 시 가사 오버레이가 안 뜨는 케이스. 로그상 `cleanupAllResources` 직후 `Overlays already initialized, skipping mount`로 분기되어 React root는 unmount됐는데 mount는 skip됨. DOM element 존재 체크로 mount 여부를 판정하는 게 cleanup 후 inconsistent. 한 번 더 새로고침하면 회복. 재현 빈도/조건 추가 수집 후 root cause 진단.
+- **에러 리포팅 인프라** — `hidden-source-map` + Sentry 연동. 소스맵만 켜는 게 아니라 리포팅 서비스까지 구성해야 의미 있으므로 별도 사이클
+- **Tune 파이프라인 AudioWorklet 마이그레이션** — deprecated `ScriptProcessorNode` 대체. Tier 2(ML HD) 인프라 필요 시 동시 처리하면 효율적. v2.4.0 vocal removal과 묶어서 처리 가능
+- **tsconfig deprecation 마이그레이션** — v2.3.1 deps bump에서 `ignoreDeprecations: "6.0"` 임시 silence 적용. TypeScript v7 진입 전 `baseUrl` 제거 + `paths`만 사용 + `moduleResolution` 정리. ts-jest config의 node10 fallback 추적 포함
+- **setupUIResources cleanup→skip race** — v2.3.2 검증 중 발견. 새로고침 직후 영상 진입 시 가사 오버레이가 안 뜨는 케이스. 로그상 `cleanupAllResources` 직후 `Overlays already initialized, skipping mount`로 분기되어 React root는 unmount됐는데 mount는 skip됨. 한 번 더 새로고침하면 회복. 재현 빈도/조건 추가 수집 후 root cause 진단
+- **접근성(a11y) 개선** — 주요 인터랙티브 요소에 ARIA 라벨·키보드 내비게이션
