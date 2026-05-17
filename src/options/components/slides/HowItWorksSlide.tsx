@@ -48,9 +48,18 @@ export const HowItWorksSlide: React.FC<HowItWorksSlideProps> = ({ onNext, onBack
         </div>
       </div>
 
-      {/* Step B: 팝업에서 ON */}
+      {/* Step B (NEW): 팝업 첫 화면 = 모드 온보딩 — 사용자가 popup 첫 진입에서 보는 화면 안내 */}
       <div style={styles.stepCard}>
         <div style={styles.stepBadge}>2</div>
+        <div style={styles.stepContent}>
+          <h3 style={styles.stepTitle}>{t('extWelcomeHowStepOnboardingTitle')}</h3>
+          <p style={styles.stepDesc}>{t('extWelcomeHowStepOnboardingDesc')}</p>
+        </div>
+      </div>
+
+      {/* Step C: 팝업에서 ON (기존 step2 → step3) */}
+      <div style={styles.stepCard}>
+        <div style={styles.stepBadge}>3</div>
         <div style={styles.stepContent}>
           <h3 style={styles.stepTitle}>{t('extWelcomeHowStep2aTitle')}</h3>
 
@@ -76,10 +85,10 @@ export const HowItWorksSlide: React.FC<HowItWorksSlideProps> = ({ onNext, onBack
         </div>
       </div>
 
-      {/* Step C: 영상에서 노래방 모드 켜기 — 두 위치 모두 동일 기능, step1처럼 세로 큰 이미지 */}
+      {/* Step D: 영상에서 노래방 모드 켜기 (기존 step3 → step4) */}
       <div style={styles.step1Card}>
         <div style={styles.step1Header}>
-          <div style={styles.stepBadge}>3</div>
+          <div style={styles.stepBadge}>4</div>
           <div>
             <h3 style={styles.stepTitle}>{t('extWelcomeHowStep3Title')}</h3>
             <p style={styles.stepDesc}>{t('extWelcomeHowStep3Desc')}</p>
@@ -101,6 +110,16 @@ export const HowItWorksSlide: React.FC<HowItWorksSlideProps> = ({ onNext, onBack
               <span style={styles.step1Caption}>{t(img.captionKey)}</span>
             </div>
           ))}
+        </div>
+
+        {/* 사이드바 가이드 메뉴 안내 — 사용자가 노래방 모드 안의 가이드 메뉴 존재를 모르는 문제 해소 */}
+        <div style={styles.step3SidebarHint}>
+          <p style={styles.step3SidebarHintText}>{t('extWelcomeHowStep3SidebarHint')}</p>
+          <img
+            src={chrome.runtime.getURL('assets/images/welcome-step-guide.png')}
+            alt={t('extWelcomeHowStep3SidebarHint')}
+            style={styles.step3SidebarHintImage}
+          />
         </div>
       </div>
 
@@ -146,6 +165,31 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     gap: '14px',
+  },
+  step3SidebarHint: {
+    marginTop: '4px',
+    padding: '12px 14px',
+    background: 'rgba(0, 212, 170, 0.08)',
+    border: '1px solid rgba(0, 212, 170, 0.2)',
+    borderRadius: '8px',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '10px',
+  },
+  step3SidebarHintText: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.7)',
+    lineHeight: '1.5',
+    margin: 0,
+  },
+  step3SidebarHintImage: {
+    display: 'block',
+    maxWidth: '180px',
+    width: '100%',
+    height: 'auto',
+    margin: '0 auto',
+    borderRadius: '6px',
+    border: '1px solid rgba(255,255,255,0.08)',
   },
   step1ImageRow: {
     display: 'flex',

@@ -113,8 +113,9 @@ module.exports = {
       patterns: [
         { from: 'manifest.json', to: 'manifest.json' },
         { from: 'public/assets/images', to: 'assets/images' },
-        { from: 'public/assets/fonts', to: 'assets/fonts' },
-        { from: 'src/assets/icons', to: 'assets/icons' },
+        // fonts/icons 폴더는 환경에 따라 비어있거나 없을 수 있어 missing 경고 무시
+        { from: 'public/assets/fonts', to: 'assets/fonts', noErrorOnMissing: true },
+        { from: 'src/assets/icons', to: 'assets/icons', noErrorOnMissing: true },
         { from: 'src/content/content.css', to: 'content/content.css' },
         {
           from: 'src/locales/*.json',
