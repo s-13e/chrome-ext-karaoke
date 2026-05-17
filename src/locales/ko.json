@@ -461,6 +461,8 @@
   "extWelcomeImgPin3": "고정 완료",
   "extWelcomeHowStepOnboardingTitle": "팝업 첫 화면에서 모드 선택",
   "extWelcomeHowStepOnboardingDesc": "팝업을 처음 열면 사용 모드를 선택하는 안내가 나타납니다. 원하는 모드를 고르면 다음 단계의 확장 토글 화면으로 넘어가요.",
+  "extWelcomeHowStep4LyricsRecoveryTitle": "가사가 이상할 때",
+  "extWelcomeHowStep4LyricsRecoveryDesc": "영상 왼쪽의 가사 위에 마우스를 올리면 나타나는 👎 버튼으로 잘못되거나 싱크 안 맞는 가사를 숨길 수 있어요. 노래방 모드를 켜지 않아도 사용할 수 있습니다.",
   "extWelcomeHowStep2aTitle": "확장을 켜세요",
   "extWelcomeImgPopup1": "버튼을 클릭하세요",
   "extWelcomeImgPopup2": "ON! 이제 유튜브에서 체험해보세요",

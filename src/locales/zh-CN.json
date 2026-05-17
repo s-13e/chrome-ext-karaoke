@@ -459,6 +459,8 @@
   "extWelcomeImgPin3": "固定完成",
   "extWelcomeHowStepOnboardingTitle": "在弹窗的第一个画面选择模式",
   "extWelcomeHowStepOnboardingDesc": "首次打开弹窗时会出现模式选择引导。选择你想要的模式后，下一步会进入扩展开关画面。",
+  "extWelcomeHowStep4LyricsRecoveryTitle": "歌词看起来不对时",
+  "extWelcomeHowStep4LyricsRecoveryDesc": "将鼠标移到视频左侧的歌词上会出现👎按钮，可以隐藏错误或不同步的歌词。无需开启卡拉OK模式即可使用。",
   "extWelcomeHowStep2aTitle": "开启扩展",
   "extWelcomeImgPopup1": "点击按钮",
   "extWelcomeImgPopup2": "ON！去YouTube体验吧",

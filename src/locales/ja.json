@@ -459,6 +459,8 @@
   "extWelcomeImgPin3": "固定完了",
   "extWelcomeHowStepOnboardingTitle": "ポップアップの最初の画面でモードを選ぶ",
   "extWelcomeHowStepOnboardingDesc": "ポップアップを初めて開くと、使用モードを選ぶ案内が表示されます。お好みのモードを選ぶと、次の拡張機能のオン/オフ画面に進みます。",
+  "extWelcomeHowStep4LyricsRecoveryTitle": "歌詞がおかしいとき",
+  "extWelcomeHowStep4LyricsRecoveryDesc": "動画の左側にある歌詞の上にマウスを置くと表示される👎ボタンで、間違っていたりシンクがずれている歌詞を非表示にできます。カラオケモードをオンにしなくても使えます。",
   "extWelcomeHowStep2aTitle": "拡張機能をオンにする",
   "extWelcomeImgPopup1": "ボタンをクリック",
   "extWelcomeImgPopup2": "ON！YouTubeで体験しよう",

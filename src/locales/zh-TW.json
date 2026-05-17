@@ -459,6 +459,8 @@
   "extWelcomeImgPin3": "固定完成",
   "extWelcomeHowStepOnboardingTitle": "在彈出視窗的第一個畫面選擇模式",
   "extWelcomeHowStepOnboardingDesc": "首次開啟彈出視窗時會出現模式選擇引導。選擇您想要的模式後，下一步會進入擴充功能開關畫面。",
+  "extWelcomeHowStep4LyricsRecoveryTitle": "歌詞看起來不對時",
+  "extWelcomeHowStep4LyricsRecoveryDesc": "將滑鼠移到影片左側的歌詞上會出現👎按鈕，可以隱藏錯誤或不同步的歌詞。無需開啟卡拉OK模式即可使用。",
   "extWelcomeHowStep2aTitle": "開啟擴充功能",
   "extWelcomeImgPopup1": "點擊按鈕",
   "extWelcomeImgPopup2": "ON！去YouTube體驗吧",

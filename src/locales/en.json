@@ -459,6 +459,8 @@
   "extWelcomeImgPin3": "Pinned!",
   "extWelcomeHowStepOnboardingTitle": "Pick a mode on the popup's first screen",
   "extWelcomeHowStepOnboardingDesc": "When you open the popup for the first time, you'll see a quick mode selection. Choose what fits, and the next screen will show the extension toggle.",
+  "extWelcomeHowStep4LyricsRecoveryTitle": "When the lyrics look wrong",
+  "extWelcomeHowStep4LyricsRecoveryDesc": "Hover over the lyrics on the left side of the video to reveal the 👎 button — use it to hide wrong or out-of-sync lyrics. No need to turn on karaoke mode for this.",
   "extWelcomeHowStep2aTitle": "Turn on the extension",
   "extWelcomeImgPopup1": "Click the button",
   "extWelcomeImgPopup2": "ON! Try it on YouTube",

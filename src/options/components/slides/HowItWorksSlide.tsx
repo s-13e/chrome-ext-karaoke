@@ -85,10 +85,20 @@ export const HowItWorksSlide: React.FC<HowItWorksSlideProps> = ({ onNext, onBack
         </div>
       </div>
 
-      {/* Step D: 영상에서 노래방 모드 켜기 (기존 step3 → step4) */}
+      {/* Step D (NEW): 가사 신뢰성 회복 — 가사 위 microFeedback 👎로 잘못된/싱크 안 맞는 가사 숨김.
+          노래방 모드 무관 작동이라 노래방 모드 안내(step5)보다 앞에 위치. churn 막는 핵심 정보. */}
+      <div style={styles.stepCard}>
+        <div style={styles.stepBadge}>4</div>
+        <div style={styles.stepContent}>
+          <h3 style={styles.stepTitle}>{t('extWelcomeHowStep4LyricsRecoveryTitle')}</h3>
+          <p style={styles.stepDesc}>{t('extWelcomeHowStep4LyricsRecoveryDesc')}</p>
+        </div>
+      </div>
+
+      {/* Step E: 영상에서 노래방 모드 켜기 (기존 step4 → step5) */}
       <div style={styles.step1Card}>
         <div style={styles.step1Header}>
-          <div style={styles.stepBadge}>4</div>
+          <div style={styles.stepBadge}>5</div>
           <div>
             <h3 style={styles.stepTitle}>{t('extWelcomeHowStep3Title')}</h3>
             <p style={styles.stepDesc}>{t('extWelcomeHowStep3Desc')}</p>

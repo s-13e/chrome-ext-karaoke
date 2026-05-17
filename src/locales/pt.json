@@ -459,6 +459,8 @@
   "extWelcomeImgPin3": "Fixada!",
   "extWelcomeHowStepOnboardingTitle": "Escolha um modo na primeira tela do popup",
   "extWelcomeHowStepOnboardingDesc": "Ao abrir o popup pela primeira vez você verá uma breve seleção de modo. Escolha o que preferir e a próxima tela mostrará o botão para ativar a extensão.",
+  "extWelcomeHowStep4LyricsRecoveryTitle": "Quando a letra parecer errada",
+  "extWelcomeHowStep4LyricsRecoveryDesc": "Passe o cursor sobre a letra no lado esquerdo do vídeo para revelar o botão 👎 — use para ocultar letras erradas ou fora de sincronia. Não precisa ativar o modo karaokê para isso.",
   "extWelcomeHowStep2aTitle": "Ative a extensao",
   "extWelcomeImgPopup1": "Clique no botao",
   "extWelcomeImgPopup2": "ON! Experimente no YouTube",
